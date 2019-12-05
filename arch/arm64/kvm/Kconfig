@@ -71,4 +71,12 @@ config PROTECTED_NVHE_STACKTRACE
 
 	  If unsure, or not using protected nVHE (pKVM), say N.
 
+config KVM_ARM_HYP_DEBUG_UART
+	bool "Hack up some basic UART functionality at EL2"
+
+config KVM_ARM_HYP_DEBUG_UART_ADDR
+	hex "Physical address of the PL011 for EL2 to use"
+	depends on KVM_ARM_HYP_DEBUG_UART
+	default 0x09000000
+
 endif # VIRTUALIZATION
