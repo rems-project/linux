@@ -286,7 +286,7 @@ static bool vring_use_dma_api(const struct virtio_device *vdev)
 	if (xen_domain())
 		return true;
 
-	return false;
+	return true;
 }
 
 size_t virtio_max_dma_size(const struct virtio_device *vdev)
