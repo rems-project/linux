@@ -19,6 +19,23 @@
 #include <nvhe/mem_protect.h>
 #include <nvhe/mm.h>
 
+// GHOST
+#include <../debug-pl011.h>
+#include <../ghost_extra_debug-pl011.h>
+#include <../ghost_pgtable.h>
+#include "./ghost_compute_abstraction.h"
+#include "../ghost_control.h"
+
+//horrible hack for ghost code in nvhe/iommu/s2mpu.c
+// but in the default build # CONFIG_KVM_S2MPU is not set
+// and (looking in the Makefile) it seems that file isn't even linked in
+// void __kvm_nvhe_ghost_dump_s2mpus(u64 indent);
+
+#pragma GCC diagnostic ignored "-Wdeclaration-after-statement"
+#pragma GCC diagnostic ignored "-Wunused-variable"
+
+// /GHOST
+
 #define KVM_HOST_S2_FLAGS (KVM_PGTABLE_S2_NOFWB | KVM_PGTABLE_S2_IDMAP)
 
 struct host_mmu host_mmu;
@@ -43,20 +60,36 @@ static void guest_unlock_component(struct pkvm_hyp_vm *vm)
 static void host_lock_component(void)
 {
 	hyp_spin_lock(&host_mmu.lock);
+	// GHOST
+	if (GHOST_EXEC_SPEC)
+		record_and_check_abstraction_host_pre();
+	// /GHOST
 }
 
 static void host_unlock_component(void)
 {
+	// GHOST
+	if (GHOST_EXEC_SPEC)
+		record_and_copy_abstraction_host_post();
+	// /GHOST
 	hyp_spin_unlock(&host_mmu.lock);
 }
 
 static void hyp_lock_component(void)
 {
 	hyp_spin_lock(&pkvm_pgd_lock);
+	// GHOST
+	if (GHOST_EXEC_SPEC)
+		record_and_check_abstraction_pkvm_pre();
+	// /GHOST
 }
 
 static void hyp_unlock_component(void)
 {
+	// GHOST
+	if (GHOST_EXEC_SPEC)
+		record_and_copy_abstraction_pkvm_post();
+	// /GHOST
 	hyp_spin_unlock(&pkvm_pgd_lock);
 }
 
@@ -543,6 +576,15 @@ static bool host_stage2_force_pte_cb(u64 addr, u64 end, enum kvm_pgtable_prot pr
 static int host_stage2_idmap(u64 addr)
 {
 	struct kvm_mem_range range;
+	// PS: t012345he mm.c struct memblock_region hyp_memory[] is initialised by pkvm.c register_memblock_regions to a sorted copy of the regions available to linux, using the include/linux/memblock.h for_each_mem_region (struct memblock_region is also defined there).  I guess hyp_memory[] is constant after initialisation?   The find_mem_range above finds the enclosing region for addr if there is one, writing into range.  The memblock_region's have flags (HOTPLUG/MIRROR/NOMAP), but find_mem_range ignores them, so I think we can abstract hyp_memory[] to just a set of physical addresses (closed under the same-4K-page relation) (or, equivalently, a set of page addresses or page frame numbers) (or reuse our mapping and maplet code).
+	// In the QEMU boot these are:
+	//  base:0x........40000000 base':0x.......1385b0000 size:0x........f85b0000 flags:
+	// -base:0x.......1385b0000 base':0x.......138750000 size:0x..........1a0000 flags:
+	// -base:0x.......138750000 base':0x.......13bc20000 size:0x.........34d0000 flags:
+	// -base:0x.......13bc20000 base':0x.......13c000000 size:0x..........3e0000 flags:
+	// -base:0x.......13c000000 base':0x.......140000000 size:0x.........4000000 flags:
+	// Why five contiguous regions?   Different permissions.
+        // I'll only pay attention to the memory case for now, not the device case
 	bool is_memory = !!find_mem_range(addr, &range);
 	enum kvm_pgtable_prot prot;
 	int ret;
@@ -550,11 +592,97 @@ static int host_stage2_idmap(u64 addr)
 	prot = is_memory ? PKVM_HOST_MEM_PROT : PKVM_HOST_MMIO_PROT;
 
 	host_lock_component();
+
+ 	// GHOST
+	bool ghost_check = ghost_control.check_host_stage2_idmap;
+	u64 i=0; /* base indent */
+	int cur;
+	mapping mapping_pre, mapping_post; // interpretation of pgt on entry and exit
+	mapping mapping_pre_annot, mapping_post_annot; // interpretation of pgtable on entry and exit, cut down to annot parts
+	//mapping mapping_requested;
+	mapping mapping_hyp_memory;
+	mapping mapping_post_nonannot;
+	if (ghost_check) {
+		hyp_putsxn("\nhost_stage2_idmap addr",addr,64); hyp_putc('\n');
+		//hyp_putsxn("kvm_iommu_ops.host_stage2_adjust_mmio_range",(u64)kvm_iommu_ops.host_stage2_adjust_mmio_range,64);
+		//hyp_putsp("\n");
+		ghost_dump_hyp_memory(i+2);
+		//	ghost_dump_s2mpus(i+2);
+		// (we can't meaningfully record the on-entry host pagetable abstraction until we've taken the lock - and in any case, instead of recomputing the abstraction, we should be able to pull it from the lock invariant)
+	}
+	// /GHOST
+
+	// GHOST
+	if (ghost_check) {
+		ghost_lock_maplets();
+		mapping_pre = ghost_record_pgtable_and_check(host_mmu.pgt.ghost_mapping, &host_mmu.pgt, true/*dump*/, "host_mmu.pgt", i+2);
+		ghost_dump_pgtable_locked(&host_mmu.pgt,"before: host_mmu.pgt", i);
+		ghost_unlock_maplets();
+	}
+	// PS: the host_stage2_adjust_range uses kvm_pgtable_get_leaf (which does a kvm_pgtable_walk) to find the current pte and level for addr. If there's a valid entry, it returns -EAGAIN (presumably another thread has mapped it since the fault); if there's a nonzero invalid entry, it returns -EPERM (indicating that there's another owner and we shouldn't map it); otherwise it iterates from this level downwards looking for a level at which the level supports a block mapping for a block included in the range.  (Though in the pKVM boot it doesn't seem to ever make block mappings for actual memory??)  The tree geometry means that there won't be any annotated ptes if we find a proper block mapping.
+	// /GHOST
+
 	ret = host_stage2_adjust_range(addr, &range);
 	if (ret)
 		goto unlock;
 
 	ret = host_stage2_idmap_locked(range.start, range.end - range.start, prot);
+
+	// GHOST
+	if (ghost_check) {
+		// sketch of the postcondition - punting on sundry cases
+		// some of this is common with pgtable.c stage2 postconditions and should be abstracted out when we know better what they all are
+		ghost_lock_maplets();
+		mapping_post = ghost_record_pgtable(&host_mmu.pgt, "host_stage2_idmap post", i+2);
+		ghost_dump_pgtable_locked(&host_mmu.pgt,"after: host_mmu.pgt", i);
+		// the atomicity is interesting here: after the host_unlock_component(), what remains guaranteed?
+
+		// the naive postcondition would check mapping_post included in mapping_pre + mapping_requested, but that would be wrong, as the code might map more than the requested address - any block contained in a memblock_region.  Ignoring device memory, the upper bound is really the hyp_memory[] minus the annotation parts of the on-entry mapping.  So we first compute the interpretation of those two.   For device memory, it looks as if currently (with s2mpu.c not turned on) we should allow _any_ non-hyp_memory mapping, but at PKVM_HOST_MMIO_PROT.  So how is that supposed to protect devices from guests?  IIRC Will said the s2mpu.c is turned on in later versions.
+
+
+		// we think the hyp_memory is constant, while the annotations will change; they should be ghost state for the spec, but here we'll compute them from the host tables on entry
+		mapping_hyp_memory = mapping_empty_();
+		for (cur=0; cur<hyp_memblock_nr; cur++)
+			extend_mapping_coalesce(&mapping_hyp_memory, hyp_memory[cur].base, hyp_memory[cur].size / PAGE_SIZE, maplet_target_mapped(hyp_memory[cur].base, DUMMY_ATTR, dummy_aal()));
+		mapping_pre_annot = mapping_annot(mapping_pre);
+
+		// NB this addr might have been "guessed" - so the following is (at least) awkward to talk about in the top-level spec - it's not necessarily the fault address.  We tend to think a pure safety spec is what we should go for, without any progress result, and so we should omit this here.  The underlying `pgtable.c:kvm_pgtable_stage2_map` will have a stronger spec that we'll weaken for its usag
+		// postcondition: if addr is in memory and is not annotated in the stage 2 map, it's in mapping_post
+		//if (mapping_in_domain(addr, mapping_hyp_memory) && !mapping_in_domain(addr, mapping_pre_annot)) {
+		//	mapping_requested = mapping_singleton(ALIGN_DOWN(addr,PAGE_SIZE), ALIGN_DOWN(addr,PAGE_SIZE), 1, DUMMY_ATTR);
+		//	mapping_submapping(mapping_requested, mapping_post, "host_stage2_idmap post", "mapping_requested", "mapping_post", i+2);
+		//} else {
+		//	mapping_requested = mapping_empty_();
+		//	hyp_putspi("addr not in memory or annotated in stage 2, so nothing to check\n", i+2);
+		//}
+
+		// postcondition: mapping_post minus annotations included in hyp_memory minus annotations
+		mapping_post_nonannot = mapping_nonannot(mapping_post);
+		mapping_submapping(mapping_post_nonannot, mapping_hyp_memory, "host_stage2_idmap post", "mapping_post_nonannot", "mapping_hyp_memory", i+2);
+		mapping_disjoint(mapping_post_nonannot, mapping_pre_annot, "host_stage2_idmap post", "mapping_post_nonannot", "mapping_pre_annot", i+2);
+
+		// postcondition: mapping_post and mapping_pre have the same annotation part
+		mapping_post_annot = mapping_annot(mapping_post);
+		mapping_equal(mapping_pre_annot, mapping_post_annot, "host_stage2_idmap post annot equal", "mapping_pre_annot", "mapping_post_annot", i+2);
+
+		// record updated interpretation
+                free_mapping(host_mmu.pgt.ghost_mapping);
+		host_mmu.pgt.ghost_mapping = mapping_post;
+
+		free_mapping(mapping_pre);
+		/* NOT:	free_mapping(mapping_post);*/
+		free_mapping(mapping_pre_annot);
+		free_mapping(mapping_post_annot);
+		free_mapping(mapping_post_nonannot);
+		//free_mapping(mapping_requested);
+		free_mapping(mapping_hyp_memory);
+		ghost_unlock_maplets();
+		//ghost_dump_pgtable(host_mmu.pgt,"after: host_mmu.pgt", i);
+		//ghost_dump_pgtable_diff(mapping_pre, host_mmu.pgt,"host_mmu.pgt", i);
+		// and we need to wrap this local postcondition back up into the host lock invariant when we unlock it below
+	}
+	// /GHOST
+
 unlock:
 	host_unlock_component();
 
@@ -610,6 +738,16 @@ void handle_host_mem_abort(struct kvm_cpu_context *host_ctxt)
 	struct kvm_vcpu_fault_info fault;
 	u64 esr, addr;
 	int ret = 0;
+
+	// GHOST
+	bool ghost_check = ghost_control.check_handle_host_mem_abort;
+	if (ghost_check) {
+		hyp_putsp(GHOST_WHITE_ON_BLUE);
+		hyp_putsp("handle_host_mem_abort");
+		hyp_putsp(GHOST_NORMAL);
+		hyp_putsp("\n");
+	}
+	// /GHOST
 
 	esr = read_sysreg_el2(SYS_ESR);
 	BUG_ON(!__get_fault_info(esr, &fault));
@@ -1705,7 +1843,37 @@ int __pkvm_host_donate_guest(u64 pfn, u64 gfn, struct pkvm_hyp_vcpu *vcpu)
 	host_lock_component();
 	guest_lock_component(vm);
 
+	// GHOST
+	// here (inside the locks) we could snapshot the abstraction of the host and guest pagetables, or (if we maintain them) use prevoiusly recorded ghost state for them in the postcondition
+	// do_donate uses check_donation which uses host_request_owned_transition and (if the donation works) calls guest_ack_donation. The former uses kvm_pgtable_walk for __check_page_stage_visitor to check that all this address range is PKVM_PAGE_OWNED (and that any valid ptes satisfy addr_is_allowed_memory() )
+	// Then host_initiate_donation uses host_stage2_set_owner_locked
+	// and guest_complete_donation uses kvm_pgtable_stage2_map (plus magic for pvmfw)
+
+	// Do we anywhere tell the guest we've done this?  Not as far as I can see
+	bool ghost_check = ghost_control.check___pkvm_host_donate_guest;
+	u64 i=0; /* base indent */
+	mapping mapping_host_pre, mapping_host_post; // interpretation of pgt on entry and exit
+	mapping mapping_guest_pre, mapping_guest_post; // interpretation of pgt on entry and exit
+	if (ghost_check) {
+		hyp_putsxn("\n__pkvm_host_donate_guest host_addr",host_addr,64); hyp_putc('\n');
+		hyp_putsxn("__pkvm_host_donate_guest guest_addr",guest_addr,64); hyp_putc('\n');
+		// record host pgtable
+		mapping_host_pre = ghost_record_pgtable_and_check(host_mmu.pgt.ghost_mapping, &host_mmu.pgt,/*dump*/true, "host_mmu.pgt", i);
+
+
+		// record guest pgtable
+		mapping_guest_pre = ghost_record_pgtable_and_check(vm->pgt.ghost_mapping, &vm->pgt,/*dump*/true, "vm->pgt", i);
+
+	}
+
+	// /GHOST
 	ret = do_donate(&donation);
+	// GHOST
+	// postcondition: if that PKVM_PAGE_OWNED check then the host ownership (and any mapping) has been removed, and the guest mapping has been added.  Plus magic for pvmfw
+
+	// TODO
+	// now we need a more slick way of computing the different parts of the host pgt, for different predicates on the annotations
+	// /GHOST0
 
 	guest_unlock_component(vm);
 	host_unlock_component();

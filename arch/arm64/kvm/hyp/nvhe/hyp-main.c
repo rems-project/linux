@@ -33,6 +33,19 @@
  */
 static DEFINE_PER_CPU(struct user_fpsimd_state, loaded_host_fpsimd_state);
 
+// GHOST
+#include <../debug-pl011.h>
+#include <../ghost_extra_debug-pl011.h>
+//#include <nvhe/ghost_check_pgtables.h>
+#include <nvhe/ghost_misc.h>
+#include <../ghost_pgtable.h>
+#include <../ghost_control.h>
+#include "./ghost_spec.h"
+#include "./ghost_compute_abstraction.h"
+#pragma GCC diagnostic ignored "-Wdeclaration-after-statement"
+// /GHOST
+
+
 DEFINE_PER_CPU(struct kvm_nvhe_init_params, kvm_init_params);
 
 void __kvm_hyp_host_forward_smc(struct kvm_cpu_context *host_ctxt);
@@ -1006,7 +1019,7 @@ static void handle___pkvm_create_private_mapping(struct kvm_cpu_context *host_ct
 	 * ERR_PTR() on failure).
 	 */
 	unsigned long haddr;
-	int err = __pkvm_create_private_mapping(phys, size, prot, &haddr);
+	int err = __pkvm_create_private_mapping_ghost(phys, size, prot, &haddr, HYP_HCALL);
 
 	if (err)
 		haddr = (unsigned long)ERR_PTR(err);
@@ -1084,6 +1097,89 @@ static const hcall_t host_hcall[] = {
 	HANDLE_FUNC(__pkvm_vcpu_sync_state),
 };
 
+// GHOST
+#define HANDLE_FUNC_STRING(x)	[__KVM_HOST_SMCCC_FUNC_##x] = #x
+static const char * ghost_host_hcall_string[] = {
+	/* ___kvm_hyp_init */
+	HANDLE_FUNC_STRING(__kvm_get_mdcr_el2),
+	HANDLE_FUNC_STRING(__pkvm_init),
+	HANDLE_FUNC_STRING(__pkvm_create_private_mapping),
+	HANDLE_FUNC_STRING(__pkvm_cpu_set_vector),
+	HANDLE_FUNC_STRING(__kvm_enable_ssbs),
+	HANDLE_FUNC_STRING(__vgic_v3_init_lrs),
+	HANDLE_FUNC_STRING(__vgic_v3_get_gic_config),
+	HANDLE_FUNC_STRING(__kvm_flush_vm_context),
+	HANDLE_FUNC_STRING(__kvm_tlb_flush_vmid_ipa),
+	HANDLE_FUNC_STRING(__kvm_tlb_flush_vmid),
+	HANDLE_FUNC_STRING(__kvm_flush_cpu_context),
+	HANDLE_FUNC_STRING(__pkvm_prot_finalize),
+
+	HANDLE_FUNC_STRING(__pkvm_host_share_hyp),
+	HANDLE_FUNC_STRING(__pkvm_host_unshare_hyp),
+	HANDLE_FUNC_STRING(__pkvm_host_reclaim_page),
+	HANDLE_FUNC_STRING(__pkvm_host_map_guest),
+	HANDLE_FUNC_STRING(__kvm_adjust_pc),
+	HANDLE_FUNC_STRING(__kvm_vcpu_run),
+	HANDLE_FUNC_STRING(__kvm_timer_set_cntvoff),
+	HANDLE_FUNC_STRING(__vgic_v3_save_vmcr_aprs),
+	HANDLE_FUNC_STRING(__vgic_v3_restore_vmcr_aprs),
+	HANDLE_FUNC_STRING(__pkvm_init_vm),
+	HANDLE_FUNC_STRING(__pkvm_init_vcpu),
+	HANDLE_FUNC_STRING(__pkvm_teardown_vm),
+	HANDLE_FUNC_STRING(__pkvm_vcpu_load),
+	HANDLE_FUNC_STRING(__pkvm_vcpu_put),
+	HANDLE_FUNC_STRING(__pkvm_vcpu_sync_state),
+	HANDLE_FUNC_STRING(__pkvm_iommu_driver_init),
+	HANDLE_FUNC_STRING(__pkvm_iommu_register),
+	HANDLE_FUNC_STRING(__pkvm_iommu_pm_notify),
+	HANDLE_FUNC_STRING(__pkvm_iommu_finalize),
+	HANDLE_FUNC_STRING(__pkvm_alloc_module_va),
+	HANDLE_FUNC_STRING(__pkvm_map_module_page),
+	HANDLE_FUNC_STRING(__pkvm_unmap_module_page),
+	HANDLE_FUNC_STRING(__pkvm_init_module),
+	HANDLE_FUNC_STRING(__pkvm_register_hcall),
+	HANDLE_FUNC_STRING(__pkvm_close_module_registration),
+};
+
+// /GHOST
+
+
+
+/* the following is a horrible-hack copy of functions from mem_protect.c - really these should be pulled out into a common file, but then they also have to be unified with functions in iommu.c that I don't want to touch right now */
+// GHOST
+static void host_lock_component(void)
+{
+	hyp_spin_lock(&host_mmu.lock);
+	// GHOST
+	record_and_check_abstraction_host_pre();
+	// /GHOST
+}
+
+static void host_unlock_component(void)
+{
+	// GHOST
+	record_and_copy_abstraction_host_post();
+	// /GHOST
+	hyp_spin_unlock(&host_mmu.lock);
+}
+
+static void hyp_lock_component(void)
+{
+	hyp_spin_lock(&pkvm_pgd_lock);
+	// GHOST
+	record_and_check_abstraction_pkvm_pre();
+	// /GHOST
+}
+
+static void hyp_unlock_component(void)
+{
+	// GHOST
+	record_and_copy_abstraction_pkvm_post();
+	// /GHOST
+	hyp_spin_unlock(&pkvm_pgd_lock);
+}
+// /GHOST
+
 static void handle_host_hcall(struct kvm_cpu_context *host_ctxt)
 {
 	DECLARE_REG(unsigned long, id, host_ctxt, 0);
@@ -1104,6 +1200,36 @@ static void handle_host_hcall(struct kvm_cpu_context *host_ctxt)
 
 	id -= KVM_HOST_SMCCC_ID(0);
 
+	// GHOST
+
+	_Bool b;
+	_Bool ghost_dump = ghost_control.dump_handle_host_hcall;
+	_Bool ghost_dump_verbose = ghost_control.dump_handle_host_hcall_verbose;
+	u64 i=0; /* base indent */
+	if (ghost_dump) {
+		hyp_puti(i);
+		hyp_putsp(GHOST_WHITE_ON_BLUE);
+		hyp_putsxn("handle_host_hcall id",id,64);
+		hyp_putsp((char*)ghost_host_hcall_string[id]);
+		hyp_putsp(GHOST_NORMAL);
+		hyp_putc('\n');
+	}
+	if (ghost_dump_verbose) {
+		hyp_puts("Common hcall information:\n");
+		ghost_dump_sysregs();
+		ghost_dump_setup();
+		//	if (static_branch_unlikely(&kvm_protected_mode_initialized)) {
+		ghost_hyp_put_mapping_reqs();
+		ghost_dump_pgtable(&pkvm_pgtable,"pkvm_pgtable", i);
+		ghost_check_hyp_mapping_reqs(&pkvm_pgtable,false /*noisy*/);
+		//dump_pgtable(pkvm_pgtable);  // around 140k lines
+		//	}
+		ghost_dump_pgtable(&host_mmu.pgt,"host_kvm.pgt", i);
+		ghost_dump_hyp_memory(0);
+		ghost_dump_shadow_table();
+		// /GHOST
+	}
+
 	if (unlikely(id < hcall_min || id >= ARRAY_SIZE(host_hcall)))
 		goto inval;
 
@@ -1113,6 +1239,36 @@ static void handle_host_hcall(struct kvm_cpu_context *host_ctxt)
 
 	cpu_reg(host_ctxt, 0) = SMCCC_RET_SUCCESS;
 	hfn(host_ctxt);
+
+        // GHOST
+	// check whether this is the last __pkvm_prot_finalize call; if so then record the common abstraction and start checking transitions
+	// TODO: could this miss a race, eg of a host_mem_abort by some other CPU after it has done its pkvm_prot_finalise but before this last one?  That one wouldn't matter - but could there be any that change the abstract state?
+	if (GHOST_EXEC_SPEC && !READ_ONCE(pkvm_prot_finalized_all) && id == __KVM_HOST_SMCCC_FUNC___pkvm_prot_finalize && cpu_reg(host_ctxt, 0) == SMCCC_RET_SUCCESS) {
+		hyp_spin_lock(&ghost_prot_finalized_lock);
+		pkvm_prot_finalized_cpu[hyp_smp_processor_id()]=true;
+		b = true;
+		for (i=0; i<hyp_nr_cpus; i++)
+			b = b && pkvm_prot_finalized_cpu[i];
+		WRITE_ONCE(pkvm_prot_finalized_all, b);
+		init_abstraction_common();
+		host_lock_component();
+		hyp_lock_component();
+		record_abstraction_common();
+		hyp_unlock_component();
+		host_unlock_component();
+		hyp_spin_unlock(&ghost_prot_finalized_lock);
+	}
+        // /GHOST
+
+        // GHOST
+
+	if (ghost_dump_verbose) {
+		hyp_puts("\nafter host hcall body");
+		ghost_dump_pgtable(&pkvm_pgtable,"pkvm_pgtable", i);
+		ghost_dump_pgtable(&host_mmu.pgt,"host_kvm.pgt", i);
+		//ghost_dump_hyp_memory();
+	}
+        // /GHOST
 
 	return;
 inval:
@@ -1141,10 +1297,38 @@ static void handle_host_smc(struct kvm_cpu_context *host_ctxt)
 	kvm_skip_host_instr();
 }
 
+// GHOST
+void hyp_put_exception_heading(void)
+{
+	hyp_putsp("\n");
+	hyp_putsp(GHOST_WHITE_ON_BLUE);
+	hyp_putsp("******  handle_trap  ***************************************************************");
+	hyp_putsp(GHOST_NORMAL);
+	hyp_putsp("\n");
+}
+// /GHOST
+
 void handle_trap(struct kvm_cpu_context *host_ctxt)
 {
-	u64 esr = read_sysreg_el2(SYS_ESR);
+	// GHOST
+	u64 ghost_impl_return_value;
+	_Bool check_this_transition=false;
+	if (GHOST_EXEC_SPEC && READ_ONCE(pkvm_prot_finalized_all)) {
+		clear_abstraction_thread_local();
+		record_abstraction_regs_pre(host_ctxt);
+		check_this_transition = true;
+	}
+	// /GHOST
 
+	// GHOST
+	if (ghost_control.dump_handle_trap) {
+		hyp_put_exception_heading();
+		//ghost_dump_sysregs();
+	}
+	// /GHOST
+
+
+	u64 esr = read_sysreg_el2(SYS_ESR);
 	switch (ESR_ELx_EC(esr)) {
 	case ESR_ELx_EC_HVC64:
 		handle_host_hcall(host_ctxt);
@@ -1163,4 +1347,21 @@ void handle_trap(struct kvm_cpu_context *host_ctxt)
 	default:
 		BUG();
 	}
+
+
+	// GHOST
+	if (check_this_transition) {
+		// record the remaining parts of the new impl abstract state
+		// (the pkvm, host, and vm components having been recorded at impl lock points)
+		record_abstraction_hyp_memory(this_cpu_ptr(&gs_recorded_post));
+		record_abstraction_regs_post(host_ctxt);
+		this_cpu_ptr(&gs_recorded_post)->hyp_physvirt_offset = hyp_physvirt_offset;
+		// compute the new spec abstract state
+		ghost_impl_return_value = cpu_reg(host_ctxt, 0);
+		compute_new_abstract_state_handle_trap(this_cpu_ptr(&gs_computed_post), this_cpu_ptr(&gs_recorded_pre), ghost_impl_return_value);
+		// and check the two are equal on relevant components
+		ghost_spec_assert(abstraction_equals_all(this_cpu_ptr(&gs_computed_post), this_cpu_ptr(&gs_recorded_post), this_cpu_ptr(&gs_recorded_pre)));
+	}
+	// /GHOST
+
 }

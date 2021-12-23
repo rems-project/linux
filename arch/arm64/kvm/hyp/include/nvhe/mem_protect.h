@@ -93,4 +93,10 @@ static __always_inline void __load_host_stage2(void)
 	else
 		write_sysreg(0, vttbr_el2);
 }
+
+
+// GHOST
+bool is_dabt(u64 esr);
+// /GHOST
+
 #endif /* __KVM_NVHE_MEM_PROTECT__ */

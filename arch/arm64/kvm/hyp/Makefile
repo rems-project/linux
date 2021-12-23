@@ -7,4 +7,6 @@ incdir := $(srctree)/$(src)/include
 subdir-asflags-y := -I$(incdir)
 subdir-ccflags-y := -I$(incdir)
 
-obj-$(CONFIG_KVM) += vhe/ nvhe/ pgtable.o
+obj-$(CONFIG_KVM) += vhe/ nvhe/ pgtable.o ghost_maplets.o ghost_pgtable.o ghost_control.o ghost_extra_debug-pl011.o nvhe/serial.o 
+
+

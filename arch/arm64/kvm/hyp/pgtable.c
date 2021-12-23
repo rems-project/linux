@@ -12,6 +12,18 @@
 #include <asm/stage2_pgtable.h>
 
 
+// GHOST
+#include <asm/kvm_mmu.h>      // needed for debug-pl011.h
+#include <../debug-pl011.h>
+#include <../ghost_extra_debug-pl011.h>
+//#include <nvhe/ghost_check_pgtables.h>
+#include "./ghost_pgtable.h"
+#include "./ghost_control.h"
+
+#pragma GCC diagnostic ignored "-Wdeclaration-after-statement"
+// /GHOST
+
+
 #define KVM_PTE_TYPE			BIT(1)
 #define KVM_PTE_TYPE_BLOCK		0
 #define KVM_PTE_TYPE_PAGE		1
@@ -62,6 +74,45 @@ struct kvm_pgtable_walk_data {
 	u64				addr;
 	const u64			end;
 };
+
+
+// for GHOST code: this type definition was just before kvm_get_vtcr, but we need it earlier to state pre/postconditions in __kvm_pgtable_walk, as we're doing that specific for the stage2, not for arbitrary callbacks
+struct stage2_map_data {
+	const u64			phys;
+	kvm_pte_t			attr;
+	u8				owner_id;
+
+	kvm_pte_t			*anchor;
+	kvm_pte_t			*childp;
+
+	struct kvm_s2_mmu		*mmu;
+	void				*memcache;
+
+	/* Force mappings to page granularity */
+	bool				force_pte;
+};
+
+// GHOST
+bool is_stage2_map_walker(struct kvm_pgtable_walk_data *data);
+
+void ghost_dump_kvm_pgtable(struct kvm_pgtable *pgt, u64 i)
+{
+	hyp_puti(i);
+	hyp_putsxn("ia_bits",pgt->ia_bits,32);
+	hyp_putsxn("start_level",pgt->start_level,32);
+	hyp_putsxn("pgd",(u64)(pgt->pgd),64);
+}
+void ghost_dump_kvm_pgtable_walk_data(struct kvm_pgtable_walk_data *data, u64 i)
+{
+	hyp_puti(i);
+	hyp_puts("pgd:");
+	ghost_dump_kvm_pgtable(data->pgt, 0);
+	hyp_putsxn("addr",data->addr,64);
+	hyp_putsxn("end",data->end,64);
+	hyp_putc('\n');
+}
+
+// /GHOST
 
 static bool kvm_phys_is_valid(u64 phys)
 {
@@ -189,11 +240,13 @@ static bool kvm_pgtable_walk_continue(const struct kvm_pgtable_walker *walker,
 }
 
 static int __kvm_pgtable_walk(struct kvm_pgtable_walk_data *data,
-			      struct kvm_pgtable_mm_ops *mm_ops, kvm_pteref_t pgtable, u32 level);
+			      struct kvm_pgtable_mm_ops *mm_ops, kvm_pteref_t pgtable, u32 level,
+			      u64 ghost_va_partial);
 
 static inline int __kvm_pgtable_visit(struct kvm_pgtable_walk_data *data,
 				      struct kvm_pgtable_mm_ops *mm_ops,
-				      kvm_pteref_t pteref, u32 level)
+				      kvm_pteref_t pteref, u32 level,
+				      u64 ghost_va_partial)
 {
 	enum kvm_pgtable_walk_flags flags = data->walker->flags;
 	kvm_pte_t *ptep = kvm_dereference_pteref(data->walker, pteref);
@@ -212,6 +265,13 @@ static inline int __kvm_pgtable_visit(struct kvm_pgtable_walk_data *data,
 	bool reload = false;
 	kvm_pteref_t childp;
 	bool table = kvm_pte_table(ctx.old, level);
+
+	// GHOST
+	//if (ghost_extra_debug_initialised) {
+	//	hyp_putsxn("__kvm_pgtable_visit &ret",(u64)&ret,64);
+	//	hyp_putc('\n');
+	//}
+	// /GHOST
 
 	if (table && (ctx.flags & KVM_PGTABLE_WALK_TABLE_PRE)) {
 		ret = kvm_pgtable_visitor_cb(data, &ctx, KVM_PGTABLE_WALK_TABLE_PRE);
@@ -243,7 +303,7 @@ static inline int __kvm_pgtable_visit(struct kvm_pgtable_walk_data *data,
 	}
 
 	childp = (kvm_pteref_t)kvm_pte_follow(ctx.old, mm_ops);
-	ret = __kvm_pgtable_walk(data, mm_ops, childp, level + 1);
+	ret = __kvm_pgtable_walk(data, mm_ops, childp, level + 1, ghost_va_partial);
 	if (!kvm_pgtable_walk_continue(data->walker, ret))
 		goto out;
 
@@ -258,13 +318,44 @@ out:
 }
 
 static int __kvm_pgtable_walk(struct kvm_pgtable_walk_data *data,
-			      struct kvm_pgtable_mm_ops *mm_ops, kvm_pteref_t pgtable, u32 level)
+			      struct kvm_pgtable_mm_ops *mm_ops, kvm_pteref_t pgtable, u32 level,
+			      u64 ghost_va_partial)
 {
 	u32 idx;
 	int ret = 0;
 
-	if (WARN_ON_ONCE(level >= KVM_PGTABLE_MAX_LEVELS))
-		return -EINVAL;
+	// GHOST
+	bool ghost_check = ghost_control.check___kvm_pgtable_walk && is_stage2_map_walker(data); // turning off for now
+	u64 i = 4 + level * 2;  /* base indent */
+	u64 ghost_va_partial_new;
+	mapping mapping_pre, mapping_post; // interpretation of pgt on entry and exit
+	mapping mapping_pre_annot, mapping_post_annot; // interpretation of pgtable on entry and exit, cut down to annot parts
+	mapping mapping_requested, mapping_pre_plus_requested;
+
+	if (ghost_check) {
+		hyp_putspi("__kvm_pgtable_walk ", i);
+		if (level==0) ghost_dump_kvm_pgtable_walk_data(data, i);
+		hyp_puti(i+2);
+		hyp_putsxn("pgtable",(u64)pgtable,64);
+		hyp_putsxn("level",level,32);
+		hyp_putsxn("va_partial",ghost_va_partial,64);
+		hyp_putc('\n');
+
+		ghost_lock_maplets();
+		mapping_pre = ghost_record_pgtable_partial(pgtable, level, ghost_va_partial, dummy_aal(), "__kvm_pgtable_walk pre", i+2);
+		if (((struct stage2_map_data *)(data->walker->arg))->anchor == NULL) { // if anchor not set
+			// TODO: I guess we need to cut down the (addr,end) to the footprint of the subpagetable we're working on. We don't see that in the boot as the fault-on-demand only seems to request a single-page mapping?  If it never does, the anchor machinery is irrelevant for that.
+			mapping_requested = mapping_singleton(data->addr, (data->end - data->addr)/PAGE_SIZE, maplet_target_mapped(((struct stage2_map_data *)(data->walker->arg))->phys, DUMMY_ATTR, dummy_aal()));
+		} else {
+			mapping_requested = mapping_empty_();
+		}
+		ghost_unlock_maplets();
+	}
+	// /GHOST
+	if (WARN_ON_ONCE(level >= KVM_PGTABLE_MAX_LEVELS)) {
+		ret = -EINVAL;
+		goto out;
+	}
 
 	for (idx = kvm_pgtable_idx(data, level); idx < PTRS_PER_PTE; ++idx) {
 		kvm_pteref_t pteref = &pgtable[idx];
@@ -272,11 +363,47 @@ static int __kvm_pgtable_walk(struct kvm_pgtable_walk_data *data,
 		if (data->addr >= data->end)
 			break;
 
-		ret = __kvm_pgtable_visit(data, mm_ops, pteref, level);
+		// GHOST
+                switch (level) {
+                case 0: ghost_va_partial_new = ghost_va_partial | ((u64)idx << 39); break;
+                case 1: ghost_va_partial_new = ghost_va_partial | ((u64)idx << 30); break;
+                case 2: ghost_va_partial_new = ghost_va_partial | ((u64)idx << 21); break;
+                case 3: ghost_va_partial_new = ghost_va_partial | ((u64)idx << 12); break;
+                default: check_assert_fail("unhandled level"); // cases are exhaustive
+                }
+		// /GHOST
+		ret = __kvm_pgtable_visit(data, mm_ops, pteref, level, ghost_va_partial_new);
 		if (ret)
 			break;
 	}
 
+out:
+	// GHOST
+	if (ghost_check) {
+		// sketch of the postcondition - punting on sundry rounding and error/edge cases
+		// some of this is shared with the kvm_pgtable_stage2_map postcondition, but for a subtable
+		ghost_lock_maplets();
+		mapping_post = ghost_record_pgtable_partial(pgtable, level, ghost_va_partial, dummy_aal(), "__kvm_pgtable_walk post", i+2);
+		// postcondition: mapping_requested included in mapping_post
+		mapping_submapping(mapping_requested, mapping_post, "__kvm_pgtable_walk_post", "mapping_requested", "mapping_post", i+2);
+		// postcondition: mapping_post included in mapping_pre + mapping_requested
+		mapping_pre_plus_requested = mapping_plus(mapping_pre, mapping_requested);
+		mapping_submapping(mapping_post, mapping_pre_plus_requested, "__kvm_pgtable_walk_post", "mapping_post", "mapping_pre_plus_requested", i+2);
+		// postcondition: mapping_post and mapping_pre have the same annotation part
+		mapping_pre_annot = mapping_annot(mapping_pre);
+		mapping_post_annot = mapping_annot(mapping_post);
+		mapping_equal(mapping_pre_annot, mapping_post_annot, "__kvm_pgtable_walk_post annot equal", "mapping_pre_annot", "mapping_post_annot", i+2);
+		free_mapping(mapping_pre);
+		free_mapping(mapping_post);
+		free_mapping(mapping_pre_annot);
+		free_mapping(mapping_post_annot);
+		free_mapping(mapping_requested);
+		free_mapping(mapping_pre_plus_requested);
+		ghost_unlock_maplets();
+		// in addition to these, we need various properties of the intervening memory+tlbi+dsb state, as sketched for kvm_pgtable_stage2_map
+		// if the anchor was set on entry, the mapping_requested was empty, but we should have free'd all the pages below, and cleared the anchor when we got back to it
+	}
+	// /GHOST
 	return ret;
 }
 
@@ -285,7 +412,17 @@ static int _kvm_pgtable_walk(struct kvm_pgtable *pgt, struct kvm_pgtable_walk_da
 	u32 idx;
 	int ret = 0;
 	u64 limit = BIT(pgt->ia_bits);
-
+	u64 ghost_va_partial;
+	// GHOST
+	bool ghost_check = ghost_control.check__kvm_pgtable_walk &&  is_stage2_map_walker(data);/* turning off for now to reduce noise */
+	u64 i=2; /* base indent */
+	if (ghost_check) {
+		hyp_putspi("_kvm_pgtable_walk\n", i);
+	        ghost_dump_kvm_pgtable_walk_data(data, i+2);
+		hyp_putsxn("pgt",(u64)pgt,64);
+		hyp_putc('\n');
+	}
+	// /GHOST
 	if (data->addr > limit || data->end > limit)
 		return -ERANGE;
 
@@ -295,7 +432,10 @@ static int _kvm_pgtable_walk(struct kvm_pgtable *pgt, struct kvm_pgtable_walk_da
 	for (idx = kvm_pgd_page_idx(pgt, data->addr); data->addr < data->end; ++idx) {
 		kvm_pteref_t pteref = &pgt->pgd[idx * PTRS_PER_PTE];
 
-		ret = __kvm_pgtable_walk(data, pgt->mm_ops, pteref, pgt->start_level);
+		// GHOST
+		ghost_va_partial = 0;  // TODO?
+		// /GHOST
+		ret = __kvm_pgtable_walk(data, pgt->mm_ops, pteref, pgt->start_level, ghost_va_partial);
 		if (ret)
 			break;
 	}
@@ -303,6 +443,7 @@ static int _kvm_pgtable_walk(struct kvm_pgtable *pgt, struct kvm_pgtable_walk_da
 	return ret;
 }
 
+/* GHOST: maybe we'd just inline this in the verification of kvm_pgtable_stage2_map, rather than more-or-less duplicate their specifications? */
 int kvm_pgtable_walk(struct kvm_pgtable *pgt, u64 addr, u64 size,
 		     struct kvm_pgtable_walker *walker)
 {
@@ -589,20 +730,8 @@ void kvm_pgtable_hyp_destroy(struct kvm_pgtable *pgt)
 	pgt->pgd = NULL;
 }
 
-struct stage2_map_data {
-	const u64			phys;
-	kvm_pte_t			attr;
-	u8				owner_id;
-
-	kvm_pte_t			*anchor;
-	kvm_pte_t			*childp;
-
-	struct kvm_s2_mmu		*mmu;
-	void				*memcache;
-
-	/* Force mappings to page granularity */
-	bool				force_pte;
-};
+//  GHOST: struct stage2_map_data  was here; moved above
+// /GHOST
 
 u64 kvm_get_vtcr(u64 mmfr0, u64 mmfr1, u32 phys_shift)
 {
@@ -848,6 +977,13 @@ static int stage2_map_walker_try_leaf(const struct kvm_pgtable_visit_ctx *ctx,
 	struct kvm_pgtable *pgt = data->mmu->pgt;
 	struct kvm_pgtable_mm_ops *mm_ops = ctx->mm_ops;
 
+	// GHOST
+	//if (ghost_extra_debug_initialised) {
+	//	hyp_putsxn("stage2_map_walker_try_leaf &new",(u64)&new,64);
+	//	hyp_putc('\n');
+	//}
+	// /GHOST
+
 	if (!stage2_leaf_mapping_allowed(ctx, data))
 		return -E2BIG;
 
@@ -912,6 +1048,12 @@ static int stage2_map_walk_leaf(const struct kvm_pgtable_visit_ctx *ctx,
 	struct kvm_pgtable_mm_ops *mm_ops = ctx->mm_ops;
 	kvm_pte_t *childp, new;
 	int ret;
+	// GHOST
+	//	if (ghost_extra_debug_initialised) {
+	//	hyp_putsxn("stage2_map_walk_leaf &ret",(u64)&ret,64);
+	//	hyp_putc('\n');
+	//}
+	// /GHOST
 
 	ret = stage2_map_walker_try_leaf(ctx, data);
 	if (ret != -E2BIG)
@@ -972,6 +1114,40 @@ int kvm_pgtable_stage2_map(struct kvm_pgtable *pgt, u64 addr, u64 size,
 			   void *mc, enum kvm_pgtable_walk_flags flags)
 {
 	int ret;
+
+	// GHOST
+	bool ghost_check = ghost_control.check_kvm_pgtable_stage2_map;
+	int i=0;  /* base indent */
+	mapping mapping_pre, mapping_post; // interpretation of pgt on entry and exit
+	mapping mapping_pre_annot, mapping_post_annot; // interpretation of pgt on entry and exit, cut down to annot parts
+	mapping mapping_requested, mapping_pre_plus_requested;
+	if (ghost_check) {
+		hyp_putspi("*********************************************************\n", i);
+		hyp_putspi("kvm_pgtable_stage2_map:\n", i);
+
+		// mapping_requested = addr..addr+size |-> (phys..phys+size, prot)
+		ghost_lock_maplets();
+		mapping_requested = mapping_singleton(addr, size / PAGE_SIZE, maplet_target_mapped(phys, DUMMY_ATTR, dummy_aal()));
+// the attribute we see in the constructed table is
+// 1000000000007fc
+// 0000000100000000000000000000000000000000000000000000011111111100
+// bits 56 and 10-2 all set
+// 	56 is in 58:55 reserved for s/w use
+//  10 is AF               the access flag
+//  9:8 is SH[1:0]         11 for Normal memory means Inner Shareable (if effecticve VTCR_EL2.DS=0)
+//  7:6 is S2AP[1:0]       11 means Access from N-s EL1 or N-s EL0 is Read/write
+//  5:2 is MemAttr[3:0]    11 is Normal, Outer Write-Back Cacheable, Inner Write-Back Cacheable
+
+		ghost_unlock_maplets();
+
+		hyp_putspi("mapping_requested\n", i+2);
+		hyp_put_mapping(mapping_requested, i+2);
+
+		// record mapping on entry
+		mapping_pre = ghost_record_pgtable(pgt, "kvm_pgtable_stage2_map pre", i+2);
+	}
+        // /GHOST
+
 	struct stage2_map_data map_data = {
 		.phys		= ALIGN_DOWN(phys, PAGE_SIZE),
 		.mmu		= pgt->mmu,
@@ -986,17 +1162,56 @@ int kvm_pgtable_stage2_map(struct kvm_pgtable *pgt, u64 addr, u64 size,
 		.arg		= &map_data,
 	};
 
-	if (WARN_ON((pgt->flags & KVM_PGTABLE_S2_IDMAP) && (addr != phys)))
-		return -EINVAL;
+	if (WARN_ON((pgt->flags & KVM_PGTABLE_S2_IDMAP) && (addr != phys))) {
+		ret = -EINVAL;
+		goto out;
+	}
 
 	ret = stage2_set_prot_attr(pgt, prot, &map_data.attr);
 	if (ret)
-		return ret;
+		goto out;
 
 	ret = kvm_pgtable_walk(pgt, addr, size, &walker);
 	dsb(ishst);
+out:
+	// GHOST
+	if (ghost_check) {
+		// sketch of the postcondition - punting on sundry rounding and error/edge cases
+		ghost_lock_maplets();
+		mapping_post = ghost_record_pgtable(pgt, "kvm_pgtable_stage2_map post", i+2);
+		// postcondition: mapping_requested included in mapping_post
+		mapping_submapping(mapping_requested, mapping_post, "kvm_pgtable_stage2_map post", "mapping_requested", "mapping_post", i+2);
+		// postcondition: mapping_post included in mapping_pre + mapping_requested
+		mapping_pre_plus_requested = mapping_plus(mapping_pre, mapping_requested);
+		mapping_submapping(mapping_post, mapping_pre_plus_requested, "kvm_pgtable_stage2_map post", "mapping_post", "mapping_pre_plus_requested", i+2);
+		// postcondition: mapping_post and mapping_pre have the same annotation part
+		mapping_pre_annot = mapping_annot(mapping_pre);
+		mapping_post_annot = mapping_annot(mapping_post);
+		mapping_equal(mapping_pre_annot, mapping_post_annot, "kvm_pgtable_stage2_map post annot equal", "mapping_pre_annot", "mapping_post_annot", i+2);
+		free_mapping(mapping_pre);
+		free_mapping(mapping_post);
+		free_mapping(mapping_pre_annot);
+		free_mapping(mapping_post_annot);
+		free_mapping(mapping_requested);
+		free_mapping(mapping_pre_plus_requested);
+		ghost_unlock_maplets();
+		// in addition to these, we need to know:
+		//  - that the second condition above held throughout any changes (with an invariant on the pgt)
+		//  - that the break-before-make protocol and sufficient barriers have been conformed with (with that invariant being over some tlbi/dsb-state-annotated semantics)
+		//  - the ownership transfer of pages between the pgt and by the allocator is handled correctly (standard separation-logic stuff)
+		// perhaps we also need to know that new mappings are not block mappings, and that only block mappings will be lost?  Without that, mem_protect.c:host_stage2_idmap can't guarantee to actually establish the new mapping, as another thread could come in after the host_unlock_component().  If the code actually relies in that case on again trapping and remapping, liveness is questionable.
+	}
+	// /GHOST
+
 	return ret;
 }
+
+// GHOST
+bool is_stage2_map_walker(struct kvm_pgtable_walk_data *data)
+{
+	return data->walker->cb == stage2_map_walker;
+}
+// /GHOST
 
 int kvm_pgtable_stage2_set_owner(struct kvm_pgtable *pgt, u64 addr, u64 size,
 				 void *mc, u8 owner_id)
@@ -1272,6 +1487,10 @@ int __kvm_pgtable_stage2_init(struct kvm_pgtable *pgt, struct kvm_s2_mmu *mmu,
 	pgt->mmu		= mmu;
 	pgt->flags		= flags;
 	pgt->force_pte_cb	= force_pte_cb;
+
+	// GHOST
+	pgt->ghost_mapping = mapping_empty_();
+	// /GHOST
 
 	/* Ensure zeroed PGD pages are visible to the hardware walker */
 	dsb(ishst);

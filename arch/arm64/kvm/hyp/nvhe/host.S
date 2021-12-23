@@ -138,6 +138,9 @@ SYM_FUNC_END(__host_hvc)
 	.align 7
 .L__vect_start\@:
 	stp	x0, x1, [sp, #-16]!
+        // GHOST
+        // bl ghost_get_sysregs // this panics - presumably needs fancier address futzing and/or linking
+        // /GHOST
 	mrs	x0, esr_el2
 	ubfx	x0, x0, #ESR_ELx_EC_SHIFT, #ESR_ELx_EC_WIDTH
 	cmp	x0, #ESR_ELx_EC_HVC64
