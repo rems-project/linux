@@ -17,6 +17,9 @@
 #define KVM_PTE_TYPE_PAGE		1
 #define KVM_PTE_TYPE_TABLE		1
 
+//#define KVM_PTE_ADDR_51_48		GENMASK(15, 12)
+#define KVM_PTE_ADDR_MASK		__GENMASK(47, PAGE_SHIFT)
+#define KVM_PTE_ADDR_51_48		__GENMASK(15, 12)
 #define KVM_PTE_LEAF_ATTR_LO		GENMASK(11, 2)
 
 #define KVM_PTE_LEAF_ATTR_LO_S1_ATTRIDX	GENMASK(4, 2)
@@ -263,7 +266,9 @@ static int __kvm_pgtable_walk(struct kvm_pgtable_walk_data *data,
 	u32 idx;
 	int ret = 0;
 
-	if (WARN_ON_ONCE(level >= KVM_PGTABLE_MAX_LEVELS))
+	//CERB_WORK_AROUND: expression statements
+	//if (WARN_ON_ONCE(level >= KVM_PGTABLE_MAX_LEVELS))
+	if ((level >= KVM_PGTABLE_MAX_LEVELS))
 		return -EINVAL;
 
 	for (idx = kvm_pgtable_idx(data, level); idx < PTRS_PER_PTE; ++idx) {

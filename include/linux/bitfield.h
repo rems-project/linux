@@ -149,11 +149,14 @@
  * FIELD_GET() extracts the field specified by @_mask from the
  * bitfield passed in as @_reg by masking and shifting it down.
  */
+//CERB_WORK_AROUND: expression statements
+//#define FIELD_GET(_mask, _reg)						\
+//	({								\
+//		__BF_FIELD_CHECK(_mask, _reg, 0U, "FIELD_GET: ");	\
+//		(typeof(_mask))(((_reg) & (_mask)) >> __bf_shf(_mask)); \
+//	})
 #define FIELD_GET(_mask, _reg)						\
-	({								\
-		__BF_FIELD_CHECK(_mask, _reg, 0U, "FIELD_GET: ");	\
-		(typeof(_mask))(((_reg) & (_mask)) >> __bf_shf(_mask));	\
-	})
+		(typeof(_mask))(((_reg) & (_mask)) >> __bf_shf(_mask)) 	\
 
 extern void __compiletime_error("value doesn't fit into mask")
 __field_overflow(void);
