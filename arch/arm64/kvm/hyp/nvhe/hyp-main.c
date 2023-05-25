@@ -863,7 +863,9 @@ static void handle___kvm_enable_ssbs(struct kvm_cpu_context *host_ctxt)
 {
 	u64 tmp;
 
-	tmp = read_sysreg_el2(SYS_SCTLR);
+	//CERB_WORK_AROUND expression statements
+	//tmp = read_sysreg_el2(SYS_SCTLR);
+	tmp = 0;
 	tmp |= SCTLR_ELx_DSSBS;
 	write_sysreg_el2(tmp, SYS_SCTLR);
 }
@@ -1050,7 +1052,8 @@ static void handle___pkvm_teardown_vm(struct kvm_cpu_context *host_ctxt)
 
 typedef void (*hcall_t)(struct kvm_cpu_context *);
 
-#define HANDLE_FUNC(x)	[__KVM_HOST_SMCCC_FUNC_##x] = (hcall_t)handle_##x
+//CERB_ERROR: constraint violation: initializer element is not a compile-time constant
+#define HANDLE_FUNC(x)	[__KVM_HOST_SMCCC_FUNC_##x] = (hcall_t)0
 
 static const hcall_t host_hcall[] = {
 	/* ___kvm_hyp_init */
@@ -1143,7 +1146,9 @@ static void handle_host_smc(struct kvm_cpu_context *host_ctxt)
 
 void handle_trap(struct kvm_cpu_context *host_ctxt)
 {
-	u64 esr = read_sysreg_el2(SYS_ESR);
+	//CERB_WORK_AROUND: expression statements
+	//u64 esr = read_sysreg_el2(SYS_ESR);
+	u64 esr = 0;
 
 	switch (ESR_ELx_EC(esr)) {
 	case ESR_ELx_EC_HVC64:
@@ -1155,6 +1160,8 @@ void handle_trap(struct kvm_cpu_context *host_ctxt)
 	case ESR_ELx_EC_FP_ASIMD:
 	case ESR_ELx_EC_SVE:
 		fpsimd_host_restore();
+		//sysreg_clear_set(cptr_el2, CPTR_EL2_TZ, 0);
+		//sve_cond_update_zcr_vq(ZCR_ELx_LEN_MASK, SYS_ZCR_EL2);
 		break;
 	case ESR_ELx_EC_IABT_LOW:
 	case ESR_ELx_EC_DABT_LOW:

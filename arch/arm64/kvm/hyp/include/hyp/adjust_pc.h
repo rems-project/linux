@@ -47,7 +47,8 @@ static inline void __kvm_skip_instr(struct kvm_vcpu *vcpu)
  */
 static inline void kvm_skip_host_instr(void)
 {
-	write_sysreg_el2(read_sysreg_el2(SYS_ELR) + 4, SYS_ELR);
+	//CERB_WORK_AROUND: expression statements
+	//write_sysreg_el2(read_sysreg_el2(SYS_ELR) + 4, SYS_ELR);
 }
 
 #endif

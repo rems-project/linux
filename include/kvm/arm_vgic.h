@@ -304,6 +304,7 @@ struct vgic_v2_cpu_if {
 };
 
 struct vgic_v3_cpu_if {
+    int CERB_WORK_AROUND; // empty struct
 	u32		vgic_hcr;
 	u32		vgic_vmcr;
 	u32		vgic_sre;	/* Restored only, change ignored */

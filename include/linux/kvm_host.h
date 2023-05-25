@@ -318,6 +318,7 @@ struct kvm_mmio_fragment {
 };
 
 struct kvm_vcpu {
+    int CERB_WORK_AROUND; // empty structs
 	struct kvm *kvm;
 #ifdef CONFIG_PREEMPT_NOTIFIERS
 	struct preempt_notifier preempt_notifier;
