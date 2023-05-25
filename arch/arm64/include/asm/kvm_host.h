@@ -77,6 +77,7 @@ struct kvm_vmid {
 };
 
 struct kvm_s2_mmu {
+	int CERB_WORK_AROUND; // empty struct
 	struct kvm_vmid vmid;
 
 	/*
