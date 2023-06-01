@@ -40,7 +40,7 @@ def preprocess(cmd, filename):
     return re.sub(f'-c -o .* {filename}', f'--preprocess --comments --comments-in-macros {filename}', cmd)
 
 def cerberus(cmd, filename):
-    return 'cerberus -include cerb_work_around.h ' + ' '.join(x.group() for x in re.finditer('(-I|-include )\S+', cmd)) + ' ' + filename
+    return 'cerberus -include cerb_work_around.h ' + ' '.join(x.group() for x in re.finditer(r'(-I|-include )\S+', cmd)) + ' ' + filename
 
 def create_command(data, args):
     result = []
@@ -63,38 +63,38 @@ def for_file(args):
     
     output = create_command(data, args)
     
-    if len(output) == 1:
+    output_len = len(output)
+    if output_len == 1:
         print(output[0])
         exit(0)
-    elif len(output) == 0:
+    elif ouput_len == 0:
         eprint(f'*{args.file_suffix} not found in compile_commands.json')
     else:
         eprint(f'More than one file matching *{args.file_suffix} found in compile_commands.json', then_exit=False)
         eprint([ name for name in map(extract_filename, output) ])
 
+# top level
 parser = argparse.ArgumentParser(description="Helper script for generating commands.")
 parser.set_defaults(func=(lambda _: parser.parse_args(['-h'])))
 
+# subparsers
 subparsers = parser.add_subparsers(title='subcommands', description='Choose which action to execute', help='Additional help')
 
+# make subcommand
 parser_make = subparsers.add_parser('make',
         help='Generate a compile_commands.json file; run AFTER building pkvm.')
-
 parser_make.set_defaults(func=write_compile_commands)
 
+# for subcommand
 parser_for = subparsers.add_parser('for',
         help='Get the compile command for a file (and tool).')
-
 parser_for.add_argument('--tool', choices=['pp', 'preprocess', 'cerberus'],
         required=False, help='Ouptut command for specifc use case.')
-
 parser_for.add_argument('file_suffix',
         help='Uniquely identifying suffix of a file in compile_commands.json')
-
 parser_for.set_defaults(func=for_file)
 
+# Parse args and call func (as set using set_defaults)
 args = parser.parse_args()
-
-# Call the func (as set using set_defaults for the parent & subcommands)
 args.func(args)
 
