@@ -79,6 +79,13 @@ enum __kvm_host_smccc_func {
 	__KVM_HOST_SMCCC_FUNC___pkvm_init_vm,
 	__KVM_HOST_SMCCC_FUNC___pkvm_init_vcpu,
 	__KVM_HOST_SMCCC_FUNC___pkvm_teardown_vm,
+
+	/* Hypercalls available if CONFIG_NVHE_KCOV is set */
+	__KVM_HOST_SMCCC_FUNC___pkvm_kcov_init_buffer,
+	__KVM_HOST_SMCCC_FUNC___pkvm_kcov_buffer_add_page,
+	__KVM_HOST_SMCCC_FUNC___pkvm_kcov_teardown_buffer,
+	__KVM_HOST_SMCCC_FUNC___pkvm_kcov_enable,
+	__KVM_HOST_SMCCC_FUNC___pkvm_kcov_disable,
 };
 
 #define DECLARE_KVM_VHE_SYM(sym)	extern char sym[]

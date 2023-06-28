@@ -424,6 +424,19 @@ extern s64 kvm_nvhe_sym(hyp_physvirt_offset);
 extern u64 kvm_nvhe_sym(hyp_cpu_logical_map)[NR_CPUS];
 #define hyp_cpu_logical_map CHOOSE_NVHE_SYM(hyp_cpu_logical_map)
 
+#ifdef CONFIG_NVHE_KCOV
+extern u64 kvm_nvhe_sym(hyp_kimage_voffset);
+#define hyp_kimage_voffset CHOOSE_NVHE_SYM(hyp_kimage_voffset)
+
+extern u64 kvm_nvhe_sym(hyp_kimage_vaddr);
+#define hyp_kimage_vaddr CHOOSE_NVHE_SYM(hyp_kimage_vaddr)
+
+/* This function will fill in the previous two variable at setup time */
+void init_hyp_kcov_layout(void);
+#else
+static inline void init_hyp_kcov_layout(void){}
+#endif
+
 struct vcpu_reset_state {
 	unsigned long	pc;
 	unsigned long	r0;

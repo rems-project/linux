@@ -29,6 +29,7 @@ static inline phys_addr_t hyp_virt_to_phys(void *addr)
 
 #define hyp_phys_to_pfn(phys)	((phys) >> PAGE_SHIFT)
 #define hyp_pfn_to_phys(pfn)	((phys_addr_t)((pfn) << PAGE_SHIFT))
+#define hyp_pfn_to_virt(pfn)	(__hyp_va(hyp_pfn_to_phys(pfn)))
 #define hyp_phys_to_page(phys)	(&hyp_vmemmap[hyp_phys_to_pfn(phys)])
 #define hyp_virt_to_page(virt)	hyp_phys_to_page(__hyp_pa(virt))
 #define hyp_virt_to_pfn(virt)	hyp_phys_to_pfn(__hyp_pa(virt))
