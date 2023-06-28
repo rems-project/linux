@@ -101,6 +101,7 @@ __init void kvm_compute_layout(void)
 	}
 	tag_val >>= tag_lsb;
 
+	init_hyp_kcov_layout();
 	init_hyp_physvirt_offset();
 }
 

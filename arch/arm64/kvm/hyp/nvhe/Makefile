@@ -23,6 +23,7 @@ lib-objs := $(addprefix ../../../lib/, $(lib-objs))
 hyp-obj-y := timer-sr.o sysreg-sr.o debug-sr.o switch.o tlb.o hyp-init.o host.o \
 	 hyp-main.o hyp-smp.o psci-relay.o early_alloc.o page_alloc.o \
 	 cache.o setup.o mm.o mem_protect.o sys_regs.o pkvm.o stacktrace.o
+hyp-obj-$(CONFIG_NVHE_KCOV) += kcov.o
 hyp-obj-y += ../vgic-v3-sr.o ../aarch32.o ../vgic-v2-cpuif-proxy.o ../entry.o \
 	 ../fpsimd.o ../hyp-entry.o ../exception.o ../pgtable.o
 hyp-obj-$(CONFIG_DEBUG_LIST) += list_debug.o
@@ -131,7 +132,10 @@ GCOV_PROFILE	:= n
 KASAN_SANITIZE	:= n
 KCSAN_SANITIZE	:= n
 UBSAN_SANITIZE	:= n
-KCOV_INSTRUMENT	:= n
+KCOV_INSTRUMENT	:= $(if $(CONFIG_NVHE_KCOV),y,n)
+
+# Don't self instrument the kcov file
+KCOV_INSTRUMENT_kcov.nvhe.o := n
 
 # Skip objtool checking for this directory because nVHE code is compiled with
 # non-standard build rules.
