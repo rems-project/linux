@@ -19,6 +19,7 @@ struct kcov_remote_arg {
 #define KCOV_REMOTE_MAX_HANDLES		0x100
 
 #define KCOV_INIT_TRACE			_IOR('c', 1, unsigned long)
+#define KCOV_INIT_HYP_TRACE		_IOR('c', 2, unsigned long)
 #define KCOV_ENABLE			_IO('c', 100)
 #define KCOV_DISABLE			_IO('c', 101)
 #define KCOV_REMOTE_ENABLE		_IOW('c', 102, struct kcov_remote_arg)
@@ -39,6 +40,9 @@ enum {
 
 #define KCOV_ENABLE_MODE_MASK (0xffffull)
 #define KCOV_ENABLE_OPTIONS_MASK (0xffffull << 48)
+#define KCOV_ENABLE_HYP (0x1ull << 48)
+#define KCOV_ENABLE_HYP_ONLY (0x1ull << 49)
+
 /*
  * The format for the types of collected comparisons.
  *

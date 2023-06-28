@@ -59,6 +59,8 @@ struct kcov {
 	unsigned int		size;
 	/* Coverage buffer shared with user space. */
 	void			*area;
+	/* Hypervisor buffer index, -1 if hyp tracing disabled */
+	int			hyp_index;
 	/* Tracing option for coarse filtering */
 	unsigned long		options;
 	/* Task for which we collect coverage, or NULL. */
@@ -344,6 +346,18 @@ void notrace __sanitizer_cov_trace_switch(u64 val, u64 *cases)
 EXPORT_SYMBOL(__sanitizer_cov_trace_switch);
 #endif /* ifdef CONFIG_KCOV_ENABLE_COMPARISONS */
 
+static int kcov_hyp_start(struct kcov *kcov, enum kcov_mode mode,
+				unsigned long options)
+{
+	if (!(options & KCOV_ENABLE_HYP))
+		return 0;
+	if (kcov->hyp_index < 0)
+		return -EINVAL;
+	if (mode != KCOV_MODE_TRACE_PC)
+		return -EINVAL;
+	return kvm_kcov_hyp_enable_tracing(kcov->hyp_index);
+}
+
 static void kcov_start(struct task_struct *t, struct kcov *kcov,
 			unsigned int size, void *area, enum kcov_mode mode,
 			int sequence, unsigned long options)
@@ -354,9 +368,22 @@ static void kcov_start(struct task_struct *t, struct kcov *kcov,
 	t->kcov_size = size;
 	t->kcov_area = area;
 	t->kcov_sequence = sequence;
+	if (options & KCOV_ENABLE_HYP_ONLY)
+		return;
 	/* See comment in check_kcov_mode(). */
 	barrier();
 	WRITE_ONCE(t->kcov_mode, mode);
+}
+
+static int kcov_hyp_stop(struct task_struct *t, struct kcov *kcov)
+{
+	if (kcov->hyp_index < 0)
+		return 0;
+	if (!(kcov->options & KCOV_ENABLE_HYP))
+		return 0;
+	if(t != current)
+		return -1;
+	return kvm_kcov_hyp_disable_tracing();
 }
 
 static void kcov_stop(struct task_struct *t)
@@ -413,6 +440,7 @@ static void kcov_remote_reset(struct kcov *kcov)
 static void kcov_disable(struct task_struct *t, struct kcov *kcov)
 {
 	kcov_task_reset(t);
+	WARN_ON(kcov_hyp_stop(t, kcov));
 	if (kcov->remote)
 		kcov_remote_reset(kcov);
 	else
@@ -428,6 +456,8 @@ static void kcov_put(struct kcov *kcov)
 {
 	if (refcount_dec_and_test(&kcov->refcount)) {
 		kcov_remote_reset(kcov);
+		if (kcov->hyp_index >= 0)
+			WARN_ON(kvm_kcov_hyp_teardown_tracing_buffer(kcov->hyp_index));
 		vfree(kcov->area);
 		kfree(kcov);
 	}
@@ -517,6 +547,7 @@ static int kcov_open(struct inode *inode, struct file *filep)
 	kcov->mode = KCOV_MODE_DISABLED;
 	kcov->options = 0;
 	kcov->sequence = 1;
+	kcov->hyp_index = -1;
 	refcount_set(&kcov->refcount, 1);
 	spin_lock_init(&kcov->lock);
 	filep->private_data = kcov;
@@ -545,6 +576,8 @@ static int kcov_get_mode(unsigned long arg)
 }
 
 static unsigned long kcov_check_options(unsigned long arg){
+	if ((arg & KCOV_ENABLE_HYP_ONLY) && !(arg & KCOV_ENABLE_HYP))
+		return -EINVAL;
 	return arg & KCOV_ENABLE_OPTIONS_MASK;
 }
 
@@ -585,7 +618,7 @@ static int kcov_ioctl_locked(struct kcov *kcov, unsigned int cmd,
 {
 	struct task_struct *t;
 	unsigned long flags, unused, options;
-	int mode, i;
+	int mode, i, ret;
 	struct kcov_remote_arg *remote_arg;
 	struct kcov_remote *remote;
 
@@ -610,6 +643,9 @@ static int kcov_ioctl_locked(struct kcov *kcov, unsigned int cmd,
 		if (options < 0)
 			return options;
 		kcov_fault_in_area(kcov);
+		ret = kcov_hyp_start(kcov, mode, options);
+		if (ret)
+			return ret;
 		kcov->mode = mode;
 		kcov->options = options;
 		kcov_start(t, kcov, kcov->size, kcov->area, kcov->mode,
@@ -704,6 +740,7 @@ static long kcov_ioctl(struct file *filep, unsigned int cmd, unsigned long arg)
 	kcov = filep->private_data;
 	switch (cmd) {
 	case KCOV_INIT_TRACE:
+	case KCOV_INIT_HYP_TRACE:
 		/*
 		 * Enable kcov in trace mode and setup buffer size.
 		 * Must happen before anything else.
@@ -722,6 +759,15 @@ static long kcov_ioctl(struct file *filep, unsigned int cmd, unsigned long arg)
 			spin_unlock_irqrestore(&kcov->lock, flags);
 			vfree(area);
 			return -EBUSY;
+		}
+		if (cmd == KCOV_INIT_HYP_TRACE) {
+			res = kvm_kcov_hyp_init_tracing_buffer(area, size);
+			if (res < 0) {
+				spin_unlock_irqrestore(&kcov->lock, flags);
+				vfree(area);
+				return res;
+			}
+			kcov->hyp_index = res;
 		}
 		kcov->area = area;
 		kcov->size = size;
