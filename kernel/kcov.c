@@ -59,6 +59,8 @@ struct kcov {
 	unsigned int		size;
 	/* Coverage buffer shared with user space. */
 	void			*area;
+	/* Tracing option for coarse filtering */
+	unsigned long		options;
 	/* Task for which we collect coverage, or NULL. */
 	struct task_struct	*t;
 	/* Collecting coverage from remote (background) threads. */
@@ -344,7 +346,7 @@ EXPORT_SYMBOL(__sanitizer_cov_trace_switch);
 
 static void kcov_start(struct task_struct *t, struct kcov *kcov,
 			unsigned int size, void *area, enum kcov_mode mode,
-			int sequence)
+			int sequence, unsigned long options)
 {
 	kcov_debug("t = %px, size = %u, area = %px\n", t, size, area);
 	t->kcov = kcov;
@@ -383,6 +385,7 @@ static void kcov_reset(struct kcov *kcov)
 {
 	kcov->t = NULL;
 	kcov->mode = KCOV_MODE_INIT;
+	kcov->options = 0;
 	kcov->remote = false;
 	kcov->remote_size = 0;
 	kcov->sequence++;
@@ -512,6 +515,7 @@ static int kcov_open(struct inode *inode, struct file *filep)
 	if (!kcov)
 		return -ENOMEM;
 	kcov->mode = KCOV_MODE_DISABLED;
+	kcov->options = 0;
 	kcov->sequence = 1;
 	refcount_set(&kcov->refcount, 1);
 	spin_lock_init(&kcov->lock);
@@ -527,6 +531,7 @@ static int kcov_close(struct inode *inode, struct file *filep)
 
 static int kcov_get_mode(unsigned long arg)
 {
+	arg &= KCOV_ENABLE_MODE_MASK;
 	if (arg == KCOV_TRACE_PC)
 		return KCOV_MODE_TRACE_PC;
 	else if (arg == KCOV_TRACE_CMP)
@@ -537,6 +542,10 @@ static int kcov_get_mode(unsigned long arg)
 #endif
 	else
 		return -EINVAL;
+}
+
+static unsigned long kcov_check_options(unsigned long arg){
+	return arg & KCOV_ENABLE_OPTIONS_MASK;
 }
 
 /*
@@ -575,7 +584,7 @@ static int kcov_ioctl_locked(struct kcov *kcov, unsigned int cmd,
 			     unsigned long arg)
 {
 	struct task_struct *t;
-	unsigned long flags, unused;
+	unsigned long flags, unused, options;
 	int mode, i;
 	struct kcov_remote_arg *remote_arg;
 	struct kcov_remote *remote;
@@ -597,10 +606,14 @@ static int kcov_ioctl_locked(struct kcov *kcov, unsigned int cmd,
 		mode = kcov_get_mode(arg);
 		if (mode < 0)
 			return mode;
+		options = kcov_check_options(arg);
+		if (options < 0)
+			return options;
 		kcov_fault_in_area(kcov);
 		kcov->mode = mode;
+		kcov->options = options;
 		kcov_start(t, kcov, kcov->size, kcov->area, kcov->mode,
-				kcov->sequence);
+				kcov->sequence, options);
 		kcov->t = t;
 		/* Put either in kcov_task_exit() or in KCOV_DISABLE. */
 		kcov_get(kcov);
@@ -629,6 +642,7 @@ static int kcov_ioctl_locked(struct kcov *kcov, unsigned int cmd,
 		if (remote_arg->area_size > LONG_MAX / sizeof(unsigned long))
 			return -EINVAL;
 		kcov->mode = mode;
+		kcov->options = 0;
 		t->kcov = kcov;
 		kcov->t = t;
 		kcov->remote = true;
@@ -824,7 +838,7 @@ static void kcov_remote_softirq_stop(struct task_struct *t)
 	if (data->saved_kcov) {
 		kcov_start(t, data->saved_kcov, data->saved_size,
 				data->saved_area, data->saved_mode,
-				data->saved_sequence);
+				data->saved_sequence, 0);
 		data->saved_mode = 0;
 		data->saved_size = 0;
 		data->saved_area = NULL;
@@ -915,7 +929,7 @@ void kcov_remote_start(u64 handle)
 		kcov_remote_softirq_start(t);
 		t->kcov_softirq = 1;
 	}
-	kcov_start(t, kcov, size, area, mode, sequence);
+	kcov_start(t, kcov, size, area, mode, sequence, 0);
 
 	local_unlock_irqrestore(&kcov_percpu_data.lock, flags);
 

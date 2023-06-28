@@ -37,6 +37,8 @@ enum {
 	KCOV_TRACE_CMP = 1,
 };
 
+#define KCOV_ENABLE_MODE_MASK (0xffffull)
+#define KCOV_ENABLE_OPTIONS_MASK (0xffffull << 48)
 /*
  * The format for the types of collected comparisons.
  *
