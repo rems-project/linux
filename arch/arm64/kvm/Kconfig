@@ -71,6 +71,25 @@ config PROTECTED_NVHE_STACKTRACE
 
 	  If unsure, or not using protected nVHE (pKVM), say N.
 
+config NVHE_KCOV
+	bool "Enable KCOV on the EL2 object"
+	depends on NVHE_EL2_DEBUG && KCOV
+	select PID_IN_CONTEXTIDR
+	select ARCH_HAS_HYPERVISOR_KCOV
+	default y
+	help
+	  Provide KCOV support at EL2. Enables support for the KCOV_ENABLE_HYP
+	  option (for buffers initialized with KCOV_INIT_HYP_TRACE)
+
+config NVHE_KCOV_NUM_BUFFERS
+	int "Number of KCOV buffers in the EL2 object"
+	depends on NVHE_KCOV
+	default 10
+	help
+	  The maximum number of buffers simultaneous initialized at EL2. Those
+	  are KCOV buffers intialized with KCOV_INIT_HYP_TRACE instead of
+	  KCOV_INIT_TRACE.
+
 config PKVM_PROXY
 	bool "Access to pkvm proxy debug file to issue hypercalls from usermode (UNSAFE)"
 	depends on NVHE_EL2_DEBUG

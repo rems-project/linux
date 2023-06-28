@@ -19,6 +19,7 @@
 #include <nvhe/mm.h>
 #include <nvhe/pkvm.h>
 #include <nvhe/trap_handler.h>
+#include <nvhe/kcov.h>
 
 #include <linux/irqchip/arm-gic-v3.h>
 #include <uapi/linux/psci.h>
@@ -1048,6 +1049,40 @@ static void handle___pkvm_teardown_vm(struct kvm_cpu_context *host_ctxt)
 	cpu_reg(host_ctxt, 1) = __pkvm_teardown_vm(handle);
 }
 
+static void handle___pkvm_kcov_init_buffer(struct kvm_cpu_context *host_ctxt)
+{
+	DECLARE_REG(uint, size, host_ctxt, 1);
+
+	cpu_reg(host_ctxt, 1) = __pkvm_kcov_init_buffer(size);
+}
+
+static void handle___pkvm_kcov_buffer_add_page(struct kvm_cpu_context *host_ctxt)
+{
+	DECLARE_REG(u64, index, host_ctxt, 1);
+	DECLARE_REG(u64, pfn, host_ctxt, 2);
+
+	cpu_reg(host_ctxt, 1) = __pkvm_kcov_buffer_add_page(index, pfn);
+}
+
+static void handle___pkvm_kcov_teardown_buffer(struct kvm_cpu_context *host_ctxt)
+{
+	DECLARE_REG(u64, index, host_ctxt, 1);
+
+	cpu_reg(host_ctxt, 1) = __pkvm_kcov_teardown_buffer(index);
+}
+
+static void handle___pkvm_kcov_enable(struct kvm_cpu_context *host_ctxt)
+{
+	DECLARE_REG(u64, index, host_ctxt, 1);
+
+	cpu_reg(host_ctxt, 1) = __pkvm_kcov_enable(index);
+}
+
+static void handle___pkvm_kcov_disable(struct kvm_cpu_context *host_ctxt)
+{
+	cpu_reg(host_ctxt, 1) = __pkvm_kcov_disable();
+}
+
 typedef void (*hcall_t)(struct kvm_cpu_context *);
 
 #define HANDLE_FUNC(x)	[__KVM_HOST_SMCCC_FUNC_##x] = (hcall_t)handle_##x
@@ -1082,6 +1117,12 @@ static const hcall_t host_hcall[] = {
 	HANDLE_FUNC(__pkvm_vcpu_load),
 	HANDLE_FUNC(__pkvm_vcpu_put),
 	HANDLE_FUNC(__pkvm_vcpu_sync_state),
+
+	HANDLE_FUNC(__pkvm_kcov_init_buffer),
+	HANDLE_FUNC(__pkvm_kcov_buffer_add_page),
+	HANDLE_FUNC(__pkvm_kcov_teardown_buffer),
+	HANDLE_FUNC(__pkvm_kcov_enable),
+	HANDLE_FUNC(__pkvm_kcov_disable),
 };
 
 static void handle_host_hcall(struct kvm_cpu_context *host_ctxt)
@@ -1145,6 +1186,8 @@ void handle_trap(struct kvm_cpu_context *host_ctxt)
 {
 	u64 esr = read_sysreg_el2(SYS_ESR);
 
+        pkvm_kcov_enter_from_host();
+
 	switch (ESR_ELx_EC(esr)) {
 	case ESR_ELx_EC_HVC64:
 		handle_host_hcall(host_ctxt);
@@ -1163,4 +1206,5 @@ void handle_trap(struct kvm_cpu_context *host_ctxt)
 	default:
 		BUG();
 	}
+        pkvm_kcov_exit_to_host();
 }
