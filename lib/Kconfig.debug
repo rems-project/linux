@@ -2004,6 +2004,13 @@ config ARCH_HAS_KCOV
 	  build and run with CONFIG_KCOV. This typically requires
 	  disabling instrumentation for some early boot code.
 
+config ARCH_HAS_HYPERVISOR_KCOV
+	bool
+	help
+	  An architecture should select this when it supports building and
+	  running kcov in an KVM hypervisor object separated from the main
+	  kernel (e.g. pKVM)
+
 config CC_HAS_SANCOV_TRACE_PC
 	def_bool $(cc-option,-fsanitize-coverage=trace-pc)
 

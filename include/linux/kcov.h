@@ -90,4 +90,35 @@ static inline void kcov_remote_start_usb_softirq(u64 id) {}
 static inline void kcov_remote_stop_softirq(void) {}
 
 #endif /* CONFIG_KCOV */
+
+/* The architecture shouldn't provide this if CONFIG_KCOV is off, however it can
+ * still do it and the functions just won't be used */
+#ifdef CONFIG_ARCH_HAS_HYPERVISOR_KCOV
+
+int kvm_kcov_hyp_init_tracing_buffer(void *mem, unsigned int size);
+int kvm_kcov_hyp_teardown_tracing_buffer(int buffer_index);
+int kvm_kcov_hyp_enable_tracing(int buffer_index);
+int kvm_kcov_hyp_disable_tracing(void);
+
+#else
+
+static inline int kvm_kcov_hyp_init_tracing_buffer(void *mem, unsigned int size)
+{
+	return -ENOSYS;
+}
+static inline int kvm_kcov_hyp_teardown_tracing_buffer(int buffer_index)
+{
+	return -ENOSYS;
+}
+static inline int kvm_kcov_hyp_enable_tracing(int buffer_index)
+{
+	return -ENOSYS;
+}
+static inline int kvm_kcov_hyp_disable_tracing(void)
+{
+	return -ENOSYS;
+}
+
+#endif /* CONFIG_ARCH_HAS_HYPERVISOR_KCOV */
+
 #endif /* _LINUX_KCOV_H */
