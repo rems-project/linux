@@ -94,6 +94,16 @@ static inline unsigned long array_index_mask_nospec(unsigned long idx,
 #define __smp_rmb()	dmb(ishld)
 #define __smp_wmb()	dmb(ishst)
 
+#ifdef CONFIG_TEMP_PROOF_SIMPLIFICATION
+
+#define __smp_store_release(p, v)					\
+do {									\
+	*p = v;								\
+} while (0)
+
+
+#else
+
 #define __smp_store_release(p, v)					\
 do {									\
 	typeof(p) __p = (p);						\
@@ -128,6 +138,8 @@ do {									\
 		break;							\
 	}								\
 } while (0)
+
+#endif /* CONFIG_TEMP_PROOF_SIMPLIFICATION */
 
 #define __smp_load_acquire(p)						\
 ({									\
