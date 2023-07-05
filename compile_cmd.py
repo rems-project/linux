@@ -43,6 +43,10 @@ def cerberus(cmd, filename):
     return re.sub(f'-include', f'--include',
             'cerberus -include cerb_work_around.h ' + ' '.join(x.group() for x in re.finditer(r'(-I|-include )\S+', cmd)) + ' ' + filename)
 
+def cerberus_cn(cmd, filename):
+    return re.sub(f'-include', f'--include',
+            'cn -include cerb_work_around.h ' + ' '.join(x.group() for x in re.finditer(r'(-I|-include )\S+', cmd)) + ' ' + filename)
+
 def create_command(data, args):
     result = []
     for elem in data:
@@ -50,6 +54,8 @@ def create_command(data, args):
             cmd = elem['command'] if 'command' in elem else ' '.join(elem['arguments'])
             if args.tool == "cerberus":
                 cmd = cerberus(cmd, filename)
+            elif args.tool == "cn":
+                cmd = cerberus_cn(cmd, filename)
             elif args.tool == "pp" or args.tool == "preprocess":
                 cmd = preprocess(cmd, filename)
             result.append(cmd)
@@ -91,7 +97,7 @@ parser_make.set_defaults(func=write_compile_commands)
 # for subcommand
 parser_for = subparsers.add_parser('for',
         help='Get the compile command for a file (and tool).')
-parser_for.add_argument('--tool', choices=['pp', 'preprocess', 'cerberus'],
+parser_for.add_argument('--tool', choices=['pp', 'preprocess', 'cerberus', 'cn'],
         help='Ouptut command for specifc use case.')
 parser_for.add_argument('file_suffix',
         help='Suffix of a file in compile_commands.json')
