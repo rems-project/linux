@@ -8,6 +8,11 @@ config DEFCONFIG_LIST
 	default "/boot/config-$(shell,uname -r)"
 	default "arch/$(SRCARCH)/configs/$(KBUILD_DEFCONFIG)"
 
+config TEMP_PROOF_SIMPLIFICATION
+	def_bool y
+	help
+	  Simplify (break) some features for proof purposes, for now.
+
 config CC_VERSION_TEXT
 	string
 	default "$(CC_VERSION_TEXT)"
