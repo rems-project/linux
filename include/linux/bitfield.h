@@ -109,11 +109,18 @@
  * FIELD_PREP() masks and shifts up the value.  The result should
  * be combined with other fields of the bitfield using logical OR.
  */
+#define __FIELD_PREP(_mask, _val)					\
+	(((typeof(_mask))(_val) << __bf_shf(_mask)) & (_mask))
+
+#ifdef CONFIG_TEMP_PROOF_SIMPLIFICATION
+#define FIELD_PREP(_mask, _val) __FIELD_PREP(_mask, _val)
+#else
 #define FIELD_PREP(_mask, _val)						\
 	({								\
 		__BF_FIELD_CHECK(_mask, 0ULL, _val, "FIELD_PREP: ");	\
-		((typeof(_mask))(_val) << __bf_shf(_mask)) & (_mask);	\
+		__FIELD_PREP(_mask, _val);				\
 	})
+#endif /* CONFIG_TEMP_PROOF_SIMPLIFICATION */
 
 #define __BF_CHECK_POW2(n)	BUILD_BUG_ON_ZERO(((n) & ((n) - 1)) != 0)
 
