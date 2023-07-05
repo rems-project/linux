@@ -184,10 +184,9 @@ void __warn(const char *file, int line, void *caller, unsigned taint,
 #endif
 
 #ifndef HAVE_ARCH_WARN_ON
-#define WARN_ON(condition) ({						\
-	int __ret_warn_on = !!(condition);				\
-	unlikely(__ret_warn_on);					\
-})
+#define WARN_ON(condition) (						\
+	!!(condition)							\
+)
 #endif
 
 #ifndef WARN
