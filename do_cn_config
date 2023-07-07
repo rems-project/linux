@@ -1,0 +1,34 @@
+#! /bin/bash
+
+if [[ -x $CC ]]
+then
+  echo "Using c-compiler $CC"
+else
+  echo "$0: requires env var CC to point at an executable"
+  echo "  set this to a compiler binary (ideally clang-r458507)"
+  exit 1
+fi
+
+set -ex
+
+MAKE_FLAGS="ARCH=arm64 CC=$CC CROSS_COMPILE=aarch64-linux-gnu-"
+
+# config for CN build of pKVM
+
+make $MAKE_FLAGS defconfig
+
+./scripts/config -e CONFIG_EXPERT
+./scripts/config -d CONFIG_BUG
+./scripts/config -d CONFIG_GENERIC_BUG
+./scripts/config -d CONFIG_GENERIC_BUG_RELATIVE_POINTERS
+
+# there is probably a much better way to do this next bit
+
+yes '' | make $MAKE_FLAGS syncconfig
+
+time make $MAKE_FLAGS -j $(nproc) arch/arm64/kvm/hyp/nvhe/
+
+python3 compile_cmd.py make
+
+
+
