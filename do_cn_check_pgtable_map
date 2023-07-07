@@ -1,0 +1,24 @@
+#! /bin/bash
+
+set -x
+
+FILENAME=arch/arm64/kvm/hyp/pgtable.c
+ROOTNAME=kvm_pgtable_hyp_map
+
+CARVE_DIR=$(c-tree-carve -r $ROOTNAME -p . $FILENAME)
+
+CN=$(python3 compile_cmd.py for --tool cn $(basename $FILENAME))
+
+LINUX_DIR=$(pwd)
+
+pushd $CARVE_DIR
+
+cp $LINUX_DIR/cerb_work_around.h .
+
+$CN
+
+popd
+
+rm -r $CARVE_DIR
+
+
