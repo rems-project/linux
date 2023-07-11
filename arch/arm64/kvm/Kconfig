@@ -92,4 +92,16 @@ config KVM_ARM_HYP_DEBUG_UART_ADDR
 	depends on KVM_ARM_HYP_DEBUG_UART
 	default 0x09000000
 
+config PKVM_PROXY
+	bool "Access to pkvm proxy debug file to issue hypercalls from usermode (UNSAFE)"
+	depends on NVHE_EL2_DEBUG
+	default n
+	help
+	  Say Y here to enable the pkvm proxy component that allows a user mode
+	  program to issue direct hypercalls. This is unsafe for obvious
+	  reasons. It makes it really easy for a simple user mode program with
+	  rights to access the debugfs to panic the entire system.
+
+	  If unsure, say N.
+
 endif # VIRTUALIZATION
