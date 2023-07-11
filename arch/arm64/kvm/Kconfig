@@ -73,6 +73,19 @@ config PROTECTED_NVHE_STACKTRACE
 
 source "arch/arm64/kvm/Kconfig-ghost"
 
+config PKVM_PROXY
+	bool "Access to pkvm proxy debug file to issue hypercalls from usermode (UNSAFE)"
+	depends on NVHE_EL2_DEBUG
+	default n
+	help
+	  Say Y here to enable the pkvm proxy component that allows a user mode
+	  program to issue direct hypercalls. This is unsafe for obvious
+	  reasons. It makes it really easy for a simple user mode program with
+	  rights to access the debugfs to panic the entire system.
+
+	  If unsure, say N.
+
+
 config PKVM_MODULE_PATH
 	string "Path to pKVM modules"
 	default ""
