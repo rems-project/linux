@@ -56,6 +56,37 @@
 #define KVM_INVALID_PTE_OWNER_MASK	GENMASK(63, 56)
 #define KVM_MAX_OWNER_ID		1
 
+
+/* verification hack. TODO: add a CN feature to do this less intrusively. */
+extern void *hyp_zalloc_hyp_page(void *arg);
+
+void f_proto(int x);
+
+/*@
+predicate {integer x} MM_Ops(pointer p) {
+  take data = Owned<struct kvm_pgtable_mm_ops>(p);
+  assert (data.zalloc_page == &hyp_zalloc_hyp_page);
+  return {x: 1};
+}
+
+predicate {bool exists} Opt_MM_Ops(pointer p) {
+  if (p == NULL) {
+    return {exists: false};
+  }
+  else {
+    take X = MM_Ops(p);
+    return {exists: true};
+  }
+}
+
+predicate {bool has_ops} Pg_Table (pointer p) {
+  take Data = Owned<struct kvm_pgtable>(p);
+  take Ops = Opt_MM_Ops(Data.mm_ops);
+
+  return {has_ops: Ops.exists};
+}
+@*/
+
 struct kvm_pgtable_walk_data {
 	struct kvm_pgtable		*pgt;
 	struct kvm_pgtable_walker	*walker;
@@ -385,8 +416,20 @@ static bool hyp_map_walker_try_leaf(u64 addr, u64 end, u32 level,
 	return true;
 }
 
+
+/*@
+predicate {integer x} Hyp_Map_Data (pointer p) {
+  assert (mod((integer)p, 32) == 0);
+  take O = Owned<struct hyp_map_data>(p);
+  take Ops = MM_Ops(O.mm_ops);
+  return {x: 1};
+}
+@*/
+
 static int hyp_map_walker(u64 addr, u64 end, u32 level, kvm_pte_t *ptep,
 			  enum kvm_pgtable_walk_flags flag, void * const arg)
+/*@ requires take D = Hyp_Map_Data(arg) @*/
+/*@ ensures take D2 = Hyp_Map_Data(arg) @*/
 {
 	kvm_pte_t *childp;
 	struct hyp_map_data *data = arg;
@@ -406,8 +449,18 @@ static int hyp_map_walker(u64 addr, u64 end, u32 level, kvm_pte_t *ptep,
 	return 0;
 }
 
+/*@
+predicate {integer x} Hyp_Map_Walker_Case (pointer f, pointer x) {
+  assert (f == &hyp_map_walker);
+  take D = Hyp_Map_Data(x);
+  return {x: D.x};
+}
+@*/
+
 int kvm_pgtable_hyp_map(struct kvm_pgtable *pgt, u64 addr, u64 size, u64 phys,
 			enum kvm_pgtable_prot prot)
+/*@ requires take PT = Pg_Table(pgt) @*/
+/*@ ensures take PT2 = Pg_Table(pgt) @*/
 {
 	int ret;
 	struct hyp_map_data map_data = {
