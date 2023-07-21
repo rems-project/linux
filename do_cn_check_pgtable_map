@@ -3,7 +3,7 @@
 set -x
 
 FILENAME=arch/arm64/kvm/hyp/pgtable.c
-ROOTNAME=kvm_pgtable_hyp_map
+ROOTNAME=kvm_pgtable_hyp_map,verification_deps
 
 CARVE_DIR=$(c-tree-carve -r $ROOTNAME -p . $FILENAME)
 
