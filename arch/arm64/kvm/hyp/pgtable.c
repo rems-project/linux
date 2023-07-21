@@ -62,7 +62,26 @@
 /* verification hack. TODO: add a CN feature to do this less intrusively. */
 extern void *hyp_zalloc_hyp_page(void *arg);
 
-void f_proto(int x);
+/*@
+predicate {bool exists} Cond_Zero_Page (pointer p) {
+  if (p == NULL) {
+    return {exists: false};
+  }
+  else {
+    take X = each (integer i; 0 <= i && i < 4096)
+        {Owned<char>(p + (i * 1))};
+    assert (each (integer i; 0 <= i && i < 4096)
+        {X[i] == 0});
+    return {exists: true};
+  }
+}
+@*/
+
+/*@
+spec hyp_zalloc_hyp_page (pointer arg)
+  requires true
+  ensures take P = Cond_Zero_Page (return)
+@*/
 
 /*@
 predicate {integer x} MM_Ops(pointer p) {
@@ -1401,3 +1420,10 @@ void kvm_pgtable_stage2_free_removed(struct kvm_pgtable_mm_ops *mm_ops, void *pg
 	WARN_ON(mm_ops->page_count(pgtable) != 1);
 	mm_ops->put_page(pgtable);
 }
+
+/* more verification hacks */
+static int verification_deps (void) {
+  (void) hyp_zalloc_hyp_page;
+  return 9;
+}
+
