@@ -8,6 +8,7 @@ ROOTNAME=kvm_pgtable_hyp_map,verification_deps
 CARVE_DIR=$(c-tree-carve -r $ROOTNAME -p . $FILENAME)
 
 CN=$(python3 compile_cmd.py for --tool cn $(basename $FILENAME))
+CPP=$(python3 compile_cmd.py for --tool pp $(basename $FILENAME))
 
 LINUX_DIR=$(pwd)
 
@@ -15,7 +16,20 @@ pushd $CARVE_DIR
 
 cp $LINUX_DIR/cerb_work_around.h .
 
-$CN
+if [[ $1 == '-i' ]]
+then
+
+  $CPP -o step1.c 2> pp_warnings.txt
+  cat cerb_work_around.h step1.c > target.pp.c
+  rm step1.c
+  echo 'entering interactive shell in carver dir'
+  bash
+
+else
+
+  $CN
+
+fi
 
 popd
 
