@@ -97,6 +97,30 @@ predicate {bool exists} Opt_MM_Ops(pointer p) {
     return {exists: true};
   }
 }
+@*/
+
+/* see struct kvm_pgtable defn in arch/arm64/include/asm/kvm_pgtable.h */
+/*@
+predicate {bool x} Page_Table_Entries (pointer p) {
+  take ptes = each (integer i; 0 <= i && i < 512)
+    {Owned<kvm_pte_t>(p + (i * (sizeof <kvm_pte_t>)))};
+  take children = each (integer i; 0 <= i && i < 512)
+    {Indirect_Page_Table_Entries (p + (i * (sizeof <kvm_pte_t>)), ptes[i])};
+  return {x: true};
+}
+
+function (boolean) is_table_entry (integer encoded)
+function (pointer) decode_table_entry_pointer (integer encoded)
+
+predicate {bool x} Indirect_Page_Table_Entries (pointer p, integer encoded) {
+  if (is_table_entry (encoded)) {
+    take x = Page_Table_Entries (decode_table_entry_pointer (encoded));
+    return {x: true};
+  }
+  else {
+    return {x: false};
+  }
+}
 
 predicate {bool has_ops} Pg_Table (pointer p) {
   take Data = Owned<struct kvm_pgtable>(p);
@@ -236,6 +260,14 @@ static void kvm_clear_pte(kvm_pte_t *ptep)
 
 static void kvm_set_table_pte(kvm_pte_t *ptep, kvm_pte_t *childp,
 			      struct kvm_pgtable_mm_ops *mm_ops)
+/*@ requires take Ops = MM_Ops(mm_ops) @*/
+/*@ requires take pte = Owned<u64>(ptep) @*/
+/*@ requires not (is_table_entry (pte)) @*/
+/*@ requires take Child_PT = Page_Table_Entries(childp) @*/
+/*@ ensures take pte2 = Owned<u64>(ptep) @*/
+/*@ ensures take IPT = Indirect_Page_Table_Entries (ptep, pte2) @*/
+/*@ ensures take Ops2 = MM_Ops(mm_ops) @*/
+/*@ ensures Ops2 == Ops @*/
 {
 	kvm_pte_t old = *ptep, pte = kvm_phys_to_pte(mm_ops->virt_to_phys(childp));
 
@@ -448,7 +480,9 @@ predicate {integer x} Hyp_Map_Data (pointer p) {
 static int hyp_map_walker(u64 addr, u64 end, u32 level, kvm_pte_t *ptep,
 			  enum kvm_pgtable_walk_flags flag, void * const arg)
 /*@ requires take D = Hyp_Map_Data(arg) @*/
+/*@ requires take PT = Page_Table_Entries(ptep) @*/
 /*@ ensures take D2 = Hyp_Map_Data(arg) @*/
+/*@ ensures take PT2 = Page_Table_Entries(ptep) @*/
 {
 	kvm_pte_t *childp;
 	struct hyp_map_data *data = arg;
@@ -463,6 +497,9 @@ static int hyp_map_walker(u64 addr, u64 end, u32 level, kvm_pte_t *ptep,
 	childp = (kvm_pte_t *)mm_ops->zalloc_page(NULL);
 	if (!childp)
 		return -ENOMEM;
+
+	/* this is where we need to turn a char[] into a kvm_pte_t[] (i.e. a u64[]) */
+	/* (e.g. extract ... ) */
 
 	kvm_set_table_pte(ptep, childp, mm_ops);
 	return 0;
