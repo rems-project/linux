@@ -84,10 +84,10 @@ spec hyp_zalloc_hyp_page (pointer arg)
 @*/
 
 /*@
-predicate {integer x} MM_Ops(pointer p) {
+predicate (void) MM_Ops(pointer p) {
   take data = Owned<struct kvm_pgtable_mm_ops>(p);
   assert (data.zalloc_page == &hyp_zalloc_hyp_page);
-  return {x: 1};
+  return;
 }
 
 predicate {bool exists} Opt_MM_Ops(pointer p) {
@@ -286,6 +286,7 @@ static void kvm_set_table_pte(kvm_pte_t *ptep, kvm_pte_t *childp,
 }
 
 static kvm_pte_t kvm_init_valid_leaf_pte(u64 pa, kvm_pte_t attr, u32 level)
+/*@ ensures not (is_table_entry (return)) @*/
 {
 	kvm_pte_t pte = kvm_phys_to_pte(pa);
 	u64 type = (level == KVM_PGTABLE_MAX_LEVELS - 1) ? KVM_PTE_TYPE_PAGE :
@@ -456,8 +457,24 @@ static int hyp_set_prot_attr(enum kvm_pgtable_prot prot, kvm_pte_t *ptep)
 	return 0;
 }
 
+/*@
+predicate {pointer mm_ops} Hyp_Map_Data (pointer p) {
+  assert (mod((integer)p, 32) == 0);
+  take O = Owned<struct hyp_map_data>(p);
+  take Ops = MM_Ops(O.mm_ops);
+  return {mm_ops: O.mm_ops};
+}
+@*/
+
 static bool hyp_map_walker_try_leaf(u64 addr, u64 end, u32 level,
 				    kvm_pte_t *ptep, struct hyp_map_data *data)
+/*@ requires take D = Hyp_Map_Data(data) @*/
+/*@ requires take pte = Owned<u64>(ptep) @*/
+/*@ requires not(is_table_entry(pte)) @*/
+/*@ ensures take D2 = Hyp_Map_Data(data) @*/
+/*@ ensures take pte2 = Owned<u64>(ptep) @*/
+/*@ ensures not(is_table_entry(pte2)) @*/
+/*@ ensures D2 == D @*/
 {
 	kvm_pte_t new, old = *ptep;
 	u64 granule = kvm_granule_size(level), phys = data->phys;
@@ -474,15 +491,6 @@ static bool hyp_map_walker_try_leaf(u64 addr, u64 end, u32 level,
 	return true;
 }
 
-
-/*@
-predicate {integer x} Hyp_Map_Data (pointer p) {
-  assert (mod((integer)p, 32) == 0);
-  take O = Owned<struct hyp_map_data>(p);
-  take Ops = MM_Ops(O.mm_ops);
-  return {x: 1};
-}
-@*/
 
 static inline void coerce_page_to_ptes(kvm_pte_t *ptep)
 /*@ trusted @*/
@@ -534,10 +542,10 @@ static int hyp_map_walker(u64 addr, u64 end, u32 level, kvm_pte_t *ptep,
 }
 
 /*@
-predicate {integer x} Hyp_Map_Walker_Case (pointer f, pointer x) {
+predicate (void) Hyp_Map_Walker_Case (pointer f, pointer x) {
   assert (f == &hyp_map_walker);
   take D = Hyp_Map_Data(x);
-  return {x: D.x};
+  return;
 }
 @*/
 
