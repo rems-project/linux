@@ -78,7 +78,9 @@ predicate {bool exists} Cond_Zero_Page (pointer p) {
 /*@
 spec hyp_zalloc_hyp_page (pointer arg)
   requires true
-  ensures take P = Cond_Zero_Page (return)
+  ensures
+    take P = Cond_Zero_Page (return);
+    (mod(((integer) return), 4096) == 0)
 @*/
 
 /*@
@@ -101,18 +103,17 @@ predicate {bool exists} Opt_MM_Ops(pointer p) {
 
 /* see struct kvm_pgtable defn in arch/arm64/include/asm/kvm_pgtable.h */
 /*@
-predicate {map <integer, integer> ptes} PTE_Array (pointer p) {
+predicate (map <integer, integer>) PTE_Array (pointer p) {
   take ptes = each (integer i; 0 <= i && i < 512)
     {Owned<kvm_pte_t>(p + (i * (sizeof <kvm_pte_t>)))};
-  return {ptes: ptes};
+  return ptes;
 }
 
-predicate {bool x} Page_Table_Entries (pointer p) {
-  take ptes_str = PTE_Array (p);
-  let ptes = ptes_str.ptes;
-  take children = each (integer i; 0 <= i && i < 512)
+predicate (void) Page_Table_Entries (pointer p) {
+  take ptes = PTE_Array (p);
+  take children = each (integer i; 0 <= i && i < 512 && ptes[i] != 0)
     {Indirect_Page_Table_Entries (p + (i * (sizeof <kvm_pte_t>)), ptes[i])};
-  return {x: true};
+  return;
 }
 
 function (boolean) is_table_entry (integer encoded)
@@ -483,21 +484,32 @@ predicate {integer x} Hyp_Map_Data (pointer p) {
 }
 @*/
 
-static void coerce_page_to_ptes(kvm_pte_t *ptep)
+static inline void coerce_page_to_ptes(kvm_pte_t *ptep)
+/*@ trusted @*/
 /*@ requires take ZP = Cond_Zero_Page (ptep) @*/
 /*@ requires ZP.exists @*/
 /*@ ensures take ptes = PTE_Array (ptep) @*/
+/*@ ensures each (integer i; i <= 0 && i < 4096) {ptes[i] == 0} @*/
 {
 }
+
+static inline void coerce_null_ptes_to_IPT(kvm_pte_t *ptep)
+/*@ trusted @*/
+/*@ requires take ptes = PTE_Array (ptep) @*/
+/*@ requires each (integer i; i <= 0 && i < 4096) {ptes[i] == 0} @*/
+/*@ ensures take ptes2 = Page_Table_Entries (ptep) @*/
+{
+}
+
 
 static int hyp_map_walker(u64 addr, u64 end, u32 level, kvm_pte_t *ptep,
 			  enum kvm_pgtable_walk_flags flag, void * const arg)
 /*@ requires take D = Hyp_Map_Data(arg) @*/
-/*@ requires take PT = Page_Table_Entries(ptep) @*/
 /*@ requires take pte = Owned<u64>(ptep) @*/
+/*@ requires not(is_table_entry(pte)) @*/
 /*@ ensures take D2 = Hyp_Map_Data(arg) @*/
-/*@ ensures take PT2 = Page_Table_Entries(ptep) @*/
 /*@ ensures take pte2 = Owned<u64>(ptep) @*/
+/*@ ensures take IPT2 = Indirect_Page_Table_Entries(ptep, pte2) @*/
 {
 	kvm_pte_t *childp;
 	struct hyp_map_data *data = arg;
@@ -515,6 +527,7 @@ static int hyp_map_walker(u64 addr, u64 end, u32 level, kvm_pte_t *ptep,
 
 	/* this is where we need to turn a char[] into a kvm_pte_t[] (i.e. a u64[]) */
 	coerce_page_to_ptes(childp);
+	coerce_null_ptes_to_IPT(childp);
 
 	kvm_set_table_pte(ptep, childp, mm_ops);
 	return 0;
