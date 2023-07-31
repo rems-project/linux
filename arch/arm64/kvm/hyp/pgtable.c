@@ -91,16 +91,6 @@ predicate (void) MM_Ops(pointer p) {
   assert (data.zalloc_page == &hyp_zalloc_hyp_page);
   return;
 }
-
-predicate {bool exists} Opt_MM_Ops(pointer p) {
-  if (p == NULL) {
-    return {exists: false};
-  }
-  else {
-    take X = MM_Ops(p);
-    return {exists: true};
-  }
-}
 @*/
 
 /* see struct kvm_pgtable defn in arch/arm64/include/asm/kvm_pgtable.h */
@@ -131,11 +121,26 @@ predicate {bool x} Indirect_Page_Table_Entries (pointer p, integer encoded) {
   }
 }
 
-predicate {bool has_ops} Pg_Table (pointer p) {
+predicate (void) Pg_Table (pointer p) {
   take Data = Owned<struct kvm_pgtable>(p);
-  take Ops = Opt_MM_Ops(Data.mm_ops);
+  take Ops = MM_Ops(Data.mm_ops);
 
-  return {has_ops: Ops.exists};
+  assert ((0 < Data.ia_bits) && (Data.ia_bits < 64));
+
+  return;
+}
+
+predicate (integer) KVM_PgTable_Walker (pointer p) {
+  take D = Owned<struct kvm_pgtable_walker>(p);
+  take X = Hyp_Walker_Cases (D.cb, D.arg);
+  return D.flags;
+}
+
+predicate (void) KVM_PgTable_Walk_Data (pointer p) {
+  take D = Owned<struct kvm_pgtable_walk_data>(p);
+  take PT = Pg_Table(D.pgt);
+  take Walker = KVM_PgTable_Walker(D.walker);
+  return;
 }
 @*/
 
@@ -376,6 +381,8 @@ static int __kvm_pgtable_walk(struct kvm_pgtable_walk_data *data,
 }
 
 static int _kvm_pgtable_walk(struct kvm_pgtable *pgt, struct kvm_pgtable_walk_data *data)
+/*@ requires take Data = KVM_PgTable_Walk_Data (data) @*/
+/*@ ensures take Data2 = KVM_PgTable_Walk_Data (data) @*/
 {
 	u32 idx;
 	int ret = 0;
@@ -400,6 +407,9 @@ static int _kvm_pgtable_walk(struct kvm_pgtable *pgt, struct kvm_pgtable_walk_da
 
 int kvm_pgtable_walk(struct kvm_pgtable *pgt, u64 addr, u64 size,
 		     struct kvm_pgtable_walker *walker)
+/* bogus trusted attribute here to try out other functions */
+/* issues with sequencing in this struct initialiser */
+/*@ trusted @*/
 {
 	struct kvm_pgtable_walk_data walk_data = {
 		.start	= ALIGN_DOWN(addr, PAGE_SIZE),
@@ -464,6 +474,11 @@ struct hyp_map_data {
 };
 
 static int hyp_set_prot_attr(enum kvm_pgtable_prot prot, kvm_pte_t *ptep)
+/* bogus trusted attribute here to try out other functions */
+/* too much bitwise maths in this function for now */
+/*@ trusted @*/
+/*@ requires take P = Owned(ptep) @*/
+/*@ ensures take P2 = Owned(ptep) @*/
 {
 	bool device = prot & KVM_PGTABLE_PROT_DEVICE;
 	u32 mtype = device ? MT_DEVICE_nGnRE : MT_NORMAL;
@@ -611,6 +626,12 @@ predicate (void) Hyp_Map_Walker_Case (pointer f, pointer x) {
   take D = Hyp_Map_Data(x);
   return;
 }
+
+predicate (void) Hyp_Walker_Cases (pointer f, pointer x) {
+  take X = Hyp_Map_Walker_Case (f, x);
+  return;
+}
+
 @*/
 
 int kvm_pgtable_hyp_map(struct kvm_pgtable *pgt, u64 addr, u64 size, u64 phys,
