@@ -94,6 +94,7 @@ predicate (void) MM_Ops(pointer p) {
 /* see struct kvm_pgtable defn in arch/arm64/include/asm/kvm_pgtable.h */
 /*@
 predicate (map <integer, integer>) PTE_Array (pointer p) {
+  assert (mod((integer)p, 4096) == 0);
   take ptes = each (integer i; 0 <= i && i < 512)
     {Owned<kvm_pte_t>(p + (i * (sizeof <kvm_pte_t>)))};
   return ptes;
@@ -101,7 +102,7 @@ predicate (map <integer, integer>) PTE_Array (pointer p) {
 
 predicate (void) Page_Table_Entries (pointer p) {
   take ptes = PTE_Array (p);
-  take children = each (integer i; 0 <= i && i < 512 && ptes[i] != 0)
+  take children = each (integer i; 0 <= i && i < 512)
     {Indirect_Page_Table_Entries (p + (i * (sizeof <kvm_pte_t>)), ptes[i])};
   return;
 }
@@ -118,14 +119,34 @@ predicate {bool x} Indirect_Page_Table_Entries (pointer p, integer encoded) {
     return {x: false};
   }
 }
+@*/
+/* FIXME: the number of concatenated entries in the toplevel PD is set to the
+   magic number 16 below. instead, this should be figured out from Data.start_level
+   and everything else made parametric in that. for now, just assumed to be 16,
+   the maximum. TODO */
 
-predicate (void) Pg_Table (pointer p) {
+/*@
+predicate {pointer mm_ops} Pg_Table (pointer p, boolean with_entries) {
   take Data = Owned<struct kvm_pgtable>(p);
   take Ops = MM_Ops(Data.mm_ops);
 
   assert ((0 < Data.ia_bits) && (Data.ia_bits < 64));
+  assert (mod((integer) Data.pgd, 16 * 4096) == 0);
 
-  return;
+  take Entries = Pg_Table_Toplevel (Data.pgd, with_entries);
+
+  return {mm_ops: Data.mm_ops};
+}
+
+predicate (void) Pg_Table_Toplevel (pointer p, boolean exists) {
+  if (exists) {
+    take Toplevel_Table = each (integer i; 0 <= i && i < 16)
+      {Page_Table_Entries(p + (i * 4096))};
+    return;
+  }
+  else {
+    return;
+  }
 }
 
 predicate (integer) KVM_PgTable_Walker (pointer p) {
@@ -134,11 +155,11 @@ predicate (integer) KVM_PgTable_Walker (pointer p) {
   return D.flags;
 }
 
-predicate (void) KVM_PgTable_Walk_Data (pointer p) {
+predicate {pointer pgt, integer addr, integer end}
+    KVM_PgTable_Walk_Data (pointer p) {
   take D = Owned<struct kvm_pgtable_walk_data>(p);
-  take PT = Pg_Table(D.pgt);
   take Walker = KVM_PgTable_Walker(D.walker);
-  return;
+  return {pgt: D.pgt, addr: D.addr, end: D.end};
 }
 @*/
 
@@ -194,6 +215,10 @@ static bool kvm_block_mapping_supported(u64 addr, u64 end, u64 phys, u32 level)
 }
 
 static u32 kvm_pgtable_idx(struct kvm_pgtable_walk_data *data, u32 level)
+/*@ requires take Data = KVM_PgTable_Walk_Data (data) @*/
+/*@ ensures take Data2 = KVM_PgTable_Walk_Data (data) @*/
+/*@ ensures 0 <= return && return < power(2, 12 - 3) @*/
+/*@ ensures Data2 == Data @*/
 {
 	u64 shift = kvm_granule_shift(level);
 	u64 mask = BIT(PAGE_SHIFT - 3) - 1;
@@ -210,6 +235,10 @@ static u32 __kvm_pgd_page_idx(struct kvm_pgtable *pgt, u64 addr)
 }
 
 static u32 kvm_pgd_page_idx(struct kvm_pgtable_walk_data *data)
+/*@ requires take Data = KVM_PgTable_Walk_Data (data) @*/
+/*@ ensures take Data2 = KVM_PgTable_Walk_Data (data) @*/
+/*@ ensures 0 <= return && return < 16 @*/
+/*@ ensures Data2 == Data @*/
 {
 	return __kvm_pgd_page_idx(data->pgt, data->addr);
 }
@@ -230,6 +259,9 @@ static bool kvm_pte_valid(kvm_pte_t pte)
 }
 
 static bool kvm_pte_table(kvm_pte_t pte, u32 level)
+/* FIXME: figure out the implications of the additional MAX_LEVELS check,
+   it seems to be redundant on first considerations. */
+/*@ ensures return == (is_table_entry(pte) ? 1 : 0) @*/
 {
 	if (level == KVM_PGTABLE_MAX_LEVELS - 1)
 		return false;
@@ -261,6 +293,8 @@ static kvm_pte_t kvm_phys_to_pte(u64 pa)
 }
 
 static kvm_pte_t *kvm_pte_follow(kvm_pte_t pte, struct kvm_pgtable_mm_ops *mm_ops)
+/*@ requires is_table_entry (pte) @*/
+/*@ ensures return == decode_table_entry_pointer (pte) @*/
 {
 	return mm_ops->phys_to_virt(kvm_pte_to_phys(pte));
 }
@@ -322,6 +356,16 @@ static int __kvm_pgtable_walk(struct kvm_pgtable_walk_data *data,
 
 static inline int __kvm_pgtable_visit(struct kvm_pgtable_walk_data *data,
 				      kvm_pte_t *ptep, u32 level)
+/*@ requires take Data = KVM_PgTable_Walk_Data (data) @*/
+/*@ requires take pte = Owned(ptep) @*/
+/*@ requires take IPT = Indirect_Page_Table_Entries (ptep, pte) @*/
+/*@ requires take PgTableStruct = Owned<struct kvm_pgtable>(Data.pgt) @*/
+/*@ ensures take Data2 = KVM_PgTable_Walk_Data (data) @*/
+/*@ ensures Data2.end == Data.end @*/
+/*@ ensures Data2.pgt == Data.pgt @*/
+/*@ ensures take pte2 = Owned(ptep) @*/
+/*@ ensures take IPT2 = Indirect_Page_Table_Entries (ptep, pte2) @*/
+/*@ ensures take PgTableStruct2 = Owned<struct kvm_pgtable>(Data.pgt) @*/
 {
 	int ret = 0;
 	u64 addr = data->addr;
@@ -366,6 +410,16 @@ out:
 
 static int __kvm_pgtable_walk(struct kvm_pgtable_walk_data *data,
 			      kvm_pte_t *pgtable, u32 level)
+/*@ requires take Data = KVM_PgTable_Walk_Data (data) @*/
+/*@ requires take PTEs = Page_Table_Entries (pgtable) @*/
+/*@ requires let orig_data = data @*/
+/*@ requires let orig_pgtable = pgtable @*/
+/*@ requires take PgTableStruct = Owned<struct kvm_pgtable>(Data.pgt) @*/
+/*@ ensures take Data2 = KVM_PgTable_Walk_Data (data) @*/
+/*@ ensures Data2.end == Data.end @*/
+/*@ ensures Data2.pgt == Data.pgt @*/
+/*@ ensures take PTEs2 = Page_Table_Entries (pgtable) @*/
+/*@ ensures take PgTableStruct2 = Owned<struct kvm_pgtable>(Data.pgt) @*/
 {
 	u32 idx;
 	int ret = 0;
@@ -375,11 +429,24 @@ static int __kvm_pgtable_walk(struct kvm_pgtable_walk_data *data,
 	if ((level >= KVM_PGTABLE_MAX_LEVELS))
 		return -EINVAL;
 
-	for (idx = kvm_pgtable_idx(data, level); idx < PTRS_PER_PTE; ++idx) {
+	for (idx = kvm_pgtable_idx(data, level); idx < PTRS_PER_PTE; ++idx)
+	/*@ inv take Data3 = KVM_PgTable_Walk_Data (data) @*/
+	/*@ inv take PTEs3 = Page_Table_Entries (pgtable) @*/
+	/*@ inv 0 <= idx && idx < power(2, 12 - 2) @*/
+	/*@ inv data == orig_data @*/
+	/*@ inv pgtable == orig_pgtable @*/
+	/*@ inv Data3.end == Data.end @*/
+	/*@ inv Data3.pgt == Data.pgt @*/
+	/*@ inv take PgTableStruct3 = Owned<struct kvm_pgtable>(Data.pgt) @*/
+	{
 		kvm_pte_t *ptep = &pgtable[idx];
 
 		if (data->addr >= data->end)
 			break;
+
+		/*@ extract Owned<kvm_pte_t>, idx; @*/
+		/*@ instantiate good<kvm_pte_t>, idx; @*/
+		/*@ extract Indirect_Page_Table_Entries, idx; @*/
 
 		ret = __kvm_pgtable_visit(data, ptep, level);
 		if (ret)
@@ -389,13 +456,28 @@ static int __kvm_pgtable_walk(struct kvm_pgtable_walk_data *data,
 	return ret;
 }
 
+/*@
+lemma pow_2_less_64_lemma (integer i)
+  requires 0 <= i; i < 64
+  ensures 1 <= power_uf(2, i);
+    power_uf(2, i) < power(2, 64)
+@*/
+
 static int _kvm_pgtable_walk(struct kvm_pgtable_walk_data *data)
+/* another bogus trusted, the problem here is the relationship between
+   idx and data->addr < data->end. We need the latter to imply idx < lim,
+   where lim is the geometry of the toplevel pgtable (potentially wider
+   than the other ones, thus this function). */
+/*@ trusted @*/
 /*@ requires take Data = KVM_PgTable_Walk_Data (data) @*/
+/*@ requires let orig_data = data @*/
 /*@ ensures take Data2 = KVM_PgTable_Walk_Data (data) @*/
 {
 	u32 idx;
 	int ret = 0;
 	struct kvm_pgtable *pgt = data->pgt;
+	int pgt_ia_bits = pgt->ia_bits;
+	/*@ apply pow_2_less_64_lemma(pgt_ia_bits); @*/
 	u64 limit = BIT(pgt->ia_bits);
 
 	if (data->addr > limit || data->end > limit)
@@ -404,7 +486,15 @@ static int _kvm_pgtable_walk(struct kvm_pgtable_walk_data *data)
 	if (!pgt->pgd)
 		return -EINVAL;
 
-	for (idx = kvm_pgd_page_idx(data); data->addr < data->end; ++idx) {
+	for (idx = kvm_pgd_page_idx(data); data->addr < data->end; ++idx)
+	/*@ inv take D = Owned<struct kvm_pgtable_walk_data>(data) @*/
+	/*@ inv take PT = Pg_Table(pgt, true) @*/
+	/*@ inv pgt == D.pgt @*/
+	/*@ inv pgt == Data.pgt @*/
+	/*@ inv data == orig_data @*/
+	/*@ inv take Walker = KVM_PgTable_Walker(D.walker) @*/
+	/*@ inv 0 <= idx && idx < 16 @*/
+	{
 		kvm_pte_t *ptep = &pgt->pgd[idx * PTRS_PER_PTE];
 
 		ret = __kvm_pgtable_walk(data, ptep, pgt->start_level);
@@ -572,8 +662,8 @@ predicate (void) Hyp_Walker_Cases (pointer f, pointer x) {
 
 int kvm_pgtable_hyp_map(struct kvm_pgtable *pgt, u64 addr, u64 size, u64 phys,
 			enum kvm_pgtable_prot prot)
-/*@ requires take PT = Pg_Table(pgt) @*/
-/*@ ensures take PT2 = Pg_Table(pgt) @*/
+/*@ requires take PT = Pg_Table(pgt, true) @*/
+/*@ ensures take PT2 = Pg_Table(pgt, true) @*/
 {
 	int ret;
 	struct hyp_map_data map_data = {
