@@ -749,6 +749,7 @@ static inline bool system_supports_tlb_range(void)
 extern int do_emulate_mrs(struct pt_regs *regs, u32 sys_reg, u32 rt);
 
 static inline u32 id_aa64mmfr0_parange_to_phys_shift(int parange)
+/*@ ensures 32 <= return && return <= 60 @*/
 {
 	switch (parange) {
 	case 0: return 32;
