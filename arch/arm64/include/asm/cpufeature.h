@@ -842,6 +842,7 @@ int do_emulate_mrs(struct pt_regs *regs, u32 sys_reg, u32 rt);
 bool try_emulate_mrs(struct pt_regs *regs, u32 isn);
 
 static inline u32 id_aa64mmfr0_parange_to_phys_shift(int parange)
+/*@ ensures 32 <= return && return <= 60 @*/
 {
 	switch (parange) {
 	case ID_AA64MMFR0_EL1_PARANGE_32: return 32;
