@@ -7,6 +7,14 @@ ROOTNAME=kvm_pgtable_hyp_map,verification_deps
 
 CARVE_DIR=$(c-tree-carve -r $ROOTNAME -p . $FILENAME)
 
+if [[ -z "$CARVE_DIR" ]]
+then
+
+  echo "failed to carve, giving up"
+  exit 1
+
+fi
+
 CN=$(python3 compile_cmd.py for --tool cn $(basename $FILENAME))
 CPP=$(python3 compile_cmd.py for --tool pp $(basename $FILENAME))
 
