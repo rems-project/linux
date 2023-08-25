@@ -205,15 +205,37 @@ struct kvm_pgtable_walk_data {
 	u64				end;
 };
 
+/*@ function (integer) kvm_granule_shift (integer level) @*/
+
+/* constraints on level, see arch/arm64/include/asm/pgtable-hwdef.h */
+/*@
+function (bool) valid_pgtable_level (integer level)
+{
+  0 <= level && level <= 3
+}
+@*/
+
 static u64 kvm_granule_shift(u32 level)
+/*@ cn_function kvm_granule_shift @*/
+/*@ requires valid_pgtable_level(level) @*/
 /*@ ensures 0 <= return && return < 64 @*/
+/*@ ensures return == kvm_granule_shift(level) @*/
 {
 	/* Assumes KVM_PGTABLE_MAX_LEVELS is 4 */
 	return ARM64_HW_PGTABLE_LEVEL_SHIFT(level);
 }
 
+/*@
+lemma pow_2_less_64 (integer i)
+  requires 0 <= i; i < 64
+  ensures 1 <= power_uf(2, i);
+    power_uf(2, i) < power(2, 64)
+@*/
+
 static u64 kvm_granule_size(u32 level)
+/*@ requires valid_pgtable_level(level) @*/
 {
+	/*@ apply pow_2_less_64 (kvm_granule_shift(level)); @*/
 	return BIT(kvm_granule_shift(level));
 }
 
@@ -234,6 +256,7 @@ static bool kvm_level_supports_block_mapping(u32 level)
 }
 
 static bool kvm_block_mapping_supported(u64 addr, u64 end, u64 phys, u32 level)
+/*@ requires valid_pgtable_level(level) @*/
 {
 	u64 granule = kvm_granule_size(level);
 
@@ -261,6 +284,7 @@ lemma bw_and_le(integer x, integer y)
 
 static u32 kvm_pgtable_idx(struct kvm_pgtable_walk_data *data, u32 level)
 /*@ requires take Data = KVM_PgTable_Walk_Data (data) @*/
+/*@ requires valid_pgtable_level(level) @*/
 /*@ ensures take Data2 = KVM_PgTable_Walk_Data (data) @*/
 /*@ ensures 0 <= return && return < power(2, 12 - 3) @*/
 /*@ ensures Data2 == Data @*/
@@ -324,6 +348,9 @@ static bool kvm_pte_table(kvm_pte_t pte, u32 level)
 /* FIXME: bogus trusted: bitwise ops */
 /*@ trusted @*/
 /*@ ensures return == (is_table_entry(pte) ? 1 : 0) @*/
+/*@ ensures (is_table_entry(pte) ? 
+    valid_pgtable_level(level + 1)
+    : true) @*/
 {
 	if (level == KVM_PGTABLE_MAX_LEVELS - 1)
 		return false;
@@ -399,6 +426,7 @@ static void kvm_set_table_pte(kvm_pte_t *ptep, kvm_pte_t *childp,
 static kvm_pte_t kvm_init_valid_leaf_pte(u64 pa, kvm_pte_t attr, u32 level)
 /* bogus trusted, issues with builtin ffs/ctz etc */
 /*@ trusted @*/
+/*@ requires valid_pgtable_level(level) @*/
 /*@ ensures not (is_table_entry (return)) @*/
 {
 	kvm_pte_t pte = kvm_phys_to_pte(pa);
@@ -479,6 +507,7 @@ static int kvm_pgtable_visitor_cb(struct kvm_pgtable_walk_data *data, u64 addr,
 				  u32 level, kvm_pte_t *ptep,
 				  enum kvm_pgtable_walk_flags flag)
 /*@ requires take Data = KVM_PgTable_Walk_Data (data) @*/
+/*@ requires valid_pgtable_level(level) @*/
 /*@ requires take pte = Owned(ptep) @*/
 /*@ requires take IPT = Indirect_Page_Table_Entries (ptep, pte) @*/
 /*@ requires take PgTableStruct = Owned<struct kvm_pgtable>(Data.pgt) @*/
@@ -509,6 +538,7 @@ static int __kvm_pgtable_walk(struct kvm_pgtable_walk_data *data,
 static inline int __kvm_pgtable_visit(struct kvm_pgtable_walk_data *data,
 				      kvm_pte_t *ptep, u32 level)
 /*@ requires take Data = KVM_PgTable_Walk_Data (data) @*/
+/*@ requires valid_pgtable_level(level) @*/
 /*@ requires take pte = Owned(ptep) @*/
 /*@ requires take IPT = Indirect_Page_Table_Entries (ptep, pte) @*/
 /*@ requires take PgTableStruct = Owned<struct kvm_pgtable>(Data.pgt) @*/
@@ -572,6 +602,8 @@ static int __kvm_pgtable_walk(struct kvm_pgtable_walk_data *data,
 /*@ requires let orig_pgtable = pgtable @*/
 /*@ requires take PgTableStruct = Owned<struct kvm_pgtable>(Data.pgt) @*/
 /*@ requires take Ops = MM_Ops(PgTableStruct.mm_ops) @*/
+/*@ requires valid_pgtable_level(level) @*/
+/*@ requires let orig_level = level @*/
 /*@ ensures take Data2 = KVM_PgTable_Walk_Data (data) @*/
 /*@ ensures Data2.end == Data.end @*/
 /*@ ensures Data2.pgt == Data.pgt @*/
@@ -595,6 +627,7 @@ static int __kvm_pgtable_walk(struct kvm_pgtable_walk_data *data,
 	/*@ inv 0 <= idx && idx < power(2, 12 - 2) @*/
 	/*@ inv data == orig_data @*/
 	/*@ inv pgtable == orig_pgtable @*/
+	/*@ inv level == orig_level @*/
 	/*@ inv Data3.end == Data.end @*/
 	/*@ inv Data3.pgt == Data.pgt @*/
 	/*@ inv take PgTableStruct3 = Owned<struct kvm_pgtable>(Data.pgt) @*/
@@ -619,13 +652,6 @@ static int __kvm_pgtable_walk(struct kvm_pgtable_walk_data *data,
 	return ret;
 }
 
-/*@
-lemma pow_2_less_64_lemma (integer i)
-  requires 0 <= i; i < 64
-  ensures 1 <= power_uf(2, i);
-    power_uf(2, i) < power(2, 64)
-@*/
-
 static int _kvm_pgtable_walk(struct kvm_pgtable_walk_data *data)
 /* another bogus trusted, the problem here is the relationship between
    idx and data->addr < data->end. We need the latter to imply idx < lim,
@@ -640,7 +666,7 @@ static int _kvm_pgtable_walk(struct kvm_pgtable_walk_data *data)
 	int ret = 0;
 	struct kvm_pgtable *pgt = data->pgt;
 	int pgt_ia_bits = pgt->ia_bits;
-	/*@ apply pow_2_less_64_lemma(pgt_ia_bits); @*/
+	/*@ apply pow_2_less_64(pgt_ia_bits); @*/
 	u64 limit = BIT(pgt->ia_bits);
 
 	if (data->addr > limit || data->end > limit)
@@ -736,6 +762,7 @@ predicate {pointer mm_ops} Hyp_Map_Data (pointer p) {
 
 static bool hyp_map_walker_try_leaf(u64 addr, u64 end, u32 level,
 				    kvm_pte_t *ptep, struct hyp_map_data *data)
+/*@ requires valid_pgtable_level(level) @*/
 /*@ requires take D = Hyp_Map_Data(data) @*/
 /*@ requires take pte = Owned<u64>(ptep) @*/
 /*@ requires not(is_table_entry(pte)) @*/
@@ -780,6 +807,7 @@ static inline void coerce_null_ptes_to_IPT(kvm_pte_t *ptep)
 
 static int hyp_map_walker(u64 addr, u64 end, u32 level, kvm_pte_t *ptep,
 			  enum kvm_pgtable_walk_flags flag, void * const arg)
+/*@ requires valid_pgtable_level(level) @*/
 /*@ requires take D = Hyp_Map_Data(arg) @*/
 /*@ requires take pte = Owned<u64>(ptep) @*/
 /*@ requires not(is_table_entry(pte)) @*/
