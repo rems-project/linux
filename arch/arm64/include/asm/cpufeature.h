@@ -841,8 +841,12 @@ static inline bool system_supports_tlb_range(void)
 int do_emulate_mrs(struct pt_regs *regs, u32 sys_reg, u32 rt);
 bool try_emulate_mrs(struct pt_regs *regs, u32 isn);
 
+/*@ function (integer) id_aa64mmfr0_parange_to_phys_shift(integer parange) @*/
+
 static inline u32 id_aa64mmfr0_parange_to_phys_shift(int parange)
+/*@ cn_function id_aa64mmfr0_parange_to_phys_shift @*/
 /*@ ensures 32 <= return && return <= 60 @*/
+/*@ ensures return == id_aa64mmfr0_parange_to_phys_shift(parange) @*/
 {
 	switch (parange) {
 	case ID_AA64MMFR0_EL1_PARANGE_32: return 32;
