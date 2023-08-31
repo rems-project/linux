@@ -146,6 +146,7 @@ predicate (void) Page_Table_Entries (pointer p, integer level) {
   return;
 }
 
+function (boolean) is_valid_pte_entry (integer encoded)
 function (boolean) is_table_entry (integer encoded)
 function (integer) decode_table_entry_phys (integer encoded)
 
@@ -153,6 +154,11 @@ function (pointer) decode_table_entry_pointer (integer encoded)
 {
   hyp_phys_to_virt (decode_table_entry_phys (encoded))
 }
+
+lemma table_entry_is_valid (integer encoded)
+  requires true
+  ensures
+    is_table_entry(encoded) ? is_valid_pte_entry(encoded) : true
 
 predicate {bool x} Indirect_Page_Table_Entries (pointer p, integer level, integer encoded) {
   assert (valid_pgtable_level(level) || not(is_table_entry (encoded)));
@@ -321,15 +327,20 @@ static u32 kvm_pgd_pages(u32 ia_bits, u32 start_level)
 }
 /*@
 function (integer) kvm_pte_valid (integer pte)
+
+lemma kvm_pte_valid_is_valid (integer pte)
+  requires true
+  ensures
+    kvm_pte_valid(pte) == (is_valid_pte_entry(pte) ? 1 : 0)
 @*/
 
-/* FIXME: old friend ffsll in the way here @ cn_function kvm_pte_valid @*/
+/*@ cn_function kvm_pte_valid @*/
+/*@ ensures return == (is_valid_pte_entry(pte) ? 1 : 0) @*/
+	/*@ apply kvm_pte_valid_is_valid(pte); @*/
 
 /*@
 function (integer) kvm_pte_table (integer pte, integer level)
-@*/
 
-/*@
 lemma kvm_pte_table_is_table (integer pte, integer level)
   requires
     valid_pgtable_level(level + 1)
@@ -337,19 +348,29 @@ lemma kvm_pte_table_is_table (integer pte, integer level)
     kvm_pte_table(pte, level) == (is_table_entry(pte) ? 1 : 0)
 @*/
 
+/*@
+lemma bw_ffs_uf_2()
+  requires true
+  ensures
+    bw_ffs_uf(2) >= 2 && bw_ffs_uf(2) <= 4
+@*/
+
 static bool kvm_pte_table(kvm_pte_t pte, u32 level)
-/* FIXME: conversion blocked by builtins @ cn_function kvm_pte_table @*/
-/*@ trusted @*/
+/*@ cn_function kvm_pte_table @*/
 /*@ requires valid_pgtable_level(level) @*/
 /*@ ensures return == ((valid_pgtable_level(level + 1) && is_table_entry(pte)) ? 1 : 0) @*/
 {
 	if (level == KVM_PGTABLE_MAX_LEVELS - 1)
 		return false;
 
-	/*@ apply kvm_pte_table_is_table(pte, level) @*/
-	if (!kvm_pte_valid(pte))
+	/*@ apply table_entry_is_valid(pte); @*/
+	/*@ apply kvm_pte_valid_is_valid(pte); @*/
+	/*@ apply kvm_pte_table_is_table(pte, level); @*/
+	if (!kvm_pte_valid(pte)) {
 		return false;
+	}
 
+	/*@ apply bw_ffs_uf_2(); @*/
 	return FIELD_GET(KVM_PTE_TYPE, pte) == KVM_PTE_TYPE_TABLE;
 }
 
