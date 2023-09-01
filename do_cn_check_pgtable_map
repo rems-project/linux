@@ -33,6 +33,12 @@ then
   echo 'entering interactive shell in carver dir'
   bash
 
+elif [[ $1 == '--coq' ]]
+then
+
+  $CN --lemmata $LINUX_DIR/coq_lemmas/theories/Gen_Spec.v
+  make -C $LINUX_DIR/coq_lemmas
+
 else
 
   $CN
