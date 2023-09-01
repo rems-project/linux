@@ -49,4 +49,40 @@ Proof.
     + lia.
 Qed.
 
-
+Lemma wrapI_unchanged:
+  forall minInt maxInt x,
+  minInt <= x <= maxInt ->
+  minInt <= 0 <= maxInt ->
+  wrapI minInt maxInt x = x.
+Proof.
+  intros.
+  unfold wrapI.
+  pose (q := (if 0 <=? x then 0 else -1)).
+  pose (del := (maxInt - minInt + 1)).
+  assert (x / del = q) as div_eq.
+  - assert (q <= x / del < q + 1).
+    + destruct (0 <=? x) eqn: x_pos.
+      * rewrite Z.leb_le in *.
+        unfold q, del.
+        constructor.
+        -- apply Z.div_le_lower_bound; lia.
+        -- apply Z.div_lt_upper_bound; lia.
+      * rewrite Z.leb_gt in *.
+        unfold q, del.
+        constructor.
+        -- apply Z.div_le_lower_bound; lia.
+        -- apply Z.div_lt_upper_bound; lia.
+    + lia.
+  - rewrite Z.mod_eq by lia.
+    unfold del in div_eq.
+    rewrite div_eq.
+    unfold q.
+    destruct (0 <=? x) eqn: x_pos.
+    + rewrite Zle_imp_le_bool by lia.
+      lia.
+    + assert (forall {A : Type} p (x y : A), p = false ->
+        (if p then x else y) = y) as if_false.
+      * intros.
+        (rewrite H1; auto).
+      * rewrite if_false; lia.
+Qed.
