@@ -1,0 +1,7 @@
+CC = clang-15
+
+get-clang:
+	sudo apt install clang-15
+.PHONY: get-clang
+
+get-deps: get-clang

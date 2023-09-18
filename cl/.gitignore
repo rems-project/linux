@@ -1,0 +1,4 @@
+/clang/linux-x86/
+/qemu-host/*.img
+/qemu-host/*.iso
+/qemu-host/firmware/

@@ -1,0 +1,13 @@
+qemu-system-aarch64 -M virt        \
+    -machine virtualization=true -machine virt,gic-version=3  \
+    -cpu cortex-a72 -smp 2 -m 4096                   \
+    -drive if=pflash,format=raw,file=cl/qemu-host/firmware/efi.img,readonly=on     \
+    -drive if=pflash,format=raw,file=cl/qemu-host/firmware/varstore.img         \
+    -drive if=virtio,format=qcow2,file=cl/qemu-host/disk.img           \
+    -device virtio-scsi-pci,id=scsi0              \
+    -object rng-random,filename=/dev/urandom,id=rng0      \
+    -device virtio-rng-pci,rng=rng0               \
+    -device virtio-net-pci,netdev=net0                \
+    -netdev user,id=net0,hostfwd=tcp::8022-:22            \
+    -nographic \
+    -kernel arch/arm64/boot/Image -append "earlycon nokaslr kvm-arm.mode=protected root=/dev/vda2" 
