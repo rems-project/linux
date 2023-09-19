@@ -26,6 +26,7 @@
 #include <nvhe/ghost_misc.h>
 #include "./ghost_compute_abstraction.h"
 #include <../ghost_pgtable.h>
+#include "../ghost_control.h"
 // /GHOST
 
 unsigned long hyp_nr_cpus;
@@ -432,6 +433,8 @@ int __pkvm_init(phys_addr_t phys, unsigned long size, unsigned long nr_cpus,
 	int ret;
 
 	// GHOST
+	init_ghost_control();
+
 	hyp_puts("\n__pkvm_init:");
 	hyp_puts("arguments:");
 	hyp_putsxnl("phys", phys, 64);

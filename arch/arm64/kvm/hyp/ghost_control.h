@@ -16,6 +16,8 @@ struct ghost_control {
 
 extern struct ghost_control ghost_control;
 
+void init_ghost_control(void);
+
 #define GHOST_EXEC_SPEC false
 
 #endif // _GHOST_CONTROL_H
