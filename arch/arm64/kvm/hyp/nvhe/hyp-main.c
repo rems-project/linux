@@ -1129,16 +1129,6 @@ static const char * ghost_host_hcall_string[] = {
 	HANDLE_FUNC_STRING(__pkvm_vcpu_load),
 	HANDLE_FUNC_STRING(__pkvm_vcpu_put),
 	HANDLE_FUNC_STRING(__pkvm_vcpu_sync_state),
-	HANDLE_FUNC_STRING(__pkvm_iommu_driver_init),
-	HANDLE_FUNC_STRING(__pkvm_iommu_register),
-	HANDLE_FUNC_STRING(__pkvm_iommu_pm_notify),
-	HANDLE_FUNC_STRING(__pkvm_iommu_finalize),
-	HANDLE_FUNC_STRING(__pkvm_alloc_module_va),
-	HANDLE_FUNC_STRING(__pkvm_map_module_page),
-	HANDLE_FUNC_STRING(__pkvm_unmap_module_page),
-	HANDLE_FUNC_STRING(__pkvm_init_module),
-	HANDLE_FUNC_STRING(__pkvm_register_hcall),
-	HANDLE_FUNC_STRING(__pkvm_close_module_registration),
 };
 
 // /GHOST

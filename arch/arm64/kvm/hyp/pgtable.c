@@ -106,7 +106,8 @@ void ghost_dump_kvm_pgtable_walk_data(struct kvm_pgtable_walk_data *data, u64 i)
 {
 	hyp_puti(i);
 	hyp_puts("pgd:");
-	ghost_dump_kvm_pgtable(data->pgt, 0);
+	/* ghost_dump_kvm_pgtable(data->pgt, 0); */
+	hyp_putsxn("start",data->start,64);
 	hyp_putsxn("addr",data->addr,64);
 	hyp_putsxn("end",data->end,64);
 	hyp_putc('\n');
@@ -1557,7 +1558,10 @@ void kvm_pgtable_stage2_free_removed(struct kvm_pgtable_mm_ops *mm_ops, void *pg
 		.end	= kvm_granule_size(level),
 	};
 
-	WARN_ON(__kvm_pgtable_walk(&data, mm_ops, ptep, level + 1));
+	// GHOST
+	u64 ghost_va_partial = 0;  // TODO?
+	// /GHOST
+	WARN_ON(__kvm_pgtable_walk(&data, mm_ops, ptep, level + 1, ghost_va_partial));
 
 	WARN_ON(mm_ops->page_count(pgtable) != 1);
 	mm_ops->put_page(pgtable);

@@ -1,5 +1,5 @@
 #include "./ghost_control.h"
-#include <stdbool.h>
+#include <linux/types.h>
 
 /* switches for various ghost-code checks and logging output.
    Currently the checks also produce (fairly noisy) logging output - we might add separate switches for that

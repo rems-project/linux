@@ -15,6 +15,7 @@
 #include "nvhe/ghost_asm_ids.h"
 #include "./ghost_spec.h"
 #include "./ghost_compute_abstraction.h"
+#include "../ghost_kvm_pgtable.h"
 
 
 
@@ -436,26 +437,34 @@ static enum kvm_pgtable_prot ghost_default_host_prot(bool is_memory)
 
 
 
-// adapted from mem_protect.c
-// kvm_pte_valid, kvm_pgtable_stage2_pte_prot, kvm_pte_to_phys, and default_host_prot are all pure functions, so a simple spec version just uses all those
-enum pkvm_page_state ghost_host_get_page_state(struct ghost_state *g, kvm_pte_t pte)
-{
-	enum pkvm_page_state state = 0;
-	enum kvm_pgtable_prot prot;
-	phys_addr_t phys;
+/* // adapted from mem_protect.c */
+/* // kvm_pte_valid, kvm_pgtable_stage2_pte_prot, kvm_pte_to_phys, and default_host_prot are all pure functions, so a simple spec version just uses all those */
+/* enum pkvm_page_state ghost_host_get_page_state(struct ghost_state *g, kvm_pte_t pte, u64 addr) */
+/* { */
+/* 	/1* enum pkvm_page_state state = 0; *1/ */
+/* 	/1* enum kvm_pgtable_prot prot; *1/ */
+/* 	/1* phys_addr_t phys; *1/ */
 
-	if (!kvm_pte_valid(pte) && pte)
-		return PKVM_NOPAGE;
+/* 	/1* if (!kvm_pte_valid(pte) && pte) *1/ */
+/* 	/1* 	return PKVM_NOPAGE; *1/ */
 
-	prot = kvm_pgtable_stage2_pte_prot(pte);
-	if (kvm_pte_valid(pte)) {
-		phys = kvm_pte_to_phys(pte);
-		if ((prot & KVM_PGTABLE_PROT_RWX) != ghost_default_host_prot(ghost_addr_is_memory(g,phys)))
-			state = PKVM_PAGE_RESTRICTED_PROT;
-	}
+/* 	/1* prot = kvm_pgtable_stage2_pte_prot(pte); *1/ */
+/* 	/1* if (kvm_pte_valid(pte)) { *1/ */
+/* 	/1* 	phys = kvm_pte_to_phys(pte); *1/ */
+/* 	/1* 	if ((prot & KVM_PGTABLE_PROT_RWX) != ghost_default_host_prot(ghost_addr_is_memory(g,phys))) *1/ */
+/* 	/1* 		state = PKVM_PAGE_RESTRICTED_PROT; *1/ */
+/* 	/1* } *1/ */
 
-	return state | pkvm_getstate(prot);
-}
+/* 	/1* return state | pkvm_getstate(prot); *1/ */
+
+/* 	if (!ghost_addr_is_allowed_memory(g, addr)) */
+/* 		return PKVM_NOPAGE; */
+
+/* 	if (!kvm_pte_valid(pte) && pte) */
+/* 		return PKVM_NOPAGE; */
+
+/* 	return pkvm_getstate(kvm_pgtable_stage2_pte_prot(pte)); */
+/* } */
 // but for its usage in __host_check_page_state_range, we only care whether the result is equal to PKVM_PAGE_OWNED (as it gives -EPERM otherwise)
 
 /* adapted from pgtable.c:stage2_set_prot_attr() */
