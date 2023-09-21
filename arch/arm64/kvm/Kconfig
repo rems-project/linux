@@ -48,6 +48,17 @@ menuconfig KVM
 
 	  If unsure, say N.
 
+
+config NVHE_EL2_STACKSIZE
+	int "Number of stack pages in NVHE EL2 mode"
+	depends on KVM
+	default 1
+	help
+	  Option to increate the default stack size in NVHE mode. This is useful
+	  to add debugging instrumentation or to rule out a stack overflow as a
+	  bug source.
+
+
 config NVHE_EL2_DEBUG
 	bool "Debug mode for non-VHE EL2 object"
 	depends on KVM

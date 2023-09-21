@@ -131,7 +131,7 @@ static int recreate_hyp_mappings(phys_addr_t phys, unsigned long size,
 		 * and guard page. The allocation is also aligned based on
 		 * the order of its size.
 		 */
-		ret = pkvm_alloc_private_va_range(PAGE_SIZE * 2, &hyp_addr);
+		ret = pkvm_alloc_private_va_range(PAGE_SIZE + EL2_STACKSIZE, &hyp_addr);
 		if (ret)
 			return ret;
 
@@ -146,13 +146,13 @@ static int recreate_hyp_mappings(phys_addr_t phys, unsigned long size,
 		 */
 		hyp_spin_lock(&pkvm_pgd_lock);
 		ret = kvm_pgtable_hyp_map(&pkvm_pgtable, hyp_addr + PAGE_SIZE,
-					PAGE_SIZE, params->stack_pa, PAGE_HYP);
+					EL2_STACKSIZE, params->stack_pa, PAGE_HYP);
 		hyp_spin_unlock(&pkvm_pgd_lock);
 		if (ret)
 			return ret;
 
 		/* Update stack_hyp_va to end of the stack's private VA range */
-		params->stack_hyp_va = hyp_addr + (2 * PAGE_SIZE);
+		params->stack_hyp_va = hyp_addr + PAGE_SIZE + EL2_STACKSIZE;
 	}
 
 	/*

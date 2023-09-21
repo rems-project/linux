@@ -16,6 +16,9 @@
 
 #define HYP_MEMBLOCK_REGIONS 128
 
+#define EL2_STACK_NR_PAGES (CONFIG_NVHE_EL2_STACKSIZE)
+#define EL2_STACKSIZE (PAGE_SIZE * EL2_STACK_NR_PAGES)
+
 int pkvm_init_host_vm(struct kvm *kvm, unsigned long type);
 int pkvm_create_hyp_vm(struct kvm *kvm);
 void pkvm_destroy_hyp_vm(struct kvm *kvm);
