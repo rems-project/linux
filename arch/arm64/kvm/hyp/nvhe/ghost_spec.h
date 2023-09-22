@@ -16,7 +16,7 @@
 #include <asm/kvm_pkvm.h> // for KVM_MAX_PVMS
 
 // assertion to check invariants of the ghost instrumentation, which should never fail
-#define ghost_assert(c) BUG_ON(c);
+#define ghost_assert(c) BUG_ON(!(c));
 
 // assertion to check the spec
 #define ghost_spec_assert(c) BUG_ON(c);
