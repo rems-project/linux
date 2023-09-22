@@ -309,7 +309,7 @@ void record_abstraction_all(struct ghost_state *g, struct kvm_cpu_context *ctxt)
 	record_abstraction_pkvm(g);
 	record_abstraction_host(g);
 	//record_abstraction_vms(); TODO
-	if (!ctxt) {
+	if (ctxt) {
 		record_abstraction_regs(g,ctxt);
 	}
 	g->hyp_physvirt_offset = hyp_physvirt_offset;
