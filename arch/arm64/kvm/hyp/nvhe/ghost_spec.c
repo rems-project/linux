@@ -574,6 +574,7 @@ void compute_new_abstract_state_handle_trap(struct ghost_state *g1 /*new*/, stru
 	switch (ESR_ELx_EC(ghost_reg_el2(g0,GHOST_ESR_EL2))) {
 	case ESR_ELx_EC_HVC64:
 		compute_new_abstract_state_handle_host_hcall(g1,g0,impl_return_value);
+		break;
 	case ESR_ELx_EC_SMC64:
 		//TODO compute_new_abstract_state_handle_host_smc(g1,g0);
 		break;
@@ -584,6 +585,7 @@ void compute_new_abstract_state_handle_trap(struct ghost_state *g1 /*new*/, stru
 	case ESR_ELx_EC_IABT_LOW:
 	case ESR_ELx_EC_DABT_LOW:
 		compute_new_abstract_state_handle_host_mem_abort(g1,g0,impl_return_value);
+		break;
 	default:
 		ghost_assert(false);
 	}
