@@ -1241,11 +1241,11 @@ static void handle_host_hcall(struct kvm_cpu_context *host_ctxt)
 			b = b && pkvm_prot_finalized_cpu[i];
 		WRITE_ONCE(pkvm_prot_finalized_all, b);
 		init_abstraction_common();
-		host_lock_component();
-		hyp_lock_component();
+		hyp_spin_lock(&host_mmu.lock);
+		hyp_spin_lock(&pkvm_pgd_lock);
 		record_abstraction_common();
-		hyp_unlock_component();
-		host_unlock_component();
+		hyp_spin_unlock(&pkvm_pgd_lock);
+		hyp_spin_unlock(&host_mmu.lock);
 		hyp_spin_unlock(&ghost_prot_finalized_lock);
 	}
         // /GHOST
