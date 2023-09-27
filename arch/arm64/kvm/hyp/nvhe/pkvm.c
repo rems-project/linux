@@ -26,8 +26,10 @@ unsigned int kvm_arm_vmid_bits;
 /*
  * The currently loaded hyp vCPU for each physical CPU. Used only when
  * protected KVM is enabled, but for both protected and non-protected VMs.
+ * 
+ * BS: this is non-static to allow ghost code to read it
  */
-static DEFINE_PER_CPU(struct pkvm_hyp_vcpu *, loaded_hyp_vcpu);
+/*static*/ DEFINE_PER_CPU(struct pkvm_hyp_vcpu *, loaded_hyp_vcpu);
 
 /*
  * Set trap register values based on features in ID_AA64PFR0.
@@ -239,14 +241,18 @@ static pkvm_handle_t idx_to_vm_handle(unsigned int idx)
  * Spinlock for protecting state related to the VM table. Protects writes
  * to 'vm_table' and 'nr_table_entries' as well as reads and writes to
  * 'last_hyp_vcpu_lookup'.
+ *
+ * BS: this is non-static so the ghost code can use it
  */
-static DEFINE_HYP_SPINLOCK(vm_table_lock);
+/*static*/ DEFINE_HYP_SPINLOCK(vm_table_lock);
 
 /*
  * The table of VM entries for protected VMs in hyp.
  * Allocated at hyp initialization and setup.
+ *
+ * BS: this is non-static so the ghost code can use it
  */
-static struct pkvm_hyp_vm **vm_table;
+/*static*/ struct pkvm_hyp_vm **vm_table;
 
 void pkvm_hyp_vm_table_init(void *tbl)
 {

@@ -481,7 +481,6 @@ u64 arch_prot_of_prot(enum kvm_pgtable_prot prot)
 	return attr;
 }
 
-
 void compute_new_abstract_state_handle___pkvm_host_share_hyp(struct ghost_state *g1, struct ghost_state *g0, u64 impl_return_value)
 {
 	u64 pfn = ghost_reg_gpr(g0, 1);
@@ -521,6 +520,39 @@ void compute_new_abstract_state_handle___pkvm_host_share_hyp(struct ghost_state 
 einval: return;
 }
 
+
+/* pkvm_host_unshare_hyp(pfn) */
+void compute_new_abstract_state_handle___pkvm_host_unshare_hyp(struct ghost_state *g1, struct ghost_state *g0, u64 impl_return_value)
+{
+	// TODO
+}
+
+/**
+ * compute the new abstract ghost_state from a u64 impl_return_value = pkvm_host_map_guest(host_pfn, guest_gfn)
+ */
+void compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost_state *g1, struct ghost_state *g0, u64 impl_return_value) {
+	//u64 pfn = ghost_reg_gpr(g0, 1);
+	//u64 gfn = ghost_reg_gpr(g0, 2);
+	// TODO
+}
+
+void compute_new_abstract_state_handle___pkvm_vcpu_load(struct ghost_state *g1, struct ghost_state *g0, u64 impl_return_value) {
+	//u64 pfn = ghost_reg_gpr(g0, 1);
+	//u64 gfn = ghost_reg_gpr(g0, 2);
+	// TODO
+}
+
+void compute_new_abstract_state_handle___pkvm_vcpu_put(struct ghost_state *g1, struct ghost_state *g0, u64 impl_return_value) {
+	// TODO
+}
+
+void compute_new_abstract_state_handle___pkvm_init_vm(struct ghost_state *g1, struct ghost_state *g0, u64 impl_return_value) {
+	if (impl_return_value > 0) {
+		// success case, returned a handle
+		//u64 pkvm_vm_handle = impl_return_value;
+	}
+}
+
 void compute_new_abstract_state_handle_host_hcall(struct ghost_state *g1, struct ghost_state *g0, u64 impl_return_value, bool *new_state_computed)
 {
 	// allow any hcall to fail with ENOMEM, with an otherwise-identity abstract state
@@ -538,9 +570,26 @@ void compute_new_abstract_state_handle_host_hcall(struct ghost_state *g1, struct
 		break;
 
 	__KVM_HOST_SMCCC_FUNC___pkvm_host_unshare_hyp:
+		compute_new_abstract_state_handle___pkvm_host_unshare_hyp(g1, g0, impl_return_value);
 		break;
 
 	__KVM_HOST_SMCCC_FUNC___pkvm_host_reclaim_page:
+		break;
+
+	__KVM_HOST_SMCCC_FUNC___pkvm_host_map_guest:
+		compute_new_abstract_state_handle___pkvm_host_map_guest(g1, g0, impl_return_value);
+		break;
+
+	__KVM_HOST_SMCCC_FUNC___pkvm_vcpu_load:
+		compute_new_abstract_state_handle___pkvm_vcpu_load(g1, g0, impl_return_value);
+		break;
+
+	__KVM_HOST_SMCCC_FUNC___pkvm_vcpu_put:
+		compute_new_abstract_state_handle___pkvm_vcpu_put(g1, g0, impl_return_value);
+		break;
+
+	__KVM_HOST_SMCCC_FUNC___pkvm_init_vm:
+		compute_new_abstract_state_handle___pkvm_init_vm(g1, g0, impl_return_value);
 		break;
 
 		// TODO: and their bodies, and all the other cases
@@ -564,7 +613,7 @@ void compute_new_abstract_state_handle_trap(struct ghost_state *g1 /*new*/, stru
 {
 
 	// assumes *g1 has been cleared
-	ghost_assert(!g1->pkvm.present && !g1->host.present && !g1->regs.present);
+	ghost_assert(!g1->pkvm.present && !g1->host.present && !g1->regs[THIS_CPU()].present);
 
 	// copy the g0 regs to g1; we'll update them to make the final g1
 	copy_abstraction_regs(g1, g0);

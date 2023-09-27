@@ -1,6 +1,9 @@
 #ifndef _GHOST_SPEC_H
 #define _GHOST_SPEC_H
 
+// TODO: BS: this should already be defined somewhere, no?
+#define MAX_CPUS 4
+
 #include <../debug-pl011.h>
 #include <../ghost_extra_debug-pl011.h>
 //#include <nvhe/ghost_check_pgtables.h>
@@ -9,6 +12,9 @@
 #include <../ghost_pgtable.h>
 #include <nvhe/spinlock.h>
 #pragma GCC diagnostic ignored "-Wdeclaration-after-statement"
+
+// TODO: read CPU affinity register to get this physical CPU out
+#define THIS_CPU() 0
 
 
 #include <nvhe/trap_handler.h>   // for DECLARE_REG
@@ -21,16 +27,25 @@
 // assertion to check the spec
 #define ghost_spec_assert(c) BUG_ON(!(c));
 
+// an opaque pKVM VM handle
+typedef u64 pkvm_vm_handle_t;
 
 // top-level spec types
-
-struct ghost_vcpu {                          // TODO
+struct ghost_vcpu_index {
+	bool loaded;
+	u64 vm_index;
+	u64 vcpu_index;
 };
+
+struct ghost_vcpu {
+};
+
 
 struct ghost_vm {                            // abstraction of state protected by each VM lock
 	bool present;
 	abstract_pgtable vm_abstract_pgtable;                  // the interpretation of the current concrete mapping
 	struct ghost_vcpu vcpus[KVM_MAX_VCPUS];
+	pkvm_vm_handle_t pkvm_handle; // pKVM-assigned handle
 };
 
 struct ghost_host {                          // abstraction of state protected by the host lock
@@ -43,6 +58,7 @@ struct ghost_host {                          // abstraction of state protected b
 struct ghost_pkvm {                          // abstraction of state protected by the pkvm lock
 	bool present;
 	abstract_pgtable pkvm_abstract_pgtable;                // the interpretation of the current concrete mapping
+	u64 no_vms;  // total number of VMs being managed by pKVM
 };
 
 struct ghost_register_state {
@@ -55,9 +71,10 @@ struct ghost_state {
         mapping hyp_memory;                    // constant after initialisation - the interpretation of hyp_memory[]
 	struct ghost_pkvm pkvm;                // protected by the pkvm lock
 	struct ghost_host host;                // protected by the host lock
-	struct ghost_vm vms[KVM_MAX_PVMS];     // protected by each VM lock
-	struct ghost_register_state regs;
-	s64 hyp_physvirt_offset;               // constant after initialisation - the value of hyp_physvirt_offset
+	struct ghost_vm vms[KVM_MAX_PVMS];     // protected by each VM lock, NOTE: UNORDERED.
+	struct ghost_register_state regs[NR_CPUS];
+	s64 hyp_physvirt_offset;                  // constant after initialisation - the value of hyp_physvirt_offset
+	struct ghost_vcpu_index loaded_hyp_vcpu[NR_CPUS];  // loaded vcpu, as a VM+VCPU index pair
 };
 
 
@@ -135,8 +152,8 @@ DECLARE_PER_CPU(struct ghost_state, gs_computed_post);
 //struct ghost_state spec_handle_trap(struct ghost_state *g);
 
 // macros to make ghost register accesses more uniform
-#define ghost_reg_gpr(g,r) g->regs.ctxt.regs.regs[r]
-#define ghost_reg_el2(g,r) g->regs.el2_sysregs[r]
+#define ghost_reg_gpr(g,r) g->regs[THIS_CPU()].ctxt.regs.regs[r]
+#define ghost_reg_el2(g,r) g->regs[THIS_CPU()].el2_sysregs[r]
 //#define ghost_reg_ctxt(g,r)
 
 
