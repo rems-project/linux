@@ -265,7 +265,7 @@ void ghost_dump_pgtable_locked(struct kvm_pgtable *pg, char *doc, u64 i)
 {
 	hyp_putspi(doc, i);
 	hyp_putsp(" ");
-	hyp_puts("ghost_dump_pgtable() ");
+	hyp_puts("ghost_dump_pgtable()\n");
 	if (pg->pgd==0) {
 		hyp_puts("empty");
 		return;

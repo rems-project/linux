@@ -160,23 +160,24 @@ void ghost_dump_shadow_table(void)
 
 void ghost_dump_setup(void)
 {
-	hyp_putsxn("ghost__pkvm_init_virt",     ghost__pkvm_init_virt, 64);
+
+	hyp_putsxn("    ghost__pkvm_init_virt",     ghost__pkvm_init_virt, 64);
 	hyp_putsxn("virt'",    ghost__pkvm_init_virt+ghost__pkvm_init_size, 64);
 	hyp_putsxn("ghost__pkvm_init_phys",	ghost__pkvm_init_phys, 64);
 	hyp_putsxn("phys'",	ghost__pkvm_init_phys+ghost__pkvm_init_size, 64);
 	hyp_putsxn("size",     ghost__pkvm_init_size, 64);
 	hyp_putc('\n');
 
-	hyp_putsxn("vmemmap_base    ", (u64)vmemmap_base, 64);
+	hyp_putsxn("    vmemmap_base    ", (u64)vmemmap_base, 64);
 	hyp_putsxn("size",	ghost_vmemmap_size, 64);
 	hyp_putc('\n');
 	//	hyp_putsxn("shadow_table    ", (u64)shadow_table, 64);
 	//	hyp_putsxn("size",	ghost_shadow_table_size	, 64);
 	//	hyp_putc('\n');
-	hyp_putsxn("hyp_pgt_base    ",(u64)hyp_pgt_base,64);
+	hyp_putsxn("    hyp_pgt_base    ",(u64)hyp_pgt_base,64);
 	hyp_putsxn("size",	ghost_hyp_pgt_size, 64);
 	hyp_putc('\n');
-	hyp_putsxn("host_s2_pgt_base", (u64)host_s2_pgt_base, 64);
+	hyp_putsxn("    host_s2_pgt_base", (u64)host_s2_pgt_base, 64);
 	hyp_putsxn("size",	ghost_host_s2_pgt_size, 64);
 	hyp_putc('\n');
 }

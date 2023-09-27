@@ -295,8 +295,8 @@ void hyp_put_maplet(struct maplet *maplet, u64 i)
 		hyp_putsp("ABSENT                        ");
 		break;
 	}
-	hyp_putsxn("size(b,p)",maplet->size*PAGE_SIZE,64);
-	hyp_putsxn("",(u32)maplet->size,32);
+	hyp_putsxn("size(p,b)",(u32)maplet->size,32);
+	hyp_putsxn("",maplet->size*PAGE_SIZE,64);
 	switch (maplet->target.k) {
 	case MAPPED:
 		// bits 56,55: two of the SW bits

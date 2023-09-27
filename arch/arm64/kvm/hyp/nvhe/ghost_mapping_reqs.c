@@ -230,7 +230,7 @@ void hyp_put_mapping_reqs(struct mapping_reqs *mapping_reqs)
 
 void ghost_hyp_put_mapping_reqs(void)
 {
-	hyp_puts("pkvm requested hyp mapping_reqs");
+	hyp_puts("pkvm requested hyp mapping_reqs\n");
 	//        sort_mapping_reqs_phys(&mapping_reqs);
 	hyp_put_mapping_reqs(&mapping_reqs);
 }

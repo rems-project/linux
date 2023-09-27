@@ -435,16 +435,16 @@ int __pkvm_init(phys_addr_t phys, unsigned long size, unsigned long nr_cpus,
 	// GHOST
 	init_ghost_control();
 
-	hyp_puts("\n__pkvm_init:");
-	hyp_puts("arguments:");
-	hyp_putsxnl("phys", phys, 64);
-	hyp_putsxnl("size", size, 32);
-	hyp_putsxnl("nr_cpu", nr_cpus, 8);
-	hyp_putsxnl("per_cpu_base", (u64)per_cpu_base, 64);
-	hyp_putsxnl("hyp_va_bits", (u64)hyp_va_bits, 8);
+	hyp_puts("\n__pkvm_init:\n");
+	hyp_puts("  arguments:");
+	hyp_putsxnl("    phys", phys, 64);
+	hyp_putsxnl("    size", size, 32);
+	hyp_putsxnl("    nr_cpu", nr_cpus, 8);
+	hyp_putsxnl("    per_cpu_base", (u64)per_cpu_base, 64);
+	hyp_putsxnl("    hyp_va_bits", (u64)hyp_va_bits, 8);
 
-	hyp_puts("\nInteresting globals:");
-	hyp_putsxnl("hyp_physvirt_offset", hyp_physvirt_offset, 64);
+	hyp_puts("\n  interesting globals:\n");
+	hyp_putsxnl("    hyp_physvirt_offset", hyp_physvirt_offset, 64);
 	// /GHOST
 
 	BUG_ON(kvm_check_pvm_sysreg_table());
