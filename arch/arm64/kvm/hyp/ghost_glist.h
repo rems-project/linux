@@ -110,7 +110,7 @@ static inline void glist_add_to_tail(struct glist_node *node, struct glist_head 
  */
 static inline void glist_del(struct glist_head *list)
 {
-	list->first = list->first;
+	list->first = list->first->next;
 	if (list->first == NULL)
 		list->last = NULL;
 }
