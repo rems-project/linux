@@ -98,7 +98,7 @@ bool abstraction_equals_reg(struct ghost_state *g1, struct ghost_state *g2)
 	u64 ghost_el2_regs[] = (u64[])GHOST_EL2_REGS;
 	for (i=0; i<=30; i++)
 		ret = ret && ghost_reg_gpr(g1,i) == ghost_reg_gpr(g2,i);
-	for (i=0; i<sizeof(ghost_el2_regs); i++)
+	for (i=0; i<sizeof(ghost_el2_regs)/sizeof(u64); i++)
 		ret = ret && ghost_reg_el2(g1,ghost_el2_regs[i]) == ghost_reg_el2(g2,ghost_el2_regs[i]);
 	return ret;
 	// TODO other regs
