@@ -1365,6 +1365,7 @@ void handle_trap(struct kvm_cpu_context *host_ctxt)
 	if (check_this_transition) {
 		// record the remaining parts of the new impl abstract state
 		// (the pkvm, host, and vm components having been recorded at impl lock points)
+		ghost_lock_maplets();
 		record_abstraction_hyp_memory(this_cpu_ptr(&gs_recorded_post));
 		record_abstraction_regs_post(host_ctxt);
 		this_cpu_ptr(&gs_recorded_post)->hyp_physvirt_offset = hyp_physvirt_offset;
@@ -1374,6 +1375,7 @@ void handle_trap(struct kvm_cpu_context *host_ctxt)
 		// and check the two are equal on relevant components
 		if (new_state_computed) 
 			ghost_spec_assert(abstraction_equals_all(this_cpu_ptr(&gs_computed_post), this_cpu_ptr(&gs_recorded_post), this_cpu_ptr(&gs_recorded_pre)));
+		ghost_unlock_maplets();
 	}
 	// /GHOST
 
