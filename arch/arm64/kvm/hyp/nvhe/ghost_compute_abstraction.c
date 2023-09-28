@@ -144,12 +144,14 @@ bool abstraction_equals_all(struct ghost_state *gc, struct ghost_state *gr_post,
 		ret_pkvm = true;
 
 	if (gc->host.present && gr_post->host.present) {
+		hyp_putsp("case 1\n");
 		ret_host = abstraction_equals_host(gc->host, gr_post->host);
 	}
 	else if (gc->host.present && !gr_post->host.present) {
 		ghost_assert(false);
 	}
 	else if (!gc->host.present && gr_post->host.present) {
+		hyp_putsp("case 3\n");
 		ghost_assert(gr_pre->host.present);
 		ret_host = abstraction_equals_host(gr_post->host, gr_pre->host);
 	}
@@ -348,6 +350,7 @@ void record_and_check_abstraction_host_pre(void)
 	ghost_lock_maplets();
 	struct ghost_state *g = this_cpu_ptr(&gs_recorded_pre);
 	record_abstraction_host(g);
+	hyp_putsp("a-e-h: record_and_check_abstraction_host_pre\n");
 	abstraction_equals_host(g->host, gs.host);
 	ghost_unlock_maplets();
 }

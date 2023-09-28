@@ -25,6 +25,7 @@ extern bool ghost_extra_debug_initialised;
 //}
 //// end
 
+#ifdef GHOST_COLOURS
 #define GHOST_WHITE_ON_BLACK "\033[40;37;1m"
 #define GHOST_WHITE_ON_RED "\033[41;37;1m"
 #define GHOST_WHITE_ON_GREEN "\033[42;37;1m"
@@ -33,7 +34,16 @@ extern bool ghost_extra_debug_initialised;
 #define GHOST_WHITE_ON_MAGENTA "\033[45;37;1m"
 #define GHOST_WHITE_ON_CYAN "\033[46;37;1m"
 #define GHOST_NORMAL "\033[0m"
-
+#else
+#define GHOST_WHITE_ON_BLACK  "***"
+#define GHOST_WHITE_ON_RED    "***"
+#define GHOST_WHITE_ON_GREEN  "***"
+#define GHOST_WHITE_ON_YELLOW "***"
+#define GHOST_WHITE_ON_BLUE   "***"
+#define GHOST_WHITE_ON_MAGENTA "***"
+#define GHOST_WHITE_ON_CYAN "***"
+#define GHOST_NORMAL "***"
+#endif
 
 static inline void hyp_puti(u64 i)
 {

@@ -19,7 +19,7 @@
 #define ghost_assert(c) BUG_ON(!(c));
 
 // assertion to check the spec
-#define ghost_spec_assert(c) BUG_ON(c);
+#define ghost_spec_assert(c) BUG_ON(!(c));
 
 
 // top-level spec types

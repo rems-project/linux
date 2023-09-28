@@ -1334,17 +1334,26 @@ void handle_trap(struct kvm_cpu_context *host_ctxt)
 		handle_host_hcall(host_ctxt);
 		break;
 	case ESR_ELx_EC_SMC64:
-		hyp_putsp(GHOST_WHITE_ON_BLUE "handle_host_smc" GHOST_NORMAL "\n");
+		// GHOST
+		if (ghost_control.dump_handle_trap) 
+			hyp_putsp(GHOST_WHITE_ON_BLUE "handle_host_smc" GHOST_NORMAL "\n");
+		// /GHOST
 		handle_host_smc(host_ctxt);
 		break;
 	case ESR_ELx_EC_FP_ASIMD:
 	case ESR_ELx_EC_SVE:
-		hyp_putsp(GHOST_WHITE_ON_BLUE "fmsimd_host_restore" GHOST_NORMAL "\n");
+		// GHOST
+		if (ghost_control.dump_handle_trap) 
+			hyp_putsp(GHOST_WHITE_ON_BLUE "fmsimd_host_restore" GHOST_NORMAL "\n");
+		// /GHOST
 		fpsimd_host_restore();
 		break;
 	case ESR_ELx_EC_IABT_LOW:
 	case ESR_ELx_EC_DABT_LOW:
-		hyp_putsp(GHOST_WHITE_ON_BLUE "handle_host_mem_abort" GHOST_NORMAL "\n");
+		// GHOST
+		if (ghost_control.dump_handle_trap) 
+			hyp_putsp(GHOST_WHITE_ON_BLUE "handle_host_mem_abort" GHOST_NORMAL "\n");
+		// /GHOST
 		handle_host_mem_abort(host_ctxt);
 		break;
 	default:
