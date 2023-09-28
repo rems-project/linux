@@ -448,7 +448,7 @@ static int hyp_set_prot_attr(enum kvm_pgtable_prot prot, kvm_pte_t *ptep)
         bool device = prot & KVM_PGTABLE_PROT_DEVICE;
         u32 mtype = device ? MT_DEVICE_nGnRE : MT_NORMAL;
         kvm_pte_t attr = FIELD_PREP(KVM_PTE_LEAF_ATTR_LO_S1_ATTRIDX, mtype);
-        u32 sh = KVM_PTE_LEAF_ATTR_LO_S1_SH_IS;
+        //u32 sh = KVM_PTE_LEAF_ATTR_LO_S1_SH_IS;
         u32 ap = (prot & KVM_PGTABLE_PROT_W) ? KVM_PTE_LEAF_ATTR_LO_S1_AP_RW :
                                                KVM_PTE_LEAF_ATTR_LO_S1_AP_RO;
 
@@ -489,8 +489,9 @@ mapping interpret_mapping_reqs(void)
 	struct mapping_req *mr;
         for (i=0; i<mapping_reqs.count; i++) {
 		mr = &mapping_reqs.m[i];
-		if (mr->kind != HYP_PVMFW) 
-			extend_mapping_coalesce(&map, mr->virt, mr->size, maplet_target_mapped_ext(mr->phys, 0 /*PKVM_PAGE_OWNED*/, arch_prot_of_prot(mr->prot)));
+		if (mr->kind != HYP_PVMFW) {
+			extend_mapping_coalesce(&map, mr->virt, mr->size, maplet_target_mapped_ext(mr->phys,arch_prot_of_prot(mr->prot) & (KVM_PGTABLE_PROT_SW0 | KVM_PGTABLE_PROT_SW1) , arch_prot_of_prot(mr->prot) & (KVM_PTE_LEAF_ATTR_LO_S2_S2AP_R /*bit 6*/ | KVM_PTE_LEAF_ATTR_LO_S2_S2AP_W /*bit 7*/ | KVM_PTE_LEAF_ATTR_HI_S2_XN /*bit 54*/)));
+		}
 	}
 	return map;
 }
