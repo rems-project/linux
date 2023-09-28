@@ -1242,14 +1242,19 @@ static void handle_host_hcall(struct kvm_cpu_context *host_ctxt)
 			b = b && pkvm_prot_finalized_cpu[i];
 		WRITE_ONCE(pkvm_prot_finalized_all, b);
 		if (b) {
+			hyp_putsp(GHOST_WHITE_ON_BLUE);
+			hyp_putsp("pkvm_prot_finalized_all");
+			hyp_putsp(GHOST_NORMAL);
+			hyp_putc('\n');
+			
 			init_abstraction_common();
 			hyp_spin_lock(&host_mmu.lock);
 			hyp_spin_lock(&pkvm_pgd_lock);
 			record_abstraction_common();
 			hyp_spin_unlock(&pkvm_pgd_lock);
 			hyp_spin_unlock(&host_mmu.lock);
-			hyp_spin_unlock(&ghost_prot_finalized_lock);
 		}
+		hyp_spin_unlock(&ghost_prot_finalized_lock);
 	}
         // /GHOST
 
@@ -1329,14 +1334,17 @@ void handle_trap(struct kvm_cpu_context *host_ctxt)
 		handle_host_hcall(host_ctxt);
 		break;
 	case ESR_ELx_EC_SMC64:
+		hyp_putsp(GHOST_WHITE_ON_BLUE "handle_host_smc" GHOST_NORMAL "\n");
 		handle_host_smc(host_ctxt);
 		break;
 	case ESR_ELx_EC_FP_ASIMD:
 	case ESR_ELx_EC_SVE:
+		hyp_putsp(GHOST_WHITE_ON_BLUE "fmsimd_host_restore" GHOST_NORMAL "\n");
 		fpsimd_host_restore();
 		break;
 	case ESR_ELx_EC_IABT_LOW:
 	case ESR_ELx_EC_DABT_LOW:
+		hyp_putsp(GHOST_WHITE_ON_BLUE "handle_host_mem_abort" GHOST_NORMAL "\n");
 		handle_host_mem_abort(host_ctxt);
 		break;
 	default:
