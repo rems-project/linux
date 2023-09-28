@@ -55,7 +55,7 @@ v  	PKVM_PAGE_OWNED			= 0ULL,
   	__PKVM_PAGE_RESERVED		= KVM_PGTABLE_PROT_SW0 |
   					  KVM_PGTABLE_PROT_SW1,
 
-  (2) KVM_PGTABLE_PROT_{X,W,R,DEVICE,NC} are bits 0,1,2,3,4 - but those (confusingly!) aren't Arm-A bits; they're mapped to and from Arm-A by pgtable.c:{hyp_set_prot_attr(),kvm_pgtable_hyp_pte_prot()}
+  (2) KVM_PGTABLE_PROT_{X,W,R,DEVICE,NC} are bits 0,1,2,3,4 - but those (confusingly!) aren't Arm-A bits; they're defined in arch/arm64/include/asm/kvm_pgtable.h and mapped to and from Arm-A by pgtable.c:{hyp_set_prot_attr(),kvm_pgtable_hyp_pte_prot()}
 
   The pKVM-used values of the latter are (I hope) just the combinations defined below that:
 

@@ -77,6 +77,9 @@ struct aal dummy_aal(void)
 }
 
 
+//u64 normalise_arch_prot_wxn(u64 arch_prot) {
+	
+
 struct maplet_target maplet_target_mapped_ext(phys_addr_t phys, u64 page_state, u64 arch_prot)
 {
 	int i;
@@ -314,8 +317,8 @@ void hyp_put_maplet(struct maplet *maplet, u64 i)
 		case (0): hyp_putsp("-"); break;
 		}
 		switch (maplet->target.u.m.arch_prot /*maplet->target.u.m.attr */ & KVM_PTE_LEAF_ATTR_LO_S2_S2AP_W) {
-		case (KVM_PTE_LEAF_ATTR_LO_S2_S2AP_W): hyp_putsp("W"); break;
-		case (0): hyp_putsp("-"); break;
+		case (KVM_PTE_LEAF_ATTR_LO_S2_S2AP_W): hyp_putsp("-"); break;
+		case (0): hyp_putsp("W"); break;
 		}
 		switch (maplet->target.u.m.arch_prot /*maplet->target.u.m.attr */ & KVM_PTE_LEAF_ATTR_HI_S1_XN) {  // TODO: refine for SCTLR_EL2.WXN==1 case, variously for stage 1 and stage 2
 		case (KVM_PTE_LEAF_ATTR_HI_S1_XN): hyp_putsp("-"); break;

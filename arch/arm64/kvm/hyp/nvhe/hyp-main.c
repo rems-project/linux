@@ -1301,6 +1301,7 @@ void hyp_put_exception_heading(void)
 void handle_trap(struct kvm_cpu_context *host_ctxt)
 {
 	// GHOST
+	// ghost_dump_sysregs();
 	u64 ghost_impl_return_value;
 	_Bool check_this_transition=false;
 	if (GHOST_EXEC_SPEC && READ_ONCE(pkvm_prot_finalized_all)) {

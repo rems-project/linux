@@ -104,14 +104,16 @@ void _dump_pgtable(u64 *pgd, u8 level)
         if (pgd) {
                 // dump this page
                 hyp_putsxn("level",level,8);
-                hyp_putsxn("table at virt", (u64)pgd, 64); hyp_puts("");
+                hyp_putsxn("table at virt", (u64)pgd, 64); hyp_puts("\n");
                 for (idx = 0; idx < 512; idx++) {
                         kvm_pte_t pte = pgd[idx];
-                        hyp_putsxn("level",level,8);
-                        hyp_putsxn("entry at virt",(u64)(pgd+idx),64);
-                        hyp_putsxn("raw",(u64)pte,64);
-                        hyp_put_entry(pte, level);
-                        hyp_puts("");
+			if (pte!=0) {
+				hyp_putsxn("level",level,8);
+				hyp_putsxn("entry at virt",(u64)(pgd+idx),64);
+				hyp_putsxn("raw",(u64)pte,64);
+				hyp_put_entry(pte, level);
+				hyp_puts("\n");
+			}
                 }
                 // dump any sub-pages
                 for (idx = 0; idx < 512; idx++) {
@@ -122,8 +124,9 @@ void _dump_pgtable(u64 *pgd, u8 level)
                                 next_level_virt_address = (u64)hyp_phys_to_virt((phys_addr_t)next_level_phys_address);
                                 hyp_putsxn("table phys", next_level_phys_address, 64);
                                 hyp_putsxn("table virt", next_level_virt_address, 64);
+				hyp_puts("\n");
                                 _dump_pgtable((kvm_pte_t *)next_level_virt_address, level+1);
-                                hyp_puts("");
+                                hyp_puts("\n");
                         }
                 }
         }
@@ -273,6 +276,7 @@ void ghost_dump_pgtable_locked(struct kvm_pgtable *pg, char *doc, u64 i)
 	mapping map = interpret_pgtable(pg->pgd, false /*noisy*/);
 	//hyp_puts("ghost_dump_pgtable post interpret_pgtable()\n");
 	hyp_put_mapping(map, i+2);
+	// dump_pgtable(*pg); // to look at the raw pgtable - verbosely!
 	free_mapping(map);
 }
 
