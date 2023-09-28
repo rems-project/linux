@@ -521,7 +521,7 @@ void compute_new_abstract_state_handle___pkvm_host_share_hyp(struct ghost_state 
 einval: return;
 }
 
-void compute_new_abstract_state_handle_host_hcall(struct ghost_state *g1, struct ghost_state *g0, u64 impl_return_value)
+void compute_new_abstract_state_handle_host_hcall(struct ghost_state *g1, struct ghost_state *g0, u64 impl_return_value, bool *new_state_computed)
 {
 	// allow any hcall to fail with ENOMEM, with an otherwise-identity abstract state
 	if (impl_return_value == -ENOMEM) {
@@ -534,6 +534,7 @@ void compute_new_abstract_state_handle_host_hcall(struct ghost_state *g1, struct
 	switch (id) {
 	__KVM_HOST_SMCCC_FUNC___pkvm_host_share_hyp:
 		compute_new_abstract_state_handle___pkvm_host_share_hyp(g1, g0, impl_return_value);
+		*new_state_computed = true;
 		break;
 
 	__KVM_HOST_SMCCC_FUNC___pkvm_host_unshare_hyp:
@@ -550,7 +551,7 @@ void compute_new_abstract_state_handle_host_hcall(struct ghost_state *g1, struct
 }
 
 
-void compute_new_abstract_state_handle_host_mem_abort(struct ghost_state *g1, struct ghost_state *g0, u64 impl_return_value)
+void compute_new_abstract_state_handle_host_mem_abort(struct ghost_state *g1, struct ghost_state *g0, u64 impl_return_value, bool *new_state_computed)
 {
 	//TODO
 }
@@ -558,7 +559,7 @@ void compute_new_abstract_state_handle_host_mem_abort(struct ghost_state *g1, st
 
 
 
-void compute_new_abstract_state_handle_trap(struct ghost_state *g1 /*new*/, struct ghost_state *g0 /*old*/, u64 impl_return_value)
+void compute_new_abstract_state_handle_trap(struct ghost_state *g1 /*new*/, struct ghost_state *g0 /*old*/, u64 impl_return_value, bool *new_state_computed)
 	// pointer or struct arguments and results?  For more obvious correspondence to math, struct - but that may be too terrible for executability, and distracting for those used to idiomatic C.  Doesn't matter too much.
 {
 
@@ -573,7 +574,7 @@ void compute_new_abstract_state_handle_trap(struct ghost_state *g1 /*new*/, stru
 
 	switch (ESR_ELx_EC(ghost_reg_el2(g0,GHOST_ESR_EL2))) {
 	case ESR_ELx_EC_HVC64:
-		compute_new_abstract_state_handle_host_hcall(g1,g0,impl_return_value);
+		compute_new_abstract_state_handle_host_hcall(g1,g0,impl_return_value,new_state_computed);
 		break;
 	case ESR_ELx_EC_SMC64:
 		//TODO compute_new_abstract_state_handle_host_smc(g1,g0);
@@ -584,7 +585,7 @@ void compute_new_abstract_state_handle_trap(struct ghost_state *g1 /*new*/, stru
 		break;
 	case ESR_ELx_EC_IABT_LOW:
 	case ESR_ELx_EC_DABT_LOW:
-		compute_new_abstract_state_handle_host_mem_abort(g1,g0,impl_return_value);
+		compute_new_abstract_state_handle_host_mem_abort(g1,g0,impl_return_value,new_state_computed);
 		break;
 	default:
 		ghost_assert(false);

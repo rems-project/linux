@@ -471,8 +471,11 @@ bool interpret_equals(struct glist_head head1, struct glist_head head2, u64 i)
 		return true;
 	if (glist_empty(&head1) || glist_empty(&head2)) {
 		hyp_putsp(GHOST_WHITE_ON_RED);
-		hyp_putspi("interpret_equals mismatch one empty ", i);
-		hyp_putsp(GHOST_NORMAL);
+		if (glist_empty(&head1))
+			hyp_putspi("interpret_equals mismatch first empty ", i);
+		else
+			hyp_putspi("interpret_equals mismatch second empty ", i);
+hyp_putsp(GHOST_NORMAL);
 		return false;
 	}
 
@@ -555,7 +558,7 @@ bool mapping_equal(struct glist_head head1, struct glist_head head2, char *s, ch
 	hyp_putsp(s2);
 	hyp_putsp(" ");
 	if (interpret_equals(head1, head2, i+2)) {
-		hyp_puts("true");
+		hyp_puts("true\n");
 		return true;
 	}
 	else {

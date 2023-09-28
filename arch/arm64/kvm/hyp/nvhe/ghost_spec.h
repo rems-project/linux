@@ -140,7 +140,7 @@ DECLARE_PER_CPU(struct ghost_state, gs_computed_post);
 //#define ghost_reg_ctxt(g,r)
 
 
-void compute_new_abstract_state_handle_trap(struct ghost_state *g1 /*new*/, struct ghost_state *g0 /*old*/, u64 impl_return_value);
+void compute_new_abstract_state_handle_trap(struct ghost_state *g1 /*new*/, struct ghost_state *g0 /*old*/, u64 impl_return_value, bool *new_state_computed);
 
 
 #endif // _GHOST_SPEC_H
