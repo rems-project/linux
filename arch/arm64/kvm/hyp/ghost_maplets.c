@@ -302,6 +302,8 @@ void hyp_put_maplet(struct maplet *maplet, u64 i)
 	hyp_putsxn("",maplet->size*PAGE_SIZE,64);
 	switch (maplet->target.k) {
 	case MAPPED:
+		hyp_putsxn("raw page_state ",maplet->target.u.m.page_state, 64);
+		hyp_putsxn("raw arch_prot ",maplet->target.u.m.arch_prot, 64);
 		// bits 56,55: two of the SW bits
 		switch (maplet->target.u.m.page_state /*maplet->target.u.m.attr & PKVM_PAGE_STATE_PROT_MASK*/) {
 		case PKVM_PAGE_OWNED: hyp_putsp("OW"); break;
@@ -395,6 +397,28 @@ bool maplet_eq(struct maplet *m1, struct maplet *m2)
 	return m1->virt == m2->virt && m1->size == m2->size && maplet_target_eq(m1->target, m2->target);
 }
 
+
+bool maplet_target_eq_nonattr(struct maplet_target t1, struct maplet_target t2) {
+	return t1.k == t2.k
+		&&
+		(t1.k == MAPPED) ?
+		(t1.u.m.phys == t2.u.m.phys &&
+		 t1.u.m.page_state == t2.u.m.page_state &&
+		 (t1.u.m.arch_prot & (KVM_PTE_LEAF_ATTR_LO_S2_S2AP_R /*bit 6*/ | KVM_PTE_LEAF_ATTR_LO_S2_S2AP_W /*bit 7*/ | KVM_PTE_LEAF_ATTR_HI_S2_XN /*bit 54*/)) == (t2.u.m.arch_prot & (KVM_PTE_LEAF_ATTR_LO_S2_S2AP_R /*bit 6*/ | KVM_PTE_LEAF_ATTR_LO_S2_S2AP_W /*bit 7*/ | KVM_PTE_LEAF_ATTR_HI_S2_XN /*bit 54*/)))
+		:
+		((t1.k == ANNOT)?
+		 (t1.u.a.owner_id == t2.u.a.owner_id &&
+		  t1.u.a.owner == t2.u.a.owner
+		  )
+		 :
+		 (t1.u.b.flags == t2.u.b.flags));
+}
+
+bool maplet_eq_nonattr(struct maplet *m1, struct maplet *m2)
+{
+	return m1->virt == m2->virt && m1->size == m2->size && maplet_target_eq_nonattr(m1->target, m2->target);
+}
+
 /*
 static int maplet_compare_virt(const void *lhs, const void *rhs)
 {
@@ -457,13 +481,17 @@ bool interpret_equals(struct glist_head head1, struct glist_head head2, u64 i)
 	      (pos1 = pos1->next, pos2=pos2->next) ) {
 		      m1 = glist_entry(pos1, struct maplet, list);
 		      m2 = glist_entry(pos2, struct maplet, list);
-		      if ( !(maplet_eq(m1, m2)) ) {
+		      if ( !(maplet_eq_nonattr(m1, m2)) ) {
 			      hyp_puti(i);
 			      hyp_putsp(GHOST_WHITE_ON_RED);
 			      hyp_putsxn("interpret_equals mismatch at virt1", m1->virt, 64);
 			      hyp_putsxn("virt2", m2->virt, 64);
-			      hyp_putsp(GHOST_NORMAL);
 			      hyp_putc('\n');
+			      hyp_put_maplet(m1,2);
+			      hyp_putc('\n');
+			      hyp_put_maplet(m2,2);
+			      hyp_putc('\n');
+			      hyp_putsp(GHOST_NORMAL);
 			      return false;
 		      }
         }

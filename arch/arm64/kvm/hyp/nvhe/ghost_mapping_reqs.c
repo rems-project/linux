@@ -401,6 +401,87 @@ void extend_mapping_reqs_vmemmap(struct mapping_reqs *mapping_reqs, enum mapping
 // hyp_pgtable.pgd
 
 
+// truly horrible hackery - we need this function from the middle of pgtable.c for the instrumentation checking (though not for the spec), but we can't pull it out from there.
+
+// and we have another arch_prot_of_prot in ghost_spec.c.  Have to rationalise later.
+
+#define KVM_PTE_TYPE			BIT(1)
+#define KVM_PTE_TYPE_BLOCK		0
+#define KVM_PTE_TYPE_PAGE		1
+#define KVM_PTE_TYPE_TABLE		1
+
+#define KVM_PTE_LEAF_ATTR_LO		GENMASK(11, 2)
+
+#define KVM_PTE_LEAF_ATTR_LO_S1_ATTRIDX	GENMASK(4, 2)
+#define KVM_PTE_LEAF_ATTR_LO_S1_AP	GENMASK(7, 6)
+#define KVM_PTE_LEAF_ATTR_LO_S1_AP_RO	3
+#define KVM_PTE_LEAF_ATTR_LO_S1_AP_RW	1
+#define KVM_PTE_LEAF_ATTR_LO_S1_SH	GENMASK(9, 8)
+#define KVM_PTE_LEAF_ATTR_LO_S1_SH_IS	3
+#define KVM_PTE_LEAF_ATTR_LO_S1_AF	BIT(10)
+
+#define KVM_PTE_LEAF_ATTR_LO_S2_MEMATTR	GENMASK(5, 2)
+#define KVM_PTE_LEAF_ATTR_LO_S2_S2AP_R	BIT(6)
+#define KVM_PTE_LEAF_ATTR_LO_S2_S2AP_W	BIT(7)
+#define KVM_PTE_LEAF_ATTR_LO_S2_SH	GENMASK(9, 8)
+#define KVM_PTE_LEAF_ATTR_LO_S2_SH_IS	3
+#define KVM_PTE_LEAF_ATTR_LO_S2_AF	BIT(10)
+
+#define KVM_PTE_LEAF_ATTR_HI		GENMASK(63, 51)
+
+#define KVM_PTE_LEAF_ATTR_HI_SW		GENMASK(58, 55)
+
+#define KVM_PTE_LEAF_ATTR_HI_S1_XN	BIT(54)
+
+#define KVM_PTE_LEAF_ATTR_HI_S2_XN	BIT(54)
+
+#define KVM_PTE_LEAF_ATTR_S2_PERMS	(KVM_PTE_LEAF_ATTR_LO_S2_S2AP_R | \
+					 KVM_PTE_LEAF_ATTR_LO_S2_S2AP_W | \
+					 KVM_PTE_LEAF_ATTR_HI_S2_XN)
+
+#define KVM_INVALID_PTE_OWNER_MASK	GENMASK(9, 2)
+#define KVM_MAX_OWNER_ID		FIELD_MAX(KVM_INVALID_PTE_OWNER_MASK)
+
+
+static int hyp_set_prot_attr(enum kvm_pgtable_prot prot, kvm_pte_t *ptep)
+{
+        bool device = prot & KVM_PGTABLE_PROT_DEVICE;
+        u32 mtype = device ? MT_DEVICE_nGnRE : MT_NORMAL;
+        kvm_pte_t attr = FIELD_PREP(KVM_PTE_LEAF_ATTR_LO_S1_ATTRIDX, mtype);
+        u32 sh = KVM_PTE_LEAF_ATTR_LO_S1_SH_IS;
+        u32 ap = (prot & KVM_PGTABLE_PROT_W) ? KVM_PTE_LEAF_ATTR_LO_S1_AP_RW :
+                                               KVM_PTE_LEAF_ATTR_LO_S1_AP_RO;
+
+        if (!(prot & KVM_PGTABLE_PROT_R))
+                return -EINVAL;
+
+        if (prot & KVM_PGTABLE_PROT_X) {
+                if (prot & KVM_PGTABLE_PROT_W)
+                        return -EINVAL;
+
+                if (device)
+                        return -EINVAL;
+        } else {
+                attr |= KVM_PTE_LEAF_ATTR_HI_S1_XN;
+        }
+
+        attr |= FIELD_PREP(KVM_PTE_LEAF_ATTR_LO_S1_AP, ap);
+        //attr |= FIELD_PREP(KVM_PTE_LEAF_ATTR_LO_S1_SH, sh);
+	//      attr |= KVM_PTE_LEAF_ATTR_LO_S1_AF;
+	attr |= prot & KVM_PTE_LEAF_ATTR_HI_SW;
+        *ptep = attr;
+
+        return 0;
+}
+
+
+static u64 arch_prot_of_prot(enum kvm_pgtable_prot prot) {
+	kvm_pte_t pte;
+	pte=0;
+	hyp_set_prot_attr(prot, &pte);
+	return pte;
+}
+
 mapping interpret_mapping_reqs(void)
 {
 	mapping map = mapping_empty_();
@@ -409,7 +490,7 @@ mapping interpret_mapping_reqs(void)
         for (i=0; i<mapping_reqs.count; i++) {
 		mr = &mapping_reqs.m[i];
 		if (mr->kind != HYP_PVMFW) 
-			extend_mapping_coalesce(&map, mr->virt, mr->size, maplet_target_mapped(mr->phys, /*mr->prot*/DUMMY_ATTR, dummy_aal()));
+			extend_mapping_coalesce(&map, mr->virt, mr->size, maplet_target_mapped_ext(mr->phys, 0 /*PKVM_PAGE_OWNED*/, arch_prot_of_prot(mr->prot)));
 	}
 	return map;
 }
