@@ -1232,6 +1232,7 @@ static void handle_host_hcall(struct kvm_cpu_context *host_ctxt)
 
         // GHOST
 	// check whether this is the last __pkvm_prot_finalize call; if so then record the common abstraction and start checking transitions
+	// (note that some pre/post components could have been recorded by previous lock/unlocks)
 	// TODO: could this miss a race, eg of a host_mem_abort by some other CPU after it has done its pkvm_prot_finalise but before this last one?  That one wouldn't matter - but could there be any that change the abstract state?
 	if (GHOST_EXEC_SPEC && !READ_ONCE(pkvm_prot_finalized_all) && id == __KVM_HOST_SMCCC_FUNC___pkvm_prot_finalize && cpu_reg(host_ctxt, 0) == SMCCC_RET_SUCCESS) {
 		hyp_spin_lock(&ghost_prot_finalized_lock);
@@ -1240,13 +1241,15 @@ static void handle_host_hcall(struct kvm_cpu_context *host_ctxt)
 		for (i=0; i<hyp_nr_cpus; i++)
 			b = b && pkvm_prot_finalized_cpu[i];
 		WRITE_ONCE(pkvm_prot_finalized_all, b);
-		init_abstraction_common();
-		hyp_spin_lock(&host_mmu.lock);
-		hyp_spin_lock(&pkvm_pgd_lock);
-		record_abstraction_common();
-		hyp_spin_unlock(&pkvm_pgd_lock);
-		hyp_spin_unlock(&host_mmu.lock);
-		hyp_spin_unlock(&ghost_prot_finalized_lock);
+		if (b) {
+			init_abstraction_common();
+			hyp_spin_lock(&host_mmu.lock);
+			hyp_spin_lock(&pkvm_pgd_lock);
+			record_abstraction_common();
+			hyp_spin_unlock(&pkvm_pgd_lock);
+			hyp_spin_unlock(&host_mmu.lock);
+			hyp_spin_unlock(&ghost_prot_finalized_lock);
+		}
 	}
         // /GHOST
 

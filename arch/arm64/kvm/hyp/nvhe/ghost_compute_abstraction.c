@@ -324,6 +324,7 @@ void record_abstraction_common(void)
 
 void record_and_check_abstraction_pkvm_pre(void)
 {
+	hyp_putsp("record_and_check_abstraction_pkvm_pre\n");
 	ghost_lock_maplets();
 	struct ghost_state *g = this_cpu_ptr(&gs_recorded_pre);
 	record_abstraction_pkvm(g);
@@ -333,6 +334,7 @@ void record_and_check_abstraction_pkvm_pre(void)
 
 void record_and_copy_abstraction_pkvm_post(void)
 {
+	hyp_putsp("record_and_copy_abstraction_pkvm_post\n");
 	ghost_lock_maplets();
 	struct ghost_state *g = this_cpu_ptr(&gs_recorded_post);
 	record_abstraction_pkvm(g);
@@ -342,6 +344,7 @@ void record_and_copy_abstraction_pkvm_post(void)
 
 void record_and_check_abstraction_host_pre(void)
 {
+	hyp_putsp("record_and_check_abstraction_host_pre\n");
 	ghost_lock_maplets();
 	struct ghost_state *g = this_cpu_ptr(&gs_recorded_pre);
 	record_abstraction_host(g);
@@ -351,6 +354,7 @@ void record_and_check_abstraction_host_pre(void)
 
 void record_and_copy_abstraction_host_post(void)
 {
+	hyp_putsp("record_and_copy_abstraction_host_post\n");
 	ghost_lock_maplets();
 	struct ghost_state *g = this_cpu_ptr(&gs_recorded_post);
 	record_abstraction_host(g);
