@@ -64,6 +64,9 @@ bool maplets_init=false;
 
 DEFINE_HYP_SPINLOCK(ghost_maplets_lock);
 
+static inline void ghost_assert_maplets_locked(void) {
+	hyp_assert_lock_held(&ghost_maplets_lock);
+}
 
 /* ****************** maplet target constructors ****************** */
 
@@ -159,6 +162,7 @@ struct maplet * get_maplet(struct glist_head *maplets_list)
 /* free: stitch all nodes of maplets_list into the start of the free list of the pool */
 void free_mapping(struct glist_head maplets_list)
 {
+	ghost_assert_maplets_locked();
 	if (!glist_empty(&maplets_list)) {
 
 		if (glist_empty(&maplets_pool.free)) {
@@ -208,6 +212,8 @@ void extend_mapping_coalesce(struct glist_head *maplets_list, u64 virt, u64 nr_p
 	struct maplet *tail;
 	struct maplet *m_new;
 
+	ghost_assert_maplets_locked();
+
 	//hyp_putsp("extend_mapping_coalesce ");
 
 	tail = glist_last_entry_or_null(maplets_list, struct maplet, list);
@@ -251,6 +257,7 @@ void extend_mapping_coalesce(struct glist_head *maplets_list, u64 virt, u64 nr_p
 // create mapping with no maplets
 mapping mapping_empty_(void) {
 	struct glist_head head;
+	ghost_assert_maplets_locked();
 	INIT_GLIST_HEAD(&head);
 	return head;
 }
@@ -258,6 +265,7 @@ mapping mapping_empty_(void) {
 // create mapping with a single maplet
 mapping mapping_singleton(u64 virt, u64 nr_pages, struct maplet_target t) {
 	struct glist_head head;
+	ghost_assert_maplets_locked();
 	INIT_GLIST_HEAD(&head);
 	extend_mapping_coalesce(&head, virt, nr_pages, t);
 	return head;
@@ -272,6 +280,9 @@ void hyp_put_maplet(struct maplet *maplet, u64 i)
 {
 	int j;
 	bool allzero;
+
+	ghost_assert_maplets_locked();
+
 	hyp_puti(i);
 	//hyp_putsxn("node",(u64)maplet,64);
 	//hyp_putsxn("next",(u64)(maplet->list.next),64);
@@ -359,6 +370,8 @@ void hyp_put_mapping(struct glist_head head, u64 i)
 	bool first;
 	u64 phys_first;
 	u64 size_first;
+
+	ghost_assert_maplets_locked();
 
 	first=true;
 	if (glist_empty(&head)) {
@@ -467,6 +480,8 @@ bool interpret_equals(struct glist_head head1, struct glist_head head2, u64 i)
 	//sort_maplets_virt(ms1);
 	//sort_maplets_virt(ms2);
 
+	ghost_assert_maplets_locked();
+
 	if (glist_empty(&head1) && glist_empty(&head2))
 		return true;
 	if (glist_empty(&head1) || glist_empty(&head2)) {
@@ -538,6 +553,8 @@ found: ;
 
 void diff_mappings(struct glist_head head1, struct glist_head head2, u64 i)
 {
+	ghost_assert_maplets_locked();
+
 	hyp_putspi("diff_mappings\n", i);
 	diff_mappings_one_way(head1,head2,"removed ", i+2);
 	diff_mappings_one_way(head2,head1,"added   ", i+2);
@@ -550,6 +567,8 @@ void diff_mappings(struct glist_head head1, struct glist_head head2, u64 i)
 // check that ms1 and ms2 are equal mappings
 bool mapping_equal(struct glist_head head1, struct glist_head head2, char *s, char *s1, char *s2, u64 i)
 {
+	ghost_assert_maplets_locked();
+
 	hyp_putspi(s, i);
 	hyp_putsp(" ");
 	hyp_putsp("mapping_equal ");
@@ -589,6 +608,8 @@ bool mapping_submapping(struct glist_head head1, struct glist_head head2, char *
 	struct maplet mc1, mc2;
 
 	bool m2_init=false;
+
+	ghost_assert_maplets_locked();
 
 	if (glist_empty(&head1)) // nothing in &head1 to check; succeed
 		return true;
@@ -720,6 +741,8 @@ struct glist_head mapping_copy(struct glist_head head)
 
 	struct glist_head res = mapping_empty_();
 
+	ghost_assert_maplets_locked();
+
 	if (glist_empty(&head)) // nothing in head
 		return res;
 
@@ -760,6 +783,8 @@ struct glist_head mapping_annot(struct glist_head head)
 
 	struct glist_head res = mapping_empty_();
 
+	ghost_assert_maplets_locked();
+
 	if (glist_empty(&head)) // nothing in head
 		return res;
 
@@ -782,6 +807,8 @@ struct glist_head mapping_shared(struct glist_head head)
 
 	struct glist_head res = mapping_empty_();
 
+	ghost_assert_maplets_locked();
+
 	if (glist_empty(&head)) // nothing in head
 		return res;
 
@@ -803,6 +830,8 @@ struct glist_head mapping_nonannot(struct glist_head head)
 	struct maplet *m2;
 
 	struct glist_head res = mapping_empty_();
+
+	ghost_assert_maplets_locked();
 
 	if (glist_empty(&head)) // nothing in ms2
 		return res;
@@ -842,6 +871,8 @@ struct glist_head mapping_plus(struct glist_head head2, struct glist_head head3)
 
 	struct glist_node fake_zeroth_node_2;
 	struct glist_node fake_zeroth_node_3;
+
+	ghost_assert_maplets_locked();
 
 	fake_zeroth_node_2.next = ms2->first;
 	fake_zeroth_node_3.next = ms3->first;
@@ -935,8 +966,10 @@ struct glist_head mapping_plus(struct glist_head head2, struct glist_head head3)
 // (this has an inefficient extra copy, but avoids having to futz with the mapping_plus code)
 struct glist_head mapping_minus(struct glist_head head2, u64 virt, u64 nr_pages)
 {
-	struct glist_head tmp1 = mapping_plus(head2, mapping_singleton(virt, nr_pages, maplet_target_absent()));
-	struct glist_head tmp2 = mapping_copy_except_absent(tmp1);
+	struct glist_head tmp1, tmp2;
+	ghost_assert_maplets_locked();
+	tmp1 = mapping_plus(head2, mapping_singleton(virt, nr_pages, maplet_target_absent()));
+	tmp2 = mapping_copy_except_absent(tmp1);
 	free_mapping(tmp1);
 	return tmp2;
 }
@@ -961,6 +994,8 @@ bool mapping_disjoint(struct glist_head head1, struct glist_head head2, char *s,
 
 	struct glist_node fake_zeroth_node_1;
 	struct glist_node fake_zeroth_node_2;
+
+	ghost_assert_maplets_locked();
 
 	fake_zeroth_node_1.next = ms1->first;
 	fake_zeroth_node_2.next = ms2->first;
@@ -1056,6 +1091,9 @@ bool mapping_in_domain(u64 virt, struct glist_head head)
 {
 	struct glist_node *pos1;
 	struct maplet *m1;
+
+	ghost_assert_maplets_locked();
+
 	if (glist_empty(&head))
 		return false;
 	glist_for_each(pos1, &head) {
@@ -1071,6 +1109,9 @@ bool mapping_lookup(u64 virt, struct glist_head head, struct maplet_target *tp)
 {
 	struct glist_node *pos1;
 	struct maplet *m1;
+
+	ghost_assert_maplets_locked();
+
 	if (glist_empty(&head))
 		return false;
 	glist_for_each(pos1, &head) {
