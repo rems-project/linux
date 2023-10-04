@@ -499,11 +499,13 @@ void compute_new_abstract_state_handle___pkvm_host_share_hyp(struct ghost_state 
 	u64 pfn = ghost_reg_gpr(g0, 1);
 	u64 host_addr = hyp_pfn_to_phys(pfn); // ((phys_addr_t)((pfn) << PAGE_SHIFT)) // pure
 	u64 hyp_addr = (u64)ghost__hyp_va(g0,host_addr);
+	int ret = 0;
 
 	// __host_check_page_state_range(addr, size, PKVM_PAGE_OWNED);
 	struct maplet_target t;
 	if ( mapping_lookup_annot(&g0->host, host_addr, &t) ) {
-		goto einval;
+		ret = -EINVAL;
+		goto out;
 	}
 
 	/* probably some more error check cases here, and what follows is just rough, to give the idea, not carefully abstracted from the code */
@@ -526,10 +528,8 @@ void compute_new_abstract_state_handle___pkvm_host_share_hyp(struct ghost_state 
 			g0->pkvm.pkvm_abstract_pgtable.mapping,
 			mapping_singleton(hyp_addr, 1, maplet_target_mapped_ext(host_addr, PKVM_PAGE_SHARED_BORROWED, hyp_arch_prot)));
 
-	ghost_reg_gpr(g1, 0) = SMCCC_RET_SUCCESS;
-
-
-einval: return;
+out:
+	ghost_reg_gpr(g1, 1) = ret;
 }
 
 
@@ -567,6 +567,7 @@ void compute_new_abstract_state_handle___pkvm_init_vm(struct ghost_state *g1, st
 
 void compute_new_abstract_state_handle_host_hcall(struct ghost_state *g1, struct ghost_state *g0, u64 impl_return_value, bool *new_state_computed)
 {
+	int smcc_ret = SMCCC_RET_SUCCESS;
 	// allow any hcall to fail with ENOMEM, with an otherwise-identity abstract state
 	if (impl_return_value == -ENOMEM) {
 		ghost_reg_gpr(g1, 0) = -ENOMEM;
@@ -606,9 +607,10 @@ void compute_new_abstract_state_handle_host_hcall(struct ghost_state *g1, struct
 
 		// TODO: and their bodies, and all the other cases
 	default:
-		ghost_reg_gpr(g1, 0) = SMCCC_RET_NOT_SUPPORTED;
+		smcc_ret = SMCCC_RET_NOT_SUPPORTED;
 		break;
 	}
+	ghost_reg_gpr(g1, 0) = smcc_ret;
 }
 
 
