@@ -510,7 +510,7 @@ void compute_new_abstract_state_handle___pkvm_host_share_hyp(struct ghost_state 
 
 	/* probably some more error check cases here, and what follows is just rough, to give the idea, not carefully abstracted from the code */
 	u64 host_arch_prot = arch_prot_of_prot(ghost_default_host_prot(ghost_addr_is_memory(g0, host_addr)));
-        u64 hyp_arch_prot = host_arch_prot;
+	u64 hyp_arch_prot = host_arch_prot;
 
 	/* remove any host annot mapping, if one exists */
 	g1->host.host_abstract_pgtable_annot.mapping =
