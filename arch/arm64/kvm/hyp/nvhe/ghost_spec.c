@@ -415,7 +415,11 @@ DEFINE_PER_CPU(struct ghost_state, gs_computed_post);
 bool ghost_addr_is_memory(struct ghost_state *g, phys_addr_t phys)
 {
 	struct maplet_target t;
-	return mapping_lookup(phys, g->hyp_memory, &t);
+	if ( !mapping_lookup(phys, g->hyp_memory, &t) ) {
+		return false;
+	}
+	ghost_assert(t.k == MEMBLOCK);
+	return true;
 }
 
 
