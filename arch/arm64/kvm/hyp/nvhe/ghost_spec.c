@@ -490,7 +490,7 @@ void compute_new_abstract_state_handle___pkvm_host_share_hyp(struct ghost_state 
 
 	// __host_check_page_state_range(addr, size, PKVM_PAGE_OWNED);
 	struct maplet_target t;
-	if (!mapping_lookup(host_addr, g0->host.host_abstract_pgtable_annot.mapping, &t))
+	if ( mapping_lookup(host_addr, g0->host.host_abstract_pgtable_annot.mapping, &t) )
 		goto einval;
 	if (t.k != MAPPED)
 		goto einval;
