@@ -431,9 +431,11 @@ bool ghost_addr_is_allowed_memory(struct ghost_state *g, phys_addr_t phys)
 
 static inline bool mapping_lookup_annot(struct ghost_host *host, u64 addr, struct maplet_target *out)
 {
-	bool ret = mapping_lookup(addr, host->host_abstract_pgtable_annot.mapping, out);
+	if ( !mapping_lookup(addr, host->host_abstract_pgtable_annot.mapping, out) ) {
+		return false;
+	}
 	ghost_assert(out->k == ANNOT);
-	return ret;
+	return true;
 }
 
 // horrible hack: copied unchanged from mem_protect.c, just to get in scope
