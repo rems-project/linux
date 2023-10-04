@@ -429,6 +429,13 @@ bool ghost_addr_is_allowed_memory(struct ghost_state *g, phys_addr_t phys)
 	return !(t.u.b.flags & MEMBLOCK_NOMAP);
 }
 
+static inline bool mapping_lookup_annot(struct ghost_host *host, u64 addr, struct maplet_target *out)
+{
+	bool ret = mapping_lookup(addr, host->host_abstract_pgtable_annot.mapping, out);
+	ghost_assert(out->k == ANNOT);
+	return ret;
+}
+
 // horrible hack: copied unchanged from mem_protect.c, just to get in scope
 static enum kvm_pgtable_prot ghost_default_host_prot(bool is_memory)
 {
@@ -489,10 +496,9 @@ void compute_new_abstract_state_handle___pkvm_host_share_hyp(struct ghost_state 
 
 	// __host_check_page_state_range(addr, size, PKVM_PAGE_OWNED);
 	struct maplet_target t;
-	if ( mapping_lookup(host_addr, g0->host.host_abstract_pgtable_annot.mapping, &t) )
+	if ( mapping_lookup_annot(&g0->host, host_addr, &t) ) {
 		goto einval;
-	if (t.k != MAPPED)
-		goto einval;
+	}
 
 	/* probably some more error check cases here, and what follows is just rough, to give the idea, not carefully abstracted from the code */
 	u64 host_arch_prot = arch_prot_of_prot(ghost_default_host_prot(ghost_addr_is_memory(g0, host_addr)));
