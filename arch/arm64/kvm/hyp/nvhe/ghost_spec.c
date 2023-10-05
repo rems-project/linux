@@ -433,14 +433,48 @@ bool ghost_addr_is_allowed_memory(struct ghost_state *g, phys_addr_t phys)
 	return !(t.u.b.flags & MEMBLOCK_NOMAP);
 }
 
-static inline bool mapping_lookup_annot(struct ghost_host *host, u64 addr, struct maplet_target *out)
+static bool mapping_lookup_host_annot(const struct ghost_state *g, u64 addr, struct maplet_target *out)
 {
-	if ( !mapping_lookup(addr, host->host_abstract_pgtable_annot.mapping, out) ) {
+	// this is to allow the caller to pass a NULL pointer if they do not care
+	// about the entry
+	struct maplet_target t;
+	if (!out)
+		out = &t;
+	if ( !mapping_lookup(addr, g->host.host_abstract_pgtable_annot.mapping, out) ) {
 		return false;
 	}
 	ghost_assert(out->k == ANNOT);
 	return true;
 }
+
+static bool mapping_lookup_host_shared(const struct ghost_state *g, u64 addr, struct maplet_target *out)
+{
+	// this is to allow the caller to pass a NULL pointer if they do not care
+	// about the entry
+	struct maplet_target t;
+	if (!out)
+		out = &t;
+	if ( !mapping_lookup(addr, g->host.host_abstract_pgtable_shared.mapping, out) ) {
+		return false;
+	}
+	ghost_assert(out->k == MAPPED);
+	return true;
+}
+
+static bool mapping_lookup_pkvm(const struct ghost_state *g, u64 addr, struct maplet_target *out)
+{
+	// this is to allow the caller to pass a NULL pointer if they do not care
+	// about the entry
+	struct maplet_target t;
+	if (!out)
+		out = &t;
+	if ( !mapping_lookup(addr, g->pkvm.pkvm_abstract_pgtable.mapping, out) ) {
+		return false;
+	}
+	ghost_assert(out->k == MAPPED);
+	return true;
+}
+
 
 // horrible hack: copied unchanged from mem_protect.c, just to get in scope
 static enum kvm_pgtable_prot ghost_default_host_prot(bool is_memory)
@@ -503,9 +537,18 @@ void compute_new_abstract_state_handle___pkvm_host_share_hyp(struct ghost_state 
 	int ret = 0;
 
 	// __host_check_page_state_range(addr, size, PKVM_PAGE_OWNED);
-	struct maplet_target t;
-	if ( mapping_lookup_annot(&g0->host, host_addr, &t) ) {
-		ret = -EINVAL;
+	if ( mapping_lookup_host_annot(g0, host_addr, NULL) ) {
+		ret = -EPERM;
+		goto out;
+	}
+	if ( mapping_lookup_host_shared(g0, host_addr, NULL) ) {
+		ret = -EPERM; // TODO check this (with respect to the actual code)
+		goto out;
+	}
+	// checked in the pKVM code:
+	// do_share() -> check_share() -> hyp_ack_share() -> __hyp_check_page_state_range()
+	if ( mapping_lookup_pkvm(g0, hyp_addr, NULL) ) {
+		ret = -EPERM;
 		goto out;
 	}
 
