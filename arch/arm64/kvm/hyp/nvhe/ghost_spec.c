@@ -512,9 +512,8 @@ void compute_new_abstract_state_handle___pkvm_host_share_hyp(struct ghost_state 
 	u64 host_arch_prot = arch_prot_of_prot(ghost_default_host_prot(ghost_addr_is_memory(g0, host_addr)));
 	u64 hyp_arch_prot = host_arch_prot;
 
-	/* remove any host annot mapping, if one exists */
-	g1->host.host_abstract_pgtable_annot.mapping =
-		mapping_minus(g0->host.host_abstract_pgtable_annot.mapping, host_addr, 1);
+	/* the host annot mapping is unchanged (we have established that host_addr is NOT already in there) */
+	g1->host.host_abstract_pgtable_annot.mapping = mapping_copy(g0->host.host_abstract_pgtable_annot.mapping);
 
 	/* add a new host shared mapping, PKVM_PAGE_SHARED_OWNED */
 	g1->host.host_abstract_pgtable_shared.mapping =
