@@ -570,7 +570,7 @@ void compute_new_abstract_state_handle_host_hcall(struct ghost_state *g1, struct
 	int smccc_ret = SMCCC_RET_SUCCESS;
 	// allow any hcall to fail with ENOMEM, with an otherwise-identity abstract state
 	if (impl_return_value == -ENOMEM) {
-		ghost_reg_gpr(g1, 0) = -ENOMEM;
+		ghost_reg_gpr(g1, 1) = -ENOMEM;
 		return;
 	}
 
