@@ -567,7 +567,7 @@ void compute_new_abstract_state_handle___pkvm_init_vm(struct ghost_state *g1, st
 
 void compute_new_abstract_state_handle_host_hcall(struct ghost_state *g1, struct ghost_state *g0, u64 impl_return_value, bool *new_state_computed)
 {
-	int smcc_ret = SMCCC_RET_SUCCESS;
+	int smccc_ret = SMCCC_RET_SUCCESS;
 	// allow any hcall to fail with ENOMEM, with an otherwise-identity abstract state
 	if (impl_return_value == -ENOMEM) {
 		ghost_reg_gpr(g1, 0) = -ENOMEM;
@@ -607,10 +607,10 @@ void compute_new_abstract_state_handle_host_hcall(struct ghost_state *g1, struct
 
 		// TODO: and their bodies, and all the other cases
 	default:
-		smcc_ret = SMCCC_RET_NOT_SUPPORTED;
+		smccc_ret = SMCCC_RET_NOT_SUPPORTED;
 		break;
 	}
-	ghost_reg_gpr(g1, 0) = smcc_ret;
+	ghost_reg_gpr(g1, 0) = smccc_ret;
 }
 
 
