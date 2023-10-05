@@ -536,6 +536,17 @@ void compute_new_abstract_state_handle___pkvm_host_share_hyp(struct ghost_state 
 	u64 hyp_addr = (u64)ghost__hyp_va(g0,host_addr);
 	int ret = 0;
 
+	// this is dealing with the ND failure
+	if (impl_return_value == -ENOMEM) {
+		ret = -ENOMEM;
+		// TODO: Ben please check this
+		// TODO: keeping this commented for now because these two functions
+		//       are not exported (probably to prevent improperly locked usage)
+		// copy_abstraction_host(g1, g0);
+		// copy_abstraction_pkvm(g1, g0);
+		goto out;
+	}
+
 	// __host_check_page_state_range(addr, size, PKVM_PAGE_OWNED);
 	if ( mapping_lookup_host_annot(g0, host_addr, NULL) ) {
 		ret = -EPERM;
