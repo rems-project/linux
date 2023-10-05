@@ -498,6 +498,7 @@ void compute_new_abstract_state_handle___pkvm_host_share_hyp(struct ghost_state 
 {
 	u64 pfn = ghost_reg_gpr(g0, 1);
 	u64 host_addr = hyp_pfn_to_phys(pfn); // ((phys_addr_t)((pfn) << PAGE_SHIFT)) // pure
+	u64 phys_addr = host_addr; // TODO: isn't there a macro that we can use here?
 	u64 hyp_addr = (u64)ghost__hyp_va(g0,host_addr);
 	int ret = 0;
 
@@ -509,7 +510,7 @@ void compute_new_abstract_state_handle___pkvm_host_share_hyp(struct ghost_state 
 	}
 
 	/* probably some more error check cases here, and what follows is just rough, to give the idea, not carefully abstracted from the code */
-	u64 host_arch_prot = arch_prot_of_prot(ghost_default_host_prot(ghost_addr_is_memory(g0, host_addr)));
+	u64 host_arch_prot = arch_prot_of_prot(ghost_default_host_prot(ghost_addr_is_memory(g0, phys_addr)));
 	u64 hyp_arch_prot = host_arch_prot;
 
 	/* the host annot mapping is unchanged (we have established that host_addr is NOT already in there) */
@@ -519,13 +520,13 @@ void compute_new_abstract_state_handle___pkvm_host_share_hyp(struct ghost_state 
 	g1->host.host_abstract_pgtable_shared.mapping =
 		mapping_plus(
 			g0->host.host_abstract_pgtable_shared.mapping,
-			mapping_singleton(hyp_addr, 1, maplet_target_mapped_ext(host_addr, PKVM_PAGE_SHARED_OWNED, host_arch_prot)));
+			mapping_singleton(host_addr, 1, maplet_target_mapped_ext(phys_addr, PKVM_PAGE_SHARED_OWNED, host_arch_prot)));
 
 	/* add a new hyp mapping, PKVM_PAGE_SHARED_BORROWED */
 	g1->pkvm.pkvm_abstract_pgtable.mapping =
 		mapping_plus(
 			g0->pkvm.pkvm_abstract_pgtable.mapping,
-			mapping_singleton(hyp_addr, 1, maplet_target_mapped_ext(host_addr, PKVM_PAGE_SHARED_BORROWED, hyp_arch_prot)));
+			mapping_singleton(hyp_addr, 1, maplet_target_mapped_ext(phys_addr, PKVM_PAGE_SHARED_BORROWED, hyp_arch_prot)));
 
 out:
 	ghost_reg_gpr(g1, 1) = ret;
