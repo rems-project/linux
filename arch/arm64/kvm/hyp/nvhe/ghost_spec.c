@@ -533,7 +533,7 @@ void compute_new_abstract_state_handle___pkvm_host_share_hyp(struct ghost_state 
 	u64 pfn = ghost_reg_gpr(g0, 1);
 	u64 host_addr = hyp_pfn_to_phys(pfn); // ((phys_addr_t)((pfn) << PAGE_SHIFT)) // pure
 	u64 phys_addr = host_addr; // TODO: isn't there a macro that we can use here?
-	u64 hyp_addr = (u64)ghost__hyp_va(g0,host_addr);
+	u64 hyp_addr = (u64)ghost__hyp_va(g0,phys_addr);
 	int ret = 0;
 
 	// this is dealing with the ND failure
