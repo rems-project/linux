@@ -594,7 +594,59 @@ out:
 /* pkvm_host_unshare_hyp(pfn) */
 void compute_new_abstract_state_handle___pkvm_host_unshare_hyp(struct ghost_state *g1, struct ghost_state *g0, u64 impl_return_value)
 {
-	// TODO
+	u64 pfn = ghost_reg_gpr(g0, 1);
+	u64 host_addr = hyp_pfn_to_phys(pfn); // ((phys_addr_t)((pfn) << PAGE_SHIFT)) // pure
+	u64 phys_addr = host_addr; // TODO: isn't there a macro that we can use here?
+	u64 hyp_addr = (u64)ghost__hyp_va(g0,phys_addr);
+	int ret = 0;
+
+	// __host_check_page_state_range(addr, size, PKVM_PAGE_SHARED_OWNED);
+	if ( !mapping_lookup_host_shared(g0, host_addr, NULL) ) {
+		ret = -EPERM;
+		goto error;
+	}
+
+	// check that pKVM is not using the page (otherwise EBUSY) -- we model this as an ND
+	if (impl_return_value == -EBUSY) {
+		ret = -EBUSY;
+		goto error;
+	}
+
+	// NOTE: we do not need a mapping_lookup_pkvm() corresponding to
+	//   __hyp_check_page_state_range(hyp_addr, PAGE_SIZE, PKVM_PAGE_SHARED_BORROWED)
+	// because this is a (possibly disabled) check that the host is not trying
+	// to unshare a page it did NOT previously share with pKVM.
+
+	/* add a new host shared mapping, PKVM_PAGE_SHARED_OWNED */
+	// __host_set_page_state_range(host_addr, PAGE_SIZE, PKVM_PAGE_OWNED);
+	g1->host.host_abstract_pgtable_shared.mapping =
+		mapping_minus(g0->host.host_abstract_pgtable_shared.mapping, host_addr, 1);
+
+	// PKVM can non-deterministically fail to unmap the page in its page table
+	if (impl_return_value == -EFAULT) {
+		ret = -EFAULT;
+		goto error;
+	}
+	g1->pkvm.pkvm_abstract_pgtable.mapping =
+		mapping_minus(g0->pkvm.pkvm_abstract_pgtable.mapping, hyp_addr, 1);
+	goto out;
+error:
+	ghost_lock_maplets();
+	switch(ret) {
+	case -EPERM:
+	case -EBUSY:
+		copy_abstraction_host(g1, g0);
+		copy_abstraction_pkvm(g1, g0);
+		break;
+	case -EFAULT:
+		copy_abstraction_pkvm(g1, g0);
+		break;
+	default:
+		ghost_assert(false);
+	}
+	ghost_unlock_maplets();
+out:
+	ghost_reg_gpr(g1, 1) = ret;
 }
 
 /**
@@ -642,6 +694,7 @@ void compute_new_abstract_state_handle_host_hcall(struct ghost_state *g1, struct
 
 	__KVM_HOST_SMCCC_FUNC___pkvm_host_unshare_hyp:
 		compute_new_abstract_state_handle___pkvm_host_unshare_hyp(g1, g0, impl_return_value);
+		*new_state_computed = true;
 		break;
 
 	__KVM_HOST_SMCCC_FUNC___pkvm_host_reclaim_page:
