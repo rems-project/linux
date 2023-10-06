@@ -536,9 +536,21 @@ void compute_new_abstract_state_handle___pkvm_host_share_hyp(struct ghost_state 
 	u64 hyp_addr = (u64)ghost__hyp_va(g0,phys_addr);
 	int ret = 0;
 
-	// when the hypercall is adding entries to the host and hyp page tables
-	// it may run out of memory.
-	// we model this as a nondeterministic error (with two flavours)
+	/* TODO: do some more thinking and if needed fix the following THEN branch
+	 * ----
+	 * BS and KM now think that ENOMEM cannot actually be an outcome of the hypercall
+	 * as a result the __host_set_page_state_range() function (update of the HOST mapping)
+	 * because of what comment preceding `host_stage2_try()` says and its code (which unmaps
+	 * MMIO stuff if needed and retry updating the HOST mapping).
+	 * KM: however I don't see the same in the code of `pkvm_create_mappings_locked()`,
+	 *     so I think that the attempt at adding a new entry to the pKVM page table can
+	 *     still cause a ENOMEM.
+	 * ----
+	 * NOTE: the rest of this comment is older than the previous TODO and may now be slightly wrong
+	 * ----
+	 * when the hypercall is adding entries to the host and hyp page tables
+	 * it may run out of memory.
+	 * we model this as a nondeterministic error (with two flavours) */
 	if (impl_return_value == -ENOMEM) {
 		ret = -ENOMEM;
 		// TODO: it is not clear how to write the spec currently
