@@ -23,6 +23,8 @@ void record_and_copy_abstraction_host_post(void);
 bool abstraction_equals_hyp_memory(struct ghost_state *g1, struct ghost_state *g2);
 void copy_abstraction_regs(struct ghost_state *g_tgt, struct ghost_state *g_src);
 void copy_abstraction_hyp_memory(struct ghost_state *g_tgt, struct ghost_state *g_src);
+void copy_abstraction_host(struct ghost_state *g_tgt, struct ghost_state *g_src);
+void copy_abstraction_pkvm(struct ghost_state *g_tgt, struct ghost_state *g_src);
 
 
 void record_abstraction_hyp_memory(struct ghost_state *g);

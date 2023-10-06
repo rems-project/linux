@@ -239,6 +239,7 @@ void copy_abstraction_hyp_memory(struct ghost_state *g_tgt, struct ghost_state *
 
 void copy_abstraction_pkvm(struct ghost_state *g_tgt, struct ghost_state *g_src)
 {
+	ghost_assert_maplets_locked();
 	ghost_assert(g_src->pkvm.present);
 	clear_abstraction_pkvm(g_tgt);
 	g_tgt->pkvm.present = g_src->pkvm.present;
@@ -248,6 +249,7 @@ void copy_abstraction_pkvm(struct ghost_state *g_tgt, struct ghost_state *g_src)
 
 void copy_abstraction_host(struct ghost_state *g_tgt, struct ghost_state *g_src)
 {
+	ghost_assert_maplets_locked();
 	ghost_assert(g_src->host.present);
 	clear_abstraction_host(g_tgt);
 	g_tgt->host.present = g_src->host.present;
