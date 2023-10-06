@@ -536,14 +536,18 @@ void compute_new_abstract_state_handle___pkvm_host_share_hyp(struct ghost_state 
 	u64 hyp_addr = (u64)ghost__hyp_va(g0,phys_addr);
 	int ret = 0;
 
-	// this is dealing with the ND failure
+	// when the hypercall is adding entries to the host and hyp page tables
+	// it may run out of memory.
+	// we model this as a nondeterministic error (with two flavours)
 	if (impl_return_value == -ENOMEM) {
 		ret = -ENOMEM;
-		// TODO: Ben please check this
-		// TODO: keeping this commented for now because these two functions
-		//       are not exported (probably to prevent improperly locked usage)
-		// copy_abstraction_host(g1, g0);
-		// copy_abstraction_pkvm(g1, g0);
+		// TODO: it is not clear how to write the spec currently
+		// because we 2 possible outcome:
+		//   1. the error happened when attempting to add an entry
+		//      to the host page table; then we don't copy anything to g1
+		//   2. the error happened when attempting to add an entry
+		//      to the pKVM page table; then we need to do
+		//        copy_abstraction_host(g1, g0);
 		goto out;
 	}
 
