@@ -64,7 +64,7 @@ bool maplets_init=false;
 
 DEFINE_HYP_SPINLOCK(ghost_maplets_lock);
 
-static inline void ghost_assert_maplets_locked(void) {
+inline void ghost_assert_maplets_locked(void) {
 	hyp_assert_lock_held(&ghost_maplets_lock);
 }
 

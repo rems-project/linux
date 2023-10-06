@@ -171,7 +171,7 @@ bool mapping_lookup(u64 virt, mapping map, struct maplet_target *tp);
 
 void ghost_lock_maplets(void);
 void ghost_unlock_maplets(void);
-
+inline void ghost_assert_maplets_locked(void);
 
 #endif  // _GHOST_MAPLETS_H
 
