@@ -549,18 +549,15 @@ void compute_new_abstract_state_handle___pkvm_host_share_hyp(struct ghost_state 
 
 	// __host_check_page_state_range(addr, size, PKVM_PAGE_OWNED);
 	if ( mapping_lookup_host_annot(g0, host_addr, NULL) ) {
-		ret = -EPERM;
-		goto out;
+		goto eperm;
 	}
 	if ( mapping_lookup_host_shared(g0, host_addr, NULL) ) {
-		ret = -EPERM; // TODO check this (with respect to the actual code)
-		goto out;
+		goto eperm;
 	}
 	// checked in the pKVM code:
 	// do_share() -> check_share() -> hyp_ack_share() -> __hyp_check_page_state_range()
 	if ( mapping_lookup_pkvm(g0, hyp_addr, NULL) ) {
-		ret = -EPERM;
-		goto out;
+		goto eperm;
 	}
 
 	/* probably some more error check cases here, and what follows is just rough, to give the idea, not carefully abstracted from the code */
@@ -581,7 +578,14 @@ void compute_new_abstract_state_handle___pkvm_host_share_hyp(struct ghost_state 
 		mapping_plus(
 			g0->pkvm.pkvm_abstract_pgtable.mapping,
 			mapping_singleton(hyp_addr, 1, maplet_target_mapped_ext(phys_addr, PKVM_PAGE_SHARED_BORROWED, hyp_arch_prot)));
+	goto out;
 
+eperm:
+	ghost_lock_maplets();
+	copy_abstraction_host(g1, g0);
+	copy_abstraction_pkvm(g1, g0);
+	ghost_unlock_maplets();
+	ret = -EPERM;
 out:
 	ghost_reg_gpr(g1, 1) = ret;
 }
