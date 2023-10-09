@@ -534,7 +534,7 @@ void record_and_check_abstraction_pkvm_pre(void)
 	ghost_lock_maplets();
 	struct ghost_state *g = this_cpu_ptr(&gs_recorded_pre);
 	record_abstraction_pkvm(g);
-	abstraction_equals_pkvm(g->pkvm, gs.pkvm);
+	ghost_spec_assert(abstraction_equals_pkvm(g->pkvm, gs.pkvm));
 	ghost_unlock_maplets();
 }
 
@@ -555,7 +555,7 @@ void record_and_check_abstraction_host_pre(void)
 	struct ghost_state *g = this_cpu_ptr(&gs_recorded_pre);
 	record_abstraction_host(g);
 	hyp_putsp("a-e-h: record_and_check_abstraction_host_pre\n");
-	abstraction_equals_host(g->host, gs.host);
+	ghost_spec_assert(abstraction_equals_host(g->host, gs.host));
 	ghost_unlock_maplets();
 }
 
@@ -577,8 +577,8 @@ void record_and_check_abstraction_vm_table_pre(void)
 	record_abstraction_vms(g);
 	record_abstraction_loaded_vcpu(g);
 	hyp_putsp("a-e-h: record_and_check_abstraction_vm_table_pre\n");
-	abstraction_equals_vms(g->vms, gs.vms);
-	abstraction_equals_loaded_vcpus(g, &gs);
+	ghost_spec_assert(abstraction_equals_vms(g->vms, gs.vms));
+	ghost_spec_assert(abstraction_equals_loaded_vcpus(g, &gs));
 	ghost_unlock_maplets();
 }
 
