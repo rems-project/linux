@@ -235,17 +235,13 @@ bool abstraction_equals_vms(struct ghost_vms vms1, struct ghost_vms vms2)
 	return equal;
 }
 
-//void abstraction_vms(struct ghost_state *g)
-//{
-//	// TODO
-//}
 
 // do we want these for an arbitrary g or for the global gs ?
 
 
 bool abstraction_equals_all(struct ghost_state *gc, struct ghost_state *gr_post, struct ghost_state *gr_pre)
 {
-	bool ret_pkvm, ret_host, ret_vms;
+	bool ret_pkvm, ret_host, ret_vms, ret_loaded_vcpus;
 	if (gc->pkvm.present && gr_post->pkvm.present) {
 		ret_pkvm = abstraction_equals_pkvm(gc->pkvm, gr_post->pkvm);
 	}
@@ -285,17 +281,22 @@ bool abstraction_equals_all(struct ghost_state *gc, struct ghost_state *gr_post,
 		ret_vms = true;
 	}
 
-	return abstraction_equals_hyp_memory(gc, gr_post) && abstraction_equals_reg(gc, gr_post) && gc->hyp_physvirt_offset==gr_post->hyp_physvirt_offset && ret_pkvm && ret_host && ret_vms;
 
+	ret_loaded_vcpus = abstraction_equals_loaded_vcpus(gc, gr_post);
+
+	return abstraction_equals_hyp_memory(gc, gr_post) && abstraction_equals_reg(gc, gr_post) && gc->hyp_physvirt_offset==gr_post->hyp_physvirt_offset && ret_pkvm && ret_host && ret_vms && ret_loaded_vcpus;
 }
 
 
 void init_abstraction(struct ghost_state *g)
 {
-	int cpu;
 	g->pkvm.present = false;
 	g->host.present = false;
 	g->regs.present = false;
+	g->vms.present = false;
+	for (int cpu=0; cpu<NR_CPUS; cpu++) {
+		g->loaded_hyp_vcpu[cpu].present = false;
+	}
 }
 
 void init_abstraction_common(void)
