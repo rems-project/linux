@@ -713,39 +713,63 @@ out:
 	ghost_reg_gpr(g1, 1) = ret;
 }
 
+static unsigned int ghost_vm_handle_to_idx(struct ghost_state *g, pkvm_handle_t handle)
+{
+	return handle - g->vm_handle_offset;
+}
+
+static bool ghost_is_valid_vm_handle(struct ghost_state *g, pkvm_handle_t handle)
+{
+	// NOTE: if handle < vm_handle_offset then the subtraction in
+	// the body of ghost_vm_handle_to_idx() will have wrapped and
+	// the returned index is very big, so here serendipitously
+	// return false.
+	return ghost_vm_handle_to_idx(g, handle) < KVM_MAX_PVMS;
+}
+
 void compute_new_abstract_state_handle___pkvm_vcpu_load(struct ghost_state *g1, struct ghost_state *g0, u64 impl_return_value) {
 	int this_cpu = get_cpu();
-	u64 vm_handle = ghost_reg_gpr(g0, 1);
-	u64 vcpu_idx = ghost_reg_gpr(g0, 2);
-
-	u64 vm_idx = vm_handle - g0->vm_handle_offset;
+	pkvm_handle_t vm_handle = ghost_reg_gpr(g0, 1);
+	unsigned int vcpu_idx = ghost_reg_gpr(g0, 2);
+	
+	u64 vm_idx = ghost_vm_handle_to_idx(g0, vm_handle);
 
 	ghost_assert(g0->loaded_hyp_vcpu[this_cpu].present);
+	// if another vcpu is already loaded on this CPU, then do nothing
 	if (g0->loaded_hyp_vcpu[this_cpu].loaded)
 		goto out;
 
-	if (vm_idx >= KVM_MAX_PVMS)
+	if (!ghost_is_valid_vm_handle(g0, vm_handle))
 		goto out;
 
-	struct ghost_vm *vm = ghost_vm_from_handle(g0, (pkvm_vm_handle_t)vm_handle);
+	struct ghost_vm *vm = ghost_vm_from_handle(g0, vm_handle);
+	// if the vm is not present in the vm_table[] array, then do nothing
+	if (!vm->exists)
+		goto out;
+
 	if (vcpu_idx > vm->nr_vcpus)
 		goto out;
 
-	struct ghost_vcpu *vcpu = ghost_vcpu_from_handle(g0, (pkvm_vm_handle_t)vm_handle, vcpu_idx);
-	ghost_assert(vcpu);
+	ghost_assert(vcpu_idx < KVM_MAX_VCPUS);
+	struct ghost_vcpu *vcpu = &vm->vcpus[vcpu_idx];
+
 	ghost_assert(vcpu->exists);
+
+	// if the vcpu is already loaded (potentially in another CPU), then do nothing
 	if (vcpu->loaded)
 		goto out;
 
+	// record in the ghost state of the vcpu 'vcpu_idx' that is has been loaded
+	g1->vms.vms[vm_idx].vcpus[vcpu_idx].loaded = true;
+
+	// record in the ghost state that the current CPU has loaded
+	// the vcpu 'vcpu_idx' of vm 'vm_idx'
 	g1->loaded_hyp_vcpu[this_cpu] = (struct ghost_loaded_vcpu){
 		.present = true,
 		.loaded = true,
 		.vm_index = vm_idx,
 		.vcpu_index = vcpu_idx,
 	};
-
-	g1->vms.vms[vm_idx].vcpus[vcpu_idx].loaded = true;
-
 out:
 	return;
 }
