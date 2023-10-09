@@ -98,12 +98,12 @@ struct ghost_vm compute_abstraction_vm(u64 idx) {
 	abstract_vm.nr_vcpus = vm->nr_vcpus;
 	for (i=0; i<KVM_MAX_VCPUS; i++) {
 		abstract_vm.vcpus[i] = (struct ghost_vcpu){
-			.present = false,
+			.exists = false,
 		};
 
 		// if the vm has this vcpu, then 
 		if (i < abstract_vm.nr_vcpus) {
-			abstract_vm.vcpus[i].present = true;
+			abstract_vm.vcpus[i].exists = true;
 			abstract_vm.vcpus[i].loaded = false;
 		}
 	}

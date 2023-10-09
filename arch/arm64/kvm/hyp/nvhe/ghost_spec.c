@@ -733,7 +733,7 @@ void compute_new_abstract_state_handle___pkvm_vcpu_load(struct ghost_state *g1, 
 
 	struct ghost_vcpu *vcpu = ghost_vcpu_from_handle(g0, (pkvm_vm_handle_t)vm_handle, vcpu_idx);
 	ghost_assert(vcpu);
-	ghost_assert(vcpu->present);
+	ghost_assert(vcpu->exists);
 	if (vcpu->loaded)
 		goto out;
 
