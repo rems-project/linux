@@ -36,7 +36,7 @@ struct ghost_loaded_vcpu {
 };
 
 struct ghost_vcpu {
-	bool present; // the vm.vcpus table is up to KVM_MAX_VCPUS but only the first no_vcpus are present
+	bool present; // the vm.vcpus table is up to KVM_MAX_VCPUS but only the first nr_vcpus are present
 	bool loaded;  // if currently loaded on some physical CPU
 };
 
@@ -44,8 +44,8 @@ struct ghost_vcpu {
 struct ghost_vm {                            // abstraction of state protected by each VM lock
 	bool present;
 	abstract_pgtable vm_abstract_pgtable;                  // the interpretation of the current concrete mapping
-	u64 no_vcpus;
-	struct ghost_vcpu vcpus[KVM_MAX_VCPUS];     // table of vcpus, only `present` up to no_vcpus, NOTE: ordered same as real pkvm vm.hyp_vcpu table
+	u64 nr_vcpus;
+	struct ghost_vcpu vcpus[KVM_MAX_VCPUS];     // table of vcpus, only `present` up to nr_vcpus, NOTE: ordered same as real pkvm vm.hyp_vcpu table
 	pkvm_vm_handle_t pkvm_handle; // pKVM-assigned handle
 };
 

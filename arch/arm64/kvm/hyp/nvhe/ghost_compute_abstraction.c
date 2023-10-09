@@ -95,14 +95,14 @@ struct ghost_vm compute_abstraction_vm(u64 idx) {
 	struct ghost_vm abstract_vm;
 	abstract_vm.present = true;
 	abstract_vm.pkvm_handle = idx + HANDLE_OFFSET;  // see pkvm.c idx_to_vm_handle
-	abstract_vm.no_vcpus = vm->nr_vcpus;
+	abstract_vm.nr_vcpus = vm->nr_vcpus;
 	for (i=0; i<KVM_MAX_VCPUS; i++) {
 		abstract_vm.vcpus[i] = (struct ghost_vcpu){
 			.present = false,
 		};
 
 		// if the vm has this vcpu, then 
-		if (i < abstract_vm.no_vcpus) {
+		if (i < abstract_vm.nr_vcpus) {
 			abstract_vm.vcpus[i].present = true;
 			abstract_vm.vcpus[i].loaded = false;
 		}
@@ -162,7 +162,7 @@ bool abstraction_equals_vm(struct ghost_vm vm1, struct ghost_vm vm2)
 	ghost_assert(vm1.present && vm2.present);
 	// TODO: assert abstract pgtable mapping equal
 	// TODO: assert vcpus the same
-	return vm1.pkvm_handle == vm2.pkvm_handle && vm1.no_vcpus == vm2.no_vcpus;
+	return vm1.pkvm_handle == vm2.pkvm_handle && vm1.nr_vcpus == vm2.nr_vcpus;
 }
 
 bool abstraction_equals_vms(struct ghost_vms vms1, struct ghost_vms vms2)
