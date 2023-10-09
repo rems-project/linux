@@ -95,29 +95,35 @@ struct ghost_vm compute_abstraction_vm(u64 idx) {
 	struct ghost_vm abstract_vm;
 	abstract_vm.present = true;
 	abstract_vm.pkvm_handle = idx + HANDLE_OFFSET;  // see pkvm.c idx_to_vm_handle
-	abstract_vm.nr_vcpus = vm->nr_vcpus;
-	for (i=0; i<KVM_MAX_VCPUS; i++) {
-		abstract_vm.vcpus[i] = (struct ghost_vcpu){
-			.exists = false,
-		};
+	if (vm) {
+		abstract_vm.exists = true;
+		abstract_vm.nr_vcpus = vm->nr_vcpus;
+		for (i=0; i<KVM_MAX_VCPUS; i++) {
+			abstract_vm.vcpus[i] = (struct ghost_vcpu){
+				.exists = false,
+			};
 
-		// if the vm has this vcpu, then 
-		if (i < abstract_vm.nr_vcpus) {
-			abstract_vm.vcpus[i].exists = true;
-			abstract_vm.vcpus[i].loaded = false;
+			// if the vm has this vcpu, then 
+			if (i < abstract_vm.nr_vcpus) {
+				abstract_vm.vcpus[i].exists = true;
+				abstract_vm.vcpus[i].loaded = vm->vcpus[i]->loaded_hyp_vcpu ? true : false;
+			}
 		}
+		abstract_vm.vm_abstract_pgtable = ghost_record_pgtable_ap(&vm->pgt, "guest_mmu.pgt", 0);
+	} else {
+		abstract_vm.exists = false;
 	}
-	// TODO: vcpus of each vm
-	// TODO: vm abstract pgtable mapping
 	return abstract_vm;
 }
 
 struct ghost_vms compute_abstraction_vms(void) {
-	struct ghost_vms vms = {0};
+	struct ghost_vms vms = { 0 };
 	int i;
 	for (i=0; i<KVM_MAX_PVMS; i++) {
 		if (vm_table[i]) {
 			vms.vms[i] = compute_abstraction_vm(i);
+		} else {
+			vms.vms[i].present = false;
 		}
 	}
 	vms.present = true;
