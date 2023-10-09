@@ -82,7 +82,7 @@ struct ghost_state {
 	struct ghost_vms vms;                  // protected by the vm_table lock
 	u64 vm_handle_offset;                  // vm handles are defined as index into vms.vms table + this offset
 	s64 hyp_physvirt_offset;               // constant after initialisation - the value of hyp_physvirt_offset
-	struct ghost_loaded_vcpu loaded_hyp_vcpu;  // loaded vcpu, as a VM+VCPU index pair
+	struct ghost_loaded_vcpu loaded_hyp_vcpu[NR_CPUS];  // loaded vcpu, as a VM+VCPU index pair
 };
 
 

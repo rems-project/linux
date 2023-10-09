@@ -418,7 +418,7 @@ void record_abstraction_loaded_vcpus(struct ghost_state *g) {
 		vm_index = compute_pkvm_vm_ptr_to_ghost_vm_index(g, vm);
 		present = true;
 	}
-	g->loaded_hyp_vcpu = (struct ghost_loaded_vcpu){
+	g->loaded_hyp_vcpu[get_cpu()] = (struct ghost_loaded_vcpu){
 		present,
 		vm_index,
 		vcpu_index,

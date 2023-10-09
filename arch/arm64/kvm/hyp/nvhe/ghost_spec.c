@@ -692,9 +692,10 @@ void compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost_state 
 	u64 guest_virt = (gfn << 12);
 
 	// previous vcpu_load must have been done
-	ghost_assert(g0->loaded_hyp_vcpu.present);
+	int this_cpu = get_cpu();
+	ghost_assert(g0->loaded_hyp_vcpu[this_cpu].present);
 	// `hyp_vcpu = pkvm_get_loaded_hyp_vcpu(); if (!hyp_vcpu) goto out;`
-	if (!g0->loaded_hyp_vcpu.loaded) {
+	if (!g0->loaded_hyp_vcpu[this_cpu].loaded) {
 		ret = -EINVAL;
 		goto out;
 	}
@@ -713,13 +714,14 @@ out:
 }
 
 void compute_new_abstract_state_handle___pkvm_vcpu_load(struct ghost_state *g1, struct ghost_state *g0, u64 impl_return_value) {
+	int this_cpu = get_cpu();
 	u64 vm_handle = ghost_reg_gpr(g0, 1);
 	u64 vcpu_idx = ghost_reg_gpr(g0, 2);
 
 	u64 vm_idx = vm_handle - g0->vm_handle_offset;
 
-	ghost_assert(g0->loaded_hyp_vcpu.present);
-	if (g0->loaded_hyp_vcpu.loaded)
+	ghost_assert(g0->loaded_hyp_vcpu[this_cpu].present);
+	if (g0->loaded_hyp_vcpu[this_cpu].loaded)
 		goto out;
 
 	if (vm_idx >= KVM_MAX_PVMS)
@@ -735,7 +737,7 @@ void compute_new_abstract_state_handle___pkvm_vcpu_load(struct ghost_state *g1, 
 	if (vcpu->loaded)
 		goto out;
 
-	g1->loaded_hyp_vcpu = (struct ghost_loaded_vcpu){
+	g1->loaded_hyp_vcpu[this_cpu] = (struct ghost_loaded_vcpu){
 		.present = true,
 		.loaded = true,
 		.vm_index = vm_idx,
@@ -749,15 +751,16 @@ out:
 }
 
 void compute_new_abstract_state_handle___pkvm_vcpu_put(struct ghost_state *g1, struct ghost_state *g0, u64 impl_return_value) {
-	if (!g0->loaded_hyp_vcpu.loaded)
+	int this_cpu = get_cpu();
+	if (!g0->loaded_hyp_vcpu[this_cpu].loaded)
 		goto out;
 
-	u64 vm_idx = g0->loaded_hyp_vcpu.vm_index;
-	u64 vcpu_idx = g0->loaded_hyp_vcpu.vcpu_index;
+	u64 vm_idx = g0->loaded_hyp_vcpu[this_cpu].vm_index;
+	u64 vcpu_idx = g0->loaded_hyp_vcpu[this_cpu].vcpu_index;
 
 	g1->vms.vms[vm_idx].vcpus[vcpu_idx].loaded = false;
 
-	g1->loaded_hyp_vcpu = (struct ghost_loaded_vcpu){
+	g1->loaded_hyp_vcpu[this_cpu] = (struct ghost_loaded_vcpu){
 		.present = true,
 		.loaded = false,
 	};
