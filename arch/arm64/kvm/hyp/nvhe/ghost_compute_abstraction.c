@@ -169,12 +169,57 @@ bool abstraction_equals_host(struct ghost_host gh1, struct ghost_host gh2)
 		abstract_pgtable_equal("abstraction_equals_host", gh1.host_abstract_pgtable_shared, gh2.host_abstract_pgtable_shared, "gh1.host_mapping_shared", "gh2.host_mapping_shared", 4));
 }
 
+bool abstraction_equals_loaded_vcpu(struct ghost_loaded_vcpu loaded_vcpu1, struct ghost_loaded_vcpu loaded_vcpu2) 
+{
+	ghost_assert(loaded_vcpu1.present && loaded_vcpu2.present);
+	if (loaded_vcpu1.loaded == loaded_vcpu2.loaded) {
+		return    loaded_vcpu1.vm_index == loaded_vcpu2.vm_index
+		       && loaded_vcpu1.vcpu_index == loaded_vcpu2.vcpu_index;
+	} else {
+	  return false;
+	}
+}
+
+bool abstraction_equals_loaded_vcpus(struct ghost_state *g1, struct ghost_state *g2)
+{
+	bool ret = true;
+	for (int i=0; i<NR_CPUS; i++) {
+		if (g1->loaded_hyp_vcpu[i].present && g2->loaded_hyp_vcpu[i].present) {
+			ret = ret && abstraction_equals_loaded_vcpu(g1->loaded_hyp_vcpu[i], g2->loaded_hyp_vcpu[i]);
+		} else if (g1->loaded_hyp_vcpu[i].present && !g2->loaded_hyp_vcpu[i].present) {
+			ghost_assert(false);
+		}
+	}
+	return ret;
+}
+
+bool abstraction_equals_vcpu(struct ghost_vcpu vcpu1, struct ghost_vcpu vcpu2)
+{
+	if (vcpu1.exists == vcpu2.exists) {
+		return vcpu1.loaded == vcpu2.loaded;
+	} else {
+		return false;
+	}
+}
+
 bool abstraction_equals_vm(struct ghost_vm vm1, struct ghost_vm vm2)
 {
 	ghost_assert(vm1.present && vm2.present);
-	// TODO: assert abstract pgtable mapping equal
-	// TODO: assert vcpus the same
-	return vm1.pkvm_handle == vm2.pkvm_handle && vm1.nr_vcpus == vm2.nr_vcpus;
+	if (vm1.exists != vm2.exists)
+		return false;
+	
+	if (!vm1.exists) // and therefore !vm2.exists
+		return true;
+
+	// both vm1.exists AND vm2.exists
+	bool vcpus_are_equal;
+	for (int i=0; i<KVM_MAX_VCPUS; i++) {
+		vcpus_are_equal = vcpus_are_equal && abstraction_equals_vcpu(vm1.vcpus[i], vm2.vcpus[i]);
+	}
+	return (   abstract_pgtable_equal("abstraction_equals_vm", vm1.vm_abstract_pgtable, vm2.vm_abstract_pgtable, "vm1.vm_abstract_pgtable", "vm2.vm_abstract_pgtable", 4)
+		&& vm1.nr_vcpus == vm2.nr_vcpus
+		&& vcpus_are_equal
+		&& vm1.pkvm_handle == vm2.pkvm_handle);
 }
 
 bool abstraction_equals_vms(struct ghost_vms vms1, struct ghost_vms vms2)
@@ -184,7 +229,7 @@ bool abstraction_equals_vms(struct ghost_vms vms1, struct ghost_vms vms2)
 	ghost_assert(vms1.present && vms2.present);
 	for (i=0; i<KVM_MAX_PVMS; i++) {
 		if (vms1.vms[i].present || vms2.vms[i].present) {
-			equal &= abstraction_equals_vm(vms1.vms[i], vms2.vms[i]);
+			equal = equal && abstraction_equals_vm(vms1.vms[i], vms2.vms[i]);
 		}
 	}
 	return equal;
