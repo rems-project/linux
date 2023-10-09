@@ -406,6 +406,32 @@ DEFINE_PER_CPU(struct ghost_state, gs_computed_post);
 //
 ////}
 //
+struct ghost_vm *ghost_vm_from_handle(struct ghost_state *g, pkvm_vm_handle_t handle) {
+	u64 vm_idx = handle - g->vm_handle_offset;
+	ghost_assert(g->vms.present);
+	if (vm_idx > KVM_MAX_PVMS)
+		return NULL;
+
+	ghost_assert(g->vms.vms[vm_idx].present);
+	struct ghost_vm *vm = &g->vms.vms[vm_idx];
+	return vm;
+}
+
+struct ghost_vcpu *ghost_vcpu_from_handle(struct ghost_state *g, pkvm_vm_handle_t handle, u64 vcpu_idx) {
+	u64 vm_idx = handle - g->vm_handle_offset;
+	ghost_assert(g->vms.present);
+	ghost_assert(g->vms.vms[vm_idx].present);
+
+	struct ghost_vm *vm = ghost_vm_from_handle(g, handle);
+	if (!vm)
+		return NULL;
+
+	if (vcpu_idx > KVM_MAX_VCPUS)
+		return NULL;
+
+	struct ghost_vcpu *vcpu = &vm->vcpus[vcpu_idx];
+	return vcpu;
+}
 
 // adapted from memory.h to make it a pure function of the ghost state rather than depend on the impl global hyp_phys_virt_offset
 #define ghost__hyp_va(g,phys)	((void *)((phys_addr_t)(phys) - g->hyp_physvirt_offset))
@@ -678,26 +704,107 @@ out:
  * compute the new abstract ghost_state from a u64 impl_return_value = pkvm_host_map_guest(host_pfn, guest_gfn)
  */
 void compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost_state *g1, struct ghost_state *g0, u64 impl_return_value) {
-	//u64 pfn = ghost_reg_gpr(g0, 1);
-	//u64 gfn = ghost_reg_gpr(g0, 2);
-	// TODO
+	int ret;
+
+	u64 pfn = ghost_reg_gpr(g0, 1);
+	u64 gfn = ghost_reg_gpr(g0, 2);
+
+	u64 phys_addr = (pfn << 12); // TODO: must be a macro for this, and depends on granule size?
+	u64 host_virt = phys_addr;
+	u64 guest_virt = (gfn << 12);
+
+	// previous vcpu_load must have been done
+	ghost_assert(g0->loaded_hyp_vcpu.present);
+	// `hyp_vcpu = pkvm_get_loaded_hyp_vcpu(); if (!hyp_vcpu) goto out;`
+	if (!g0->loaded_hyp_vcpu.loaded) {
+		ret = -EINVAL;
+		goto out;
+	}
+
+	// TODO: other error cases
+
+	ret = 0;
+
+	g1->host.host_abstract_pgtable_annot.mapping =
+		mapping_plus(g0->host.host_abstract_pgtable_annot.mapping,
+		             mapping_singleton(host_virt, 1, maplet_target_annot(PKVM_ID_GUEST)));
+
+	// TODO: allocate in guest concrete pgtable
+out:
+	ghost_reg_gpr(g1, 1) = ret;
 }
 
 void compute_new_abstract_state_handle___pkvm_vcpu_load(struct ghost_state *g1, struct ghost_state *g0, u64 impl_return_value) {
-	//u64 pfn = ghost_reg_gpr(g0, 1);
-	//u64 gfn = ghost_reg_gpr(g0, 2);
-	// TODO
+	u64 vm_handle = ghost_reg_gpr(g0, 1);
+	u64 vcpu_idx = ghost_reg_gpr(g0, 2);
+
+	u64 vm_idx = vm_handle - g0->vm_handle_offset;
+
+	ghost_assert(g0->loaded_hyp_vcpu.present);
+	if (g0->loaded_hyp_vcpu.loaded)
+		goto out;
+
+	if (vm_idx >= KVM_MAX_PVMS)
+		goto out;
+
+	struct ghost_vm *vm = ghost_vm_from_handle(g0, (pkvm_vm_handle_t)vm_handle);
+	if (vcpu_idx > vm->no_vcpus)
+		goto out;
+
+	struct ghost_vcpu *vcpu = ghost_vcpu_from_handle(g0, (pkvm_vm_handle_t)vm_handle, vcpu_idx);
+	ghost_assert(vcpu);
+	ghost_assert(vcpu->present);
+	if (vcpu->loaded)
+		goto out;
+
+	g1->loaded_hyp_vcpu = (struct ghost_vcpu_index){
+		.present = true,
+		.loaded = true,
+		.vm_index = vm_idx,
+		.vcpu_index = vcpu_idx,
+	};
+
+	g1->vms.vms[vm_idx].vcpus[vcpu_idx].loaded = true;
+
+out:
+	return;
 }
 
 void compute_new_abstract_state_handle___pkvm_vcpu_put(struct ghost_state *g1, struct ghost_state *g0, u64 impl_return_value) {
-	// TODO
+	if (!g0->loaded_hyp_vcpu.loaded)
+		goto out;
+
+	u64 vm_idx = g0->loaded_hyp_vcpu.vm_index;
+	u64 vcpu_idx = g0->loaded_hyp_vcpu.vcpu_index;
+
+	g1->vms.vms[vm_idx].vcpus[vcpu_idx].loaded = false;
+
+	g1->loaded_hyp_vcpu = (struct ghost_vcpu_index){
+		.present = true,
+		.loaded = false,
+	};
+out:
+	return;
 }
 
 void compute_new_abstract_state_handle___pkvm_init_vm(struct ghost_state *g1, struct ghost_state *g0, u64 impl_return_value) {
-	if (impl_return_value > 0) {
-		// success case, returned a handle
-		//u64 pkvm_vm_handle = impl_return_value;
-	}
+	int ret;
+	if (impl_return_value <= 0)
+	 	// TODO: set ret
+		goto out;
+
+	u64 handle = impl_return_value;
+	u64 idx = handle - g0->vm_handle_offset;
+
+	g1->vms.present = true;
+	g1->vms.vms[idx] = (struct ghost_vm) {
+		.present = true,
+		.pkvm_handle = handle,
+		// TODO: init pagetable and vcpus
+	};
+	ret = 0;
+out:
+	ghost_reg_gpr(g1, 1) = 0;
 }
 
 void compute_new_abstract_state_handle_host_hcall(struct ghost_state *g1, struct ghost_state *g0, u64 impl_return_value, bool *new_state_computed)
@@ -763,7 +870,7 @@ void compute_new_abstract_state_handle_trap(struct ghost_state *g1 /*new*/, stru
 {
 
 	// assumes *g1 has been cleared
-	ghost_assert(!g1->pkvm.present && !g1->host.present && !g1->regs[THIS_CPU()].present);
+	ghost_assert(!g1->pkvm.present && !g1->host.present && !g1->regs.present);
 
 	// copy the g0 regs to g1; we'll update them to make the final g1
 	copy_abstraction_regs(g1, g0);

@@ -17,6 +17,10 @@
 #include <nvhe/pkvm.h>
 #include <nvhe/trap_handler.h>
 
+// GHOST
+#include "./ghost_compute_abstraction.h"
+// /GHOST
+
 /* Used by icache_is_vpipt(). */
 unsigned long __icache_flags;
 
@@ -246,6 +250,22 @@ static pkvm_handle_t idx_to_vm_handle(unsigned int idx)
  */
 /*static*/ DEFINE_HYP_SPINLOCK(vm_table_lock);
 
+static void vm_table_lock_component(void)
+{
+	hyp_spin_lock(&vm_table_lock);
+	// GHOST
+	record_and_check_abstraction_vm_table_pre();
+	// /GHOST
+}
+
+static void vm_table_unlock_component(void)
+{
+	record_and_copy_abstraction_vm_table_post();
+	// GHOST
+	hyp_spin_unlock(&vm_table_lock);
+	// /GHOST
+}
+
 /*
  * The table of VM entries for protected VMs in hyp.
  * Allocated at hyp initialization and setup.
@@ -283,7 +303,7 @@ struct pkvm_hyp_vcpu *pkvm_load_hyp_vcpu(pkvm_handle_t handle,
 	if (__this_cpu_read(loaded_hyp_vcpu))
 		return NULL;
 
-	hyp_spin_lock(&vm_table_lock);
+	vm_table_lock_component();
 	hyp_vm = get_vm_by_handle(handle);
 	if (!hyp_vm || hyp_vm->nr_vcpus <= vcpu_idx)
 		goto unlock;
@@ -299,7 +319,7 @@ struct pkvm_hyp_vcpu *pkvm_load_hyp_vcpu(pkvm_handle_t handle,
 	hyp_vcpu->loaded_hyp_vcpu = this_cpu_ptr(&loaded_hyp_vcpu);
 	hyp_page_ref_inc(hyp_virt_to_page(hyp_vm));
 unlock:
-	hyp_spin_unlock(&vm_table_lock);
+	vm_table_unlock_component();
 
 	if (hyp_vcpu)
 		__this_cpu_write(loaded_hyp_vcpu, hyp_vcpu);
@@ -310,11 +330,11 @@ void pkvm_put_hyp_vcpu(struct pkvm_hyp_vcpu *hyp_vcpu)
 {
 	struct pkvm_hyp_vm *hyp_vm = pkvm_hyp_vcpu_to_hyp_vm(hyp_vcpu);
 
-	hyp_spin_lock(&vm_table_lock);
+	vm_table_lock_component();
 	hyp_vcpu->loaded_hyp_vcpu = NULL;
 	__this_cpu_write(loaded_hyp_vcpu, NULL);
 	hyp_page_ref_dec(hyp_virt_to_page(hyp_vm));
-	hyp_spin_unlock(&vm_table_lock);
+	vm_table_unlock_component();
 }
 
 struct pkvm_hyp_vcpu *pkvm_get_loaded_hyp_vcpu(void)

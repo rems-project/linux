@@ -1,9 +1,6 @@
 #ifndef _GHOST_SPEC_H
 #define _GHOST_SPEC_H
 
-// TODO: BS: this should already be defined somewhere, no?
-#define MAX_CPUS 4
-
 #include <../debug-pl011.h>
 #include <../ghost_extra_debug-pl011.h>
 //#include <nvhe/ghost_check_pgtables.h>
@@ -12,10 +9,6 @@
 #include <../ghost_pgtable.h>
 #include <nvhe/spinlock.h>
 #pragma GCC diagnostic ignored "-Wdeclaration-after-statement"
-
-// TODO: read CPU affinity register to get this physical CPU out
-#define THIS_CPU() 0
-
 
 #include <nvhe/trap_handler.h>   // for DECLARE_REG
 #include <asm/kvm_asm.h>    // for __KVM_HOST_SMCCC_FUNC___pkvm_host_share_hyp etc
@@ -30,21 +23,29 @@
 // an opaque pKVM VM handle
 typedef u64 pkvm_vm_handle_t;
 
+// from nvhe/pkvm.c
+// the vm handles are vm table indexes + HANDLE_OFFSET
+#define HANDLE_OFFSET 0x1000
+
 // top-level spec types
 struct ghost_vcpu_index {
-	bool loaded;
-	u64 vm_index;
-	u64 vcpu_index;
+	bool present;
+	bool loaded;  // if there is a currently loaded vcpu
+	u64 vm_index; // if loaded, the VM index (in the ghost_state.vms table)
+	u64 vcpu_index; // if loaded, the vcpu index within the VM
 };
 
 struct ghost_vcpu {
+	bool present; // the vm.vcpus table is up to KVM_MAX_VCPUS but only the first no_vcpus are present
+	bool loaded;  // if currently loaded on some physical CPU
 };
 
 
 struct ghost_vm {                            // abstraction of state protected by each VM lock
 	bool present;
 	abstract_pgtable vm_abstract_pgtable;                  // the interpretation of the current concrete mapping
-	struct ghost_vcpu vcpus[KVM_MAX_VCPUS];
+	u64 no_vcpus;
+	struct ghost_vcpu vcpus[KVM_MAX_VCPUS];     // table of vcpus, only `present` up to no_vcpus, NOTE: ordered same as real pkvm vm.hyp_vcpu table
 	pkvm_vm_handle_t pkvm_handle; // pKVM-assigned handle
 };
 
@@ -58,7 +59,6 @@ struct ghost_host {                          // abstraction of state protected b
 struct ghost_pkvm {                          // abstraction of state protected by the pkvm lock
 	bool present;
 	abstract_pgtable pkvm_abstract_pgtable;                // the interpretation of the current concrete mapping
-	u64 no_vms;  // total number of VMs being managed by pKVM
 };
 
 struct ghost_register_state {
@@ -67,16 +67,32 @@ struct ghost_register_state {
 	u64 el2_sysregs[GHOST_NR_SYSREGS];   // EL2 register values (NB: not all elements are live)
 };
 
+/// The table of VMs
+/// technically not owed by the pkvm lock(!)
+struct ghost_vms {
+	bool present;
+	struct ghost_vm vms[KVM_MAX_PVMS];     // protected by each VM lock, NOTE: ordered the same as pkvm's own vm_table.
+};
+
 struct ghost_state {
         mapping hyp_memory;                    // constant after initialisation - the interpretation of hyp_memory[]
 	struct ghost_pkvm pkvm;                // protected by the pkvm lock
 	struct ghost_host host;                // protected by the host lock
-	struct ghost_vm vms[KVM_MAX_PVMS];     // protected by each VM lock, NOTE: UNORDERED.
-	struct ghost_register_state regs[NR_CPUS];
-	s64 hyp_physvirt_offset;                  // constant after initialisation - the value of hyp_physvirt_offset
-	struct ghost_vcpu_index loaded_hyp_vcpu[NR_CPUS];  // loaded vcpu, as a VM+VCPU index pair
+	struct ghost_register_state regs;      // register bank
+	struct ghost_vms vms;                  // protected by the vm_table lock
+	u64 vm_handle_offset;                  // vm handles are defined as index into vms.vms table + this offset
+	s64 hyp_physvirt_offset;               // constant after initialisation - the value of hyp_physvirt_offset
+	struct ghost_vcpu_index loaded_hyp_vcpu;  // loaded vcpu, as a VM+VCPU index pair
 };
 
+
+// some helper functions
+
+/// Get the ghost vm from the pkvm-supplied vm handle
+struct ghost_vm *ghost_vm_from_handle(struct ghost_state *g, pkvm_vm_handle_t handle);
+
+/// Get the ghost vcpu from the pkvm-supplied vm handle and vcpu index within that vm
+struct ghost_vcpu *ghost_vcpu_from_handle(struct ghost_state *g, pkvm_vm_handle_t handle, u64 vcpu_index);
 
 
 //
@@ -152,8 +168,8 @@ DECLARE_PER_CPU(struct ghost_state, gs_computed_post);
 //struct ghost_state spec_handle_trap(struct ghost_state *g);
 
 // macros to make ghost register accesses more uniform
-#define ghost_reg_gpr(g,r) g->regs[THIS_CPU()].ctxt.regs.regs[r]
-#define ghost_reg_el2(g,r) g->regs[THIS_CPU()].el2_sysregs[r]
+#define ghost_reg_gpr(g,r) g->regs.ctxt.regs.regs[r]
+#define ghost_reg_el2(g,r) g->regs.el2_sysregs[r]
 //#define ghost_reg_ctxt(g,r)
 
 

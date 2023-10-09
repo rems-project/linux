@@ -43,6 +43,9 @@
 #include "./ghost_spec.h"
 #include "./ghost_compute_abstraction.h"
 
+/* from nvhe/pkvm.c */
+extern struct pkvm_hyp_vm **vm_table;
+extern hyp_spinlock_t vm_table_lock;
 
 // for all these, one needs to be in ghost_(un)lock_maplets()
 // and, unless we make the memory management more automatic, the context must carefully free any pre-existing mappings
@@ -68,7 +71,6 @@ struct ghost_pkvm compute_abstraction_pkvm(void)
 	u64 i=0; /* base indent */ /* though we'll mostly want this to be quiet, later */
 	gp.pkvm_abstract_pgtable = ghost_record_pgtable_ap(&pkvm_pgtable, "pkvm_pgtable", i);
 	gp.present = true;
-	gp.no_vms = 0; /* will be incremented by compute_abstract_vms */
 	return gp;
 }
 
@@ -84,6 +86,42 @@ struct ghost_host compute_abstraction_host(void)
 	gh.present = true;
 	free_mapping(ap.mapping);
 	return gh;
+}
+
+/// from a vm_table index compute the abstract ghost VM
+struct ghost_vm compute_abstraction_vm(u64 idx) {
+	int i;
+	struct pkvm_hyp_vm *vm = vm_table[idx];
+	struct ghost_vm abstract_vm;
+	abstract_vm.present = true;
+	abstract_vm.pkvm_handle = idx + HANDLE_OFFSET;  // see pkvm.c idx_to_vm_handle
+	abstract_vm.no_vcpus = vm->nr_vcpus;
+	for (i=0; i<KVM_MAX_VCPUS; i++) {
+		abstract_vm.vcpus[i] = (struct ghost_vcpu){
+			.present = false,
+		};
+
+		// if the vm has this vcpu, then 
+		if (i < abstract_vm.no_vcpus) {
+			abstract_vm.vcpus[i].present = true;
+			abstract_vm.vcpus[i].loaded = false;
+		}
+	}
+	// TODO: vcpus of each vm
+	// TODO: vm abstract pgtable mapping
+	return abstract_vm;
+}
+
+struct ghost_vms compute_abstraction_vms(void) {
+	struct ghost_vms vms = {0};
+	int i;
+	for (i=0; i<KVM_MAX_PVMS; i++) {
+		if (vm_table[i]) {
+			vms.vms[i] = compute_abstraction_vm(i);
+		}
+	}
+	vms.present = true;
+	return vms;
 }
 
 
@@ -119,6 +157,26 @@ bool abstraction_equals_host(struct ghost_host gh1, struct ghost_host gh2)
 		mapping_equal(gh1.host_abstract_pgtable_shared.mapping, gh2.host_abstract_pgtable_shared.mapping, "abstraction_equals_host", "gh1.host_mapping_shared", "gh2.host_mapping_shared", 4));
 }
 
+bool abstraction_equals_vm(struct ghost_vm vm1, struct ghost_vm vm2)
+{
+	ghost_assert(vm1.present && vm2.present);
+	// TODO: assert abstract pgtable mapping equal
+	// TODO: assert vcpus the same
+	return vm1.pkvm_handle == vm2.pkvm_handle && vm1.no_vcpus == vm2.no_vcpus;
+}
+
+bool abstraction_equals_vms(struct ghost_vms vms1, struct ghost_vms vms2)
+{
+	bool equal = true;
+	int i;
+	ghost_assert(vms1.present && vms2.present);
+	for (i=0; i<KVM_MAX_PVMS; i++) {
+		if (vms1.vms[i].present || vms2.vms[i].present) {
+			equal &= abstraction_equals_vm(vms1.vms[i], vms2.vms[i]);
+		}
+	}
+	return equal;
+}
 
 //void abstraction_vms(struct ghost_state *g)
 //{
@@ -130,7 +188,7 @@ bool abstraction_equals_host(struct ghost_host gh1, struct ghost_host gh2)
 
 bool abstraction_equals_all(struct ghost_state *gc, struct ghost_state *gr_post, struct ghost_state *gr_pre)
 {
-	bool ret_pkvm, ret_host;
+	bool ret_pkvm, ret_host, ret_vms;
 	if (gc->pkvm.present && gr_post->pkvm.present) {
 		ret_pkvm = abstraction_equals_pkvm(gc->pkvm, gr_post->pkvm);
 	}
@@ -159,7 +217,15 @@ bool abstraction_equals_all(struct ghost_state *gc, struct ghost_state *gr_post,
 	else
 		ret_host = true;
 
-	return abstraction_equals_hyp_memory(gc, gr_post) && abstraction_equals_reg(gc, gr_post) && gc->hyp_physvirt_offset==gr_post->hyp_physvirt_offset && ret_pkvm && ret_host;
+	if (gc->vms.present && gr_post->vms.present) {
+		ret_vms = abstraction_equals_vms(gc->vms, gr_post->vms);
+	} else if (gc->vms.present && !gr_post->vms.present) {
+		ghost_assert(false);
+	} else if (!gc->vms.present && gr_post->vms.present) {
+		ret_vms = true;
+	}
+
+	return abstraction_equals_hyp_memory(gc, gr_post) && abstraction_equals_reg(gc, gr_post) && gc->hyp_physvirt_offset==gr_post->hyp_physvirt_offset && ret_pkvm && ret_host && ret_vms;
 
 }
 
@@ -169,9 +235,7 @@ void init_abstraction(struct ghost_state *g)
 	int cpu;
 	g->pkvm.present = false;
 	g->host.present = false;
-	for (cpu=0; cpu<NR_CPUS; cpu++) {
-		g->regs[cpu].present = false;
-	}
+	g->regs.present = false;
 }
 
 void init_abstraction_common(void)
@@ -206,7 +270,7 @@ void clear_abstraction_host(struct ghost_state *g)
 
 void clear_abstraction_regs(struct ghost_state *g)
 {
-	g->regs[THIS_CPU()].present = false;
+	g->regs.present = false;
 }
 
 void clear_abstraction_all(struct ghost_state *g)
@@ -225,10 +289,20 @@ void clear_abstraction_thread_local(void)
 	ghost_unlock_maplets();
 }
 
+void clear_abstraction_vms(struct ghost_state *g)
+{
+	int i;
+	g->vms.present = false;
+	for (i=0; i<KVM_MAX_PVMS; i++) {
+		g->vms.vms[i].present = false;
+		// TODO: clear vm pagetables
+	}
+}
+
 void copy_abstraction_regs(struct ghost_state *g_tgt, struct ghost_state *g_src)
 {
-	ghost_assert(g_src->regs[THIS_CPU()].present);
-	ghost_assert(!g_tgt->regs[THIS_CPU()].present);
+	ghost_assert(g_src->regs.present);
+	ghost_assert(!g_tgt->regs.present);
 	memcpy((void*) &(g_tgt->regs), (void*) &(g_src->regs), sizeof(struct ghost_register_state));
 }
 
@@ -261,6 +335,20 @@ void copy_abstraction_host(struct ghost_state *g_tgt, struct ghost_state *g_src)
 	g_tgt->host.host_abstract_pgtable_nonannot.mapping = mapping_copy(g_src->host.host_abstract_pgtable_nonannot.mapping);
 }
 
+void copy_abstraction_vms(struct ghost_state *g_tgt, struct ghost_state *g_src)
+{
+	ghost_assert_maplets_locked();
+	ghost_assert(g_src->vms.present);
+	clear_abstraction_vms(g_tgt);
+	g_tgt->host.present = g_src->host.present;
+	g_tgt->host.host_abstract_pgtable_annot.root = g_src->host.host_abstract_pgtable_annot.root;
+	g_tgt->host.host_abstract_pgtable_annot.mapping = mapping_copy(g_src->host.host_abstract_pgtable_annot.mapping);
+	g_tgt->host.host_abstract_pgtable_shared.root = g_src->host.host_abstract_pgtable_shared.root;
+	g_tgt->host.host_abstract_pgtable_shared.mapping = mapping_copy(g_src->host.host_abstract_pgtable_shared.mapping);
+	g_tgt->host.host_abstract_pgtable_nonannot.root = g_src->host.host_abstract_pgtable_nonannot.root;
+	g_tgt->host.host_abstract_pgtable_nonannot.mapping = mapping_copy(g_src->host.host_abstract_pgtable_nonannot.mapping);
+}
+
 void record_abstraction_hyp_memory(struct ghost_state *g)
 {
 	g->hyp_memory = compute_abstraction_hyp_memory();
@@ -273,9 +361,7 @@ void record_abstraction_pkvm(struct ghost_state *g)
 }
 
 /* from nvhe/pkvm.c */
-extern struct pkvm_hyp_vm **vm_table;
-extern hyp_spinlock_t vm_table_lock;
-extern struct pkvm_hyp_vcpu **loaded_hyp_vcpu;
+extern DEFINE_PER_CPU(struct pkvm_hyp_vcpu *, loaded_hyp_vcpu);
 
 static u64 compute_pkvm_vm_ptr_to_ghost_vm_index(struct ghost_state *g, struct pkvm_hyp_vm *vm) {
 	int i;
@@ -310,7 +396,7 @@ static struct pkvm_hyp_vm *compute_pkvm_vm_ptr_from_hyp_vcpu(struct pkvm_hyp_vcp
 // }
 
 /*
- * record the currently loaded vcpus on each core
+ * record the currently loaded vcpu on this core
  * this must be called after loading pkvm
  *
  * must own the pkvm lock
@@ -319,22 +405,21 @@ void record_abstraction_loaded_vcpus(struct ghost_state *g) {
 	int i;
 	ghost_assert(g->pkvm.present);
 	hyp_spin_lock(&vm_table_lock);
-	for (i=0; i<NR_CPUS; i++) {
-		bool present = false;
-		u64 vm_index = 0;
-		u64 vcpu_index = 0;
-		if (loaded_hyp_vcpu[i] != NULL) {
-			struct pkvm_hyp_vcpu *vcpu = loaded_hyp_vcpu[i];
-			struct pkvm_hyp_vm *vm = compute_pkvm_vm_ptr_from_hyp_vcpu(vcpu);
-			vm_index = compute_pkvm_vm_ptr_to_ghost_vm_index(g, vm);
-			present = true;
-		}
-		g->loaded_hyp_vcpu[i] = (struct ghost_vcpu_index){
-			present,
-			vm_index,
-			vcpu_index,
-		};
+	bool present = false;
+	u64 vm_index = 0;
+	u64 vcpu_index = 0;
+	// TODO: I don't know if this is how to really read out an exported this_cpu variable
+	struct pkvm_hyp_vcpu *this = this_cpu_ptr(loaded_hyp_vcpu);
+	if (this != NULL) {
+		struct pkvm_hyp_vm *vm = compute_pkvm_vm_ptr_from_hyp_vcpu(this);
+		vm_index = compute_pkvm_vm_ptr_to_ghost_vm_index(g, vm);
+		present = true;
 	}
+	g->loaded_hyp_vcpu = (struct ghost_vcpu_index){
+		present,
+		vm_index,
+		vcpu_index,
+	};
 	hyp_spin_unlock(&vm_table_lock);
 }
 
@@ -346,22 +431,21 @@ void record_abstraction_host(struct ghost_state *g)
 
 void record_abstraction_vms(struct ghost_state *g)
 {
-	//g->vms = abstraction_vms(); TODO
+	ghost_assert(!g->vms.present);
+	g->vms = compute_abstraction_vms();
 }
 
 void record_abstraction_regs(struct ghost_state *g, struct kvm_cpu_context *ctxt)
 {
 	int i;
-	int cpu = THIS_CPU();
-
-	g->regs[cpu].present = true;
+	g->regs.present = true;
 
 	// copy GPR values from the ctxt saved by the exception vector
 	for (i=0; i<=30; i++) {
-		g->regs[cpu].ctxt.regs.regs[i] = ctxt->regs.regs[i];
+		g->regs.ctxt.regs.regs[i] = ctxt->regs.regs[i];
 	}
 	// save EL2 registers
-	ghost_get_sysregs(g->regs[cpu].el2_sysregs);
+	ghost_get_sysregs(g->regs.el2_sysregs);
 	// save EL1 registers comprising pKVM's view of the context
 	// __sysreg_save_state_nvhe(ctxt);
 }
@@ -383,11 +467,12 @@ void record_abstraction_all(struct ghost_state *g, struct kvm_cpu_context *ctxt)
 	record_abstraction_hyp_memory(g);
 	record_abstraction_pkvm(g);
 	record_abstraction_host(g);
-	//record_abstraction_vms(); TODO
+	record_abstraction_vms(g);
 	if (ctxt) {
 		record_abstraction_regs(g,ctxt);
 	}
 	g->hyp_physvirt_offset = hyp_physvirt_offset;
+	g->vm_handle_offset = HANDLE_OFFSET;
 }
 
 void record_abstraction_common(void)
@@ -438,3 +523,23 @@ void record_and_copy_abstraction_host_post(void)
 	ghost_unlock_maplets();
 }
 
+void record_and_check_abstraction_vm_table_pre(void)
+{
+	hyp_putsp("record_and_check_abstraction_vm_table_pre\n");
+	ghost_lock_maplets();
+	struct ghost_state *g = this_cpu_ptr(&gs_recorded_pre);
+	record_abstraction_vms(g);
+	hyp_putsp("a-e-h: record_and_check_abstraction_vm_table_pre\n");
+	abstraction_equals_vms(g->vms, gs.vms);
+	ghost_unlock_maplets();
+}
+
+void record_and_copy_abstraction_vm_table_post(void)
+{
+	hyp_putsp("record_and_copy_abstraction_vm_table_post\n");
+	ghost_lock_maplets();
+	struct ghost_state *g = this_cpu_ptr(&gs_recorded_post);
+	record_abstraction_vms(g);
+	copy_abstraction_vms(&gs, g);
+	ghost_unlock_maplets();
+}
