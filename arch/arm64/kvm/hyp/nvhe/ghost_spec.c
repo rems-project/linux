@@ -595,17 +595,17 @@ void compute_new_abstract_state_handle___pkvm_host_share_hyp(struct ghost_state 
 	// __host_check_page_state_range(addr, size, PKVM_PAGE_OWNED);
 	if (is_in_mapping_host_relinquished(g0, host_addr)) {
 		ret = -EPERM;
-		goto error;
+		goto out;
 	}
 	if (is_in_mapping_host_shared(g0, host_addr)) {
 		ret = -EPERM;
-		goto error;
+		goto out;
 	}
 	// checked in the pKVM code:
 	// do_share() -> check_share() -> hyp_ack_share() -> __hyp_check_page_state_range()
 	if (is_in_mapping_pkvm(g0, hyp_addr)) {
 		ret = -EPERM;
-		goto error;
+		goto out;
 	}
 
 	u64 host_arch_prot = arch_prot_of_prot(ghost_default_host_prot(ghost_addr_is_memory(g0, phys_addr)));
@@ -625,12 +625,6 @@ void compute_new_abstract_state_handle___pkvm_host_share_hyp(struct ghost_state 
 		mapping_plus(
 			g0->pkvm.pkvm_abstract_pgtable.mapping,
 			mapping_singleton(hyp_addr, 1, maplet_target_mapped_ext(phys_addr, PKVM_PAGE_SHARED_BORROWED, hyp_arch_prot)));
-	goto out;
-error:
-	ghost_lock_maplets();
-	copy_abstraction_host(g1, g0);
-	copy_abstraction_pkvm(g1, g0);
-	ghost_unlock_maplets();
 out:
 	ghost_reg_gpr(g1, 1) = ret;
 }
@@ -648,7 +642,7 @@ void compute_new_abstract_state_handle___pkvm_host_unshare_hyp(struct ghost_stat
 	// __host_check_page_state_range(addr, size, PKVM_PAGE_SHARED_OWNED);
 	if (!is_in_mapping_host_shared(g0, host_addr)) {
 		ret = -EPERM;
-		goto error;
+		goto out;
 	}
 
 	// check that pKVM is not using the page (otherwise EBUSY)
@@ -656,7 +650,7 @@ void compute_new_abstract_state_handle___pkvm_host_unshare_hyp(struct ghost_stat
 	// by the return code of the pKVM implementation
 	if (impl_return_value == -EBUSY) {
 		ret = -EBUSY;
-		goto error;
+		goto out;
 	}
 
 	// NOTE: we do not need a is_in_mapping_pkvm() corresponding to
@@ -676,26 +670,10 @@ void compute_new_abstract_state_handle___pkvm_host_unshare_hyp(struct ghost_stat
 	// TODO: check and remove this accordingly
 	if (impl_return_value == -EFAULT) {
 		ret = -EFAULT;
-		goto error;
+		goto out;
 	}
 	g1->pkvm.pkvm_abstract_pgtable.mapping =
 		mapping_minus(g0->pkvm.pkvm_abstract_pgtable.mapping, hyp_addr, 1);
-	goto out;
-error:
-	ghost_lock_maplets();
-	switch(ret) {
-	case -EPERM:
-	case -EBUSY:
-		copy_abstraction_host(g1, g0);
-		copy_abstraction_pkvm(g1, g0);
-		break;
-	case -EFAULT:
-		copy_abstraction_pkvm(g1, g0);
-		break;
-	default:
-		ghost_assert(false);
-	}
-	ghost_unlock_maplets();
 out:
 	ghost_reg_gpr(g1, 1) = ret;
 }

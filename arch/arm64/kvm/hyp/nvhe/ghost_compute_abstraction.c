@@ -222,6 +222,9 @@ bool abstraction_equals_all(struct ghost_state *gc, struct ghost_state *gr_post,
 	} else if (gc->vms.present && !gr_post->vms.present) {
 		ghost_assert(false);
 	} else if (!gc->vms.present && gr_post->vms.present) {
+		ghost_assert(gr_pre->vms.present);
+		ret_vms = abstraction_equals_vms(gr_post->vms, gr_pre->vms);
+	} else {
 		ret_vms = true;
 	}
 
