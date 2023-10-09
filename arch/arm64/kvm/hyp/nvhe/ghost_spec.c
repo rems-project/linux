@@ -433,7 +433,7 @@ bool ghost_addr_is_allowed_memory(struct ghost_state *g, phys_addr_t phys)
 	return !(t.u.b.flags & MEMBLOCK_NOMAP);
 }
 
-static bool mapping_lookup_host_annot(const struct ghost_state *g, u64 addr, struct maplet_target *out)
+static bool lookup_mapping_host_relinquished(const struct ghost_state *g, u64 addr, struct maplet_target *out)
 {
 	// this is to allow the caller to pass a NULL pointer if they do not care
 	// about the entry
@@ -446,8 +446,9 @@ static bool mapping_lookup_host_annot(const struct ghost_state *g, u64 addr, str
 	ghost_assert(out->k == ANNOT);
 	return true;
 }
+#define is_in_mapping_host_relinquished(G, A) (lookup_mapping_host_relinquished(G, A, NULL))
 
-static bool mapping_lookup_host_shared(const struct ghost_state *g, u64 addr, struct maplet_target *out)
+static bool lookup_mapping_host_shared(const struct ghost_state *g, u64 addr, struct maplet_target *out)
 {
 	// this is to allow the caller to pass a NULL pointer if they do not care
 	// about the entry
@@ -460,8 +461,9 @@ static bool mapping_lookup_host_shared(const struct ghost_state *g, u64 addr, st
 	ghost_assert(out->k == MAPPED);
 	return true;
 }
+#define is_in_mapping_host_shared(G, A) (lookup_mapping_host_shared(G, A, NULL))
 
-static bool mapping_lookup_pkvm(const struct ghost_state *g, u64 addr, struct maplet_target *out)
+static bool lookup_mapping_host_pkvm(const struct ghost_state *g, u64 addr, struct maplet_target *out)
 {
 	// this is to allow the caller to pass a NULL pointer if they do not care
 	// about the entry
@@ -474,6 +476,7 @@ static bool mapping_lookup_pkvm(const struct ghost_state *g, u64 addr, struct ma
 	ghost_assert(out->k == MAPPED);
 	return true;
 }
+#define is_in_mapping_pkvm(G, A) (lookup_mapping_host_pkvm(G, A, NULL))
 
 
 // horrible hack: copied unchanged from mem_protect.c, just to get in scope
@@ -564,19 +567,21 @@ void compute_new_abstract_state_handle___pkvm_host_share_hyp(struct ghost_state 
 	}
 
 	// __host_check_page_state_range(addr, size, PKVM_PAGE_OWNED);
-	if ( mapping_lookup_host_annot(g0, host_addr, NULL) ) {
-		goto eperm;
+	if (is_in_mapping_host_relinquished(g0, host_addr)) {
+		ret = -EPERM;
+		goto error;
 	}
-	if ( mapping_lookup_host_shared(g0, host_addr, NULL) ) {
-		goto eperm;
+	if (is_in_mapping_host_shared(g0, host_addr)) {
+		ret = -EPERM;
+		goto error;
 	}
 	// checked in the pKVM code:
 	// do_share() -> check_share() -> hyp_ack_share() -> __hyp_check_page_state_range()
-	if ( mapping_lookup_pkvm(g0, hyp_addr, NULL) ) {
-		goto eperm;
+	if (is_in_mapping_pkvm(g0, hyp_addr)) {
+		ret = -EPERM;
+		goto error;
 	}
 
-	/* probably some more error check cases here, and what follows is just rough, to give the idea, not carefully abstracted from the code */
 	u64 host_arch_prot = arch_prot_of_prot(ghost_default_host_prot(ghost_addr_is_memory(g0, phys_addr)));
 	u64 hyp_arch_prot = host_arch_prot;
 
@@ -595,13 +600,11 @@ void compute_new_abstract_state_handle___pkvm_host_share_hyp(struct ghost_state 
 			g0->pkvm.pkvm_abstract_pgtable.mapping,
 			mapping_singleton(hyp_addr, 1, maplet_target_mapped_ext(phys_addr, PKVM_PAGE_SHARED_BORROWED, hyp_arch_prot)));
 	goto out;
-
-eperm:
+error:
 	ghost_lock_maplets();
 	copy_abstraction_host(g1, g0);
 	copy_abstraction_pkvm(g1, g0);
 	ghost_unlock_maplets();
-	ret = -EPERM;
 out:
 	ghost_reg_gpr(g1, 1) = ret;
 }
@@ -617,28 +620,34 @@ void compute_new_abstract_state_handle___pkvm_host_unshare_hyp(struct ghost_stat
 	int ret = 0;
 
 	// __host_check_page_state_range(addr, size, PKVM_PAGE_SHARED_OWNED);
-	if ( !mapping_lookup_host_shared(g0, host_addr, NULL) ) {
+	if (!is_in_mapping_host_shared(g0, host_addr)) {
 		ret = -EPERM;
 		goto error;
 	}
 
-	// check that pKVM is not using the page (otherwise EBUSY) -- we model this as an ND
+	// check that pKVM is not using the page (otherwise EBUSY)
+	// we model this as a non-deterministic choice that is determined
+	// by the return code of the pKVM implementation
 	if (impl_return_value == -EBUSY) {
 		ret = -EBUSY;
 		goto error;
 	}
 
-	// NOTE: we do not need a mapping_lookup_pkvm() corresponding to
+	// NOTE: we do not need a is_in_mapping_pkvm() corresponding to
 	//   __hyp_check_page_state_range(hyp_addr, PAGE_SIZE, PKVM_PAGE_SHARED_BORROWED)
 	// because this is a (possibly disabled) check that the host is not trying
 	// to unshare a page it did NOT previously share with pKVM.
+	// TODO BS: I don't understand why this is here. Re-read the pKVM code
+	// more carefully and adapt or remove this comment accordingly
 
-	/* add a new host shared mapping, PKVM_PAGE_SHARED_OWNED */
-	// __host_set_page_state_range(host_addr, PAGE_SIZE, PKVM_PAGE_OWNED);
+	/* remove 'host_addr' from the host shared finite map */
+	// in pKVM code: __host_set_page_state_range(host_addr, PAGE_SIZE, PKVM_PAGE_OWNED);
 	g1->host.host_abstract_pgtable_shared.mapping =
 		mapping_minus(g0->host.host_abstract_pgtable_shared.mapping, host_addr, 1);
 
 	// PKVM can non-deterministically fail to unmap the page in its page table
+	// TODO: this may not be possible now that host_share_hyp cannot do a ENOMEM
+	// TODO: check and remove this accordingly
 	if (impl_return_value == -EFAULT) {
 		ret = -EFAULT;
 		goto error;
