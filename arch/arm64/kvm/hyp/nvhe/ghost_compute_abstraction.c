@@ -391,7 +391,7 @@ void copy_abstraction_host(struct ghost_state *g_tgt, struct ghost_state *g_src)
 	ghost_assert_maplets_locked();
 	ghost_assert(g_src->host.present);
 	clear_abstraction_host(g_tgt);
-	g_tgt->host.present = g_src->host.present;
+	g_tgt->host.present = true;
 	g_tgt->host.host_abstract_pgtable_annot.root = g_src->host.host_abstract_pgtable_annot.root;
 	g_tgt->host.host_abstract_pgtable_annot.mapping = mapping_copy(g_src->host.host_abstract_pgtable_annot.mapping);
 	g_tgt->host.host_abstract_pgtable_shared.root = g_src->host.host_abstract_pgtable_shared.root;
