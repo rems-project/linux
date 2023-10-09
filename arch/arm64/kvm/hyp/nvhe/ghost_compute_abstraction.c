@@ -333,11 +333,25 @@ void clear_abstraction_regs(struct ghost_state *g)
 	g->regs.present = false;
 }
 
+void clear_abstraction_vms(struct ghost_state *g)
+{
+	int i;
+	g->vms.present = false;
+	for (i=0; i<KVM_MAX_PVMS; i++) {
+		g->vms.vms[i].present = false;
+		free_mapping(g->vms.vms[i].vm_abstract_pgtable.mapping);
+	}
+}
+
 void clear_abstraction_all(struct ghost_state *g)
 {
 	clear_abstraction_pkvm(g);
 	clear_abstraction_host(g);
 	clear_abstraction_regs(g);
+	clear_abstraction_vms(g);
+	for (int i=0; i<NR_CPUS; i++) {
+		g->loaded_hyp_vcpu[i].present = false;
+	}
 }
 
 void clear_abstraction_thread_local(void)
@@ -347,16 +361,6 @@ void clear_abstraction_thread_local(void)
 	clear_abstraction_all(this_cpu_ptr(&gs_recorded_post));
 	clear_abstraction_all(this_cpu_ptr(&gs_computed_post));
 	ghost_unlock_maplets();
-}
-
-void clear_abstraction_vms(struct ghost_state *g)
-{
-	int i;
-	g->vms.present = false;
-	for (i=0; i<KVM_MAX_PVMS; i++) {
-		g->vms.vms[i].present = false;
-		// TODO: clear vm pagetables
-	}
 }
 
 void copy_abstraction_regs(struct ghost_state *g_tgt, struct ghost_state *g_src)
