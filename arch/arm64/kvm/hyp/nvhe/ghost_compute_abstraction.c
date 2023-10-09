@@ -445,64 +445,29 @@ void record_abstraction_pkvm(struct ghost_state *g)
 /* from nvhe/pkvm.c */
 extern DEFINE_PER_CPU(struct pkvm_hyp_vcpu *, loaded_hyp_vcpu);
 
-static u64 compute_pkvm_vm_ptr_to_ghost_vm_index(struct ghost_state *g, struct pkvm_hyp_vm *vm) {
-	int i;
-	for (i=0; i<KVM_MAX_PVMS; i++) {
-		if (vm_table[i] == vm) {
-			return i;
-		}
-	}
-	BUG();
-}
-
-// static u64 compute_vm_ptr_to_vm_index(struct pkvm_hyp_vm *vm) {
-// 	u64 i;
-// 	for (i=0; i<KVM_MAX_PVMS; i++) {
-// 		if (vm_table[i] == vm) {
-// 			return i;
-// 		}
-// 	}
-// 	BUG();
-// }
-
-static struct pkvm_hyp_vm *compute_pkvm_vm_ptr_from_hyp_vcpu(struct pkvm_hyp_vcpu *vcpu) {
-	struct kvm_vcpu *kvm_vcpu = &vcpu->vcpu;
-	struct kvm *kvm = kvm_vcpu->kvm;
-	// actually the kvm instance was a hyp_vm...
-	struct pkvm_hyp_vm *vm = (struct pkvm_hyp_vm *)kvm;
-	return vm;
-}
-
-// static void ghost_handle_to_vm_index(void) {
-// 	// TODO
-// }
-
 /*
  * record the currently loaded vcpu on this core
  * this must be called after loading pkvm
- *
- * must own the pkvm lock
  */
-void record_abstraction_loaded_vcpus(struct ghost_state *g) {
-	int i;
-	ghost_assert(g->pkvm.present);
-	hyp_spin_lock(&vm_table_lock);
-	bool present = false;
+void record_abstraction_loaded_vcpu(struct ghost_state *g)
+{
+	hyp_assert_lock_held(&vm_table_lock);
+	bool loaded = false;
 	u64 vm_index = 0;
 	u64 vcpu_index = 0;
 	// TODO: I don't know if this is how to really read out an exported this_cpu variable
-	struct pkvm_hyp_vcpu *this = this_cpu_ptr(loaded_hyp_vcpu);
-	if (this != NULL) {
-		struct pkvm_hyp_vm *vm = compute_pkvm_vm_ptr_from_hyp_vcpu(this);
-		vm_index = compute_pkvm_vm_ptr_to_ghost_vm_index(g, vm);
-		present = true;
+	struct pkvm_hyp_vcpu *loaded_vcpu = this_cpu_ptr(loaded_hyp_vcpu);
+	if (loaded_vcpu) {
+		vm_index = loaded_vcpu->vcpu.kvm->arch.pkvm.handle - HANDLE_OFFSET;
+		vcpu_index = loaded_vcpu->vcpu.vcpu_idx;
+		loaded = true;
 	}
 	g->loaded_hyp_vcpu[get_cpu()] = (struct ghost_loaded_vcpu){
-		present,
-		vm_index,
-		vcpu_index,
+		.present = true,
+		.loaded = loaded,
+		.vm_index = vm_index,
+		.vcpu_index = vcpu_index,
 	};
-	hyp_spin_unlock(&vm_table_lock);
 }
 
 void record_abstraction_host(struct ghost_state *g)
@@ -549,7 +514,6 @@ void record_abstraction_all(struct ghost_state *g, struct kvm_cpu_context *ctxt)
 	record_abstraction_hyp_memory(g);
 	record_abstraction_pkvm(g);
 	record_abstraction_host(g);
-	record_abstraction_vms(g);
 	if (ctxt) {
 		record_abstraction_regs(g,ctxt);
 	}
@@ -611,8 +575,10 @@ void record_and_check_abstraction_vm_table_pre(void)
 	ghost_lock_maplets();
 	struct ghost_state *g = this_cpu_ptr(&gs_recorded_pre);
 	record_abstraction_vms(g);
+	record_abstraction_loaded_vcpu(g);
 	hyp_putsp("a-e-h: record_and_check_abstraction_vm_table_pre\n");
 	abstraction_equals_vms(g->vms, gs.vms);
+	abstraction_equals_loaded_vcpus(g, &gs);
 	ghost_unlock_maplets();
 }
 
@@ -622,6 +588,8 @@ void record_and_copy_abstraction_vm_table_post(void)
 	ghost_lock_maplets();
 	struct ghost_state *g = this_cpu_ptr(&gs_recorded_post);
 	record_abstraction_vms(g);
+	record_abstraction_loaded_vcpu(g);
 	copy_abstraction_vms(&gs, g);
+	copy_abstraction_loaded_vcpus(&gs, g);
 	ghost_unlock_maplets();
 }
