@@ -28,7 +28,7 @@ typedef u64 pkvm_vm_handle_t;
 #define HANDLE_OFFSET 0x1000
 
 // top-level spec types
-struct ghost_vcpu_index {
+struct ghost_loaded_vcpu {
 	bool present;
 	bool loaded;  // if there is a currently loaded vcpu
 	u64 vm_index; // if loaded, the VM index (in the ghost_state.vms table)
@@ -82,7 +82,7 @@ struct ghost_state {
 	struct ghost_vms vms;                  // protected by the vm_table lock
 	u64 vm_handle_offset;                  // vm handles are defined as index into vms.vms table + this offset
 	s64 hyp_physvirt_offset;               // constant after initialisation - the value of hyp_physvirt_offset
-	struct ghost_vcpu_index loaded_hyp_vcpu;  // loaded vcpu, as a VM+VCPU index pair
+	struct ghost_loaded_vcpu loaded_hyp_vcpu;  // loaded vcpu, as a VM+VCPU index pair
 };
 
 

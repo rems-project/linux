@@ -735,7 +735,7 @@ void compute_new_abstract_state_handle___pkvm_vcpu_load(struct ghost_state *g1, 
 	if (vcpu->loaded)
 		goto out;
 
-	g1->loaded_hyp_vcpu = (struct ghost_vcpu_index){
+	g1->loaded_hyp_vcpu = (struct ghost_loaded_vcpu){
 		.present = true,
 		.loaded = true,
 		.vm_index = vm_idx,
@@ -757,7 +757,7 @@ void compute_new_abstract_state_handle___pkvm_vcpu_put(struct ghost_state *g1, s
 
 	g1->vms.vms[vm_idx].vcpus[vcpu_idx].loaded = false;
 
-	g1->loaded_hyp_vcpu = (struct ghost_vcpu_index){
+	g1->loaded_hyp_vcpu = (struct ghost_loaded_vcpu){
 		.present = true,
 		.loaded = false,
 	};
