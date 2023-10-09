@@ -405,13 +405,30 @@ void copy_abstraction_vms(struct ghost_state *g_tgt, struct ghost_state *g_src)
 	ghost_assert_maplets_locked();
 	ghost_assert(g_src->vms.present);
 	clear_abstraction_vms(g_tgt);
-	g_tgt->host.present = g_src->host.present;
-	g_tgt->host.host_abstract_pgtable_annot.root = g_src->host.host_abstract_pgtable_annot.root;
-	g_tgt->host.host_abstract_pgtable_annot.mapping = mapping_copy(g_src->host.host_abstract_pgtable_annot.mapping);
-	g_tgt->host.host_abstract_pgtable_shared.root = g_src->host.host_abstract_pgtable_shared.root;
-	g_tgt->host.host_abstract_pgtable_shared.mapping = mapping_copy(g_src->host.host_abstract_pgtable_shared.mapping);
-	g_tgt->host.host_abstract_pgtable_nonannot.root = g_src->host.host_abstract_pgtable_nonannot.root;
-	g_tgt->host.host_abstract_pgtable_nonannot.mapping = mapping_copy(g_src->host.host_abstract_pgtable_nonannot.mapping);
+	for (int i=0; i<KVM_MAX_PVMS; i++) {
+		bool present = g_src->vms.vms[i].present;
+		g_tgt->vms.vms[i].present = present;
+		if (present) {
+			g_tgt->vms.vms[i].exists = g_src->vms.vms[i].exists;
+			if (g_src->vms.vms[i].exists) {
+				g_tgt->vms.vms[i].vm_abstract_pgtable.root = g_src->vms.vms[i].vm_abstract_pgtable.root;
+				g_tgt->vms.vms[i].vm_abstract_pgtable.mapping = mapping_copy(g_src->vms.vms[i].vm_abstract_pgtable.mapping);
+				g_tgt->vms.vms[i].nr_vcpus = g_src->vms.vms[i].nr_vcpus;
+				ghost_assert(g_src->vms.vms[i].nr_vcpus <= KVM_MAX_VCPUS);
+				for (int vcpu_idx=0; vcpu_idx<g_src->vms.vms[i].nr_vcpus; vcpu_idx++) {
+					g_tgt->vms.vms[i].vcpus[vcpu_idx] = g_src->vms.vms[i].vcpus[vcpu_idx];
+				}
+				g_tgt->vms.vms[i].pkvm_handle = g_src->vms.vms[i].pkvm_handle;
+			}
+		}
+	}
+}
+
+void copy_abstraction_loaded_vcpus(struct ghost_state *g_tgt, struct ghost_state *g_src)
+{
+	for (int i=0; i<NR_CPUS; i++) {
+		g_tgt->loaded_hyp_vcpu[i] = g_src->loaded_hyp_vcpu[i];
+	}
 }
 
 void record_abstraction_hyp_memory(struct ghost_state *g)
