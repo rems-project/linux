@@ -124,6 +124,12 @@ struct ghost_vms compute_abstraction_vms(void) {
 	return vms;
 }
 
+bool abstract_pgtable_equal(char *cmp_name, abstract_pgtable ap1, abstract_pgtable ap2,
+	char *ap1_name, char* ap2_name, u64 indent)
+{
+	return (   ap1.root == ap2.root
+		&& mapping_equal(ap1.mapping, ap2.mapping, cmp_name, ap1_name, ap2_name, indent));
+}
 
 bool abstraction_equals_hyp_memory(struct ghost_state *g1, struct ghost_state *g2)
 {
@@ -146,15 +152,15 @@ bool abstraction_equals_reg(struct ghost_state *g1, struct ghost_state *g2)
 bool abstraction_equals_pkvm(struct ghost_pkvm gp1, struct ghost_pkvm gp2)
 {
 	ghost_assert(gp1.present && gp2.present);
-	return mapping_equal(gp1.pkvm_abstract_pgtable.mapping, gp2.pkvm_abstract_pgtable.mapping, "abstraction_equals_pkvm", "gp1.pkvm_mapping", "gp2.pkvm_mapping", 4);
+	return abstract_pgtable_equal("abstraction_equals_pkvm", gp1.pkvm_abstract_pgtable, gp2.pkvm_abstract_pgtable, "gp1.pkvm_mapping", "gp2.pkvm_mapping", 4);
 }
 
 bool abstraction_equals_host(struct ghost_host gh1, struct ghost_host gh2)
 {
 	// note that this only checks the annot component
 	ghost_assert(gh1.present && gh2.present);
-	return (mapping_equal(gh1.host_abstract_pgtable_annot.mapping, gh2.host_abstract_pgtable_annot.mapping, "abstraction_equals_host", "gh1.host_mapping_annot", "gh2.host_mapping_annot", 4) &&
-		mapping_equal(gh1.host_abstract_pgtable_shared.mapping, gh2.host_abstract_pgtable_shared.mapping, "abstraction_equals_host", "gh1.host_mapping_shared", "gh2.host_mapping_shared", 4));
+	return (abstract_pgtable_equal("abstraction_equals_host", gh1.host_abstract_pgtable_annot, gh2.host_abstract_pgtable_annot, "gh1.host_mapping_annot", "gh2.host_mapping_annot", 4) &&
+		abstract_pgtable_equal("abstraction_equals_host", gh1.host_abstract_pgtable_shared, gh2.host_abstract_pgtable_shared, "gh1.host_mapping_shared", "gh2.host_mapping_shared", 4));
 }
 
 bool abstraction_equals_vm(struct ghost_vm vm1, struct ghost_vm vm2)
