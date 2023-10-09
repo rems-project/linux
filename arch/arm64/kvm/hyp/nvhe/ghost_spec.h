@@ -75,7 +75,7 @@ struct ghost_vms {
 };
 
 struct ghost_state {
-        mapping hyp_memory;                    // constant after initialisation - the interpretation of hyp_memory[]
+	mapping hyp_memory;                    // constant after initialisation - the interpretation of hyp_memory[]
 	struct ghost_pkvm pkvm;                // protected by the pkvm lock
 	struct ghost_host host;                // protected by the host lock
 	struct ghost_register_state regs;      // register bank
