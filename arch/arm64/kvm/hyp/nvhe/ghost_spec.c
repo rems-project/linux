@@ -679,14 +679,6 @@ void compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost_state 
 	ghost_assert(g0_vm_idx < KVM_MAX_PVMS);
 	ghost_assert(g1_vm_idx < KVM_MAX_PVMS);
 
-	// non-det failure on attempting to top-up guest memcache
-	// resolved by dispatching on the implementations return value
-	// TODO: check this case more carefully...
-	if (impl_return_value == -ENOMEM) {
-		ret = -ENOMEM;
-		goto out;
-	}
-
 	// TODO: non-protected VM/VCPUs?
 
 	// if this page is not accessible by the host, fail with -EPERM
@@ -702,20 +694,28 @@ void compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost_state 
 	}
 
 	// TODO: other error cases
-	ret = 0;
-
-	u64 guest_arch_prot = arch_prot_of_prot(ghost_default_host_prot(ghost_addr_is_memory(g0, phys_addr)));
-
 	g1->host.host_abstract_pgtable_annot.mapping =
 		mapping_plus(g0->host.host_abstract_pgtable_annot.mapping,
 		             mapping_singleton(host_virt, 1, maplet_target_annot(PKVM_ID_GUEST)));
 
+	// non-det failure on attempting to top-up guest memcache
+	// resolved by dispatching on the implementations return value
+	// TODO: check this case more carefully...
+	if (impl_return_value == -ENOMEM) {
+		ret = -ENOMEM;
+		goto out;
+	}
+
+	u64 guest_arch_prot = arch_prot_of_prot(ghost_default_host_prot(ghost_addr_is_memory(g0, phys_addr)));
 	g1->vms.vms[g1_vm_idx].vm_abstract_pgtable.mapping =
 		mapping_plus(g0->vms.vms[g0_vm_idx].vm_abstract_pgtable.mapping,
 		             mapping_singleton(guest_virt, 1, maplet_target_mapped_ext(phys_addr, PKVM_PAGE_OWNED, guest_arch_prot)));
+	ret = 0;
+
 out:
 	ghost_reg_gpr(g1, 1) = ret;
 }
+
 void compute_new_abstract_state_handle___pkvm_vcpu_load(struct ghost_state *g1, struct ghost_state *g0, u64 impl_return_value) {
 	int this_cpu = get_cpu();
 	pkvm_handle_t vm_handle = ghost_reg_gpr(g0, 1);
@@ -748,6 +748,7 @@ void compute_new_abstract_state_handle___pkvm_vcpu_load(struct ghost_state *g1, 
 	// record in the ghost state of the vcpu 'vcpu_idx' that is has been loaded
 	u64 g1_vm_idx = ghost_vm_idx_from_handle(g1, vm_handle);
 	ghost_assert(g1_vm_idx < KVM_MAX_PVMS);
+
 	g1->vms.vms[g1_vm_idx].vcpus[vcpu_idx].loaded = true;
 
 	// record in the ghost state that the current CPU has loaded
@@ -759,6 +760,7 @@ void compute_new_abstract_state_handle___pkvm_vcpu_load(struct ghost_state *g1, 
 		.vcpu_index = vcpu_idx,
 	};
 out:
+	/* NOTE: vcpu_load does not write back to any general purpose register */
 	return;
 }
 
@@ -778,6 +780,7 @@ void compute_new_abstract_state_handle___pkvm_vcpu_put(struct ghost_state *g1, s
 		.loaded = false,
 	};
 out:
+	/* NOTE: vcpu_put does not write back to any general purpose register */
 	return;
 }
 
