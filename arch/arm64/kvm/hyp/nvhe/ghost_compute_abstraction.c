@@ -89,7 +89,10 @@ struct ghost_host compute_abstraction_host(void)
 }
 
 u64 __ghost_vm_idx_from_handle(struct ghost_vms *vms, pkvm_handle_t handle) {
+	ghost_assert_vms_locked();
 	ghost_assert(vms->present);
+
+	u64 free_slot = KVM_MAX_PVMS;
 
 	for (int i=0; i<KVM_MAX_PVMS; i++) {
 		struct ghost_vm *this = &vms->vms[i];
@@ -97,12 +100,12 @@ u64 __ghost_vm_idx_from_handle(struct ghost_vms *vms, pkvm_handle_t handle) {
 		if (this->exists && this->pkvm_handle == handle) {
 			return i;
 		} else if (!this->exists) {
-			return i;
+			free_slot = i;
 		}
 	}
 
 	// out-of-range index is an error
-	return KVM_MAX_PVMS;
+	return free_slot;
 }
 
 struct ghost_vm *__ghost_vm_from_handle(struct ghost_vms *vms, pkvm_handle_t handle) {
