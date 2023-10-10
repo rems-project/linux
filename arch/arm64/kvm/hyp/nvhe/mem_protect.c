@@ -49,10 +49,16 @@ static void guest_lock_component(struct pkvm_hyp_vm *vm)
 {
 	hyp_spin_lock(&vm->lock);
 	current_vm = vm;
+	// GHOST
+	record_and_check_abstraction_vm_pre(vm);
+	// /GHOST
 }
 
 static void guest_unlock_component(struct pkvm_hyp_vm *vm)
 {
+	// GHOST
+	record_and_copy_abstraction_vm_post(vm);
+	// /GHOST
 	current_vm = NULL;
 	hyp_spin_unlock(&vm->lock);
 }

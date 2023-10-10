@@ -87,9 +87,14 @@ struct ghost_state {
 /// or if none exists, a free slot that it can be inserted into.
 struct ghost_vm *ghost_vm_from_handle(struct ghost_state *g, pkvm_handle_t handle);
 u64 ghost_vm_idx_from_handle(struct ghost_state *g, pkvm_handle_t handle);
+// TODO: make a nice abstraction above `g->vms.vms` so never use indexes or arrays in interface
 
 /// Checks that `handle` is a valid handle of a VM in the vms table.
 bool ghost_vm_is_valid_handle(struct ghost_state *g, pkvm_handle_t handle);
+
+void ghost_lock_vms(void);
+void ghost_unlock_vms(void);
+void ghost_assert_vms_locked(void);
 
 //
 // struct args_host_hvc_pkvm_host_share_hyp {
