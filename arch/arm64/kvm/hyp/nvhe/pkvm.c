@@ -31,7 +31,9 @@ unsigned int kvm_arm_vmid_bits;
  * The currently loaded hyp vCPU for each physical CPU. Used only when
  * protected KVM is enabled, but for both protected and non-protected VMs.
  * 
+ * GHOST
  * BS: this is non-static to allow ghost code to read it
+ * /GHOST
  */
 /*static*/ DEFINE_PER_CPU(struct pkvm_hyp_vcpu *, loaded_hyp_vcpu);
 
@@ -246,7 +248,9 @@ static pkvm_handle_t idx_to_vm_handle(unsigned int idx)
  * to 'vm_table' and 'nr_table_entries' as well as reads and writes to
  * 'last_hyp_vcpu_lookup'.
  *
+ * GHOST
  * BS: this is non-static so the ghost code can use it
+ * /GHOST
  */
 /*static*/ DEFINE_HYP_SPINLOCK(vm_table_lock);
 
@@ -270,7 +274,9 @@ static void vm_table_unlock_component(void)
  * The table of VM entries for protected VMs in hyp.
  * Allocated at hyp initialization and setup.
  *
+ * GHOST
  * BS: this is non-static so the ghost code can use it
+ * /GHOST
  */
 /*static*/ struct pkvm_hyp_vm **vm_table;
 
