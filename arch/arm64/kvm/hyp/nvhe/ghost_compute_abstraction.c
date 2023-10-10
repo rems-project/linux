@@ -513,6 +513,7 @@ void record_abstraction_loaded_vcpu(struct ghost_state *g)
 		vcpu_index = loaded_vcpu->vcpu.vcpu_idx;
 		loaded = true;
 	}
+	// TODO: get_cpu() causes a linker error "undefined reference to `__kvm_nvhe_cpu_number'"
 	g->loaded_hyp_vcpu[get_cpu()] = (struct ghost_loaded_vcpu){
 		.present = true,
 		.loaded = loaded,
