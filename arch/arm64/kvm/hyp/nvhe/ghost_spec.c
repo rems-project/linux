@@ -666,22 +666,53 @@ void compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost_state 
 
 	// previous vcpu_load must have been done
 	int this_cpu = get_cpu();
-	ghost_assert(g0->loaded_hyp_vcpu[this_cpu].present);
+	struct ghost_loaded_vcpu hyp_loaded_vcpu = g0->loaded_hyp_vcpu[this_cpu];
+	ghost_assert(hyp_loaded_vcpu.present);
 	// `hyp_vcpu = pkvm_get_loaded_hyp_vcpu(); if (!hyp_vcpu) goto out;`
-	if (!g0->loaded_hyp_vcpu[this_cpu].loaded) {
+	if (!hyp_loaded_vcpu.loaded) {
 		ret = -EINVAL;
 		goto out;
 	}
 
-	// TODO: other error cases
+	u64 g0_vm_idx = ghost_vm_idx_from_handle(g0, hyp_loaded_vcpu.vm_handle);
+	u64 g1_vm_idx = ghost_vm_idx_from_handle(g1, hyp_loaded_vcpu.vm_handle);
+	ghost_assert(g0_vm_idx < KVM_MAX_PVMS);
+	ghost_assert(g1_vm_idx < KVM_MAX_PVMS);
 
+	// non-det failure on attempting to top-up guest memcache
+	// resolved by dispatching on the implementations return value
+	// TODO: check this case more carefully...
+	if (impl_return_value == -ENOMEM) {
+		ret = -ENOMEM;
+		goto out;
+	}
+
+	// TODO: non-protected VM/VCPUs?
+
+	// if this page is not accessible by the host, fail with -EPERM
+	if (lookup_mapping_host_relinquished(g0, host_virt, NULL)) {
+		ret = -EPERM;
+		goto out;
+	}
+
+	// if this page is shared with/from the host, cannot give it away, so fail with -EPERM
+	if (lookup_mapping_host_shared(g0, host_virt, NULL)) {
+		ret = -EPERM;
+		goto out;
+	}
+
+	// TODO: other error cases
 	ret = 0;
+
+	u64 guest_arch_prot = arch_prot_of_prot(ghost_default_host_prot(ghost_addr_is_memory(g0, phys_addr)));
 
 	g1->host.host_abstract_pgtable_annot.mapping =
 		mapping_plus(g0->host.host_abstract_pgtable_annot.mapping,
 		             mapping_singleton(host_virt, 1, maplet_target_annot(PKVM_ID_GUEST)));
 
-	// TODO: allocate in guest concrete pgtable
+	g1->vms.vms[g1_vm_idx].vm_abstract_pgtable.mapping =
+		mapping_plus(g0->vms.vms[g0_vm_idx].vm_abstract_pgtable.mapping,
+		             mapping_singleton(guest_virt, 1, maplet_target_mapped_ext(phys_addr, PKVM_PAGE_OWNED, guest_arch_prot)));
 out:
 	ghost_reg_gpr(g1, 1) = ret;
 }
