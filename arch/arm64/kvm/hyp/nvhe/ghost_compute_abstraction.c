@@ -476,7 +476,9 @@ void copy_abstraction_vms(struct ghost_state *g_tgt, struct ghost_state *g_src)
 void copy_abstraction_loaded_vcpus(struct ghost_state *g_tgt, struct ghost_state *g_src)
 {
 	for (int i=0; i<NR_CPUS; i++) {
-		g_tgt->loaded_hyp_vcpu[i] = g_src->loaded_hyp_vcpu[i];
+		if (g_src->loaded_hyp_vcpu[i].present) {
+			g_tgt->loaded_hyp_vcpu[i] = g_src->loaded_hyp_vcpu[i];
+		}
 	}
 }
 
@@ -500,13 +502,13 @@ extern DEFINE_PER_CPU(struct pkvm_hyp_vcpu *, loaded_hyp_vcpu);
  */
 void record_abstraction_loaded_vcpu(struct ghost_state *g)
 {
-	hyp_assert_lock_held(&vm_table_lock);
 	bool loaded = false;
 	pkvm_handle_t vm_handle = 0;
 	u64 vcpu_index = 0;
-	// TODO: I don't know if this is how to really read out an exported this_cpu variable
 	struct pkvm_hyp_vcpu *loaded_vcpu = this_cpu_ptr(loaded_hyp_vcpu);
 	if (loaded_vcpu) {
+		// Now we dereference the vcpu struct, even though we're not protected by a lock
+		// this is somehow ok?
 		vm_handle = loaded_vcpu->vcpu.kvm->arch.pkvm.handle;
 		vcpu_index = loaded_vcpu->vcpu.vcpu_idx;
 		loaded = true;
@@ -617,7 +619,25 @@ void record_and_copy_abstraction_host_post(void)
 	ghost_unlock_maplets();
 }
 
-void record_and_check_abstraction_vm_table_pre(void)
+void ghost_record_and_check_loaded_hyp_vcpu_pre(void)
+{
+	ghost_lock_maplets();
+	struct ghost_state *g = this_cpu_ptr(&gs_recorded_post);
+	record_abstraction_loaded_vcpu(g);
+	ghost_spec_assert(abstraction_equals_loaded_vcpus(g, &gs));
+	ghost_unlock_maplets();
+}
+
+void ghost_record_and_copy_loaded_hyp_vcpu_post(void)
+{
+	ghost_lock_maplets();
+	struct ghost_state *g = this_cpu_ptr(&gs_recorded_post);
+	record_abstraction_loaded_vcpu(g);
+	copy_abstraction_loaded_vcpus(&gs, g);
+	ghost_unlock_maplets();
+}
+
+void record_and_check_abstraction_vm_pre(void)
 {
 	hyp_putsp("record_and_check_abstraction_vm_table_pre\n");
 	ghost_lock_maplets();
@@ -630,7 +650,7 @@ void record_and_check_abstraction_vm_table_pre(void)
 	ghost_unlock_maplets();
 }
 
-void record_and_copy_abstraction_vm_table_post(void)
+void record_and_copy_abstraction_vm_post(void)
 {
 	hyp_putsp("record_and_copy_abstraction_vm_table_post\n");
 	ghost_lock_maplets();

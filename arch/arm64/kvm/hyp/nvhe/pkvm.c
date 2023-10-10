@@ -257,17 +257,11 @@ static pkvm_handle_t idx_to_vm_handle(unsigned int idx)
 static void vm_table_lock_component(void)
 {
 	hyp_spin_lock(&vm_table_lock);
-	// GHOST
-	record_and_check_abstraction_vm_table_pre();
-	// /GHOST
 }
 
 static void vm_table_unlock_component(void)
 {
-	record_and_copy_abstraction_vm_table_post();
-	// GHOST
 	hyp_spin_unlock(&vm_table_lock);
-	// /GHOST
 }
 
 /*
@@ -310,6 +304,9 @@ struct pkvm_hyp_vcpu *pkvm_load_hyp_vcpu(pkvm_handle_t handle,
 		return NULL;
 
 	vm_table_lock_component();
+	// GHOST
+	record_and_check_abstraction_loaded_hyp_vcpu_pre();
+	// /GHOST
 	hyp_vm = get_vm_by_handle(handle);
 	if (!hyp_vm || hyp_vm->nr_vcpus <= vcpu_idx)
 		goto unlock;
@@ -329,6 +326,10 @@ unlock:
 
 	if (hyp_vcpu)
 		__this_cpu_write(loaded_hyp_vcpu, hyp_vcpu);
+
+	// GHOST
+	record_and_copy_abstraction_loaded_hyp_vcpu_post();
+	// /GHOST
 	return hyp_vcpu;
 }
 
@@ -337,8 +338,14 @@ void pkvm_put_hyp_vcpu(struct pkvm_hyp_vcpu *hyp_vcpu)
 	struct pkvm_hyp_vm *hyp_vm = pkvm_hyp_vcpu_to_hyp_vm(hyp_vcpu);
 
 	vm_table_lock_component();
+	// GHOST
+	record_and_check_abstraction_loaded_hyp_vcpu_pre();
+	// /GHOST
 	hyp_vcpu->loaded_hyp_vcpu = NULL;
 	__this_cpu_write(loaded_hyp_vcpu, NULL);
+	// GHOST
+	record_and_copy_abstraction_loaded_hyp_vcpu_post();
+	// /GHOST
 	hyp_page_ref_dec(hyp_virt_to_page(hyp_vm));
 	vm_table_unlock_component();
 }
