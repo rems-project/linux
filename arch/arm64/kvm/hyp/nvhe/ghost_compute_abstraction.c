@@ -665,7 +665,7 @@ void record_and_copy_abstraction_host_post(void)
 	ghost_unlock_maplets();
 }
 
-void record_and_check_loaded_hyp_vcpu_pre(void)
+void record_and_check_abstraction_loaded_hyp_vcpu_pre(void)
 {
 	ghost_lock_maplets();
 	struct ghost_state *g = this_cpu_ptr(&gs_recorded_post);
@@ -674,7 +674,7 @@ void record_and_check_loaded_hyp_vcpu_pre(void)
 	ghost_unlock_maplets();
 }
 
-void record_and_copy_loaded_hyp_vcpu_post(void)
+void record_and_copy_abstraction_loaded_hyp_vcpu_post(void)
 {
 	ghost_lock_maplets();
 	struct ghost_state *g = this_cpu_ptr(&gs_recorded_post);
