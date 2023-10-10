@@ -620,7 +620,7 @@ void record_and_copy_abstraction_host_post(void)
 	ghost_unlock_maplets();
 }
 
-void ghost_record_and_check_loaded_hyp_vcpu_pre(void)
+void record_and_check_loaded_hyp_vcpu_pre(void)
 {
 	ghost_lock_maplets();
 	struct ghost_state *g = this_cpu_ptr(&gs_recorded_post);
@@ -629,7 +629,7 @@ void ghost_record_and_check_loaded_hyp_vcpu_pre(void)
 	ghost_unlock_maplets();
 }
 
-void ghost_record_and_copy_loaded_hyp_vcpu_post(void)
+void record_and_copy_loaded_hyp_vcpu_post(void)
 {
 	ghost_lock_maplets();
 	struct ghost_state *g = this_cpu_ptr(&gs_recorded_post);
@@ -672,7 +672,7 @@ u64 ghost_vm_idx_from_handle(struct ghost_state *g, pkvm_handle_t handle) {
 	return __ghost_vm_idx_from_handle(&g->vms, handle);
 }
 
-bool ghost_is_valid_vm_handle(struct ghost_state *g, pkvm_handle_t handle)
+bool ghost_vm_is_valid_handle(struct ghost_state *g, pkvm_handle_t handle)
 {
 	ghost_assert(g->vms.present);
 	struct ghost_vm *vm = ghost_vm_from_handle(g, handle);
