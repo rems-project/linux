@@ -406,36 +406,9 @@ DEFINE_PER_CPU(struct ghost_state, gs_computed_post);
 //
 ////}
 //
-struct ghost_vm *ghost_vm_from_handle(struct ghost_state *g, pkvm_vm_handle_t handle) {
-	u64 vm_idx = handle - g->vm_handle_offset;
-	ghost_assert(g->vms.present);
-	if (vm_idx > KVM_MAX_PVMS)
-		return NULL;
-
-	ghost_assert(g->vms.vms[vm_idx].present);
-	struct ghost_vm *vm = &g->vms.vms[vm_idx];
-	return vm;
-}
-
-struct ghost_vcpu *ghost_vcpu_from_handle(struct ghost_state *g, pkvm_vm_handle_t handle, u64 vcpu_idx) {
-	u64 vm_idx = handle - g->vm_handle_offset;
-	ghost_assert(g->vms.present);
-	ghost_assert(g->vms.vms[vm_idx].present);
-
-	struct ghost_vm *vm = ghost_vm_from_handle(g, handle);
-	if (!vm)
-		return NULL;
-
-	if (vcpu_idx > KVM_MAX_VCPUS)
-		return NULL;
-
-	struct ghost_vcpu *vcpu = &vm->vcpus[vcpu_idx];
-	return vcpu;
-}
 
 // adapted from memory.h to make it a pure function of the ghost state rather than depend on the impl global hyp_phys_virt_offset
 #define ghost__hyp_va(g,phys)	((void *)((phys_addr_t)(phys) - g->hyp_physvirt_offset))
-
 
 // adapted from mem_protect.c to use the hyp_memory map
 bool ghost_addr_is_memory(struct ghost_state *g, phys_addr_t phys)
@@ -712,47 +685,29 @@ void compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost_state 
 out:
 	ghost_reg_gpr(g1, 1) = ret;
 }
-
-static unsigned int ghost_vm_handle_to_idx(struct ghost_state *g, pkvm_handle_t handle)
-{
-	return handle - g->vm_handle_offset;
-}
-
-static bool ghost_is_valid_vm_handle(struct ghost_state *g, pkvm_handle_t handle)
-{
-	// NOTE: if handle < vm_handle_offset then the subtraction in
-	// the body of ghost_vm_handle_to_idx() will have wrapped and
-	// the returned index is very big, so here serendipitously
-	// return false.
-	return ghost_vm_handle_to_idx(g, handle) < KVM_MAX_PVMS;
-}
-
 void compute_new_abstract_state_handle___pkvm_vcpu_load(struct ghost_state *g1, struct ghost_state *g0, u64 impl_return_value) {
 	int this_cpu = get_cpu();
 	pkvm_handle_t vm_handle = ghost_reg_gpr(g0, 1);
 	unsigned int vcpu_idx = ghost_reg_gpr(g0, 2);
 	
-	u64 vm_idx = ghost_vm_handle_to_idx(g0, vm_handle);
-
 	ghost_assert(g0->loaded_hyp_vcpu[this_cpu].present);
 	// if another vcpu is already loaded on this CPU, then do nothing
 	if (g0->loaded_hyp_vcpu[this_cpu].loaded)
 		goto out;
 
-	if (!ghost_is_valid_vm_handle(g0, vm_handle))
+	// if the vm is not present in the vm_table[] array, then do nothing
+	if (!ghost_vm_is_valid_handle(g0, vm_handle))
 		goto out;
 
 	struct ghost_vm *vm = ghost_vm_from_handle(g0, vm_handle);
-	// if the vm is not present in the vm_table[] array, then do nothing
-	if (!vm->exists)
-		goto out;
+	ghost_assert(vm && vm->exists);  // just checked it was valid
 
+	// if loading non-existent vcpu, do nothing.
 	if (vcpu_idx > vm->nr_vcpus)
 		goto out;
 
-	ghost_assert(vcpu_idx < KVM_MAX_VCPUS);
 	struct ghost_vcpu *vcpu = &vm->vcpus[vcpu_idx];
-
+	ghost_assert(vcpu_idx < KVM_MAX_VCPUS);
 	ghost_assert(vcpu->exists);
 
 	// if the vcpu is already loaded (potentially in another CPU), then do nothing
@@ -760,14 +715,16 @@ void compute_new_abstract_state_handle___pkvm_vcpu_load(struct ghost_state *g1, 
 		goto out;
 
 	// record in the ghost state of the vcpu 'vcpu_idx' that is has been loaded
-	g1->vms.vms[vm_idx].vcpus[vcpu_idx].loaded = true;
+	u64 g1_vm_idx = ghost_vm_idx_from_handle(g1, vm_handle);
+	ghost_assert(g1_vm_idx < KVM_MAX_PVMS);
+	g1->vms.vms[g1_vm_idx].vcpus[vcpu_idx].loaded = true;
 
 	// record in the ghost state that the current CPU has loaded
 	// the vcpu 'vcpu_idx' of vm 'vm_idx'
 	g1->loaded_hyp_vcpu[this_cpu] = (struct ghost_loaded_vcpu){
 		.present = true,
 		.loaded = true,
-		.vm_index = vm_idx,
+		.vm_handle = vm_handle,
 		.vcpu_index = vcpu_idx,
 	};
 out:
@@ -779,10 +736,11 @@ void compute_new_abstract_state_handle___pkvm_vcpu_put(struct ghost_state *g1, s
 	if (!g0->loaded_hyp_vcpu[this_cpu].loaded)
 		goto out;
 
-	u64 vm_idx = g0->loaded_hyp_vcpu[this_cpu].vm_index;
+	pkvm_handle_t vm_handle = g0->loaded_hyp_vcpu[this_cpu].vm_handle;
 	u64 vcpu_idx = g0->loaded_hyp_vcpu[this_cpu].vcpu_index;
 
-	g1->vms.vms[vm_idx].vcpus[vcpu_idx].loaded = false;
+	u64 g1_vm_idx = ghost_vm_idx_from_handle(g1, vm_handle);
+	g1->vms.vms[g1_vm_idx].vcpus[vcpu_idx].loaded = false;
 
 	g1->loaded_hyp_vcpu[this_cpu] = (struct ghost_loaded_vcpu){
 		.present = true,
@@ -799,11 +757,15 @@ void compute_new_abstract_state_handle___pkvm_init_vm(struct ghost_state *g1, st
 		goto out;
 
 	u64 handle = impl_return_value;
-	u64 idx = handle - g0->vm_handle_offset;
+	u64 idx = ghost_vm_idx_from_handle(g1, handle);
+
+	// TODO: error case on init'ing too many VMs?
+	if (idx >= KVM_MAX_PVMS)
+		goto out;
 
 	g1->vms.present = true;
 	g1->vms.vms[idx] = (struct ghost_vm) {
-		.present = true,
+		.exists = true,
 		.pkvm_handle = handle,
 		// TODO: init pagetable and vcpus
 	};

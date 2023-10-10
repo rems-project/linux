@@ -19,10 +19,6 @@
 
 // assertion to check the spec
 #define ghost_spec_assert(c) BUG_ON(!(c));
-
-// an opaque pKVM VM handle
-typedef u64 pkvm_vm_handle_t;
-
 // from nvhe/pkvm.c
 // the vm handles are vm table indexes + HANDLE_OFFSET
 #define HANDLE_OFFSET 0x1000
@@ -31,7 +27,7 @@ typedef u64 pkvm_vm_handle_t;
 struct ghost_loaded_vcpu {
 	bool present;
 	bool loaded;  // if there is a currently loaded vcpu
-	u64 vm_index; // if loaded, the VM index (in the ghost_state.vms table)
+	pkvm_handle_t vm_handle; // if loaded, the VM handle
 	u64 vcpu_index; // if loaded, the vcpu index within the VM
 };
 
@@ -42,12 +38,11 @@ struct ghost_vcpu {
 
 
 struct ghost_vm {                            // abstraction of state protected by each VM lock
-	bool present;
 	bool exists; // the vm is referenced in the vm_table[] array
 	abstract_pgtable vm_abstract_pgtable;                  // the interpretation of the current concrete mapping
 	u64 nr_vcpus;
 	struct ghost_vcpu vcpus[KVM_MAX_VCPUS];     // table of vcpus, only `present` up to nr_vcpus, NOTE: ordered same as real pkvm vm.hyp_vcpu table
-	pkvm_vm_handle_t pkvm_handle; // pKVM-assigned handle
+	pkvm_handle_t pkvm_handle; // pKVM-assigned handle
 };
 
 struct ghost_host {                          // abstraction of state protected by the host lock
@@ -72,7 +67,7 @@ struct ghost_register_state {
 /// technically not owed by the pkvm lock(!)
 struct ghost_vms {
 	bool present;
-	struct ghost_vm vms[KVM_MAX_PVMS];     // protected by each VM lock, NOTE: ordered the same as pkvm's own vm_table.
+	struct ghost_vm vms[KVM_MAX_PVMS];     // protected by each VM lock, NOTE: unordered. Use the ghost_vm_* index functions
 };
 
 struct ghost_state {
@@ -81,7 +76,6 @@ struct ghost_state {
 	struct ghost_host host;                // protected by the host lock
 	struct ghost_register_state regs;      // register bank
 	struct ghost_vms vms;                  // protected by the vm_table lock
-	u64 vm_handle_offset;                  // vm handles are defined as index into vms.vms table + this offset
 	s64 hyp_physvirt_offset;               // constant after initialisation - the value of hyp_physvirt_offset
 	struct ghost_loaded_vcpu loaded_hyp_vcpu[NR_CPUS];  // loaded vcpu, as a VM+VCPU index pair
 };
@@ -89,12 +83,13 @@ struct ghost_state {
 
 // some helper functions
 
-/// Get the ghost vm from the pkvm-supplied vm handle
-struct ghost_vm *ghost_vm_from_handle(struct ghost_state *g, pkvm_vm_handle_t handle);
+/// Returns a reference to the ghost_vm struct in the ghost vms table with that handle
+/// or if none exists, a free slot that it can be inserted into.
+struct ghost_vm *ghost_vm_from_handle(struct ghost_state *g, pkvm_handle_t handle);
+u64 ghost_vm_idx_from_handle(struct ghost_state *g, pkvm_handle_t handle);
 
-/// Get the ghost vcpu from the pkvm-supplied vm handle and vcpu index within that vm
-struct ghost_vcpu *ghost_vcpu_from_handle(struct ghost_state *g, pkvm_vm_handle_t handle, u64 vcpu_index);
-
+/// Checks that `handle` is a valid handle of a VM in the vms table.
+bool ghost_vm_is_valid_handle(struct ghost_state *g, pkvm_handle_t handle);
 
 //
 // struct args_host_hvc_pkvm_host_share_hyp {

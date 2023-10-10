@@ -88,13 +88,43 @@ struct ghost_host compute_abstraction_host(void)
 	return gh;
 }
 
+u64 __ghost_vm_idx_from_handle(struct ghost_vms *vms, pkvm_handle_t handle) {
+	ghost_assert(vms->present);
+
+	for (int i=0; i<KVM_MAX_PVMS; i++) {
+		struct ghost_vm *this = &vms->vms[i];
+
+		if (this->exists && this->pkvm_handle == handle) {
+			return i;
+		} else if (!this->exists) {
+			return i;
+		}
+	}
+
+	// out-of-range index is an error
+	return KVM_MAX_PVMS;
+}
+
+struct ghost_vm *__ghost_vm_from_handle(struct ghost_vms *vms, pkvm_handle_t handle) {
+	ghost_assert(vms->present);
+	u64 i = __ghost_vm_idx_from_handle(vms, handle);
+
+	if (i < KVM_MAX_PVMS)
+		return &vms->vms[i];
+
+	return NULL;
+}
+
+static pkvm_handle_t __vm_table_idx_to_vm_handle(u64 idx) {
+	return idx + HANDLE_OFFSET;  // see pkvm.c idx_to_vm_handle
+}
+
 /// from a vm_table index compute the abstract ghost VM
 struct ghost_vm compute_abstraction_vm(u64 idx) {
 	int i;
 	struct pkvm_hyp_vm *vm = vm_table[idx];
 	struct ghost_vm abstract_vm;
-	abstract_vm.present = true;
-	abstract_vm.pkvm_handle = idx + HANDLE_OFFSET;  // see pkvm.c idx_to_vm_handle
+	abstract_vm.pkvm_handle = __vm_table_idx_to_vm_handle(idx);
 	if (vm) {
 		abstract_vm.exists = true;
 		abstract_vm.nr_vcpus = vm->nr_vcpus;
@@ -120,10 +150,13 @@ struct ghost_vms compute_abstraction_vms(void) {
 	struct ghost_vms vms = { 0 };
 	int i;
 	for (i=0; i<KVM_MAX_PVMS; i++) {
-		if (vm_table[i]) {
-			vms.vms[i] = compute_abstraction_vm(i);
-		} else {
-			vms.vms[i].present = false;
+		struct ghost_vm vm = compute_abstraction_vm(i);
+
+		if (vm.exists) {
+			// append to list of ghost VMs
+			struct ghost_vm *slot = __ghost_vm_from_handle(&vms, vm.pkvm_handle);
+			ghost_assert(!slot->exists);
+			*slot = vm;
 		}
 	}
 	vms.present = true;
@@ -173,7 +206,7 @@ bool abstraction_equals_loaded_vcpu(struct ghost_loaded_vcpu loaded_vcpu1, struc
 {
 	ghost_assert(loaded_vcpu1.present && loaded_vcpu2.present);
 	if (loaded_vcpu1.loaded == loaded_vcpu2.loaded) {
-		return    loaded_vcpu1.vm_index == loaded_vcpu2.vm_index
+		return    loaded_vcpu1.vm_handle == loaded_vcpu2.vm_handle
 		       && loaded_vcpu1.vcpu_index == loaded_vcpu2.vcpu_index;
 	} else {
 	  return false;
@@ -204,7 +237,7 @@ bool abstraction_equals_vcpu(struct ghost_vcpu vcpu1, struct ghost_vcpu vcpu2)
 
 bool abstraction_equals_vm(struct ghost_vm vm1, struct ghost_vm vm2)
 {
-	ghost_assert(vm1.present && vm2.present);
+	// an unused VM slot (not exists) is never equal to a used VM
 	if (vm1.exists != vm2.exists)
 		return false;
 	
@@ -222,17 +255,35 @@ bool abstraction_equals_vm(struct ghost_vm vm1, struct ghost_vm vm2)
 		&& vm1.pkvm_handle == vm2.pkvm_handle);
 }
 
-bool abstraction_equals_vms(struct ghost_vms vms1, struct ghost_vms vms2)
-{
-	bool equal = true;
+bool __abstraction_vm_contained_in(struct ghost_vm *vm, struct ghost_vms *vms) {
+	struct ghost_vm *vm2 = __ghost_vm_from_handle(vms, vm->pkvm_handle);
+
+	if (vm2) {
+		return abstraction_equals_vm(*vm, *vm2);
+	} else {
+		return false;
+	}
+}
+
+bool __abstraction_vm_all_contained_in(struct ghost_vms *vms1, struct ghost_vms *vms2) {
+	bool all_found;
 	int i;
-	ghost_assert(vms1.present && vms2.present);
 	for (i=0; i<KVM_MAX_PVMS; i++) {
-		if (vms1.vms[i].present || vms2.vms[i].present) {
-			equal = equal && abstraction_equals_vm(vms1.vms[i], vms2.vms[i]);
+		struct ghost_vm *vm1 = &vms1->vms[i];
+		if (vm1->exists) {
+			all_found = all_found && __abstraction_vm_contained_in(vm1, vms2);
 		}
 	}
-	return equal;
+	return all_found;
+}
+
+bool abstraction_equals_vms(struct ghost_vms vms1, struct ghost_vms vms2)
+{
+	ghost_assert(vms1.present && vms2.present);
+	return (
+		   __abstraction_vm_all_contained_in(&vms1, &vms2)
+		&& __abstraction_vm_all_contained_in(&vms2, &vms1)
+	);
 }
 
 
@@ -339,8 +390,9 @@ void clear_abstraction_vms(struct ghost_state *g)
 	int i;
 	g->vms.present = false;
 	for (i=0; i<KVM_MAX_PVMS; i++) {
-		g->vms.vms[i].present = false;
-		free_mapping(g->vms.vms[i].vm_abstract_pgtable.mapping);
+		if (g->vms.vms[i].exists)
+			free_mapping(g->vms.vms[i].vm_abstract_pgtable.mapping);
+		g->vms.vms[i].exists = false;
 	}
 }
 
@@ -406,20 +458,17 @@ void copy_abstraction_vms(struct ghost_state *g_tgt, struct ghost_state *g_src)
 	ghost_assert(g_src->vms.present);
 	clear_abstraction_vms(g_tgt);
 	for (int i=0; i<KVM_MAX_PVMS; i++) {
-		bool present = g_src->vms.vms[i].present;
-		g_tgt->vms.vms[i].present = present;
-		if (present) {
-			g_tgt->vms.vms[i].exists = g_src->vms.vms[i].exists;
-			if (g_src->vms.vms[i].exists) {
-				g_tgt->vms.vms[i].vm_abstract_pgtable.root = g_src->vms.vms[i].vm_abstract_pgtable.root;
-				g_tgt->vms.vms[i].vm_abstract_pgtable.mapping = mapping_copy(g_src->vms.vms[i].vm_abstract_pgtable.mapping);
-				g_tgt->vms.vms[i].nr_vcpus = g_src->vms.vms[i].nr_vcpus;
-				ghost_assert(g_src->vms.vms[i].nr_vcpus <= KVM_MAX_VCPUS);
-				for (int vcpu_idx=0; vcpu_idx<g_src->vms.vms[i].nr_vcpus; vcpu_idx++) {
-					g_tgt->vms.vms[i].vcpus[vcpu_idx] = g_src->vms.vms[i].vcpus[vcpu_idx];
-				}
-				g_tgt->vms.vms[i].pkvm_handle = g_src->vms.vms[i].pkvm_handle;
+		bool exists = g_src->vms.vms[i].exists;
+		g_tgt->vms.vms[i].exists = exists;
+		if (exists) {
+			g_tgt->vms.vms[i].vm_abstract_pgtable.root = g_src->vms.vms[i].vm_abstract_pgtable.root;
+			g_tgt->vms.vms[i].vm_abstract_pgtable.mapping = mapping_copy(g_src->vms.vms[i].vm_abstract_pgtable.mapping);
+			g_tgt->vms.vms[i].nr_vcpus = g_src->vms.vms[i].nr_vcpus;
+			ghost_assert(g_src->vms.vms[i].nr_vcpus <= KVM_MAX_VCPUS);
+			for (int vcpu_idx=0; vcpu_idx<g_src->vms.vms[i].nr_vcpus; vcpu_idx++) {
+				g_tgt->vms.vms[i].vcpus[vcpu_idx] = g_src->vms.vms[i].vcpus[vcpu_idx];
 			}
+			g_tgt->vms.vms[i].pkvm_handle = g_src->vms.vms[i].pkvm_handle;
 		}
 	}
 }
@@ -453,19 +502,19 @@ void record_abstraction_loaded_vcpu(struct ghost_state *g)
 {
 	hyp_assert_lock_held(&vm_table_lock);
 	bool loaded = false;
-	u64 vm_index = 0;
+	pkvm_handle_t vm_handle = 0;
 	u64 vcpu_index = 0;
 	// TODO: I don't know if this is how to really read out an exported this_cpu variable
 	struct pkvm_hyp_vcpu *loaded_vcpu = this_cpu_ptr(loaded_hyp_vcpu);
 	if (loaded_vcpu) {
-		vm_index = loaded_vcpu->vcpu.kvm->arch.pkvm.handle - HANDLE_OFFSET;
+		vm_handle = loaded_vcpu->vcpu.kvm->arch.pkvm.handle;
 		vcpu_index = loaded_vcpu->vcpu.vcpu_idx;
 		loaded = true;
 	}
 	g->loaded_hyp_vcpu[get_cpu()] = (struct ghost_loaded_vcpu){
 		.present = true,
 		.loaded = loaded,
-		.vm_index = vm_index,
+		.vm_handle = vm_handle,
 		.vcpu_index = vcpu_index,
 	};
 }
@@ -518,7 +567,6 @@ void record_abstraction_all(struct ghost_state *g, struct kvm_cpu_context *ctxt)
 		record_abstraction_regs(g,ctxt);
 	}
 	g->hyp_physvirt_offset = hyp_physvirt_offset;
-	g->vm_handle_offset = HANDLE_OFFSET;
 }
 
 void record_abstraction_common(void)
@@ -592,4 +640,20 @@ void record_and_copy_abstraction_vm_table_post(void)
 	copy_abstraction_vms(&gs, g);
 	copy_abstraction_loaded_vcpus(&gs, g);
 	ghost_unlock_maplets();
+}
+
+
+struct ghost_vm *ghost_vm_from_handle(struct ghost_state *g, pkvm_handle_t handle) {
+	return __ghost_vm_from_handle(&g->vms, handle);
+}
+
+u64 ghost_vm_idx_from_handle(struct ghost_state *g, pkvm_handle_t handle) {
+	return __ghost_vm_idx_from_handle(&g->vms, handle);
+}
+
+bool ghost_is_valid_vm_handle(struct ghost_state *g, pkvm_handle_t handle)
+{
+	ghost_assert(g->vms.present);
+	struct ghost_vm *vm = ghost_vm_from_handle(g, handle);
+	return vm && vm->exists;
 }
