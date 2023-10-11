@@ -69,5 +69,6 @@ void ghost_dump_pgtable_diff_ap(abstract_pgtable map_old, struct kvm_pgtable *pg
 
 void ghost_test(void);
 
+abstract_pgtable abstract_pgtable_copy(abstract_pgtable src);
 
 #endif // _GHOST_PGTABLE_H

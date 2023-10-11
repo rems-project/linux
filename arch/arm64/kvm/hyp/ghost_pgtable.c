@@ -385,3 +385,11 @@ void ghost_dump_pgtable_diff_ap(abstract_pgtable ap_old, struct kvm_pgtable *pg,
 
 void ghost_test(void) {
 }
+
+abstract_pgtable abstract_pgtable_copy(abstract_pgtable src)
+{
+	abstract_pgtable dest;
+	dest.root = src.root;
+	dest.mapping = mapping_copy(src.mapping);
+	return dest;
+}
