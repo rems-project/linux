@@ -680,10 +680,12 @@ void compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost_state 
 		goto out;
 	}
 
-	u64 g0_vm_idx = ghost_vm_idx_from_handle(g0, hyp_loaded_vcpu.vm_handle);
-	u64 g1_vm_idx = ghost_vm_idx_from_handle(g1, hyp_loaded_vcpu.vm_handle);
-	ghost_assert(g0_vm_idx < KVM_MAX_PVMS);
-	ghost_assert(g1_vm_idx < KVM_MAX_PVMS);
+	ghost_assert(ghost_vms_is_valid_handle(&g0->vms, hyp_loaded_vcpu.vm_handle))
+
+	struct ghost_vm *g0_vm = ghost_vms_get(&g0->vms, hyp_loaded_vcpu.vm_handle);
+	struct ghost_vm *g1_vm = ghost_vms_alloc(&g1->vms);
+	ghost_assert(g0_vm != NULL);
+	ghost_assert(g1_vm != NULL);
 
 	// TODO: non-protected VM/VCPUs?
 
@@ -713,8 +715,11 @@ void compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost_state 
 	}
 
 	u64 guest_arch_prot = arch_prot_of_prot(ghost_default_host_prot(ghost_addr_is_memory(g0, phys_addr)));
-	g1->vms.vms[g1_vm_idx].vm_abstract_pgtable.mapping =
-		mapping_plus(g0->vms.vms[g0_vm_idx].vm_abstract_pgtable.mapping,
+
+	// Guest VM same except pgtable mapping updated slightly
+	ghost_vm_clone_into_nomappings(g1_vm, g0_vm);
+	g1_vm->vm_abstract_pgtable.mapping =
+		mapping_plus(g0_vm->vm_abstract_pgtable.mapping,
 		             mapping_singleton(guest_virt, 1, maplet_target_mapped_ext(phys_addr, PKVM_PAGE_OWNED, guest_arch_prot)));
 	ret = 0;
 
@@ -732,12 +737,11 @@ void compute_new_abstract_state_handle___pkvm_vcpu_load(struct ghost_state *g1, 
 	if (g0->loaded_hyp_vcpu[this_cpu].loaded)
 		goto out;
 
-	// if the vm is not present in the vm_table[] array, then do nothing
-	if (!ghost_vm_is_valid_handle(g0, vm_handle))
-		goto out;
+	struct ghost_vm *vm = ghost_vms_get(&g0->vms, vm_handle);
 
-	struct ghost_vm *vm = ghost_vm_from_handle(g0, vm_handle);
-	ghost_assert(vm && vm->exists);  // just checked it was valid
+	// if the vm does not exist, do nothing.
+	if (!vm || !vm->exists)
+		goto out;
 
 	// if loading non-existent vcpu, do nothing.
 	if (vcpu_idx > vm->nr_vcpus)
@@ -752,10 +756,9 @@ void compute_new_abstract_state_handle___pkvm_vcpu_load(struct ghost_state *g1, 
 		goto out;
 
 	// record in the ghost state of the vcpu 'vcpu_idx' that is has been loaded
-	u64 g1_vm_idx = ghost_vm_idx_from_handle(g1, vm_handle);
-	ghost_assert(g1_vm_idx < KVM_MAX_PVMS);
-
-	g1->vms.vms[g1_vm_idx].vcpus[vcpu_idx].loaded = true;
+	struct ghost_vm *vm1 = ghost_vms_alloc(&g1->vms);
+	ghost_vm_clone_into(vm1, vm);
+	vm1->vcpus[vcpu_idx].loaded = true;
 
 	// record in the ghost state that the current CPU has loaded
 	// the vcpu 'vcpu_idx' of vm 'vm_idx'
@@ -770,7 +773,8 @@ out:
 	return;
 }
 
-void compute_new_abstract_state_handle___pkvm_vcpu_put(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call) {
+void compute_new_abstract_state_handle___pkvm_vcpu_put(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call)
+{
 	int this_cpu = get_cpu();
 	if (!g0->loaded_hyp_vcpu[this_cpu].loaded)
 		goto out;
@@ -778,8 +782,13 @@ void compute_new_abstract_state_handle___pkvm_vcpu_put(struct ghost_state *g1, s
 	pkvm_handle_t vm_handle = g0->loaded_hyp_vcpu[this_cpu].vm_handle;
 	u64 vcpu_idx = g0->loaded_hyp_vcpu[this_cpu].vcpu_index;
 
-	u64 g1_vm_idx = ghost_vm_idx_from_handle(g1, vm_handle);
-	g1->vms.vms[g1_vm_idx].vcpus[vcpu_idx].loaded = false;
+	struct ghost_vm *vm0 = ghost_vms_get(&g0->vms, vm_handle);
+	struct ghost_vm *vm1 = ghost_vms_alloc(&g1->vms);
+	ghost_spec_assert(vm0 && vm0->exists); // must have existed to have loaded it.
+	ghost_assert(vm1);
+
+	ghost_vm_clone_into(vm1, vm0);
+	vm1->vcpus[vcpu_idx].loaded = false;
 
 	g1->loaded_hyp_vcpu[this_cpu] = (struct ghost_loaded_vcpu){
 		.present = true,
@@ -802,13 +811,13 @@ void compute_new_abstract_state_handle___pkvm_init_vm(struct ghost_state *g1, st
 		goto out;
 
 	u64 handle = call->return_value;
-	u64 idx = ghost_vm_idx_from_handle(g1, handle);
+
+	struct ghost_vm *vm1 = ghost_vms_alloc(&g1->vms);
+	ghost_assert(vm1);
 
 	u64 nr_vcpus = GHOST_READ_ONCE(call, host_kvm->max_vcpus);
 
 	// TODO: error case on init'ing too many VMs?
-	if (idx >= KVM_MAX_PVMS)
-		goto out;
 
 	g1->vms.present = true;
 	struct ghost_vm vm = (struct ghost_vm) {
@@ -820,7 +829,8 @@ void compute_new_abstract_state_handle___pkvm_init_vm(struct ghost_state *g1, st
 	};
 	// TODO: init .vm_abstract_pgtable to init state (how to get the root?)
 	// TODO: init .vcpus table
-	g1->vms.vms[idx] = vm;
+	ghost_vm_clone_into(vm1, &vm);
+	// TODO: free old mappings
 	ret = 0;
 out:
 	ghost_reg_gpr(g1, 1) = 0;

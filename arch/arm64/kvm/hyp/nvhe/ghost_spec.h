@@ -37,12 +37,26 @@ struct ghost_vcpu {
 };
 
 
-struct ghost_vm {                            // abstraction of state protected by each VM lock
+/**
+ * struct ghost_vm - Ghost copy of a guest VMs state
+ *
+ * @exists: whether this VM in the parent vm table slot contains a valid VM
+ * @vm_abstract_pgtable: an abstract mapping of the concrete guest pagetable
+ * @nr_vcpus: the number of VCPUs this VM has
+ * @vcpus: the table of ghost_vcpu objects, valid up to nr_vcpus
+ * @pkvm_handle: the opaque pkvm-assigned handle corresponding to this guest
+ * @lock: a reference to the internal VM lock in pkvm.
+ *
+ * Protected by the VM's lock
+ * the `lock` field should not be used to take the lock, only to check it
+ */
+struct ghost_vm {
 	bool exists; // the vm is referenced in the vm_table[] array
 	abstract_pgtable vm_abstract_pgtable;                  // the interpretation of the current concrete mapping
 	u64 nr_vcpus;
 	struct ghost_vcpu vcpus[KVM_MAX_VCPUS];     // table of vcpus, only `present` up to nr_vcpus, NOTE: ordered same as real pkvm vm.hyp_vcpu table
 	pkvm_handle_t pkvm_handle; // pKVM-assigned handle
+	hyp_spinlock_t *lock;
 };
 
 /**
@@ -74,12 +88,106 @@ struct ghost_register_state {
 	u64 el2_sysregs[GHOST_NR_SYSREGS];   // EL2 register values (NB: not all elements are live)
 };
 
-/// The table of VMs
-/// technically not owed by the pkvm lock(!)
+/**
+ * struct ghost_vms - Ghost VM table
+ *
+ * @present: whether this part of the ghost state is set
+ * @table: the underlying (unordered) table of VMs, unordered, and each protected by the corresponding pkvm vm lock
+ *
+ * Code should not access .table directly, but through the abstract ghost_vms_* functions.
+ */
 struct ghost_vms {
 	bool present;
-	struct ghost_vm vms[KVM_MAX_PVMS];     // protected by each VM lock, NOTE: unordered. Use the ghost_vm_* index functions
+	struct ghost_vm table[KVM_MAX_PVMS];
 };
+
+/**
+ * ghost_vms_get() - Get a reference to the ghost_vm in the table
+ *
+ * @vms: ghost vm table
+ * @handle: the pkvm-defined opaque VM handle
+ *
+ * Return:
+ *  - Reference to the ghost_vm* if it exists in the table
+ *  - NULL if there is no VM with that handle in the table
+ *
+ * Must own the ghost vms lock
+ */
+struct ghost_vm *ghost_vms_get(struct ghost_vms *vms, pkvm_handle_t handle);
+
+/**
+ * ghost_vms_alloc() - Get a reference to a fresh (empty) ghost_vm in the table
+ *
+ * @vms: ghost vm table
+ *
+ * Return:
+ *  A reference to an empty vm slot that can be used.
+ *  is marked non-empty on return
+ *
+ * Must own the ghost vms lock
+ */
+struct ghost_vm *ghost_vms_alloc(struct ghost_vms *vms);
+
+/**
+ * ghost_vms_get_default() - Get a reference to the ghost_vm in the table, creating one if it doesn't exist
+ *
+ * @vms: ghost vm table
+ * @handle: the pkvm-defined opaque VM handle
+ *
+ * Return:
+ *  - Reference to the existing-or-newly-created ghost_vm*
+ *
+ * Must own the ghost vms lock
+ */
+struct ghost_vm *ghost_vms_get_default(struct ghost_vms *vms, pkvm_handle_t handle);
+
+/**
+ * ghost_vm_clear() - Clears a VM slot back to default state
+ *
+ * @vm: the vm to clean
+ *
+ * Marks the slot empty.
+ *
+ * Must own the VM lock
+ */
+void ghost_vm_clear(struct ghost_vm *vm);
+
+/**
+ * ghost_vms_free() - Remove a VM from the table
+ *
+ * @vms: ghost vm table
+ * @handle: opaque pkvm-defined handle for the VM to remove
+ *
+ * Marks any slot (if it exists) for that VM as empty.
+ *
+ * Must own the ghost vms lock
+ */
+void ghost_vms_free(struct ghost_vms *vms, pkvm_handle_t handle);
+
+/**
+ * ghost_vms_is_valid_handle() - Checks that the guest associated with an opaque pkvm-assigned handle exists in the vm table
+ *
+ * Must own the ghost vms lock
+ */
+bool ghost_vms_is_valid_handle(struct ghost_vms *vms, pkvm_handle_t handle);
+
+/**
+ * ghost_vm_clone_into_nomappings() - Copies all the fields (not mappings) from one VM slot to another
+ *
+ * Must own the ghost vms lock, *and* both VMs locks
+ */
+void ghost_vm_clone_into_nomappings(struct ghost_vm *dest, struct ghost_vm *src);
+
+/**
+ * ghost_vm_clone_into() - Copies all the fields (including mappings) from one VM slot to another
+ *
+ * Must own the ghost vms lock, *and* both VMs locks
+ */
+void ghost_vm_clone_into(struct ghost_vm *dest, struct ghost_vm *src);
+
+void ghost_lock_vms(void);
+void ghost_unlock_vms(void);
+void ghost_assert_vms_locked(void);
 
 struct ghost_state {
 	mapping hyp_memory;                    // constant after initialisation - the interpretation of hyp_memory[]
@@ -141,21 +249,6 @@ struct ghost_call_data {
 	struct ghost_relaxed_reads relaxed_reads;
 };
 
-
-// some helper functions
-
-/// Returns a reference to the ghost_vm struct in the ghost vms table with that handle
-/// or if none exists, a free slot that it can be inserted into.
-struct ghost_vm *ghost_vm_from_handle(struct ghost_state *g, pkvm_handle_t handle);
-u64 ghost_vm_idx_from_handle(struct ghost_state *g, pkvm_handle_t handle);
-// TODO: make a nice abstraction above `g->vms.vms` so never use indexes or arrays in interface
-
-/// Checks that `handle` is a valid handle of a VM in the vms table.
-bool ghost_vm_is_valid_handle(struct ghost_state *g, pkvm_handle_t handle);
-
-void ghost_lock_vms(void);
-void ghost_unlock_vms(void);
-void ghost_assert_vms_locked(void);
 
 //
 // struct args_host_hvc_pkvm_host_share_hyp {
