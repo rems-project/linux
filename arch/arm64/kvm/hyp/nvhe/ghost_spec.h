@@ -24,16 +24,34 @@
 #define HANDLE_OFFSET 0x1000
 
 // top-level spec types
+
+/**
+ * struct ghost_loaded_vcpu - A Ghost copy of the per-cpu status of the currently-loaded vcpu
+ *
+ * @present: whether the parent ghost_state has a ghost loaded_vcpu, if false the other fields are undefined.
+ * @loaded: whether this physical CPU has a loaded vCPU.
+ * @vm_handle: if loaded, the opaque pkvm-assigned handle for the vcpu's guest vm.
+ * @vcpu_index: if loaded, the index in the guest vm's vcpu table of the loaded vcpu.
+ *
+ * Since this is per-cpu, it does not need to be protected by a lock.
+ * Although the underlying vm and vcpu are protected by that guest vm's lock.
+ */
 struct ghost_loaded_vcpu {
 	bool present;
-	bool loaded;  // if there is a currently loaded vcpu
-	pkvm_handle_t vm_handle; // if loaded, the VM handle
-	u64 vcpu_index; // if loaded, the vcpu index within the VM
+	bool loaded;
+	pkvm_handle_t vm_handle;
+	u64 vcpu_index;
 };
 
+/**
+ * struct ghost_vcpu - A Ghost copy of a single vcpu within a VM
+ *
+ * @exists: whether this slot in the parent vcpu table has a valid vcpu in it.
+ * @loaded: whether this vcpu is currently loaded on a physical CPU
+ */
 struct ghost_vcpu {
-	bool exists; // the vm.vcpus table is up to KVM_MAX_VCPUS but only the first nr_vcpus are present
-	bool loaded;  // if currently loaded on some physical CPU
+	bool exists;
+	bool loaded;
 };
 
 
@@ -51,11 +69,11 @@ struct ghost_vcpu {
  * the `lock` field should not be used to take the lock, only to check it
  */
 struct ghost_vm {
-	bool exists; // the vm is referenced in the vm_table[] array
-	abstract_pgtable vm_abstract_pgtable;                  // the interpretation of the current concrete mapping
+	bool exists;
+	abstract_pgtable vm_abstract_pgtable;
 	u64 nr_vcpus;
-	struct ghost_vcpu vcpus[KVM_MAX_VCPUS];     // table of vcpus, only `present` up to nr_vcpus, NOTE: ordered same as real pkvm vm.hyp_vcpu table
-	pkvm_handle_t pkvm_handle; // pKVM-assigned handle
+	struct ghost_vcpu vcpus[KVM_MAX_VCPUS];
+	pkvm_handle_t pkvm_handle;
 	hyp_spinlock_t *lock;
 };
 
