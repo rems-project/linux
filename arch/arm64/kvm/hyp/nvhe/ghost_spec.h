@@ -45,6 +45,17 @@ struct ghost_vm {                            // abstraction of state protected b
 	pkvm_handle_t pkvm_handle; // pKVM-assigned handle
 };
 
+/**
+ * struct ghost_host - Ghost copy of the host android/linux state
+ * @present: whether the parent ghost_state has some ghost host data
+ * @host_abstract_pgtable_annot: the annotated (invalid) parts of the host pgt with owner_id!=HOST
+ * @host_abstract_pgtable_shared: the valid parts of the host pgt with page state either SHARED_OWNED or SHARED_BORROWED
+ * @host_abstract_pgtable_nonannot: for debugging, the concrete parts of the table that are actually mapped right now.
+ *
+ * The host (intermediate-physical, although idmapped) address space is represented in two parts:
+ *  - The annot mapping, which are all parts of physical space, which are owned by pkvm or the guests, and not shared with the host
+ *  - The shared mapping, which are accessible by the host, but either shared with another (i.e marked SHARED_OWNED) or shared by someone else with the host (marked SHARED_BORROWED)
+ */
 struct ghost_host {                          // abstraction of state protected by the host lock
 	bool present;
 	abstract_pgtable host_abstract_pgtable_annot;           // the first two are the real host part of the abstract state
@@ -80,10 +91,17 @@ struct ghost_state {
 	struct ghost_loaded_vcpu loaded_hyp_vcpu[NR_CPUS];  // loaded vcpu, as a VM+VCPU index pair
 };
 
+/**
+ * max number of recorded READ_ONCEs
+ */
 #define GHOST_MAX_RELAXED_READS 512
 
 /**
  * struct ghost_read - A single relaxed read
+ *
+ * @phys_addr: the physical address read from
+ * @value: the actual value that was read
+ * @width: the size of the read, in bytes
  */
 struct ghost_read {
 	u64 phys_addr;
@@ -93,6 +111,12 @@ struct ghost_read {
 
 /**
  * struct ghost_relaxed_reads - List of previously seen relaxed reads
+ *
+ * @len: count of stored relaxed reads
+ * @read_slots: the underlying buffer of ghost reads
+ *
+ * read_slots contains an array of non-overlapping ghost_read objects, up to index len
+ * then ghost_relaxed_reads_insert appends to this, and ghost_reads_get gets the corresponding read value
  */
 struct ghost_relaxed_reads {
 	size_t len;
