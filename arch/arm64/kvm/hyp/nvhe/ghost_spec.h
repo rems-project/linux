@@ -80,6 +80,43 @@ struct ghost_state {
 	struct ghost_loaded_vcpu loaded_hyp_vcpu[NR_CPUS];  // loaded vcpu, as a VM+VCPU index pair
 };
 
+#define GHOST_MAX_RELAXED_READS 512
+
+/**
+ * struct ghost_read - A single relaxed read
+ */
+struct ghost_read {
+	u64 phys_addr;
+	u64 value;
+	u8 width;
+};
+
+/**
+ * struct ghost_relaxed_reads - List of previously seen relaxed reads
+ */
+struct ghost_relaxed_reads {
+	size_t len;
+	struct ghost_read read_slots[GHOST_MAX_RELAXED_READS];
+};
+
+void ghost_relaxed_reads_insert(struct ghost_relaxed_reads *rs, u64 phys_addr, u8 width, u64 value);
+u64 ghost_relaxed_reads_get(struct ghost_relaxed_reads *rs, u64 phys_addr, u8 width);
+
+/**
+ * struct ghost_call_data - Ghost copies of values from implementation
+ *
+ * To manage non-determinism in the implementation when writing the spec,
+ * we collect various non-deterministically decided values
+ * picked by the implementation
+ *
+ * @return_value: The final errno returned by the real implementation
+ * @relaxed_reads: The list of relaxed READ_ONCE()s performed by the implementation.
+ */
+struct ghost_call_data {
+	u64 return_value;
+	struct ghost_relaxed_reads relaxed_reads;
+};
+
 
 // some helper functions
 
@@ -158,9 +195,15 @@ DECLARE_PER_CPU(struct ghost_state, gs_recorded_pre);
 DECLARE_PER_CPU(struct ghost_state, gs_recorded_post);
 DECLARE_PER_CPU(struct ghost_state, gs_computed_post);
 
+/**
+ * gs_call_data - per-thread storage of data collected during the hypercall
+ */
+DECLARE_PER_CPU(struct ghost_call_data, gs_call_data);
 
-
-
+/**
+ * ghost_clear_call_data - Resets this CPU's recorded hypercall data back to empty
+ */
+void ghost_clear_call_data(void);
 
 // __this_cpu_read(g_initial)
 // __this_cpu_ptr(&g_initial)
@@ -174,8 +217,15 @@ DECLARE_PER_CPU(struct ghost_state, gs_computed_post);
 //#define ghost_reg_ctxt(g,r)
 
 
-void compute_new_abstract_state_handle_trap(struct ghost_state *g1 /*new*/, struct ghost_state *g0 /*old*/, u64 impl_return_value, bool *new_state_computed);
+void compute_new_abstract_state_handle_trap(struct ghost_state *g1 /*new*/, struct ghost_state *g0 /*old*/, struct ghost_call_data *call, bool *new_state_computed);
 
+/**
+ * READ_ONCE_GHOST_RECORD(ptr) - Perform a READ_ONCE(ptr) but remember the address and value in the ghost state.
+ */
+#define READ_ONCE_GHOST_RECORD(x) \
+	({ typeof(x) v = READ_ONCE(x); \
+		 ghost_relaxed_reads_insert(&this_cpu_ptr(&gs_call_data)->relaxed_reads, (u64)&x, v); \
+		 v; })
 
 #endif // _GHOST_SPEC_H
 

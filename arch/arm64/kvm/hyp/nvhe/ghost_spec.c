@@ -28,8 +28,14 @@ struct ghost_state gs; // the "master" ghost state, shared but with its parts pr
 DEFINE_PER_CPU(struct ghost_state, gs_recorded_pre);         // thread-local ghost state, of which only the relevant
 DEFINE_PER_CPU(struct ghost_state, gs_recorded_post);        //  parts are used within each transition
 DEFINE_PER_CPU(struct ghost_state, gs_computed_post);
+DEFINE_PER_CPU(struct ghost_call_data, gs_call_data);  // thread-local implementation-seen values during call
 
-
+void ghost_clear_call_data(void)
+{
+	struct ghost_call_data *call = this_cpu_ptr(&gs_call_data);
+	call->return_value = 0;
+	call->relaxed_reads.len = 0;
+}
 
 //DEFINE_PER_CPU(struct ghost_state, g_recorded_backstop);
 //DEFINE_PER_CPU(struct ghost_state, g_recorded_pre);
@@ -530,7 +536,7 @@ u64 arch_prot_of_prot(enum kvm_pgtable_prot prot)
 	return attr;
 }
 
-void compute_new_abstract_state_handle___pkvm_host_share_hyp(struct ghost_state *g1, struct ghost_state *g0, u64 impl_return_value)
+void compute_new_abstract_state_handle___pkvm_host_share_hyp(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call)
 {
 	u64 pfn = ghost_reg_gpr(g0, 1);
 	u64 host_addr = hyp_pfn_to_phys(pfn); // ((phys_addr_t)((pfn) << PAGE_SHIFT)) // pure
@@ -553,7 +559,7 @@ void compute_new_abstract_state_handle___pkvm_host_share_hyp(struct ghost_state 
 	 * when the hypercall is adding entries to the host and hyp page tables
 	 * it may run out of memory.
 	 * we model this as a nondeterministic error (with two flavours) */
-	if (impl_return_value == -ENOMEM) {
+	if (call->return_value == -ENOMEM) {
 		ret = -ENOMEM;
 		// TODO: it is not clear how to write the spec currently
 		// because we 2 possible outcome:
@@ -604,7 +610,7 @@ out:
 
 
 /* pkvm_host_unshare_hyp(pfn) */
-void compute_new_abstract_state_handle___pkvm_host_unshare_hyp(struct ghost_state *g1, struct ghost_state *g0, u64 impl_return_value)
+void compute_new_abstract_state_handle___pkvm_host_unshare_hyp(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call)
 {
 	u64 pfn = ghost_reg_gpr(g0, 1);
 	u64 host_addr = hyp_pfn_to_phys(pfn); // ((phys_addr_t)((pfn) << PAGE_SHIFT)) // pure
@@ -621,7 +627,7 @@ void compute_new_abstract_state_handle___pkvm_host_unshare_hyp(struct ghost_stat
 	// check that pKVM is not using the page (otherwise EBUSY)
 	// we model this as a non-deterministic choice that is determined
 	// by the return code of the pKVM implementation
-	if (impl_return_value == -EBUSY) {
+	if (call->return_value == -EBUSY) {
 		ret = -EBUSY;
 		goto out;
 	}
@@ -641,7 +647,7 @@ void compute_new_abstract_state_handle___pkvm_host_unshare_hyp(struct ghost_stat
 	// PKVM can non-deterministically fail to unmap the page in its page table
 	// TODO: this may not be possible now that host_share_hyp cannot do a ENOMEM
 	// TODO: check and remove this accordingly
-	if (impl_return_value == -EFAULT) {
+	if (call->return_value == -EFAULT) {
 		ret = -EFAULT;
 		goto out;
 	}
@@ -652,9 +658,9 @@ out:
 }
 
 /**
- * compute the new abstract ghost_state from a u64 impl_return_value = pkvm_host_map_guest(host_pfn, guest_gfn)
+ * compute the new abstract ghost_state from a struct ghost_call_data *call = pkvm_host_map_guest(host_pfn, guest_gfn)
  */
-void compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost_state *g1, struct ghost_state *g0, u64 impl_return_value) {
+void compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call) {
 	int ret;
 
 	u64 pfn = ghost_reg_gpr(g0, 1);
@@ -701,7 +707,7 @@ void compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost_state 
 	// non-det failure on attempting to top-up guest memcache
 	// resolved by dispatching on the implementations return value
 	// TODO: check this case more carefully...
-	if (impl_return_value == -ENOMEM) {
+	if (call->return_value == -ENOMEM) {
 		ret = -ENOMEM;
 		goto out;
 	}
@@ -716,7 +722,7 @@ out:
 	ghost_reg_gpr(g1, 1) = ret;
 }
 
-void compute_new_abstract_state_handle___pkvm_vcpu_load(struct ghost_state *g1, struct ghost_state *g0, u64 impl_return_value) {
+void compute_new_abstract_state_handle___pkvm_vcpu_load(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call) {
 	int this_cpu = get_cpu();
 	pkvm_handle_t vm_handle = ghost_reg_gpr(g0, 1);
 	unsigned int vcpu_idx = ghost_reg_gpr(g0, 2);
@@ -764,7 +770,7 @@ out:
 	return;
 }
 
-void compute_new_abstract_state_handle___pkvm_vcpu_put(struct ghost_state *g1, struct ghost_state *g0, u64 impl_return_value) {
+void compute_new_abstract_state_handle___pkvm_vcpu_put(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call) {
 	int this_cpu = get_cpu();
 	if (!g0->loaded_hyp_vcpu[this_cpu].loaded)
 		goto out;
@@ -784,13 +790,13 @@ out:
 	return;
 }
 
-void compute_new_abstract_state_handle___pkvm_init_vm(struct ghost_state *g1, struct ghost_state *g0, u64 impl_return_value) {
+void compute_new_abstract_state_handle___pkvm_init_vm(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call) {
 	int ret;
-	if (impl_return_value <= 0)
+	if (call->return_value <= 0)
 	 	// TODO: set ret
 		goto out;
 
-	u64 handle = impl_return_value;
+	u64 handle = call->return_value;
 	u64 idx = ghost_vm_idx_from_handle(g1, handle);
 
 	// TODO: error case on init'ing too many VMs?
@@ -808,11 +814,11 @@ out:
 	ghost_reg_gpr(g1, 1) = 0;
 }
 
-void compute_new_abstract_state_handle_host_hcall(struct ghost_state *g1, struct ghost_state *g0, u64 impl_return_value, bool *new_state_computed)
+void compute_new_abstract_state_handle_host_hcall(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call, bool *new_state_computed)
 {
 	int smccc_ret = SMCCC_RET_SUCCESS;
 	// allow any hcall to fail with ENOMEM, with an otherwise-identity abstract state
-	if (impl_return_value == -ENOMEM) {
+	if (call->return_value == -ENOMEM) {
 		ghost_reg_gpr(g1, 1) = -ENOMEM;
 		return;
 	}
@@ -821,12 +827,12 @@ void compute_new_abstract_state_handle_host_hcall(struct ghost_state *g1, struct
 #pragma GCC diagnostic ignored "-Wunused-label" // not sure why the next lines trigger that
 	switch (id) {
 	__KVM_HOST_SMCCC_FUNC___pkvm_host_share_hyp:
-		compute_new_abstract_state_handle___pkvm_host_share_hyp(g1, g0, impl_return_value);
+		compute_new_abstract_state_handle___pkvm_host_share_hyp(g1, g0, call);
 		*new_state_computed = true;
 		break;
 
 	__KVM_HOST_SMCCC_FUNC___pkvm_host_unshare_hyp:
-		compute_new_abstract_state_handle___pkvm_host_unshare_hyp(g1, g0, impl_return_value);
+		compute_new_abstract_state_handle___pkvm_host_unshare_hyp(g1, g0, call);
 		*new_state_computed = true;
 		break;
 
@@ -834,19 +840,19 @@ void compute_new_abstract_state_handle_host_hcall(struct ghost_state *g1, struct
 		break;
 
 	__KVM_HOST_SMCCC_FUNC___pkvm_host_map_guest:
-		compute_new_abstract_state_handle___pkvm_host_map_guest(g1, g0, impl_return_value);
+		compute_new_abstract_state_handle___pkvm_host_map_guest(g1, g0, call);
 		break;
 
 	__KVM_HOST_SMCCC_FUNC___pkvm_vcpu_load:
-		compute_new_abstract_state_handle___pkvm_vcpu_load(g1, g0, impl_return_value);
+		compute_new_abstract_state_handle___pkvm_vcpu_load(g1, g0, call);
 		break;
 
 	__KVM_HOST_SMCCC_FUNC___pkvm_vcpu_put:
-		compute_new_abstract_state_handle___pkvm_vcpu_put(g1, g0, impl_return_value);
+		compute_new_abstract_state_handle___pkvm_vcpu_put(g1, g0, call);
 		break;
 
 	__KVM_HOST_SMCCC_FUNC___pkvm_init_vm:
-		compute_new_abstract_state_handle___pkvm_init_vm(g1, g0, impl_return_value);
+		compute_new_abstract_state_handle___pkvm_init_vm(g1, g0, call);
 		break;
 
 		// TODO: and their bodies, and all the other cases
@@ -858,7 +864,7 @@ void compute_new_abstract_state_handle_host_hcall(struct ghost_state *g1, struct
 }
 
 
-void compute_new_abstract_state_handle_host_mem_abort(struct ghost_state *g1, struct ghost_state *g0, u64 impl_return_value, bool *new_state_computed)
+void compute_new_abstract_state_handle_host_mem_abort(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call, bool *new_state_computed)
 {
 	//TODO
 }
@@ -866,7 +872,7 @@ void compute_new_abstract_state_handle_host_mem_abort(struct ghost_state *g1, st
 
 
 
-void compute_new_abstract_state_handle_trap(struct ghost_state *g1 /*new*/, struct ghost_state *g0 /*old*/, u64 impl_return_value, bool *new_state_computed)
+void compute_new_abstract_state_handle_trap(struct ghost_state *g1 /*new*/, struct ghost_state *g0 /*old*/, struct ghost_call_data *call, bool *new_state_computed)
 	// pointer or struct arguments and results?  For more obvious correspondence to math, struct - but that may be too terrible for executability, and distracting for those used to idiomatic C.  Doesn't matter too much.
 {
 
@@ -881,7 +887,7 @@ void compute_new_abstract_state_handle_trap(struct ghost_state *g1 /*new*/, stru
 
 	switch (ESR_ELx_EC(ghost_reg_el2(g0,GHOST_ESR_EL2))) {
 	case ESR_ELx_EC_HVC64:
-		compute_new_abstract_state_handle_host_hcall(g1,g0,impl_return_value,new_state_computed);
+		compute_new_abstract_state_handle_host_hcall(g1,g0,call,new_state_computed);
 		break;
 	case ESR_ELx_EC_SMC64:
 		//TODO compute_new_abstract_state_handle_host_smc(g1,g0);
@@ -892,7 +898,7 @@ void compute_new_abstract_state_handle_trap(struct ghost_state *g1 /*new*/, stru
 		break;
 	case ESR_ELx_EC_IABT_LOW:
 	case ESR_ELx_EC_DABT_LOW:
-		compute_new_abstract_state_handle_host_mem_abort(g1,g0,impl_return_value,new_state_computed);
+		compute_new_abstract_state_handle_host_mem_abort(g1,g0,call,new_state_computed);
 		break;
 	default:
 		ghost_assert(false);

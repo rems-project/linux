@@ -1310,7 +1310,7 @@ void handle_trap(struct kvm_cpu_context *host_ctxt)
 {
 	// GHOST
 	// ghost_dump_sysregs();
-	u64 ghost_impl_return_value;
+	ghost_clear_call_data();
 	bool new_state_computed=false;
 	_Bool check_this_transition=false;
 	if (GHOST_EXEC_SPEC && READ_ONCE(pkvm_prot_finalized_all)) {
@@ -1370,8 +1370,8 @@ void handle_trap(struct kvm_cpu_context *host_ctxt)
 		record_abstraction_regs_post(host_ctxt);
 		this_cpu_ptr(&gs_recorded_post)->hyp_physvirt_offset = hyp_physvirt_offset;
 		// compute the new spec abstract state
-		ghost_impl_return_value = cpu_reg(host_ctxt, 0);
-		compute_new_abstract_state_handle_trap(this_cpu_ptr(&gs_computed_post), this_cpu_ptr(&gs_recorded_pre), ghost_impl_return_value, &new_state_computed);
+		this_cpu_ptr(&gs_call_data)->return_value = cpu_reg(host_ctxt, 0);
+		compute_new_abstract_state_handle_trap(this_cpu_ptr(&gs_computed_post), this_cpu_ptr(&gs_recorded_pre), this_cpu_ptr(&gs_call_data), &new_state_computed);
 		// and check the two are equal on relevant components
 		if (new_state_computed) 
 			ghost_spec_assert(abstraction_equals_all(this_cpu_ptr(&gs_computed_post), this_cpu_ptr(&gs_recorded_post), this_cpu_ptr(&gs_recorded_pre)));

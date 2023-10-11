@@ -726,6 +726,7 @@ bool ghost_vm_is_valid_handle(struct ghost_state *g, pkvm_handle_t handle)
 }
 
 
+/****************************************/
 // locking
 
 DEFINE_HYP_SPINLOCK(ghost_vms_lock);
@@ -740,4 +741,32 @@ void ghost_unlock_vms(void) {
 
 inline void ghost_assert_vms_locked(void) {
 	hyp_assert_lock_held(&ghost_vms_lock);
+}
+
+/****************************************/
+// ghost_call_data helpers
+
+void ghost_relaxed_reads_insert(struct ghost_relaxed_reads *rs, u64 phys_addr, u8 width, u64 value)
+{
+	rs->read_slots[rs->len++] = (struct ghost_read){
+		.phys_addr = phys_addr,
+		.width = width,
+		.value = value,
+	};
+	BUG_ON(rs->len > GHOST_MAX_RELAXED_READS);
+}
+
+u64 ghost_relaxed_reads_get(struct ghost_relaxed_reads *rs, u64 phys_addr, u8 width)
+{
+	int i;
+	for (i=0; i<rs->len; i++) {
+		struct ghost_read *r = &rs->read_slots[i];
+		if (r->phys_addr == phys_addr && r->width == width)
+			return r->value;
+	}
+
+	/* If the spec tries to read a relaxed read which wasn't read during the call
+	 * then the spec is clearly incorrect. */
+	ghost_spec_assert(false);
+	unreachable();
 }
