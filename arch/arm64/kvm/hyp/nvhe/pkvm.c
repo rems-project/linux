@@ -487,7 +487,7 @@ static void init_pkvm_hyp_vm(struct kvm *host_kvm, struct pkvm_hyp_vm *hyp_vm,
 	hyp_vm->host_kvm = host_kvm;
 	hyp_vm->kvm.created_vcpus = nr_vcpus;
 	hyp_vm->kvm.arch.vtcr = host_mmu.arch.vtcr;
-	hyp_vm->kvm.arch.pkvm.enabled = READ_ONCE(host_kvm->arch.pkvm.enabled);
+	hyp_vm->kvm.arch.pkvm.enabled = READ_ONCE_GHOST_RECORD(host_kvm->arch.pkvm.enabled);
 	hyp_vm->kvm.arch.mmu.last_vcpu_ran = (int __percpu *)last_ran;
 	memset(last_ran, -1, pkvm_get_last_ran_size());
 }
@@ -510,7 +510,7 @@ static int init_pkvm_hyp_vcpu(struct pkvm_hyp_vcpu *hyp_vcpu,
 	hyp_vcpu->host_vcpu = host_vcpu;
 
 	hyp_vcpu->vcpu.kvm = &hyp_vm->kvm;
-	hyp_vcpu->vcpu.vcpu_id = READ_ONCE(host_vcpu->vcpu_id);
+	hyp_vcpu->vcpu.vcpu_id = READ_ONCE_GHOST_RECORD(host_vcpu->vcpu_id);
 	hyp_vcpu->vcpu.vcpu_idx = vcpu_idx;
 
 	hyp_vcpu->vcpu.arch.hw_mmu = &hyp_vm->kvm.arch.mmu;
@@ -695,7 +695,7 @@ int __pkvm_init_vm(struct kvm *host_kvm, unsigned long vm_hva,
 	if (ret)
 		return ret;
 
-	nr_vcpus = READ_ONCE(host_kvm->created_vcpus);
+	nr_vcpus = READ_ONCE_GHOST_RECORD(host_kvm->created_vcpus);
 	if (nr_vcpus < 1) {
 		ret = -EINVAL;
 		goto err_unpin_kvm;
