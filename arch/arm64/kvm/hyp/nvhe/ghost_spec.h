@@ -223,9 +223,31 @@ void compute_new_abstract_state_handle_trap(struct ghost_state *g1 /*new*/, stru
  * READ_ONCE_GHOST_RECORD(ptr) - Perform a READ_ONCE(ptr) but remember the address and value in the ghost state.
  */
 #define READ_ONCE_GHOST_RECORD(x) \
-	({ typeof(x) v = READ_ONCE(x); \
-		 ghost_relaxed_reads_insert(&this_cpu_ptr(&gs_call_data)->relaxed_reads, (u64)&x, v); \
-		 v; })
+	({ \
+		typeof(x) v = READ_ONCE(x); \
+		ghost_relaxed_reads_insert( \
+			&this_cpu_ptr(&gs_call_data)->relaxed_reads, \
+			(u64)&x, \
+			sizeof(typeof(x)), \
+			v \
+		); \
+		v; \
+	})
+
+/**
+ * GHOST_READ_ONCE(x) - Behaves like READ_ONCE(x) but recalls the previously read value from the ghost state
+ */
+#define GHOST_READ_ONCE(gcd, x) \
+	({ \
+		ghost_relaxed_reads_get(&gcd->relaxed_reads, (u64)&x, sizeof(typeof(x))); \
+	})
+
+
+/**
+ * GHOST_SPEC_DECLARE_REG()
+ */
+#define GHOST_SPEC_DECLARE_REG(type, name, ctxt, reg)	\
+				type name = (type)ghost_reg_gpr(ctxt, (reg))
 
 #endif // _GHOST_SPEC_H
 
