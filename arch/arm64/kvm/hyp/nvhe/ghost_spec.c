@@ -792,6 +792,11 @@ out:
 
 void compute_new_abstract_state_handle___pkvm_init_vm(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call) {
 	int ret;
+	GHOST_SPEC_DECLARE_REG(struct kvm *, host_kvm, g0, 1);
+	GHOST_SPEC_DECLARE_REG(unsigned long, vm_hva, g0, 2);
+	GHOST_SPEC_DECLARE_REG(unsigned long, pgd_hva, g0, 3);
+	GHOST_SPEC_DECLARE_REG(unsigned long, last_ran_hva, g0, 4);
+
 	if (call->return_value <= 0)
 	 	// TODO: set ret
 		goto out;
@@ -799,16 +804,23 @@ void compute_new_abstract_state_handle___pkvm_init_vm(struct ghost_state *g1, st
 	u64 handle = call->return_value;
 	u64 idx = ghost_vm_idx_from_handle(g1, handle);
 
+	u64 nr_vcpus = GHOST_READ_ONCE(call, host_kvm->max_vcpus);
+
 	// TODO: error case on init'ing too many VMs?
 	if (idx >= KVM_MAX_PVMS)
 		goto out;
 
 	g1->vms.present = true;
-	g1->vms.vms[idx] = (struct ghost_vm) {
+	struct ghost_vm vm = (struct ghost_vm) {
 		.exists = true,
 		.pkvm_handle = handle,
-		// TODO: init pagetable and vcpus
+		.nr_vcpus = nr_vcpus,
+		.vcpus = {0},
+		.vm_abstract_pgtable = {0},
 	};
+	// TODO: init .vm_abstract_pgtable to init state (how to get the root?)
+	// TODO: init .vcpus table
+	g1->vms.vms[idx] = vm;
 	ret = 0;
 out:
 	ghost_reg_gpr(g1, 1) = 0;
