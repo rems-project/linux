@@ -683,7 +683,7 @@ void compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost_state 
 	ghost_assert(ghost_vms_is_valid_handle(&g0->vms, hyp_loaded_vcpu.vm_handle))
 
 	struct ghost_vm *g0_vm = ghost_vms_get(&g0->vms, hyp_loaded_vcpu.vm_handle);
-	struct ghost_vm *g1_vm = ghost_vms_alloc(&g1->vms);
+	struct ghost_vm *g1_vm = ghost_vms_alloc(&g1->vms, hyp_loaded_vcpu.vm_handle);
 	ghost_assert(g0_vm != NULL);
 	ghost_assert(g1_vm != NULL);
 
@@ -740,7 +740,7 @@ void compute_new_abstract_state_handle___pkvm_vcpu_load(struct ghost_state *g1, 
 	struct ghost_vm *vm = ghost_vms_get(&g0->vms, vm_handle);
 
 	// if the vm does not exist, do nothing.
-	if (!vm || !vm->exists)
+	if (!vm)
 		goto out;
 
 	// if loading non-existent vcpu, do nothing.
@@ -756,7 +756,7 @@ void compute_new_abstract_state_handle___pkvm_vcpu_load(struct ghost_state *g1, 
 		goto out;
 
 	// record in the ghost state of the vcpu 'vcpu_idx' that is has been loaded
-	struct ghost_vm *vm1 = ghost_vms_alloc(&g1->vms);
+	struct ghost_vm *vm1 = ghost_vms_alloc(&g1->vms, vm->pkvm_handle);
 	ghost_vm_clone_into(vm1, vm);
 	vm1->vcpus[vcpu_idx].loaded = true;
 
@@ -783,8 +783,8 @@ void compute_new_abstract_state_handle___pkvm_vcpu_put(struct ghost_state *g1, s
 	u64 vcpu_idx = g0->loaded_hyp_vcpu[this_cpu].vcpu_index;
 
 	struct ghost_vm *vm0 = ghost_vms_get(&g0->vms, vm_handle);
-	struct ghost_vm *vm1 = ghost_vms_alloc(&g1->vms);
-	ghost_spec_assert(vm0 && vm0->exists); // must have existed to have loaded it.
+	struct ghost_vm *vm1 = ghost_vms_alloc(&g1->vms, vm_handle);
+	ghost_spec_assert(vm0); // must have existed to have loaded it.
 	ghost_assert(vm1);
 
 	ghost_vm_clone_into(vm1, vm0);
@@ -812,7 +812,7 @@ void compute_new_abstract_state_handle___pkvm_init_vm(struct ghost_state *g1, st
 
 	u64 handle = call->return_value;
 
-	struct ghost_vm *vm1 = ghost_vms_alloc(&g1->vms);
+	struct ghost_vm *vm1 = ghost_vms_alloc(&g1->vms, handle);
 	ghost_assert(vm1);
 
 	u64 nr_vcpus = GHOST_READ_ONCE(call, host_kvm->max_vcpus);
@@ -821,7 +821,6 @@ void compute_new_abstract_state_handle___pkvm_init_vm(struct ghost_state *g1, st
 
 	g1->vms.present = true;
 	struct ghost_vm vm = (struct ghost_vm) {
-		.exists = true,
 		.pkvm_handle = handle,
 		.nr_vcpus = nr_vcpus,
 		.vcpus = {0},

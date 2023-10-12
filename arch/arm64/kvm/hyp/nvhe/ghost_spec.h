@@ -55,7 +55,6 @@ struct ghost_vcpu {
 /**
  * struct ghost_vm - Ghost copy of a guest VMs state
  *
- * @exists: whether this VM in the parent vm table slot contains a valid VM
  * @vm_abstract_pgtable: an abstract mapping of the concrete guest pagetable
  * @nr_vcpus: the number of VCPUs this VM has
  * @vcpus: the table of ghost_vcpu objects, valid up to nr_vcpus
@@ -66,7 +65,6 @@ struct ghost_vcpu {
  * the `lock` field should not be used to take the lock, only to check it
  */
 struct ghost_vm {
-	bool exists;
 	abstract_pgtable vm_abstract_pgtable;
 	u64 nr_vcpus;
 	struct ghost_vcpu vcpus[KVM_MAX_VCPUS];
@@ -92,28 +90,61 @@ struct ghost_host {                          // abstraction of state protected b
 	abstract_pgtable host_abstract_pgtable_nonannot;        // this isn't really in the host part of the abstract state (it's not computed by the next-abstract-state function); it's just so we can do an approximation to the check of host Stage 2 translations that the "real spec" will do};
 };
 
-struct ghost_pkvm {                          // abstraction of state protected by the pkvm lock
+/**
+ * struct ghost_pkvm - Ghost copy of the pKVM-specific EL2 state
+ *
+ * @present: whether the parent ghost state has some ghost pkvm EL2 data
+ * @pkvm_abstract_pgtable: if present, abstract mapping containing the concrete EL2 Stage1 translation
+ *
+ * Context: Protected by the global pKVM hypervisor lock.
+ */
+struct ghost_pkvm {
 	bool present;
-	abstract_pgtable pkvm_abstract_pgtable;                // the interpretation of the current concrete mapping
+	abstract_pgtable pkvm_abstract_pgtable;
 };
 
+/**
+ * struct ghost_register_state - Ghost copy of the per-CPU register state
+ *
+ * @present: whether the parent ghost state has some ghost register state for this CPU.
+ * @ctxt: if present, the EL0/1 register values on entry/exit to the C.
+ * @el2_sysregs: if present, ghost copy of the current value of the EL2 system registers.
+ *
+ * Not all the registers are live.
+ */
 struct ghost_register_state {
 	bool present;
-	struct kvm_cpu_context ctxt;         // EL0/1 register values on entry or exit to the C part of exception handler (NB: not all elements are live)
-	u64 el2_sysregs[GHOST_NR_SYSREGS];   // EL2 register values (NB: not all elements are live)
+	struct kvm_cpu_context ctxt;
+	u64 el2_sysregs[GHOST_NR_SYSREGS];
+};
+
+/**
+ * struct ghost_vm_slot - A slot in the VMS table
+ *
+ * @exists: whether this VM in the parent vm table slot contains a valid VM.
+ * @handle: if exists, the pKVM-assigned VM handle this slot is for (the key).
+ * @vm: if exists, the actual VM in this slot.
+ *
+ * Context: exists and handle are protected by the ghost vms lock,
+ *          the ghost vm itself is protected by that VM's lock.
+ */
+struct ghost_vm_slot {
+	bool exists;
+	pkvm_handle_t handle;
+	struct ghost_vm vm;
 };
 
 /**
  * struct ghost_vms - Ghost VM table
  *
  * @present: whether this part of the ghost state is set
- * @table: the underlying (unordered) table of VMs, unordered, and each protected by the corresponding pkvm vm lock
+ * @table: if present, a dictionary of ```VM handle -> VM```, implemented as a table of slots.
  *
- * Code should not access .table directly, but through the abstract ghost_vms_* functions.
+ * Code should not access .table directly, but through the abstract ghost_vms_* functions below.
  */
 struct ghost_vms {
 	bool present;
-	struct ghost_vm table[KVM_MAX_PVMS];
+	struct ghost_vm_slot table[KVM_MAX_PVMS];
 };
 
 /**
@@ -134,38 +165,17 @@ struct ghost_vm *ghost_vms_get(struct ghost_vms *vms, pkvm_handle_t handle);
  * ghost_vms_alloc() - Get a reference to a fresh (empty) ghost_vm in the table
  *
  * @vms: ghost vm table
+ * @handle: the opaque pkvm-assigned handle for the VM we will put in this slot (for safety checks)
+ *
+ * A VM with that handle must not already exist in the vms table.
  *
  * Return:
  *  A reference to an empty vm slot that can be used.
  *  is marked non-empty on return
  *
- * Must own the ghost vms lock
+ * Context: Must own the ghost vms lock, panics if all slots were used up.
  */
-struct ghost_vm *ghost_vms_alloc(struct ghost_vms *vms);
-
-/**
- * ghost_vms_get_default() - Get a reference to the ghost_vm in the table, creating one if it doesn't exist
- *
- * @vms: ghost vm table
- * @handle: the pkvm-defined opaque VM handle
- *
- * Return:
- *  - Reference to the existing-or-newly-created ghost_vm*
- *
- * Must own the ghost vms lock
- */
-struct ghost_vm *ghost_vms_get_default(struct ghost_vms *vms, pkvm_handle_t handle);
-
-/**
- * ghost_vm_clear() - Clears a VM slot back to default state
- *
- * @vm: the vm to clean
- *
- * Marks the slot empty.
- *
- * Must own the VM lock
- */
-void ghost_vm_clear(struct ghost_vm *vm);
+struct ghost_vm *ghost_vms_alloc(struct ghost_vms *vms, pkvm_handle_t );
 
 /**
  * ghost_vms_free() - Remove a VM from the table
