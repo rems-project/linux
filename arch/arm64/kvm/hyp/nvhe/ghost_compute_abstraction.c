@@ -151,8 +151,10 @@ void ghost_vm_clear(struct ghost_vm *vm)
 void ghost_vms_free(struct ghost_vms *vms, pkvm_handle_t handle)
 {
 	ghost_assert_vms_locked();
-	struct ghost_vm *vm = __ghost_vm_or_free_slot_from_handle(vms, NULL);
-	ghost_vm_clear(vm);
+	struct ghost_vm_slot *slot = __ghost_vm_or_free_slot_from_handle(vms, &handle);
+	// can only free something that exists in the table
+	ghost_assert(slot);
+	ghost_vm_clear_slot(slot);
 }
 
 bool ghost_vms_is_valid_handle(struct ghost_vms *vms, pkvm_handle_t handle)
