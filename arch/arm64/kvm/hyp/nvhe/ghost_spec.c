@@ -560,7 +560,7 @@ static bool is_borrowed_by(const struct ghost_state *g, enum ghost_host_or_hyp i
 // static bool is_shared_with_state(mapping m, u64 addr, enum pkvm_page_state expected_state)
 // {
 // 	ghost_assert(expected_state == PKVM_PAGE_SHARED_OWNED || expected_state == PKVM_PAGE_SHARED_BORROWED);
-	
+
 // 	struct maplet_target t;
 // 	if (!mapping_lookup(addr, m, &t)) {
 // 		return false;
@@ -822,7 +822,7 @@ void compute_new_abstract_state_handle___pkvm_vcpu_load(struct ghost_state *g1, 
 	unsigned int vcpu_idx = ghost_reg_gpr(g0, 2);
 
 	ghost_assert(this_cpu_ghost_loaded_vcpu(g0)->present);
-	
+
 	// if another vcpu is already loaded on this CPU, then do nothing
 	if (this_cpu_ghost_loaded_vcpu(g0)->loaded)
 		goto out;
@@ -867,7 +867,7 @@ void compute_new_abstract_state_handle___pkvm_vcpu_put(struct ghost_state *g1, s
 
 	struct ghost_loaded_vcpu *loaded_vcpu = this_cpu_ghost_loaded_vcpu(g0);
 	ghost_assert(loaded_vcpu->present);
-	
+
 	// have to have done a previous vcpu_load
 	if (!loaded_vcpu->loaded)
 		goto out;
@@ -948,7 +948,7 @@ static size_t ghost_pkvm_get_hyp_vm_size(unsigned int nr_vcpus)
 }
 
 static size_t ghost_pkvm_get_last_ran_size(struct ghost_state *g)
-{	
+{
 	// TODO: this directly using the hyp_nr_cpus global from setup.c
 	// we need to have a copy in the ghost_state instead
 	return array_size(hyp_nr_cpus, sizeof(int));
@@ -1036,7 +1036,7 @@ void compute_new_abstract_state_handle___pkvm_init_vm(struct ghost_state *g1, st
 		// for that purpose
 		.vm_abstract_pgtable = { .root = phys_of_host_va(pgd_hva), .mapping= mapping_empty_() },
 	};
-	
+
 	ghost_vm_clone_into(vm1, &vm);
 	// TODO: free old mappings
 	ret = handle;
