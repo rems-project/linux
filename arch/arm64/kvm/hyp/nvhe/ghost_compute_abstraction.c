@@ -164,16 +164,8 @@ struct ghost_vm compute_abstraction_vm(struct pkvm_hyp_vm *vm) {
 	hyp_assert_lock_held(&vm->lock);
 	abstract_vm.pkvm_handle = vm->kvm.arch.pkvm.handle;
 	abstract_vm.nr_vcpus = vm->nr_vcpus;
-	for (i=0; i<KVM_MAX_VCPUS; i++) {
-		abstract_vm.vcpus[i] = (struct ghost_vcpu){
-			.exists = false,
-		};
-
-		// if the vm has this vcpu, then
-		if (i < abstract_vm.nr_vcpus) {
-			abstract_vm.vcpus[i].exists = true;
-			abstract_vm.vcpus[i].loaded = vm->vcpus[i]->loaded_hyp_vcpu ? true : false;
-		}
+	for (i=0; i<abstract_vm.nr_vcpus; i++) {
+		abstract_vm.vcpus[i].loaded = vm->vcpus[i]->loaded_hyp_vcpu ? true : false;
 	}
 	abstract_vm.vm_abstract_pgtable = ghost_record_pgtable_ap(&vm->pgt, "guest_mmu.pgt", 0);
 	abstract_vm.lock = &vm->lock;
@@ -245,11 +237,7 @@ bool abstraction_equals_loaded_vcpus(struct ghost_state *g1, struct ghost_state 
 
 bool abstraction_equals_vcpu(struct ghost_vcpu vcpu1, struct ghost_vcpu vcpu2)
 {
-	if (vcpu1.exists == vcpu2.exists) {
-		return vcpu1.loaded == vcpu2.loaded;
-	} else {
-		return false;
-	}
+	return vcpu1.loaded == vcpu2.loaded;
 }
 
 bool abstraction_equals_vm(struct ghost_vm vm1, struct ghost_vm vm2)
@@ -267,14 +255,16 @@ bool abstraction_equals_vm(struct ghost_vm vm1, struct ghost_vm vm2)
 		return false;
 
 	ghost_assert(vm1.lock == vm2.lock);
+
+	if (vm1.nr_vcpus != vm2.nr_vcpus)
+		return false;
 	
 	bool vcpus_are_equal;
-	for (int i=0; i<KVM_MAX_VCPUS; i++) {
+	for (int i=0; i<vm1.nr_vcpus; i++) {
 		vcpus_are_equal = vcpus_are_equal && abstraction_equals_vcpu(vm1.vcpus[i], vm2.vcpus[i]);
 	}
 
 	return (   abstract_pgtable_equal("abstraction_equals_vm", vm1.vm_abstract_pgtable, vm2.vm_abstract_pgtable, "vm1.vm_abstract_pgtable", "vm2.vm_abstract_pgtable", 4)
-		&& vm1.nr_vcpus == vm2.nr_vcpus
 		&& vcpus_are_equal);
 }
 

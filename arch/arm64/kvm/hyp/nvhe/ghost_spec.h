@@ -41,15 +41,16 @@ struct ghost_loaded_vcpu {
 };
 
 /**
- * struct ghost_vcpu - A Ghost copy of a single vcpu within a VM
+ * struct ghost_vcpu - A single vcpu within a VM
  *
- * @exists: whether this slot in the parent vcpu table has a valid vcpu in it.
  * @loaded: whether this vcpu is currently loaded on a physical CPU
+ *
+ * the loaded field is redundant wrt the total set of (thread-local) loaded vcpus, but this matches pKVM's own data structures.
+ * TODO: eventually this will also contain the register bank, if not running, which will be used by vcpu_run etc.
  *
  * Context: Protected by the parent VM's lock.
  */
 struct ghost_vcpu {
-	bool exists;
 	bool loaded;
 };
 

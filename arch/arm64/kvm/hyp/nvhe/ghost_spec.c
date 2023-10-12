@@ -750,7 +750,6 @@ void compute_new_abstract_state_handle___pkvm_vcpu_load(struct ghost_state *g1, 
 
 	struct ghost_vcpu *vcpu = &vm->vcpus[vcpu_idx];
 	ghost_assert(vcpu_idx < KVM_MAX_VCPUS);
-	ghost_assert(vcpu->exists);
 
 	// if the vcpu is already loaded (potentially in another CPU), then do nothing
 	if (vcpu->loaded)
