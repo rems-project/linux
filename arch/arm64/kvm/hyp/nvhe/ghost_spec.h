@@ -247,6 +247,11 @@ struct ghost_state {
 };
 
 /**
+ * this_cpu_read_ghost_loaded_vcpu() - Get the loaded_hyp_vcpu for this CPU
+ */
+struct ghost_loaded_vcpu *this_cpu_ghost_loaded_vcpu(struct ghost_state *g);
+
+/**
  * max number of recorded READ_ONCEs
  */
 #define GHOST_MAX_RELAXED_READS 512

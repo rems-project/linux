@@ -670,20 +670,20 @@ void compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost_state 
 	u64 host_virt = phys_addr;
 	u64 guest_virt = (gfn << 12);
 
+	struct ghost_loaded_vcpu *hyp_loaded_vcpu = this_cpu_ghost_loaded_vcpu(g0);
+	ghost_assert(hyp_loaded_vcpu->present);
+
 	// previous vcpu_load must have been done
-	int this_cpu = get_cpu();
-	struct ghost_loaded_vcpu hyp_loaded_vcpu = g0->loaded_hyp_vcpu[this_cpu];
-	ghost_assert(hyp_loaded_vcpu.present);
 	// `hyp_vcpu = pkvm_get_loaded_hyp_vcpu(); if (!hyp_vcpu) goto out;`
-	if (!hyp_loaded_vcpu.loaded) {
+	if (!hyp_loaded_vcpu->loaded) {
 		ret = -EINVAL;
 		goto out;
 	}
 
-	ghost_assert(ghost_vms_is_valid_handle(&g0->vms, hyp_loaded_vcpu.vm_handle))
+	ghost_assert(ghost_vms_is_valid_handle(&g0->vms, hyp_loaded_vcpu->vm_handle))
 
-	struct ghost_vm *g0_vm = ghost_vms_get(&g0->vms, hyp_loaded_vcpu.vm_handle);
-	struct ghost_vm *g1_vm = ghost_vms_alloc(&g1->vms, hyp_loaded_vcpu.vm_handle);
+	struct ghost_vm *g0_vm = ghost_vms_get(&g0->vms, hyp_loaded_vcpu->vm_handle);
+	struct ghost_vm *g1_vm = ghost_vms_alloc(&g1->vms, hyp_loaded_vcpu->vm_handle);
 	ghost_assert(g0_vm != NULL);
 	ghost_assert(g1_vm != NULL);
 
@@ -728,13 +728,13 @@ out:
 }
 
 void compute_new_abstract_state_handle___pkvm_vcpu_load(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call) {
-	int this_cpu = get_cpu();
 	pkvm_handle_t vm_handle = ghost_reg_gpr(g0, 1);
 	unsigned int vcpu_idx = ghost_reg_gpr(g0, 2);
+
+	ghost_assert(this_cpu_ghost_loaded_vcpu(g0)->present);
 	
-	ghost_assert(g0->loaded_hyp_vcpu[this_cpu].present);
 	// if another vcpu is already loaded on this CPU, then do nothing
-	if (g0->loaded_hyp_vcpu[this_cpu].loaded)
+	if (this_cpu_ghost_loaded_vcpu(g0)->loaded)
 		goto out;
 
 	struct ghost_vm *vm = ghost_vms_get(&g0->vms, vm_handle);
@@ -762,7 +762,7 @@ void compute_new_abstract_state_handle___pkvm_vcpu_load(struct ghost_state *g1, 
 
 	// record in the ghost state that the current CPU has loaded
 	// the vcpu 'vcpu_idx' of vm 'vm_idx'
-	g1->loaded_hyp_vcpu[this_cpu] = (struct ghost_loaded_vcpu){
+	*this_cpu_ghost_loaded_vcpu(g1) = (struct ghost_loaded_vcpu){
 		.present = true,
 		.loaded = true,
 		.vm_handle = vm_handle,
@@ -775,12 +775,16 @@ out:
 
 void compute_new_abstract_state_handle___pkvm_vcpu_put(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call)
 {
-	int this_cpu = get_cpu();
-	if (!g0->loaded_hyp_vcpu[this_cpu].loaded)
+
+	struct ghost_loaded_vcpu *loaded_vcpu = this_cpu_ghost_loaded_vcpu(g0);
+	ghost_assert(loaded_vcpu->present);
+	
+	// have to have done a previous vcpu_load
+	if (!loaded_vcpu->loaded)
 		goto out;
 
-	pkvm_handle_t vm_handle = g0->loaded_hyp_vcpu[this_cpu].vm_handle;
-	u64 vcpu_idx = g0->loaded_hyp_vcpu[this_cpu].vcpu_index;
+	pkvm_handle_t vm_handle = loaded_vcpu->vm_handle;
+	u64 vcpu_idx = loaded_vcpu->vcpu_index;
 
 	struct ghost_vm *vm0 = ghost_vms_get(&g0->vms, vm_handle);
 	struct ghost_vm *vm1 = ghost_vms_alloc(&g1->vms, vm_handle);
@@ -790,7 +794,7 @@ void compute_new_abstract_state_handle___pkvm_vcpu_put(struct ghost_state *g1, s
 	ghost_vm_clone_into(vm1, vm0);
 	vm1->vcpus[vcpu_idx].loaded = false;
 
-	g1->loaded_hyp_vcpu[this_cpu] = (struct ghost_loaded_vcpu){
+	*this_cpu_ghost_loaded_vcpu(g1) = (struct ghost_loaded_vcpu){
 		.present = true,
 		.loaded = false,
 	};

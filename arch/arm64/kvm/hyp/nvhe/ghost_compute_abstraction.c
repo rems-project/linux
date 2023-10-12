@@ -596,8 +596,7 @@ void record_abstraction_loaded_vcpu(struct ghost_state *g)
 		vcpu_index = loaded_vcpu->vcpu.vcpu_idx;
 		loaded = true;
 	}
-	// TODO: get_cpu() causes a linker error "undefined reference to `__kvm_nvhe_cpu_number'"
-	g->loaded_hyp_vcpu[get_cpu()] = (struct ghost_loaded_vcpu){
+	*this_cpu_ghost_loaded_vcpu(g) = (struct ghost_loaded_vcpu){
 		.present = true,
 		.loaded = loaded,
 		.vm_handle = vm_handle,
@@ -812,4 +811,17 @@ u64 ghost_relaxed_reads_get(struct ghost_relaxed_reads *rs, u64 phys_addr, u8 wi
 	 * then the spec is clearly incorrect. */
 	ghost_spec_assert(false);
 	unreachable();
+}
+
+/********************************************/
+// ghost loaded vcpu
+
+struct ghost_loaded_vcpu *this_cpu_ghost_loaded_vcpu(struct ghost_state *g)
+{
+	// important: we do not use the multiproc affinity register (mpidr)
+	// as that contains the real affinity, which structures the output into logical groups
+	// but we want something that is sequential 0,1,2,...
+	// so we rely on Linux setting up the software-defined tpidr_el2 register correctly
+	u64 idx = read_sysreg(tpidr_el2);
+	return &g->loaded_hyp_vcpu[idx];
 }
