@@ -600,6 +600,7 @@ void compute_new_abstract_state_handle___pkvm_host_share_hyp(struct ghost_state 
 			mapping_singleton(host_addr, 1, maplet_target_mapped_ext(phys_addr, PKVM_PAGE_SHARED_OWNED, host_arch_prot)));
 
 	/* add a new hyp mapping, PKVM_PAGE_SHARED_BORROWED */
+	// g1->pkvm.pkvm_abstract_pgtable.root = g0->pkvm.pkvm_abstract_pgtable.root; // TODO: BS: is this right?
 	g1->pkvm.pkvm_abstract_pgtable.mapping =
 		mapping_plus(
 			g0->pkvm.pkvm_abstract_pgtable.mapping,
