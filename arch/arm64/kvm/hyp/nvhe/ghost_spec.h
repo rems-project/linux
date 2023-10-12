@@ -23,15 +23,15 @@
 // top-level spec types
 
 /**
- * struct ghost_loaded_vcpu - A Ghost copy of the per-cpu status of the currently-loaded vcpu
+ * struct ghost_loaded_vcpu - The identity of the currently loaded vcpu, if there is one.
  *
- * @present: whether the parent ghost_state has a ghost loaded_vcpu, if false the other fields are undefined.
+ * @present: whether the parent ghost_state has a ghost loaded_vcpu (for this cpu).
  * @loaded: if present, whether this physical CPU has a loaded vCPU.
- * @vm_handle: if present and loaded, the opaque pkvm-assigned handle for the vcpu's guest vm.
+ * @vm_handle: if present and loaded, the opaque pkvm-assigned handle for the vcpu's parent vm.
  * @vcpu_index: if present and loaded, the index in the guest vm's vcpu table of the loaded vcpu.
  *
- * Since this is per-cpu, it does not need to be protected by a lock.
- * Although the underlying vm and vcpu are protected by that guest vm's lock.
+ * Context: Thread-local, so does not need to be protected by a lock.
+ *          However, the underlying vm and its vcpus are protected by that guest vm's lock.
  */
 struct ghost_loaded_vcpu {
 	bool present;
@@ -56,7 +56,7 @@ struct ghost_vcpu {
 
 
 /**
- * struct ghost_vm - Ghost copy of a guest VMs state
+ * struct ghost_vm - A guest VM
  *
  * @vm_abstract_pgtable: an abstract mapping of the concrete guest pagetable
  * @nr_vcpus: the number of VCPUs this VM has
@@ -76,7 +76,7 @@ struct ghost_vm {
 };
 
 /**
- * struct ghost_host - Ghost copy of the host android/linux state
+ * struct ghost_host - The host android/linux mapping
  *
  * @present: whether the parent ghost_state has some ghost host data
  * @host_abstract_pgtable_annot: if present, the annotated (invalid) parts of the host pgt with owner_id!=HOST
@@ -87,17 +87,20 @@ struct ghost_vm {
  *  - The annot mapping, which are all parts of physical space, which are owned by pkvm or the guests, and not shared with the host
  *  - The shared mapping, which are accessible by the host, but either shared with another (i.e marked SHARED_OWNED) or shared by someone else with the host (marked SHARED_BORROWED)
  *
+ * The nonannot isn't really in the host part of the abstract state (it's not computed by the next-abstract-state function);
+ * it's just so we can do an approximation to the check of host Stage 2 translations that the "real spec" will do
+ *
  * Context: Protected by the host's hyp lock.
  */
-struct ghost_host {                          // abstraction of state protected by the host lock
+struct ghost_host {
 	bool present;
-	abstract_pgtable host_abstract_pgtable_annot;           // the first two are the real host part of the abstract state
-	abstract_pgtable host_abstract_pgtable_shared;          // 
-	abstract_pgtable host_abstract_pgtable_nonannot;        // this isn't really in the host part of the abstract state (it's not computed by the next-abstract-state function); it's just so we can do an approximation to the check of host Stage 2 translations that the "real spec" will do};
+	abstract_pgtable host_abstract_pgtable_annot;
+	abstract_pgtable host_abstract_pgtable_shared;
+	abstract_pgtable host_abstract_pgtable_nonannot;
 };
 
 /**
- * struct ghost_pkvm - Ghost copy of the pKVM-specific EL2 state
+ * struct ghost_pkvm - hypervisor-specific EL2 state pagetable
  *
  * @present: whether the parent ghost state has some ghost pkvm EL2 data
  * @pkvm_abstract_pgtable: if present, abstract mapping containing the concrete EL2 Stage1 translation
@@ -110,13 +113,15 @@ struct ghost_pkvm {
 };
 
 /**
- * struct ghost_register_state - Ghost copy of the per-CPU register state
+ * struct ghost_register_state - per-CPU register state
  *
  * @present: whether the parent ghost state has some ghost register state for this CPU.
  * @ctxt: if present, the EL0/1 register values on entry/exit to the C.
  * @el2_sysregs: if present, ghost copy of the current value of the EL2 system registers.
  *
  * Not all the registers are live.
+ *
+ * Context: thread-local, so not protected by any lock.
  */
 struct ghost_register_state {
 	bool present;
@@ -238,13 +243,13 @@ void ghost_assert_vms_table_locked(void);
  * and should match the real physical state for those parts.
  */
 struct ghost_state {
-	mapping hyp_memory;                    // constant after initialisation - the interpretation of hyp_memory[]
-	struct ghost_pkvm pkvm;                // protected by the pkvm lock
-	struct ghost_host host;                // protected by the host lock
-	struct ghost_register_state regs;      // register bank
-	struct ghost_vms vms;                  // protected by the vm_table lock
-	s64 hyp_physvirt_offset;               // constant after initialisation - the value of hyp_physvirt_offset
-	struct ghost_loaded_vcpu loaded_hyp_vcpu[NR_CPUS];  // loaded vcpu, as a VM+VCPU index pair
+	mapping hyp_memory;
+	struct ghost_pkvm pkvm;
+	struct ghost_host host;
+	struct ghost_register_state regs; // TODO: make per-cpu
+	struct ghost_vms vms;
+	s64 hyp_physvirt_offset;
+	struct ghost_loaded_vcpu loaded_hyp_vcpu[NR_CPUS];
 };
 
 /**
@@ -288,13 +293,14 @@ void ghost_relaxed_reads_insert(struct ghost_relaxed_reads *rs, u64 phys_addr, u
 u64 ghost_relaxed_reads_get(struct ghost_relaxed_reads *rs, u64 phys_addr, u8 width);
 
 /**
- * struct ghost_call_data - Ghost copies of values from implementation
+ * struct ghost_call_data - Ghost copies of values seen by implementation
  *
  * @return_value: The final value (usually an errno) returned by the real implementation.
  * @relaxed_reads: The list of relaxed READ_ONCE()s performed by the implementation.
  *
- * To manage non-determinism in the implementation when writing the spec,
- * we collect various non-deterministically decided values used by the implementation
+ * To manage non-determinism in the spec,
+ * we collect various non-deterministically decided values used by the implementation,
+ * which can be dispatched on in the spec to resolve non-deterministic choices.
  */
 struct ghost_call_data {
 	u64 return_value;
