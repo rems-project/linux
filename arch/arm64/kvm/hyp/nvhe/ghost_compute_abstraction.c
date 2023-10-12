@@ -162,11 +162,8 @@ bool ghost_vms_is_valid_handle(struct ghost_vms *vms, pkvm_handle_t handle)
 	ghost_assert_vms_locked();
 	ghost_assert(vms->present);
 	struct ghost_vm *vm = ghost_vms_get(vms, handle);
-	return vm && vm->exists;
-}
 
-static pkvm_handle_t __vm_table_idx_to_vm_handle(u64 idx) {
-	return idx + HANDLE_OFFSET;  // see pkvm.c idx_to_vm_handle
+	return vm && vm->exists;
 }
 
 /// from a vm_table index compute the abstract ghost VM

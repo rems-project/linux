@@ -19,9 +19,6 @@
 
 // assertion to check the spec
 #define ghost_spec_assert(c) BUG_ON(!(c));
-// from nvhe/pkvm.c
-// the vm handles are vm table indexes + HANDLE_OFFSET
-#define HANDLE_OFFSET 0x1000
 
 // top-level spec types
 
