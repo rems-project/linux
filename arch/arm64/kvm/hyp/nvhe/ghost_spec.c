@@ -892,12 +892,37 @@ out:
 	return;
 }
 
+//TODO: move somewhere else
+#define host_virt_of_pkvm_va(X) X
+
+// performs the mapping checks of hyp_pin_shared_mem (from mem_protect.c)
+bool ghost_hyp_check_host_shared_mem(struct ghost_state *g, u64 from, u64 to)
+{
+	u64 start = ALIGN_DOWN((u64)from, PAGE_SIZE);
+	u64 end = PAGE_ALIGN((u64)(u64)to);
+	u64 size = end - start;
+	for (u64 addr=start; addr < size * PAGE_SIZE; addr += PAGE_SIZE) {
+		if (!is_owned_and_shared_by(g,  GHOST_HOST, host_virt_of_pkvm_va(addr)))
+			return false;
+		if (!is_borrowed_by(g, GHOST_HYP, addr)) 
+			return false;
+	}
+	return true;
+}
+
 void compute_new_abstract_state_handle___pkvm_init_vm(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call) {
 	int ret;
 	GHOST_SPEC_DECLARE_REG(struct kvm *, host_kvm, g0, 1);
 	GHOST_SPEC_DECLARE_REG(unsigned long, vm_hva, g0, 2);
 	GHOST_SPEC_DECLARE_REG(unsigned long, pgd_hva, g0, 3);
 	GHOST_SPEC_DECLARE_REG(unsigned long, last_ran_hva, g0, 4);
+
+	// checking that the pages underlying the host_kvm structure is owned by the host
+	// and shared with pKVM
+	if (!ghost_hyp_check_host_shared_mem(g0, (u64)host_kvm, (u64)(host_kvm + 1))) {
+		ret = -EPERM;
+		goto out;
+	}
 
 	if (call->return_value <= 0)
 	 	// TODO: set ret
@@ -908,7 +933,12 @@ void compute_new_abstract_state_handle___pkvm_init_vm(struct ghost_state *g1, st
 	struct ghost_vm *vm1 = ghost_vms_alloc(&g1->vms, handle);
 	ghost_assert(vm1);
 
-	u64 nr_vcpus = GHOST_READ_ONCE(call, host_kvm->max_vcpus);
+	u64 nr_vcpus = GHOST_READ_ONCE(call, host_kvm->created_vcpus);
+
+	if (nr_vcpus < 1) {
+		ret = -EINVAL;
+		goto out;
+	}
 
 	// TODO: error case on init'ing too many VMs?
 
