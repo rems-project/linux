@@ -26,9 +26,9 @@
  * struct ghost_loaded_vcpu - A Ghost copy of the per-cpu status of the currently-loaded vcpu
  *
  * @present: whether the parent ghost_state has a ghost loaded_vcpu, if false the other fields are undefined.
- * @loaded: whether this physical CPU has a loaded vCPU.
- * @vm_handle: if loaded, the opaque pkvm-assigned handle for the vcpu's guest vm.
- * @vcpu_index: if loaded, the index in the guest vm's vcpu table of the loaded vcpu.
+ * @loaded: if present, whether this physical CPU has a loaded vCPU.
+ * @vm_handle: if present and loaded, the opaque pkvm-assigned handle for the vcpu's guest vm.
+ * @vcpu_index: if present and loaded, the index in the guest vm's vcpu table of the loaded vcpu.
  *
  * Since this is per-cpu, it does not need to be protected by a lock.
  * Although the underlying vm and vcpu are protected by that guest vm's lock.
@@ -45,6 +45,8 @@ struct ghost_loaded_vcpu {
  *
  * @exists: whether this slot in the parent vcpu table has a valid vcpu in it.
  * @loaded: whether this vcpu is currently loaded on a physical CPU
+ *
+ * Context: Protected by the parent VM's lock.
  */
 struct ghost_vcpu {
 	bool exists;
@@ -61,8 +63,8 @@ struct ghost_vcpu {
  * @pkvm_handle: the opaque pkvm-assigned handle corresponding to this guest
  * @lock: a reference to the internal VM lock in pkvm.
  *
- * Protected by the VM's lock
- * the `lock` field should not be used to take the lock, only to check it
+ * Context: Protected by the VM's lock,
+ *          the `lock` field should not be used to take the lock, only to check it
  */
 struct ghost_vm {
 	abstract_pgtable vm_abstract_pgtable;
@@ -74,14 +76,17 @@ struct ghost_vm {
 
 /**
  * struct ghost_host - Ghost copy of the host android/linux state
+ *
  * @present: whether the parent ghost_state has some ghost host data
- * @host_abstract_pgtable_annot: the annotated (invalid) parts of the host pgt with owner_id!=HOST
- * @host_abstract_pgtable_shared: the valid parts of the host pgt with page state either SHARED_OWNED or SHARED_BORROWED
- * @host_abstract_pgtable_nonannot: for debugging, the concrete parts of the table that are actually mapped right now.
+ * @host_abstract_pgtable_annot: if present, the annotated (invalid) parts of the host pgt with owner_id!=HOST
+ * @host_abstract_pgtable_shared: if present, the valid parts of the host pgt with page state either SHARED_OWNED or SHARED_BORROWED
+ * @host_abstract_pgtable_nonannot: if present, for debugging, the concrete parts of the table that are actually mapped right now.
  *
  * The host (intermediate-physical, although idmapped) address space is represented in two parts:
  *  - The annot mapping, which are all parts of physical space, which are owned by pkvm or the guests, and not shared with the host
  *  - The shared mapping, which are accessible by the host, but either shared with another (i.e marked SHARED_OWNED) or shared by someone else with the host (marked SHARED_BORROWED)
+ *
+ * Context: Protected by the host's hyp lock.
  */
 struct ghost_host {                          // abstraction of state protected by the host lock
 	bool present;
@@ -211,9 +216,26 @@ void ghost_vm_clone_into_nomappings(struct ghost_vm *dest, struct ghost_vm *src)
 void ghost_vm_clone_into(struct ghost_vm *dest, struct ghost_vm *src);
 
 void ghost_lock_vms(void);
+
 void ghost_unlock_vms(void);
+
 void ghost_assert_vms_locked(void);
 
+/**
+ * struct ghost_state - Ghost copy of the whole EL2 state
+ *
+ * @hyp_memory: abstract mapping interpretation of the hyp_memory array.
+ * @pkvm: ghost EL2 hypervisor state, including EL2 Stage1 pagetables, protected by the pkvm hyp lock.
+ * @host: ghost host pagetable state, protected by the host pgtable lock.
+ * @regs: ghost copies of initial general-purpose and current system registers.
+ * @vms: vm table, protected by the ghost vms lock, with each inner vm protected by that vm's own lock.
+ * @hyp_physvirt_offset: ghost copy of the global physical offset of physical memory within the hyp VA space.
+ * @loaded_hyp_vcpu: per-physical-cpu ghost copies of the state of the currently loaded vcpu.
+ *
+ * A ghost state may be partial, and only have some of the above fields present.
+ * In that case, the ghost state is valid for those parts that are present,
+ * and should match the real physical state for those parts.
+ */
 struct ghost_state {
 	mapping hyp_memory;                    // constant after initialisation - the interpretation of hyp_memory[]
 	struct ghost_pkvm pkvm;                // protected by the pkvm lock
@@ -232,9 +254,9 @@ struct ghost_state {
 /**
  * struct ghost_read - A single relaxed read
  *
- * @phys_addr: the physical address read from
- * @value: the actual value that was read
- * @width: the size of the read, in bytes
+ * @phys_addr: the physical address read from.
+ * @value: the actual value that was read.
+ * @width: the size of the read, in bytes.
  */
 struct ghost_read {
 	u64 phys_addr;
@@ -245,11 +267,11 @@ struct ghost_read {
 /**
  * struct ghost_relaxed_reads - List of previously seen relaxed reads
  *
- * @len: count of stored relaxed reads
- * @read_slots: the underlying buffer of ghost reads
+ * @len: count of stored relaxed reads.
+ * @read_slots: the underlying buffer of ghost reads.
  *
- * read_slots contains an array of non-overlapping ghost_read objects, up to index len
- * then ghost_relaxed_reads_insert appends to this, and ghost_reads_get gets the corresponding read value
+ * The read_slots field contains an array of non-overlapping ghost_read objects, up to index len.
+ * ghost_relaxed_reads_insert appends to this, and ghost_reads_get gets the corresponding read value
  */
 struct ghost_relaxed_reads {
 	size_t len;
@@ -262,12 +284,11 @@ u64 ghost_relaxed_reads_get(struct ghost_relaxed_reads *rs, u64 phys_addr, u8 wi
 /**
  * struct ghost_call_data - Ghost copies of values from implementation
  *
- * To manage non-determinism in the implementation when writing the spec,
- * we collect various non-deterministically decided values
- * picked by the implementation
- *
- * @return_value: The final errno returned by the real implementation
+ * @return_value: The final value (usually an errno) returned by the real implementation.
  * @relaxed_reads: The list of relaxed READ_ONCE()s performed by the implementation.
+ *
+ * To manage non-determinism in the implementation when writing the spec,
+ * we collect various non-deterministically decided values used by the implementation
  */
 struct ghost_call_data {
 	u64 return_value;
