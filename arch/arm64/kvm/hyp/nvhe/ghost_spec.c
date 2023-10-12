@@ -744,7 +744,7 @@ void compute_new_abstract_state_handle___pkvm_vcpu_load(struct ghost_state *g1, 
 		goto out;
 
 	// if loading non-existent vcpu, do nothing.
-	if (vcpu_idx > vm->nr_vcpus)
+	if (vcpu_idx >= vm->nr_vcpus)
 		goto out;
 
 	struct ghost_vcpu *vcpu = &vm->vcpus[vcpu_idx];
