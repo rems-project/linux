@@ -65,7 +65,7 @@ struct ghost_vcpu {
  * @lock: a reference to the internal VM lock in pkvm.
  *
  * Context: Protected by the VM's lock,
- *          the `lock` field should not be used to take the lock, only to check it
+ *          the `lock` field should not be used to take the lock, only to check it for sanity checking of the spec machinery
  */
 struct ghost_vm {
 	abstract_pgtable vm_abstract_pgtable;
@@ -79,13 +79,13 @@ struct ghost_vm {
  * struct ghost_host - The host android/linux mapping
  *
  * @present: whether the parent ghost_state has some ghost host data
- * @host_abstract_pgtable_annot: if present, the annotated (invalid) parts of the host pgt with owner_id!=HOST
- * @host_abstract_pgtable_shared: if present, the valid parts of the host pgt with page state either SHARED_OWNED or SHARED_BORROWED
+ * @host_abstract_pgtable_annot: if present, the annotated (invalid) parts of the host pgt with owner_id!=PKVM_ID_HOST
+ * @host_abstract_pgtable_shared: if present, the valid parts of the host pgt with page state either PKVM_PAGE_SHARED_OWNED or PKVM_PAGE_SHARED_BORROWED
  * @host_abstract_pgtable_nonannot: if present, for debugging, the concrete parts of the table that are actually mapped right now.
  *
  * The host (intermediate-physical, although idmapped) address space is represented in two parts:
- *  - The annot mapping, which are all parts of physical space, which are owned by pkvm or the guests, and not shared with the host
- *  - The shared mapping, which are accessible by the host, but either shared with another (i.e marked SHARED_OWNED) or shared by someone else with the host (marked SHARED_BORROWED)
+ *  - The annot mapping, which are all unmapped in the host, includes all parts of hyp_memory (all the non-device memory the kernel knows about) which are owned by pkvm or the guests and not shared with the host (all shared locations will always be mapped)
+ *  - The shared mapping, which are accessible by the host, but either shared with another (i.e marked PKVM_PAGE_SHARED_OWNED) or shared by someone else with the host (marked PKVM_PAGE_SHARED_BORROWED)
  *
  * The nonannot isn't really in the host part of the abstract state (it's not computed by the next-abstract-state function);
  * it's just so we can do an approximation to the check of host Stage 2 translations that the "real spec" will do
@@ -100,7 +100,7 @@ struct ghost_host {
 };
 
 /**
- * struct ghost_pkvm - hypervisor-specific EL2 state pagetable
+ * struct ghost_pkvm - hypervisor-specific EL2 stage1 pagetable
  *
  * @present: whether the parent ghost state has some ghost pkvm EL2 data
  * @pkvm_abstract_pgtable: if present, abstract mapping containing the concrete EL2 Stage1 translation
@@ -119,7 +119,8 @@ struct ghost_pkvm {
  * @ctxt: if present, the EL0/1 register values on entry/exit to the C.
  * @el2_sysregs: if present, ghost copy of the current value of the EL2 system registers.
  *
- * Not all the registers are live.
+ * Not all the register values are present, but it's not explicitly marked which are,
+ * although which are present should be constant for all present register states.
  *
  * Context: thread-local, so not protected by any lock.
  */
