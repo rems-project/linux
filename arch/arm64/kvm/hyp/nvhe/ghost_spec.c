@@ -894,12 +894,12 @@ out:
 
 //TODO: move somewhere else
 #define host_virt_of_pkvm_va(X) X
-
+#define phys_of_host_va(X) X// TODO
 // performs the mapping checks of hyp_pin_shared_mem (from mem_protect.c)
 bool ghost_hyp_check_host_shared_mem(struct ghost_state *g, u64 from, u64 to)
 {
 	u64 start = ALIGN_DOWN((u64)from, PAGE_SIZE);
-	u64 end = PAGE_ALIGN((u64)(u64)to);
+	u64 end = PAGE_ALIGN((u64)to);
 	u64 size = end - start;
 	for (u64 addr=start; addr < size * PAGE_SIZE; addr += PAGE_SIZE) {
 		if (!is_owned_and_shared_by(g,  GHOST_HOST, host_virt_of_pkvm_va(addr)))
@@ -910,12 +910,57 @@ bool ghost_hyp_check_host_shared_mem(struct ghost_state *g, u64 from, u64 to)
 	return true;
 }
 
+static bool ghost_map_donated_memory(struct ghost_state *g1, struct ghost_state *g0, u64 host_virt, size_t size)
+{
+	phys_addr_t phys_addr = host_virt; // TODO: have some macro
+	u64 hyp_virt = (u64)ghost__hyp_va(g0, phys_addr);
+	u64 nr_pages = PAGE_ALIGN((u64)size);
+
+	for (u64 addr=host_virt; addr < nr_pages * PAGE_SIZE; addr += PAGE_SIZE) {
+		if (!is_owned_exclusively_by(g0, GHOST_HOST, addr))
+			return false;
+
+	}
+	for (u64 addr=hyp_virt; addr < nr_pages * PAGE_SIZE; addr += PAGE_SIZE) {
+		if (mapping_in_domain(hyp_virt, g0->pkvm.pkvm_abstract_pgtable.mapping))
+			return false;
+	}
+
+	g1->host.host_abstract_pgtable_annot.mapping =
+		mapping_plus(g0->host.host_abstract_pgtable_annot.mapping,
+			mapping_singleton(host_virt, nr_pages, maplet_target_annot(PKVM_ID_HYP)));
+
+	u64 host_arch_prot = arch_prot_of_prot(ghost_default_host_prot(ghost_addr_is_memory(g0, phys_addr)));
+	u64 hyp_arch_prot = host_arch_prot;
+
+	g1->pkvm.pkvm_abstract_pgtable.mapping =
+		mapping_plus(g1->pkvm.pkvm_abstract_pgtable.mapping,
+			mapping_singleton(hyp_virt, nr_pages,
+				maplet_target_mapped_ext(phys_addr, PKVM_PAGE_OWNED, hyp_arch_prot)));
+	return true;
+}
+
+// TODO: duplicating pkvm_get_hyp_vm_size() because it is static (in arch/arm64/kvm/hyp/nvhe/pkvm.c)
+static size_t ghost_pkvm_get_hyp_vm_size(unsigned int nr_vcpus)
+{
+	return size_add(sizeof(struct pkvm_hyp_vm),
+		size_mul(sizeof(struct pkvm_hyp_vcpu *), nr_vcpus));
+}
+
+static size_t ghost_pkvm_get_last_ran_size(struct ghost_state *g)
+{	
+	// TODO: this directly using the hyp_nr_cpus global from setup.c
+	// we need to have a copy in the ghost_state instead
+	return array_size(hyp_nr_cpus, sizeof(int));
+}
+
 void compute_new_abstract_state_handle___pkvm_init_vm(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call) {
 	int ret;
 	GHOST_SPEC_DECLARE_REG(struct kvm *, host_kvm, g0, 1);
 	GHOST_SPEC_DECLARE_REG(unsigned long, vm_hva, g0, 2);
 	GHOST_SPEC_DECLARE_REG(unsigned long, pgd_hva, g0, 3);
 	GHOST_SPEC_DECLARE_REG(unsigned long, last_ran_hva, g0, 4);
+	size_t vm_size, pgd_size, last_ran_size;
 
 	// checking that the pages underlying the host_kvm structure is owned by the host
 	// and shared with pKVM
@@ -924,36 +969,77 @@ void compute_new_abstract_state_handle___pkvm_init_vm(struct ghost_state *g1, st
 		goto out;
 	}
 
+	u64 handle = call->return_value;
+	// TODO: insert_vm_table_entry() may return -EINVAL if during the init
+	// of pKVM vm_table could not allocated
+	struct ghost_vm *vm1 = ghost_vms_alloc(&g1->vms, handle);
+	if (!vm1) {
+		ret = -ENOMEM;
+		goto out;
+	}
+
 	if (call->return_value <= 0)
 	 	// TODO: set ret
 		goto out;
 
-	u64 handle = call->return_value;
-
-	struct ghost_vm *vm1 = ghost_vms_alloc(&g1->vms, handle);
-	ghost_assert(vm1);
+	// the calls to map_donated_memory() may run out of
+	// memory when updating the pKVM page table
+	// BS suspects there is an invariant preventing this from
+	// actually happening. If this is the case, the following
+	// check can be removed from the spec.
+	if (call->return_value == -ENOMEM) {
+		ret = call->return_value; // TODO
+		goto out;
+	}
 
 	u64 nr_vcpus = GHOST_READ_ONCE(call, host_kvm->created_vcpus);
-
 	if (nr_vcpus < 1) {
 		ret = -EINVAL;
 		goto out;
 	}
 
-	// TODO: error case on init'ing too many VMs?
+	vm_size = ghost_pkvm_get_hyp_vm_size(nr_vcpus);
+	last_ran_size = ghost_pkvm_get_last_ran_size(g0);
+	pgd_size = kvm_pgtable_stage2_pgd_size(host_mmu.arch.vtcr);
+
+	if (   !PAGE_ALIGNED(vm_hva)
+	    && !PAGE_ALIGNED(last_ran_hva)
+	    && !PAGE_ALIGNED(pgd_hva)) {
+		// if any of the calls to map_donated_memory()
+		// are given a non-page aligned va, it returns NULL
+		// which causes the hypercall to return -ENOMEM
+		ret = -ENOMEM;
+		goto out;
+	    }
+	if (!ghost_map_donated_memory(g1, g0, vm_hva, vm_size)) {
+		ret = -ENOMEM;
+		goto out;
+	}
+	if (!ghost_map_donated_memory(g1, g0, last_ran_hva, last_ran_size)) {
+		ret = -ENOMEM;
+		goto out;
+	}
+	if (!ghost_map_donated_memory(g1, g0, pgd_hva, pgd_size)) {
+		ret = -ENOMEM;
+		goto out;
+	}
 
 	g1->vms.present = true;
 	struct ghost_vm vm = (struct ghost_vm) {
 		.pkvm_handle = handle,
 		.nr_vcpus = nr_vcpus,
+		// NOTE: this sets the .loaded fields of all the elements
+		// of the array to false
 		.vcpus = {0},
-		.vm_abstract_pgtable = {0},
+		// NOTE: we expect the VM's page table to be place at the beginning
+		// of the first page of the memory region donated by the host
+		// for that purpose
+		.vm_abstract_pgtable = { .root = phys_of_host_va(pgd_hva), .mapping= mapping_empty_() },
 	};
-	// TODO: init .vm_abstract_pgtable to init state (how to get the root?)
-	// TODO: init .vcpus table
+	
 	ghost_vm_clone_into(vm1, &vm);
 	// TODO: free old mappings
-	ret = 0;
+	ret = handle;
 out:
 	ghost_reg_gpr(g1, 1) = 0;
 }
