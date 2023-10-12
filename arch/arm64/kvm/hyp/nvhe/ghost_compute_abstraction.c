@@ -218,7 +218,7 @@ bool abstraction_equals_loaded_vcpu(struct ghost_loaded_vcpu loaded_vcpu1, struc
 		return    loaded_vcpu1.vm_handle == loaded_vcpu2.vm_handle
 		       && loaded_vcpu1.vcpu_index == loaded_vcpu2.vcpu_index;
 	} else {
-	  return false;
+		return false;
 	}
 }
 
