@@ -438,50 +438,148 @@ bool ghost_addr_is_allowed_memory(struct ghost_state *g, phys_addr_t phys)
 	return !(t.u.b.flags & MEMBLOCK_NOMAP);
 }
 
-static bool lookup_mapping_host_relinquished(const struct ghost_state *g, u64 addr, struct maplet_target *out)
-{
-	// this is to allow the caller to pass a NULL pointer if they do not care
-	// about the entry
-	struct maplet_target t;
-	if (!out)
-		out = &t;
-	if ( !mapping_lookup(addr, g->host.host_abstract_pgtable_annot.mapping, out) ) {
-		return false;
-	}
-	ghost_assert(out->k == ANNOT);
-	return true;
-}
-#define is_in_mapping_host_relinquished(G, A) (lookup_mapping_host_relinquished(G, A, NULL))
+// static bool lookup_mapping_host_relinquished(const struct ghost_state *g, u64 addr, struct maplet_target *out)
+// {
+// 	// this is to allow the caller to pass a NULL pointer if they do not care
+// 	// about the entry
+// 	struct maplet_target t;
+// 	if (!out)
+// 		out = &t;
+// 	if ( !mapping_lookup(addr, g->host.host_abstract_pgtable_annot.mapping, out) ) {
+// 		return false;
+// 	}
+// 	ghost_assert(out->k == ANNOT);
+// 	return true;
+// }
+// static inline bool is_in_mapping_host_relinquished(const struct ghost_state *g, u64 addr)
+// {
+// 	return lookup_mapping_host_relinquished(g, addr, NULL);
+// }
 
-static bool lookup_mapping_host_shared(const struct ghost_state *g, u64 addr, struct maplet_target *out)
-{
-	// this is to allow the caller to pass a NULL pointer if they do not care
-	// about the entry
-	struct maplet_target t;
-	if (!out)
-		out = &t;
-	if ( !mapping_lookup(addr, g->host.host_abstract_pgtable_shared.mapping, out) ) {
-		return false;
-	}
-	ghost_assert(out->k == MAPPED);
-	return true;
-}
-#define is_in_mapping_host_shared(G, A) (lookup_mapping_host_shared(G, A, NULL))
+// static bool lookup_mapping_host_shared(const struct ghost_state *g, u64 addr, struct maplet_target *out)
+// {
+// 	// this is to allow the caller to pass a NULL pointer if they do not care
+// 	// about the entry
+// 	struct maplet_target t;
+// 	if (!out)
+// 		out = &t;
+// 	if ( !mapping_lookup(addr, g->host.host_abstract_pgtable_shared.mapping, out) ) {
+// 		return false;
+// 	}
+// 	ghost_assert(out->k == MAPPED);
+// 	return true;
+// }
+// static inline bool is_in_mapping_host_shared(const struct ghost_state *g, u64 addr)
+// {
+// 	return lookup_mapping_host_shared(g, addr, NULL);
+// }
 
-static bool lookup_mapping_host_pkvm(const struct ghost_state *g, u64 addr, struct maplet_target *out)
+// static bool lookup_mapping_host_pkvm(const struct ghost_state *g, u64 addr, struct maplet_target *out)
+// {
+// 	// this is to allow the caller to pass a NULL pointer if they do not care
+// 	// about the entry
+// 	struct maplet_target t;
+// 	if (!out)
+// 		out = &t;
+// 	if ( !mapping_lookup(addr, g->pkvm.pkvm_abstract_pgtable.mapping, out) ) {
+// 		return false;
+// 	}
+// 	ghost_assert(out->k == MAPPED);
+// 	return true;
+// }
+// static inline bool is_in_mapping_pkvm(const struct ghost_state *g, u64 addr)
+// {
+// 	return lookup_mapping_host_pkvm(g, addr, NULL);
+// }
+
+
+
+enum ghost_host_or_hyp {
+	GHOST_HOST,
+	GHOST_HYP
+};
+
+static bool is_owned_exclusively_by(const struct ghost_state *g, enum ghost_host_or_hyp id, u64 addr)
 {
-	// this is to allow the caller to pass a NULL pointer if they do not care
-	// about the entry
-	struct maplet_target t;
-	if (!out)
-		out = &t;
-	if ( !mapping_lookup(addr, g->pkvm.pkvm_abstract_pgtable.mapping, out) ) {
-		return false;
+	switch(id) {
+	case GHOST_HOST:
+		if (mapping_in_domain(addr, g->host.host_abstract_pgtable_annot.mapping))
+			return false;
+		if (mapping_in_domain(addr, g->host.host_abstract_pgtable_shared.mapping))
+			return false;
+		return true;
+	case GHOST_HYP:
+		return mapping_in_domain(addr, g->pkvm.pkvm_abstract_pgtable.mapping);
+	default:
+		ghost_assert(false);
+		unreachable();
 	}
-	ghost_assert(out->k == MAPPED);
-	return true;
 }
-#define is_in_mapping_pkvm(G, A) (lookup_mapping_host_pkvm(G, A, NULL))
+
+static bool is_owned_and_shared_by(const struct ghost_state *g, enum ghost_host_or_hyp id, u64 addr)
+{
+	struct maplet_target t;
+	switch (id) {
+	case GHOST_HOST:
+		if (!mapping_lookup(addr, g->host.host_abstract_pgtable_shared.mapping, &t))
+			return false;
+		break;
+	case GHOST_HYP:
+		if (!mapping_lookup(addr, g->pkvm.pkvm_abstract_pgtable.mapping, &t))
+			return false;
+		break;
+	default:
+		ghost_assert(false);
+		unreachable();
+	}
+	ghost_assert(t.k == MAPPED);
+	return t.u.m.page_state == PKVM_PAGE_SHARED_OWNED;
+}
+
+static bool is_borrowed_by(const struct ghost_state *g, enum ghost_host_or_hyp id, u64 addr)
+{
+	struct maplet_target t;
+	switch (id) {
+	case GHOST_HOST:
+		if (!mapping_lookup(addr, g->host.host_abstract_pgtable_shared.mapping, &t))
+			return false;
+		break;
+	case GHOST_HYP:
+		if (!mapping_lookup(addr, g->pkvm.pkvm_abstract_pgtable.mapping, &t))
+			return false;
+		break;
+	default:
+		ghost_assert(false);
+		unreachable();
+	}
+	ghost_assert(t.k == MAPPED);
+	return t.u.m.page_state == PKVM_PAGE_SHARED_BORROWED;
+}
+
+
+// static bool is_shared_with_state(mapping m, u64 addr, enum pkvm_page_state expected_state)
+// {
+// 	ghost_assert(expected_state == PKVM_PAGE_SHARED_OWNED || expected_state == PKVM_PAGE_SHARED_BORROWED);
+	
+// 	struct maplet_target t;
+// 	if (!mapping_lookup(addr, m, &t)) {
+// 		return false;
+// 	}
+// 	switch (t.k) {
+// 	case MAPPED:
+// 		return t.u.m.page_state == expected_state;
+// 	default:
+// 		return false;
+// 	}
+// }
+// inline static bool is_host_mapped_with_state(struct ghost_state *g, u64 addr, enum pkvm_page_state expected_state)
+// {
+// 	return is_mapped_with_state(g->host.host_abstract_pgtable_shared.mapping, addr, expected_state);
+// }
+// inline static bool is_pkvm_mapped_with_state(struct ghost_state *g, u64 addr, enum pkvm_page_state expected_state)
+// {
+// 	return is_mapped_with_state(g->pkvm.pkvm_abstract_pgtable.mapping, addr, expected_state);
+// }
 
 
 // horrible hack: copied unchanged from mem_protect.c, just to get in scope
@@ -572,17 +670,13 @@ void compute_new_abstract_state_handle___pkvm_host_share_hyp(struct ghost_state 
 	}
 
 	// __host_check_page_state_range(addr, size, PKVM_PAGE_OWNED);
-	if (is_in_mapping_host_relinquished(g0, host_addr)) {
-		ret = -EPERM;
-		goto out;
-	}
-	if (is_in_mapping_host_shared(g0, host_addr)) {
+	if (!is_owned_exclusively_by(g0, GHOST_HOST, host_addr)) {
 		ret = -EPERM;
 		goto out;
 	}
 	// checked in the pKVM code:
 	// do_share() -> check_share() -> hyp_ack_share() -> __hyp_check_page_state_range()
-	if (is_in_mapping_pkvm(g0, hyp_addr)) {
+	if (mapping_in_domain(hyp_addr, g0->pkvm.pkvm_abstract_pgtable.mapping)) {
 		ret = -EPERM;
 		goto out;
 	}
@@ -620,7 +714,7 @@ void compute_new_abstract_state_handle___pkvm_host_unshare_hyp(struct ghost_stat
 	int ret = 0;
 
 	// __host_check_page_state_range(addr, size, PKVM_PAGE_SHARED_OWNED);
-	if (!is_in_mapping_host_shared(g0, host_addr)) {
+	if (!is_owned_and_shared_by(g0, GHOST_HOST, host_addr)) {
 		ret = -EPERM;
 		goto out;
 	}
@@ -691,16 +785,11 @@ void compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost_state 
 	// TODO: non-protected VM/VCPUs?
 
 	// if this page is not accessible by the host, fail with -EPERM
-	if (lookup_mapping_host_relinquished(g0, host_virt, NULL)) {
+	if (!is_owned_exclusively_by(g0, GHOST_HOST, host_virt)) {
 		ret = -EPERM;
 		goto out;
 	}
-
-	// if this page is shared with/from the host, cannot give it away, so fail with -EPERM
-	if (lookup_mapping_host_shared(g0, host_virt, NULL)) {
-		ret = -EPERM;
-		goto out;
-	}
+	// TODO: check that the addr is not already mapping the guest mapping
 
 	// TODO: other error cases
 	g1->host.host_abstract_pgtable_annot.mapping =
