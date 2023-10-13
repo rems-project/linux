@@ -782,6 +782,27 @@ void compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost_state 
 	ghost_assert(g0_vm != NULL);
 	ghost_assert(g1_vm != NULL);
 
+	// The call to pkvm_refill_memcache() may non-deterministically
+	// fail because we run out of memory. In this case the hypercall
+	// ends with that host mapping left unchanged.
+	//
+	// The code of __pkvm_host_donate_guest() allows for a non-deterministic
+	// run out of memory when updating the guest page table.
+	// However, BS and KM think that pkvm_refill_memcache() is checking
+	// that this cannot happens by donating the max number of pages
+	// that may be needed from the host's memcache to pKVM's memcache used
+	// for the guest.
+	// TODO: there is still something we don't understand in the code
+	// see the BS comment in arch/arm64/kvm/hyp/nvhe/mm.c
+	// TODO2: we need to model the donation from the host of the pages used
+	// in pKVM (guest) memcached.
+	// This will require adding more state to ghost_pkvm
+	if (call->return_value == -ENOMEM) {
+		ret = -ENOMEM;
+		goto out;
+	}
+
+
 	// TODO: non-protected VM/VCPUs?
 
 	// if this page is not accessible by the host, fail with -EPERM
@@ -789,20 +810,16 @@ void compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost_state 
 		ret = -EPERM;
 		goto out;
 	}
-	// TODO: check that the addr is not already mapping the guest mapping
+	// if the addr is already mapped in the guest mapping, fail with -EPERM
+	if (mapping_in_domain(guest_virt, g0_vm->vm_abstract_pgtable.mapping)) {
+		ret = -EPERM;
+		goto out;
+	}
 
 	// TODO: other error cases
 	g1->host.host_abstract_pgtable_annot.mapping =
 		mapping_plus(g0->host.host_abstract_pgtable_annot.mapping,
 		             mapping_singleton(host_virt, 1, maplet_target_annot(PKVM_ID_GUEST)));
-
-	// non-det failure on attempting to top-up guest memcache
-	// resolved by dispatching on the implementations return value
-	// TODO: check this case more carefully...
-	if (call->return_value == -ENOMEM) {
-		ret = -ENOMEM;
-		goto out;
-	}
 
 	u64 guest_arch_prot = arch_prot_of_prot(ghost_default_host_prot(ghost_addr_is_memory(g0, phys_addr)));
 
