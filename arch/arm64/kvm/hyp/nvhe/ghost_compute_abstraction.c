@@ -788,12 +788,12 @@ void ghost_relaxed_reads_insert(struct ghost_relaxed_reads *rs, u64 phys_addr, u
 			ghost_assert(false); // existing read inside this one
 	}
 
+	ghost_assert(rs->len < GHOST_MAX_RELAXED_READS);
 	rs->read_slots[rs->len++] = (struct ghost_read){
 		.phys_addr = phys_addr,
 		.width = width,
 		.value = value,
 	};
-	BUG_ON(rs->len > GHOST_MAX_RELAXED_READS);
 }
 
 u64 ghost_relaxed_reads_get(struct ghost_relaxed_reads *rs, u64 phys_addr, u8 width)
