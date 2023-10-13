@@ -822,4 +822,9 @@ struct ghost_loaded_vcpu *this_cpu_ghost_loaded_vcpu(struct ghost_state *g)
 	// so we rely on Linux setting up the software-defined tpidr_el2 register correctly
 	u64 idx = read_sysreg(tpidr_el2);
 	return &g->loaded_hyp_vcpu[idx];
+	// TODO, KM: there is a macro for shifting that we should probably use, but don't we can
+	// at the moment because we are probably not declaring the per_cpu field properly.
+	//
+	// u64 cpu_offset = read_sysreg(tpidr_el2);
+	// return *SHIFT_PERCPU_PTR(&g->loaded_hyp_vcpu, cpu_offset);
 }
