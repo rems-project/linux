@@ -435,6 +435,9 @@ int refill_memcache(struct kvm_hyp_memcache *mc, unsigned long min_pages,
 
 	ret =  __topup_hyp_memcache(mc, min_pages, admit_host_page,
 				    hyp_virt_to_phys, &tmp);
+	// TODO
+	// BS: there is a memcache per vcpu, and a vcpu can only be loaded on one cpu at
+	// a time so no locks needed but why update with tmp like this?
 	*host_mc = tmp;
 
 	return ret;
