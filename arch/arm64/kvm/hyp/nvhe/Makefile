@@ -125,3 +125,5 @@ KCOV_INSTRUMENT	:= n
 # Skip objtool checking for this directory because nVHE code is compiled with
 # non-standard build rules.
 OBJECT_FILES_NON_STANDARD := y
+
+ccflags-y += -O1
