@@ -29,12 +29,15 @@ clean-pkvm:
 	$(MAKE) -C .. distclean  # Remove editor backup files, patch leftover files, etc.
 .PHONY: clean-pkvm
 
-get-deps:
+prepare-container:
 	@echo ... getting deps
 	sudo sed -i 's/# deb-src/deb-src/' /etc/apt/sources.list
 	sudo apt update
 	sudo apt-get build-dep -y linux
 	sudo apt install -y qemu-system-aarch64
+.PHONY: prepare-container
+
+get-deps:
 .PHONY: get-deps
 
 configure:
