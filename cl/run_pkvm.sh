@@ -10,4 +10,4 @@ qemu-system-aarch64 -M virt        \
     -device virtio-net-pci,netdev=net0                \
     -netdev user,id=net0,hostfwd=tcp::8022-:22            \
     -nographic \
-    -kernel arch/arm64/boot/Image -append "earlycon nokaslr kvm-arm.mode=protected root=/dev/vda2" 
+    -kernel arch/arm64/boot/Image -append "earlycon nokaslr kvm-arm.mode=protected root=/dev/vda2" $*
