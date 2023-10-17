@@ -1,6 +1,10 @@
 ARCH = $(shell uname -p)
 include clang/Makefile-$(ARCH)
 
+# path to Linux config script
+CONFIG = ../scripts/config
+CONFIG_FLAGS = --file ../.config
+
 all:
 .PHONY: all
 
@@ -38,14 +42,15 @@ configure:
 	$(MAKE) -C .. ARCH=arm64 CC=$(CC) CROSS_COMPILE=aarch64-linux-gnu- -j $$(nproc) defconfig
 
 	@echo ... force DWARF4 output
-	sed -i 's/CONFIG_RANDOMIZE_BASE=y/# CONFIG_RANDOMIZE_BASE is not set/' ../.config
-	sed -i 's/# CONFIG_NVHE_EL2_DEBUG is not set/CONFIG_NVHE_EL2_DEBUG=y/' ../.config
-	sed -i 's/# CONFIG_KVM_ARM_HYP_DEBUG_UART is not set/CONFIG_KVM_ARM_HYP_DEBUG_UART=y/' ../.config
-	sed -i 's/CONFIG_DEBUG_INFO_DWARF_TOOLCHAIN_DEFAULT=y/# CONFIG_DEBUG_INFO_DWARF_TOOLCHAIN_DEFAULT is not set/' ../.config
-	sed -i 's/# CONFIG_DEBUG_INFO_DWARF4 is not set/CONFIG_DEBUG_INFO_DWARF4=y/' ../.config
-	echo 'CONFIG_PROTECTED_NVHE_STACKTRACE=y' >> ../.config
-#	echo 'CONFIG_KVM_ARM_HYP_DEBUG_UART=y' >> ../.config
-#	echo 'CONFIG_KVM_ARM_HYP_DEBUG_UART_ADDR=0x09000000' >> ../.config
+	$(CONFIG) $(CONFIG_FLAGS) -d CONFIG_RANDOMIZE_BASE
+	$(CONFIG) $(CONFIG_FLAGS) -e CONFIG_NVHE_EL2_DEBUG
+	$(CONFIG) $(CONFIG_FLAGS) -e CONFIG_KVM_ARM_HYP_DEBUG_UART
+	$(CONFIG) $(CONFIG_FLAGS) -d CONFIG_DEBUG_INFO_DWARF_TOOLCHAIN_DEFAUL
+	$(CONFIG) $(CONFIG_FLAGS) -e CONFIG_DEBUG_INFO_DWARF4
+	$(CONFIG) $(CONFIG_FLAGS) -e CONFIG_PROTECTED_NVHE_STACKTRACE
+	$(CONFIG) $(CONFIG_FLAGS) -e CONFIG_KVM_ARM_HYP_DEBUG_UART
+	$(CONFIG) $(CONFIG_FLAGS) --set-val CONFIG_KVM_ARM_HYP_DEBUG_UART_ADDR 0x09000000
+	$(CONFIG) $(CONFIG_FLAGS) --set-val CONFIG_NVHE_EL2_STACKSIZE 1000
 .PHONY: configure
 
 build:
