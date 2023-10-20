@@ -351,7 +351,6 @@ void compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost_state 
 	mapping g1_host_annot_mapping = mapping_copy(g0->host.host_abstract_pgtable_annot.mapping);
 	mapping g1_host_shared_mapping = mapping_copy(g0->host.host_abstract_pgtable_shared.mapping);
 
-	g1->pkvm.pkvm_abstract_pgtable.mapping = mapping_copy(g0->pkvm.pkvm_abstract_pgtable.mapping);
 	for (int d=0; d<call->memcache_donations.len; d++) {
 		u64 pfn = call->memcache_donations.pages[d];
 		u64 page = hyp_pfn_to_phys(pfn);
