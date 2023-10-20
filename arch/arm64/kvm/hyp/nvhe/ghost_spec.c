@@ -113,20 +113,22 @@ static bool is_owned_exclusively_by(const struct ghost_state *g, enum ghost_host
 	}
 }
 
-// if id == GHOST_HOST, addr should be a host_ipa
-// if id == GHOST_HYP,  addr should be a hyp_va
-static bool is_owned_and_shared_by(const struct ghost_state *g, enum ghost_host_or_hyp id, u64 addr)
+static bool is_owned_and_shared_by(const struct ghost_state *g, enum ghost_host_or_hyp id, phys_addr_t addr)
 {
 	struct maplet_target t;
 	switch (id) {
-	case GHOST_HOST:
-		if (!mapping_lookup(addr, g->host.host_abstract_pgtable_shared.mapping, &t))
+	case GHOST_HOST: {
+		host_ipa_t host_ipa = host_ipa_of_phys(addr);
+		if (!mapping_lookup(host_ipa, g->host.host_abstract_pgtable_shared.mapping, &t))
 			return false;
 		break;
-	case GHOST_HYP:
-		if (!mapping_lookup(addr, g->pkvm.pkvm_abstract_pgtable.mapping, &t))
+	}
+	case GHOST_HYP: {
+		hyp_va_t hyp_va = hyp_va_of_phys(g, addr);
+		if (!mapping_lookup(hyp_va, g->pkvm.pkvm_abstract_pgtable.mapping, &t))
 			return false;
 		break;
+	}
 	default:
 		ghost_assert(false);
 		unreachable();
@@ -137,7 +139,7 @@ static bool is_owned_and_shared_by(const struct ghost_state *g, enum ghost_host_
 
 // if id == GHOST_HOST, addr should be a host_ipa
 // if id == GHOST_HYP,  addr should be a hyp_va
-static bool is_borrowed_by(const struct ghost_state *g, enum ghost_host_or_hyp id, u64 addr)
+static bool is_borrowed_by(const struct ghost_state *g, enum ghost_host_or_hyp id, phys_addr_t addr)
 {
 	struct maplet_target t;
 	switch (id) {
@@ -261,7 +263,7 @@ void compute_new_abstract_state_handle___pkvm_host_unshare_hyp(struct ghost_stat
 	int ret = 0;
 
 	// __host_check_page_state_range(addr, size, PKVM_PAGE_SHARED_OWNED);
-	if (!is_owned_and_shared_by(g0, GHOST_HOST, host_addr)) {
+	if (!is_owned_and_shared_by(g0, GHOST_HOST, phys)) {
 		ret = -EPERM;
 		goto out;
 	}
@@ -355,19 +357,19 @@ void compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost_state 
 
 	for (int d=0; d<call->memcache_donations.len; d++) {
 		u64 pfn = call->memcache_donations.pages[d];
-		u64 page = hyp_pfn_to_phys(pfn);
-		u64 host_page_ipa = page;
-		u64 hyp_page_addr = (u64)ghost__hyp_va(g0, page);
-		u64 hyp_arch_prot = arch_prot_of_prot(ghost_default_host_prot(ghost_addr_is_memory(g0, page)));
+		phys_addr_t donated_phys = hyp_pfn_to_phys(pfn);
+		host_ipa_t host_page_ipa = host_ipa_of_phys(donated_phys);
+		hyp_va_t hyp_page_addr = (u64)ghost__hyp_va(g0, donated_phys);
+		u64 hyp_arch_prot = arch_prot_of_prot(ghost_default_host_prot(ghost_addr_is_memory(g0, donated_phys)));
 
 		// TODO: what if location was not shared with pKVM?
-		if (!(is_owned_and_shared_by(g0, GHOST_HOST, page) && is_borrowed_by(g0, GHOST_HYP, page)))
+		if (!(is_owned_and_shared_by(g0, GHOST_HOST, donated_phys) && is_borrowed_by(g0, GHOST_HYP, donated_phys)))
 			ghost_spec_assert(false);
 
 		g1_pkvm_mapping =
 			mapping_plus(
-				mapping_minus(g1_pkvm_mapping, page, 1),
-				mapping_singleton(hyp_page_addr, 1, maplet_target_mapped_ext(page, PKVM_PAGE_OWNED, hyp_arch_prot))
+				mapping_minus(g1_pkvm_mapping, hyp_page_addr, 1),
+				mapping_singleton(hyp_page_addr, 1, maplet_target_mapped_ext(donated_phys, PKVM_PAGE_OWNED, hyp_arch_prot))
 			);
 
 		g1_host_shared_mapping =
@@ -492,7 +494,6 @@ out:
 }
 
 //TODO: move somewhere else
-#define host_ipa_of_pkvm_va(X) X
 #define phys_of_host_va(X) X// TODO
 // performs the mapping checks of hyp_pin_shared_mem (from mem_protect.c)
 bool ghost_hyp_check_host_shared_mem(struct ghost_state *g, u64 from, u64 to)
@@ -500,10 +501,10 @@ bool ghost_hyp_check_host_shared_mem(struct ghost_state *g, u64 from, u64 to)
 	u64 start = ALIGN_DOWN((u64)from, PAGE_SIZE);
 	u64 end = PAGE_ALIGN((u64)to);
 	u64 size = end - start;
-	for (u64 addr=start; addr < size * PAGE_SIZE; addr += PAGE_SIZE) {
-		if (!is_owned_and_shared_by(g, GHOST_HOST, host_ipa_of_pkvm_va(addr)))
+	for (host_va_t addr=start; addr < size * PAGE_SIZE; addr += PAGE_SIZE) {
+		if (!is_owned_and_shared_by(g, GHOST_HOST, phys_of_host_va(addr)))
 			return false;
-		if (!is_borrowed_by(g, GHOST_HYP, addr)) 
+		if (!is_borrowed_by(g, GHOST_HYP, phys_of_host_va(addr))) 
 			return false;
 	}
 	return true;
@@ -555,10 +556,10 @@ static size_t ghost_pkvm_get_last_ran_size(struct ghost_state *g)
 
 void compute_new_abstract_state_handle___pkvm_init_vm(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call) {
 	int ret;
-	GHOST_SPEC_DECLARE_REG(struct kvm *, host_kvm, g0, 1);       // TODO: this is a host_ipa
-	GHOST_SPEC_DECLARE_REG(unsigned long, vm_hva, g0, 2);        // TODO: this is a host_ipa
-	GHOST_SPEC_DECLARE_REG(unsigned long, pgd_hva, g0, 3);       // TODO: this is a host_ipa
-	GHOST_SPEC_DECLARE_REG(unsigned long, last_ran_hva, g0, 4);  // TODO: this is a host_ipa
+	GHOST_SPEC_DECLARE_REG(struct kvm *, host_kvm, g0, 1);       // TODO: this is a host_va
+	GHOST_SPEC_DECLARE_REG(unsigned long, vm_hva, g0, 2);        // TODO: this is a host_va
+	GHOST_SPEC_DECLARE_REG(unsigned long, pgd_hva, g0, 3);       // TODO: this is a host_va
+	GHOST_SPEC_DECLARE_REG(unsigned long, last_ran_hva, g0, 4);  // TODO: this is a host_va
 	size_t vm_size, pgd_size, last_ran_size;
 
 	// checking that the pages underlying the host_kvm structure is owned by the host
