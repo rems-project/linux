@@ -293,11 +293,30 @@ struct ghost_relaxed_reads {
 void ghost_relaxed_reads_insert(struct ghost_relaxed_reads *rs, u64 phys_addr, u8 width, u64 value);
 u64 ghost_relaxed_reads_get(struct ghost_relaxed_reads *rs, u64 phys_addr, u8 width);
 
+#define GHOST_MAX_MEMCACHE_DONATIONS 16
+
+/**
+ * struct ghost_memcache_donations - List of memcache pages donated to hypervisor during call
+ *
+ * @len: count of donations
+ * @pages: the underlying buffer of donated addresses.
+ *
+ * The slots field contains an array of donated pfns, up to index len.
+ * ghost_memcache_donations_insert appends to this
+ */
+struct ghost_memcache_donations {
+	size_t len;
+	u64 pages[GHOST_MAX_MEMCACHE_DONATIONS];
+};
+
+void ghost_memcache_donations_insert(struct ghost_memcache_donations *ds, u64 pfn);
+
 /**
  * struct ghost_call_data - Ghost copies of values seen by implementation
  *
  * @return_value: The final value (usually an errno) returned by the real implementation.
  * @relaxed_reads: The list of relaxed READ_ONCE()s performed by the implementation.
+ * @memcache_donations: list of donated addresses
  *
  * To manage non-determinism in the spec,
  * we collect various non-deterministically decided values used by the implementation,
@@ -306,6 +325,7 @@ u64 ghost_relaxed_reads_get(struct ghost_relaxed_reads *rs, u64 phys_addr, u8 wi
 struct ghost_call_data {
 	u64 return_value;
 	struct ghost_relaxed_reads relaxed_reads;
+	struct ghost_memcache_donations memcache_donations;
 };
 
 
@@ -424,6 +444,10 @@ void compute_new_abstract_state_handle_trap(struct ghost_state *g1 /*new*/, stru
  */
 #define GHOST_SPEC_DECLARE_REG(type, name, ctxt, reg)	\
 				type name = (type)ghost_reg_gpr(ctxt, (reg))
+
+
+#define GHOST_RECORD_MEMCACHE_DONATION(pfn) \
+	ghost_memcache_donations_insert(&this_cpu_ptr(&gs_call_data)->memcache_donations, (u64)pfn)
 
 #endif // _GHOST_SPEC_H
 

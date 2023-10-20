@@ -811,6 +811,11 @@ u64 ghost_relaxed_reads_get(struct ghost_relaxed_reads *rs, u64 phys_addr, u8 wi
 	unreachable();
 }
 
+void ghost_memcache_donations_insert(struct ghost_memcache_donations *ds, u64 pfn) {
+	ghost_assert(ds->len < GHOST_MAX_MEMCACHE_DONATIONS);
+	ds->pages[ds->len++] = pfn;
+}
+
 /********************************************/
 // ghost loaded vcpu
 

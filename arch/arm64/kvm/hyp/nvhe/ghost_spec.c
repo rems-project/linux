@@ -35,6 +35,7 @@ void ghost_clear_call_data(void)
 	struct ghost_call_data *call = this_cpu_ptr(&gs_call_data);
 	call->return_value = 0;
 	call->relaxed_reads.len = 0;
+	call->memcache_donations.len = 0;
 }
 
 
