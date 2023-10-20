@@ -243,10 +243,6 @@ static void *guest_s2_zalloc_page(void *mc)
 	memset(p, 0, sizeof(*p));
 	p->refcount = 1;
 
-	// GHOST
-	GHOST_RECORD_MEMCACHE_DONATION(hyp_virt_to_pfn(addr));
-	// /GHOST
-
 	return addr;
 }
 

@@ -19,6 +19,7 @@
 #include <nvhe/spinlock.h>
 
 // GHOST
+#include "ghost_spec.h"
 #include <nvhe/ghost_mapping_reqs.h>
 // /GHOST
 
@@ -422,6 +423,10 @@ static void *admit_host_page(void *arg)
 	 */
 	if (__pkvm_host_donate_hyp(hyp_phys_to_pfn(host_mc->head), 1))
 		return NULL;
+
+	// GHOST
+	GHOST_RECORD_MEMCACHE_DONATION(hyp_phys_to_pfn(host_mc->head));
+	// /GHOST
 
 	return pop_hyp_memcache(host_mc, hyp_phys_to_virt);
 }
