@@ -42,6 +42,27 @@ void ghost_clear_call_data(void)
 // adapted from memory.h to make it a pure function of the ghost state rather than depend on the impl global hyp_phys_virt_offset
 #define ghost__hyp_va(g,phys)	((void *)((phys_addr_t)(phys) - g->hyp_physvirt_offset))
 
+// type of pKVM virtual addresses
+typedef u64 hyp_va_t;
+// Host kernel virtual address
+typedef u64 host_va_t;
+// Host intermediate physical address
+typedef u64 host_ipa_t;
+// guest intermediate physical address
+typedef u64 guest_ipa_t;
+
+
+// this function is only valid if @phys is within the address range to which
+// the hyp_va linear mapped range is mapped too.
+// THAT IS: memstart_addr <= phys && phys < memstart_addr + 2^tag_lsb
+static inline hyp_va_t hyp_va_of_phys(struct ghost_state *g, phys_addr_t phys)
+{
+	return phys - g->hyp_physvirt_offset;
+}
+
+#define host_ipa_of_phys(PHYS) PHYS
+
+
 // adapted from mem_protect.c to use the hyp_memory map
 bool ghost_addr_is_memory(struct ghost_state *g, phys_addr_t phys)
 {
@@ -70,6 +91,8 @@ enum ghost_host_or_hyp {
 	GHOST_HYP
 };
 
+// if id == GHOST_HOST, addr should be a host_ipa
+// if id == GHOST_HYP,  addr should be a hyp_va
 static bool is_owned_exclusively_by(const struct ghost_state *g, enum ghost_host_or_hyp id, u64 addr)
 {
 	switch(id) {
@@ -87,6 +110,8 @@ static bool is_owned_exclusively_by(const struct ghost_state *g, enum ghost_host
 	}
 }
 
+// if id == GHOST_HOST, addr should be a host_ipa
+// if id == GHOST_HYP,  addr should be a hyp_va
 static bool is_owned_and_shared_by(const struct ghost_state *g, enum ghost_host_or_hyp id, u64 addr)
 {
 	struct maplet_target t;
@@ -107,6 +132,8 @@ static bool is_owned_and_shared_by(const struct ghost_state *g, enum ghost_host_
 	return t.u.m.page_state == PKVM_PAGE_SHARED_OWNED;
 }
 
+// if id == GHOST_HOST, addr should be a host_ipa
+// if id == GHOST_HYP,  addr should be a hyp_va
 static bool is_borrowed_by(const struct ghost_state *g, enum ghost_host_or_hyp id, u64 addr)
 {
 	struct maplet_target t;
@@ -154,9 +181,9 @@ u64 arch_prot_of_prot(enum kvm_pgtable_prot prot)
 void compute_new_abstract_state_handle___pkvm_host_share_hyp(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call)
 {
 	u64 pfn = ghost_reg_gpr(g0, 1);
-	u64 host_addr = hyp_pfn_to_phys(pfn); // ((phys_addr_t)((pfn) << PAGE_SHIFT)) // pure
-	u64 phys_addr = host_addr; // TODO: isn't there a macro that we can use here?
-	u64 hyp_addr = (u64)ghost__hyp_va(g0,phys_addr);
+	phys_addr_t phys = hyp_pfn_to_phys(pfn); // ((phys_addr_t)((pfn) << PAGE_SHIFT)) // pure
+	host_ipa_t host_addr = host_ipa_of_phys(phys);
+	hyp_va_t hyp_addr = hyp_va_of_phys(g0, phys);
 	int ret = 0;
 
 	/* TODO: do some more thinking and if needed fix the following THEN branch
@@ -198,7 +225,7 @@ void compute_new_abstract_state_handle___pkvm_host_share_hyp(struct ghost_state 
 		goto out;
 	}
 
-	u64 host_arch_prot = arch_prot_of_prot(ghost_default_host_prot(ghost_addr_is_memory(g0, phys_addr)));
+	u64 host_arch_prot = arch_prot_of_prot(ghost_default_host_prot(ghost_addr_is_memory(g0, phys)));
 	u64 hyp_arch_prot = host_arch_prot;
 
 	/* the host annot mapping is unchanged (we have established that host_addr is NOT already in there) */
@@ -208,14 +235,14 @@ void compute_new_abstract_state_handle___pkvm_host_share_hyp(struct ghost_state 
 	g1->host.host_abstract_pgtable_shared.mapping =
 		mapping_plus(
 			g0->host.host_abstract_pgtable_shared.mapping,
-			mapping_singleton(host_addr, 1, maplet_target_mapped_ext(phys_addr, PKVM_PAGE_SHARED_OWNED, host_arch_prot)));
+			mapping_singleton(host_addr, 1, maplet_target_mapped_ext(phys, PKVM_PAGE_SHARED_OWNED, host_arch_prot)));
 
 	/* add a new hyp mapping, PKVM_PAGE_SHARED_BORROWED */
 	// g1->pkvm.pkvm_abstract_pgtable.root = g0->pkvm.pkvm_abstract_pgtable.root; // TODO: BS: is this right?
 	g1->pkvm.pkvm_abstract_pgtable.mapping =
 		mapping_plus(
 			g0->pkvm.pkvm_abstract_pgtable.mapping,
-			mapping_singleton(hyp_addr, 1, maplet_target_mapped_ext(phys_addr, PKVM_PAGE_SHARED_BORROWED, hyp_arch_prot)));
+			mapping_singleton(hyp_addr, 1, maplet_target_mapped_ext(phys, PKVM_PAGE_SHARED_BORROWED, hyp_arch_prot)));
 out:
 	ghost_reg_gpr(g1, 1) = ret;
 }
@@ -225,9 +252,9 @@ out:
 void compute_new_abstract_state_handle___pkvm_host_unshare_hyp(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call)
 {
 	u64 pfn = ghost_reg_gpr(g0, 1);
-	u64 host_addr = hyp_pfn_to_phys(pfn); // ((phys_addr_t)((pfn) << PAGE_SHIFT)) // pure
-	u64 phys_addr = host_addr; // TODO: isn't there a macro that we can use here?
-	u64 hyp_addr = (u64)ghost__hyp_va(g0,phys_addr);
+	phys_addr_t phys = hyp_pfn_to_phys(pfn); // ((phys_addr_t)((pfn) << PAGE_SHIFT)) // pure
+	host_ipa_t host_addr = host_ipa_of_phys(phys);
+	hyp_va_t hyp_addr = hyp_va_of_phys(g0, phys);
 	int ret = 0;
 
 	// __host_check_page_state_range(addr, size, PKVM_PAGE_SHARED_OWNED);
@@ -278,9 +305,9 @@ void compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost_state 
 	u64 pfn = ghost_reg_gpr(g0, 1);
 	u64 gfn = ghost_reg_gpr(g0, 2);
 
-	u64 phys_addr = (pfn << 12); // TODO: must be a macro for this, and depends on granule size?
-	u64 host_virt = phys_addr;
-	u64 guest_virt = (gfn << 12);
+	phys_addr_t phys = hyp_pfn_to_phys(pfn);
+	host_ipa_t host_ipa = host_ipa_of_phys(phys);
+	guest_ipa_t guest_ipa = (gfn << PAGE_SHIFT);
 
 	struct ghost_loaded_vcpu *hyp_loaded_vcpu = this_cpu_ghost_loaded_vcpu(g0);
 	ghost_assert(hyp_loaded_vcpu->present);
@@ -323,12 +350,12 @@ void compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost_state 
 	// TODO: non-protected VM/VCPUs?
 
 	// if this page is not accessible by the host, fail with -EPERM
-	if (!is_owned_exclusively_by(g0, GHOST_HOST, host_virt)) {
+	if (!is_owned_exclusively_by(g0, GHOST_HOST, host_ipa)) {
 		ret = -EPERM;
 		goto out;
 	}
 	// if the addr is already mapped in the guest mapping, fail with -EPERM
-	if (mapping_in_domain(guest_virt, g0_vm->vm_abstract_pgtable.mapping)) {
+	if (mapping_in_domain(guest_ipa, g0_vm->vm_abstract_pgtable.mapping)) {
 		ret = -EPERM;
 		goto out;
 	}
@@ -336,15 +363,15 @@ void compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost_state 
 	// TODO: other error cases
 	g1->host.host_abstract_pgtable_annot.mapping =
 		mapping_plus(g0->host.host_abstract_pgtable_annot.mapping,
-		             mapping_singleton(host_virt, 1, maplet_target_annot(PKVM_ID_GUEST)));
+		             mapping_singleton(host_ipa, 1, maplet_target_annot(PKVM_ID_GUEST)));
 
-	u64 guest_arch_prot = arch_prot_of_prot(ghost_default_host_prot(ghost_addr_is_memory(g0, phys_addr)));
+	u64 guest_arch_prot = arch_prot_of_prot(ghost_default_host_prot(ghost_addr_is_memory(g0, phys)));
 
 	// Guest VM same except pgtable mapping updated slightly
 	ghost_vm_clone_into_nomappings(g1_vm, g0_vm);
 	g1_vm->vm_abstract_pgtable.mapping =
 		mapping_plus(g0_vm->vm_abstract_pgtable.mapping,
-		             mapping_singleton(guest_virt, 1, maplet_target_mapped_ext(phys_addr, PKVM_PAGE_OWNED, guest_arch_prot)));
+		             mapping_singleton(guest_ipa, 1, maplet_target_mapped_ext(phys, PKVM_PAGE_OWNED, guest_arch_prot)));
 	ret = 0;
 
 out:
@@ -427,7 +454,7 @@ out:
 }
 
 //TODO: move somewhere else
-#define host_virt_of_pkvm_va(X) X
+#define host_ipa_of_pkvm_va(X) X
 #define phys_of_host_va(X) X// TODO
 // performs the mapping checks of hyp_pin_shared_mem (from mem_protect.c)
 bool ghost_hyp_check_host_shared_mem(struct ghost_state *g, u64 from, u64 to)
@@ -436,7 +463,7 @@ bool ghost_hyp_check_host_shared_mem(struct ghost_state *g, u64 from, u64 to)
 	u64 end = PAGE_ALIGN((u64)to);
 	u64 size = end - start;
 	for (u64 addr=start; addr < size * PAGE_SIZE; addr += PAGE_SIZE) {
-		if (!is_owned_and_shared_by(g,  GHOST_HOST, host_virt_of_pkvm_va(addr)))
+		if (!is_owned_and_shared_by(g, GHOST_HOST, host_ipa_of_pkvm_va(addr)))
 			return false;
 		if (!is_borrowed_by(g, GHOST_HYP, addr)) 
 			return false;
@@ -490,10 +517,10 @@ static size_t ghost_pkvm_get_last_ran_size(struct ghost_state *g)
 
 void compute_new_abstract_state_handle___pkvm_init_vm(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call) {
 	int ret;
-	GHOST_SPEC_DECLARE_REG(struct kvm *, host_kvm, g0, 1);
-	GHOST_SPEC_DECLARE_REG(unsigned long, vm_hva, g0, 2);
-	GHOST_SPEC_DECLARE_REG(unsigned long, pgd_hva, g0, 3);
-	GHOST_SPEC_DECLARE_REG(unsigned long, last_ran_hva, g0, 4);
+	GHOST_SPEC_DECLARE_REG(struct kvm *, host_kvm, g0, 1);       // TODO: this is a host_ipa
+	GHOST_SPEC_DECLARE_REG(unsigned long, vm_hva, g0, 2);        // TODO: this is a host_ipa
+	GHOST_SPEC_DECLARE_REG(unsigned long, pgd_hva, g0, 3);       // TODO: this is a host_ipa
+	GHOST_SPEC_DECLARE_REG(unsigned long, last_ran_hva, g0, 4);  // TODO: this is a host_ipa
 	size_t vm_size, pgd_size, last_ran_size;
 
 	// checking that the pages underlying the host_kvm structure is owned by the host
