@@ -654,6 +654,16 @@ void record_abstraction_regs_post(struct kvm_cpu_context *ctxt)
 	record_abstraction_regs(g, ctxt);
 }
 
+/**
+ * these are here to make __kvm_nvhe_ versions of them that are accessible in both the nvhe and non-nvhe code
+ * as they were static in va_layout.c but now we need to access them in the ghost spec.
+ *
+ * TODO: Ben will move these (or fix it or something)
+ */
+u8 tag_lsb;
+u64 tag_val;
+
+
 void record_abstraction_all(struct ghost_state *g, struct kvm_cpu_context *ctxt)
 {
 	record_abstraction_hyp_memory(g);
@@ -663,6 +673,8 @@ void record_abstraction_all(struct ghost_state *g, struct kvm_cpu_context *ctxt)
 		record_abstraction_regs(g,ctxt);
 	}
 	g->hyp_physvirt_offset = hyp_physvirt_offset;
+	g->tag_lsb = tag_lsb;
+	g->tag_val = tag_val;
 }
 
 void record_abstraction_common(void)

@@ -63,6 +63,21 @@ static inline hyp_va_t hyp_va_of_phys(const struct ghost_state *g, phys_addr_t p
 
 #define host_ipa_of_phys(PHYS) PHYS
 
+// We convert a host virtual address to a pKVM virtual address by zero-ing out
+// the tag_val (which holds the hyp_va_msb and random tag for the kernel, which
+// we do not know; and do not want to), and replace it with the pKVM tag_val
+//
+// NOTE: this function reproduces the calculation of converting a host virtual address
+// from within its linear mapped region to a hypervisor virtual address; but, we cannot
+// inspect the actual host virtual address space, and so any specification should not rely
+// on this returning a mapping to the same physical location as the host would for that VA.
+//
+// I.E. do NOT expect: phys_of_hyp_va(hyp_va_of_host_va(ADDR)) == AArch64.TranslateAddress(ADDR) in EL1&0 Regime
+static inline hyp_va_t hyp_va_of_host_va(const struct ghost_state *g, host_va_t host_va)
+{
+	u64 va_mask = GENMASK_ULL(g->tag_lsb - 1, 0);;
+	return (host_va & va_mask) | (g->tag_val << g->tag_lsb);
+}
 
 // adapted from mem_protect.c to use the hyp_memory map
 bool ghost_addr_is_memory(struct ghost_state *g, phys_addr_t phys)

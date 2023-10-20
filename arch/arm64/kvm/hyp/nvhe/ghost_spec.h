@@ -237,6 +237,10 @@ void ghost_assert_vms_table_locked(void);
  * @regs: ghost copies of initial general-purpose and current system registers.
  * @vms: vm table, protected by the ghost vms table lock, with each inner vm protected by that vm's own lock.
  * @hyp_physvirt_offset: ghost copy of the global physical offset of physical memory within the hyp VA space.
+ * @tag_lsb: ghost copy of the pKVM VA tag (NOT the one of the Host kernel).
+ * @tag_val: ghost copy of the pKVM VA tag value (the random offset and the bit indicating whether we are
+ *           in the top or bottom of the virtual address space).
+ *           (again this is NOT the one of the Host kernel)
  * @loaded_hyp_vcpu: per-physical-cpu ghost copies of the state of the currently loaded vcpu.
  *
  * A ghost state may be partial, and only have some of the above fields present.
@@ -250,6 +254,8 @@ struct ghost_state {
 	struct ghost_register_state regs; // TODO: make per-cpu
 	struct ghost_vms vms;
 	s64 hyp_physvirt_offset;
+	u64 tag_lsb;
+	u64 tag_val;
 	struct ghost_loaded_vcpu loaded_hyp_vcpu[NR_CPUS];
 };
 
