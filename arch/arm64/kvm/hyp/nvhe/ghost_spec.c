@@ -56,7 +56,7 @@ typedef u64 guest_ipa_t;
 // this function is only valid if @phys is within the address range to which
 // the hyp_va linear mapped range is mapped too.
 // THAT IS: memstart_addr <= phys && phys < memstart_addr + 2^tag_lsb
-static inline hyp_va_t hyp_va_of_phys(struct ghost_state *g, phys_addr_t phys)
+static inline hyp_va_t hyp_va_of_phys(const struct ghost_state *g, phys_addr_t phys)
 {
 	return phys - g->hyp_physvirt_offset;
 }
@@ -92,19 +92,21 @@ enum ghost_host_or_hyp {
 	GHOST_HYP
 };
 
-// if id == GHOST_HOST, addr should be a host_ipa
-// if id == GHOST_HYP,  addr should be a hyp_va
-static bool is_owned_exclusively_by(const struct ghost_state *g, enum ghost_host_or_hyp id, u64 addr)
+static bool is_owned_exclusively_by(const struct ghost_state *g, enum ghost_host_or_hyp id, phys_addr_t addr)
 {
 	switch(id) {
-	case GHOST_HOST:
-		if (mapping_in_domain(addr, g->host.host_abstract_pgtable_annot.mapping))
+	case GHOST_HOST: {
+		host_ipa_t host_ipa = host_ipa_of_phys(addr);
+		if (mapping_in_domain(host_ipa, g->host.host_abstract_pgtable_annot.mapping))
 			return false;
-		if (mapping_in_domain(addr, g->host.host_abstract_pgtable_shared.mapping))
+		if (mapping_in_domain(host_ipa, g->host.host_abstract_pgtable_shared.mapping))
 			return false;
 		return true;
-	case GHOST_HYP:
-		return mapping_in_domain(addr, g->pkvm.pkvm_abstract_pgtable.mapping);
+	}
+	case GHOST_HYP: {
+		hyp_va_t hyp_va = hyp_va_of_phys(g, addr);
+		return mapping_in_domain(hyp_va, g->pkvm.pkvm_abstract_pgtable.mapping);
+	}
 	default:
 		ghost_assert(false);
 		unreachable();
@@ -215,7 +217,7 @@ void compute_new_abstract_state_handle___pkvm_host_share_hyp(struct ghost_state 
 	}
 
 	// __host_check_page_state_range(addr, size, PKVM_PAGE_OWNED);
-	if (!is_owned_exclusively_by(g0, GHOST_HOST, host_addr)) {
+	if (!is_owned_exclusively_by(g0, GHOST_HOST, phys)) {
 		ret = -EPERM;
 		goto out;
 	}
@@ -381,7 +383,7 @@ void compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost_state 
 	// TODO: non-protected VM/VCPUs?
 
 	// if this page is not accessible by the host, fail with -EPERM
-	if (!is_owned_exclusively_by(g0, GHOST_HOST, host_ipa)) {
+	if (!is_owned_exclusively_by(g0, GHOST_HOST, phys)) {
 		ret = -EPERM;
 		goto out;
 	}
@@ -513,7 +515,7 @@ static bool ghost_map_donated_memory(struct ghost_state *g1, struct ghost_state 
 	u64 hyp_virt = (u64)ghost__hyp_va(g0, phys_addr);
 	u64 nr_pages = PAGE_ALIGN((u64)size);
 
-	for (u64 addr=host_virt; addr < nr_pages * PAGE_SIZE; addr += PAGE_SIZE) {
+	for (u64 addr=phys_addr; addr < nr_pages * PAGE_SIZE; addr += PAGE_SIZE) {
 		if (!is_owned_exclusively_by(g0, GHOST_HOST, addr))
 			return false;
 
