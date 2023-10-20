@@ -347,6 +347,37 @@ void compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost_state 
 		goto out;
 	}
 
+	mapping g1_pkvm_mapping = mapping_copy(g0->pkvm.pkvm_abstract_pgtable.mapping);
+	mapping g1_host_annot_mapping = mapping_copy(g0->host.host_abstract_pgtable_annot.mapping);
+	mapping g1_host_shared_mapping = mapping_copy(g0->host.host_abstract_pgtable_shared.mapping);
+
+	g1->pkvm.pkvm_abstract_pgtable.mapping = mapping_copy(g0->pkvm.pkvm_abstract_pgtable.mapping);
+	for (int d=0; d<call->memcache_donations.len; d++) {
+		u64 pfn = call->memcache_donations.pages[d];
+		u64 page = hyp_pfn_to_phys(pfn);
+		u64 host_page_ipa = page;
+		u64 hyp_page_addr = (u64)ghost__hyp_va(g0, page);
+		u64 hyp_arch_prot = arch_prot_of_prot(ghost_default_host_prot(ghost_addr_is_memory(g0, page)));
+
+		// TODO: what if location was not shared with pKVM?
+		if (!(is_owned_and_shared_by(g0, GHOST_HOST, page) && is_borrowed_by(g0, GHOST_HYP, page)))
+			ghost_spec_assert(false);
+
+		g1_pkvm_mapping =
+			mapping_plus(
+				mapping_minus(g1_pkvm_mapping, page, 1),
+				mapping_singleton(hyp_page_addr, 1, maplet_target_mapped_ext(page, PKVM_PAGE_OWNED, hyp_arch_prot))
+			);
+
+		g1_host_shared_mapping =
+			mapping_minus(g1_host_shared_mapping, host_page_ipa, 1);
+
+		g1_host_annot_mapping =
+			mapping_plus(
+				g1_host_annot_mapping,
+				mapping_singleton(host_page_ipa, 1, maplet_target_annot_ext(PKVM_ID_HYP))
+			);
+	}
 
 	// TODO: non-protected VM/VCPUs?
 
@@ -362,8 +393,8 @@ void compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost_state 
 	}
 
 	// TODO: other error cases
-	g1->host.host_abstract_pgtable_annot.mapping =
-		mapping_plus(g0->host.host_abstract_pgtable_annot.mapping,
+	g1_host_annot_mapping =
+		mapping_plus(g1_host_annot_mapping,
 		             mapping_singleton(host_ipa, 1, maplet_target_annot(PKVM_ID_GUEST)));
 
 	u64 guest_arch_prot = arch_prot_of_prot(ghost_default_host_prot(ghost_addr_is_memory(g0, phys)));
@@ -373,6 +404,11 @@ void compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost_state 
 	g1_vm->vm_abstract_pgtable.mapping =
 		mapping_plus(g0_vm->vm_abstract_pgtable.mapping,
 		             mapping_singleton(guest_ipa, 1, maplet_target_mapped_ext(phys, PKVM_PAGE_OWNED, guest_arch_prot)));
+
+	g1->pkvm.pkvm_abstract_pgtable.mapping = g1_pkvm_mapping;
+	g1->host.host_abstract_pgtable_annot.mapping = g1_host_annot_mapping;
+	g1->host.host_abstract_pgtable_shared.mapping = g1_host_shared_mapping;
+
 	ret = 0;
 
 out:
