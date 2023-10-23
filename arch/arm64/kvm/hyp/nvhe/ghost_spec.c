@@ -730,6 +730,9 @@ void compute_new_abstract_state_handle_trap(struct ghost_state *g1 /*new*/, stru
 	// hyp_memory is supposed to be constant, so just copy the old one
 	copy_abstraction_hyp_memory(g1, g0);
 
+	// the globals are supposed to be constant, so copy them over
+	copy_abstraction_constants(g1, g0);
+
 	switch (ESR_ELx_EC(ghost_reg_el2(g0,GHOST_ESR_EL2))) {
 	case ESR_ELx_EC_HVC64:
 		compute_new_abstract_state_handle_host_hcall(g1,g0,call,new_state_computed);

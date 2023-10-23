@@ -14,6 +14,8 @@ void record_abstraction_common(void);
 void clear_abstraction_thread_local(void);
 void record_abstraction_regs_pre(struct kvm_cpu_context *ctxt);
 void record_abstraction_regs_post(struct kvm_cpu_context *ctxt);
+void record_abstraction_constants_pre(void);
+void record_abstraction_constants_post(void);
 void record_and_check_abstraction_pkvm_pre(void);
 void record_and_check_abstraction_host_pre(void);
 void record_and_check_abstraction_loaded_hyp_vcpu_pre(void);
@@ -26,6 +28,7 @@ void record_and_copy_abstraction_vm_post(struct pkvm_hyp_vm *vm);
 // additional functions used only in ghost files
 bool abstraction_equals_hyp_memory(struct ghost_state *g1, struct ghost_state *g2);
 void copy_abstraction_regs(struct ghost_state *g_tgt, struct ghost_state *g_src);
+void copy_abstraction_constants(struct ghost_state *g_tgt, struct ghost_state *g_src);
 void copy_abstraction_hyp_memory(struct ghost_state *g_tgt, struct ghost_state *g_src);
 void copy_abstraction_host(struct ghost_state *g_tgt, struct ghost_state *g_src);
 void copy_abstraction_pkvm(struct ghost_state *g_tgt, struct ghost_state *g_src);

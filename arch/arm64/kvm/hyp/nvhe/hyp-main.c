@@ -1316,6 +1316,7 @@ void handle_trap(struct kvm_cpu_context *host_ctxt)
 	if (GHOST_EXEC_SPEC && READ_ONCE(pkvm_prot_finalized_all)) {
 		clear_abstraction_thread_local();
 		record_abstraction_regs_pre(host_ctxt);
+		record_abstraction_constants_pre();
 		check_this_transition = true;
 	}
 	// /GHOST
@@ -1368,7 +1369,7 @@ void handle_trap(struct kvm_cpu_context *host_ctxt)
 		ghost_lock_maplets();
 		record_abstraction_hyp_memory(this_cpu_ptr(&gs_recorded_post));
 		record_abstraction_regs_post(host_ctxt);
-		this_cpu_ptr(&gs_recorded_post)->hyp_physvirt_offset = hyp_physvirt_offset;
+		record_abstraction_constants_post();
 		// compute the new spec abstract state
 		this_cpu_ptr(&gs_call_data)->return_value = cpu_reg(host_ctxt, 0);
 		compute_new_abstract_state_handle_trap(this_cpu_ptr(&gs_computed_post), this_cpu_ptr(&gs_recorded_pre), this_cpu_ptr(&gs_call_data), &new_state_computed);

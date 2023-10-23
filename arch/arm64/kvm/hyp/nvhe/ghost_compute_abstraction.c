@@ -391,7 +391,14 @@ bool abstraction_equals_all(struct ghost_state *gc, struct ghost_state *gr_post,
 
 	ret_loaded_vcpus = abstraction_equals_loaded_vcpus(gc, gr_post);
 
-	return abstraction_equals_hyp_memory(gc, gr_post) && abstraction_equals_reg(gc, gr_post) && gc->hyp_physvirt_offset==gr_post->hyp_physvirt_offset && ret_pkvm && ret_host && ret_vms && ret_loaded_vcpus;
+	// check that a bunch of global state bits, that 'in theory' should be constant, really didn't change.
+	bool ret_globals = (
+		   gc->hyp_physvirt_offset == gr_post->hyp_physvirt_offset
+		&& gc->tag_lsb == gr_post->tag_lsb
+		&& gc->tag_val == gr_post->tag_val
+	);
+
+	return abstraction_equals_hyp_memory(gc, gr_post) && abstraction_equals_reg(gc, gr_post) && ret_globals && ret_pkvm && ret_host && ret_vms && ret_loaded_vcpus;
 }
 
 
@@ -482,6 +489,13 @@ void copy_abstraction_regs(struct ghost_state *g_tgt, struct ghost_state *g_src)
 	ghost_assert(g_src->regs.present);
 	ghost_assert(!g_tgt->regs.present);
 	memcpy((void*) &(g_tgt->regs), (void*) &(g_src->regs), sizeof(struct ghost_register_state));
+}
+
+void copy_abstraction_constants(struct ghost_state *g_tgt, struct ghost_state *g_src)
+{
+	g_tgt->hyp_physvirt_offset = g_src->hyp_physvirt_offset;
+	g_tgt->tag_lsb = g_src->tag_lsb;
+	g_tgt->tag_val = g_src->tag_val;
 }
 
 void copy_abstraction_hyp_memory(struct ghost_state *g_tgt, struct ghost_state *g_src)
@@ -686,6 +700,25 @@ void record_abstraction_regs_post(struct kvm_cpu_context *ctxt)
 u8 tag_lsb;
 u64 tag_val;
 
+void record_abstraction_constants(struct ghost_state *g)
+{
+	g->hyp_physvirt_offset = hyp_physvirt_offset;
+	g->tag_lsb = tag_lsb;
+	g->tag_val = tag_val;
+}
+
+void record_abstraction_constants_pre(void)
+{
+	struct ghost_state *g = this_cpu_ptr(&gs_recorded_pre);
+	record_abstraction_constants(g);
+}
+
+void record_abstraction_constants_post(void)
+{
+	struct ghost_state *g = this_cpu_ptr(&gs_recorded_post);
+	record_abstraction_constants(g);
+}
+
 
 void record_abstraction_all(struct ghost_state *g, struct kvm_cpu_context *ctxt)
 {
@@ -695,9 +728,7 @@ void record_abstraction_all(struct ghost_state *g, struct kvm_cpu_context *ctxt)
 	if (ctxt) {
 		record_abstraction_regs(g,ctxt);
 	}
-	g->hyp_physvirt_offset = hyp_physvirt_offset;
-	g->tag_lsb = tag_lsb;
-	g->tag_val = tag_val;
+	record_abstraction_constants(g);
 }
 
 void record_abstraction_common(void)
