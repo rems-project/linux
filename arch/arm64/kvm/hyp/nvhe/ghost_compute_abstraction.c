@@ -100,7 +100,7 @@ mapping compute_abstraction_hyp_memory(void)
 void compute_abstraction_pkvm(struct ghost_pkvm *dest)
 {
 	u64 i=0; /* base indent */ /* though we'll mostly want this to be quiet, later */
-	dest->pkvm_abstract_pgtable = ghost_record_pgtable_ap(&pkvm_pgtable, "pkvm_pgtable", i);
+	ghost_record_pgtable_ap(&dest->pkvm_abstract_pgtable, &pkvm_pgtable, "pkvm_pgtable", i);
 	dest->present = true;
 }
 
@@ -108,7 +108,7 @@ void compute_abstraction_host(struct ghost_host *dest)
 {
 	abstract_pgtable ap;
 	u64 i=0; /* base indent */ /* though we'll mostly want this to be quiet, later */
-	ap = ghost_record_pgtable_ap(&host_mmu.pgt, "host_mmu.pgt", i);
+	ghost_record_pgtable_ap(&ap, &host_mmu.pgt, "host_mmu.pgt", i);
 	dest->host_abstract_pgtable_annot = (abstract_pgtable){.root = ap.root, .mapping = mapping_annot(ap.mapping)};
 	dest->host_abstract_pgtable_shared = (abstract_pgtable){.root = ap.root, .mapping = mapping_shared(ap.mapping)};
 	dest->host_abstract_pgtable_nonannot = (abstract_pgtable){.root = ap.root, .mapping = mapping_nonannot(ap.mapping)};
@@ -193,7 +193,7 @@ void compute_abstraction_vm(struct ghost_vm *dest, struct pkvm_hyp_vm *vm) {
 	for (i=0; i<dest->nr_vcpus; i++) {
 		dest->vcpus[i].loaded = vm->vcpus[i]->loaded_hyp_vcpu ? true : false;
 	}
-	dest->vm_abstract_pgtable = ghost_record_pgtable_ap(&vm->pgt, "guest_mmu.pgt", 0);
+	ghost_record_pgtable_ap(&dest->vm_abstract_pgtable, &vm->pgt, "guest_mmu.pgt", 0);
 	dest->lock = &vm->lock;
 }
 
@@ -567,7 +567,7 @@ void ghost_vm_clone_into(struct ghost_vm *dest, struct ghost_vm *src)
 {
 	ghost_assert_vms_table_locked();
 	ghost_vm_clone_into_nomappings(dest, src);
-	dest->vm_abstract_pgtable = abstract_pgtable_copy(src->vm_abstract_pgtable);
+	abstract_pgtable_copy(&dest->vm_abstract_pgtable, &src->vm_abstract_pgtable);
 }
 
 void copy_abstraction_vm(struct ghost_state *g_tgt, struct ghost_state *g_src, pkvm_handle_t handle)

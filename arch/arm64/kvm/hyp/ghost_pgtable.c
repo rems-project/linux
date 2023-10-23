@@ -297,12 +297,16 @@ mapping interpret_pgtable(kvm_pte_t *pgd, bool noisy)
 }
 
 
-abstract_pgtable interpret_pgtable_ap(kvm_pte_t *pgd, bool noisy)
+void interpret_pgtable_ap(abstract_pgtable *ap_out, kvm_pte_t *pgd, bool noisy)
 {
-	if (pgd==0)
-		return (abstract_pgtable){.root=0, .mapping=mapping_empty_()};
-	else
-		return (abstract_pgtable){.root=hyp_virt_to_phys(pgd), .mapping=interpret_pgtable(pgd, noisy)};
+	if (pgd==0) {
+		ap_out->root = 0;
+		ap_out->mapping=mapping_empty_();
+	}
+	else {
+		ap_out->root = hyp_virt_to_phys(pgd);
+		ap_out->mapping=interpret_pgtable(pgd, noisy);
+	}
 }
 
 
@@ -341,14 +345,13 @@ mapping ghost_record_pgtable(struct kvm_pgtable *pg, char *doc, u64 i)
 }
 
 
-abstract_pgtable ghost_record_pgtable_ap(struct kvm_pgtable *pg, char *doc, u64 i)
+void ghost_record_pgtable_ap(abstract_pgtable *ap_out, struct kvm_pgtable *pg, char *doc, u64 i)
 {
 	//hyp_puts("ghost_record_pgtable() ");
 	//hyp_puts(doc);
 	//hyp_putc('\n');
-	abstract_pgtable ap = interpret_pgtable_ap(pg->pgd, false /*noisy*/);
+	interpret_pgtable_ap(ap_out, pg->pgd, false /*noisy*/);
 	//	hyp_put_mapping(map, i+2)
-	return ap;
 }
 
 
@@ -367,19 +370,18 @@ mapping ghost_record_pgtable_and_check(mapping map_old, struct kvm_pgtable *pg, 
 	return map;
 }
 
-abstract_pgtable ghost_record_pgtable_and_check_ap(abstract_pgtable ap_old, struct kvm_pgtable *pg, bool dump, char *doc, u64 i)
+void ghost_record_pgtable_and_check_ap(abstract_pgtable *ap_new, abstract_pgtable *ap_old, struct kvm_pgtable *pg, bool dump, char *doc, u64 i)
 {
 	//hyp_puts("pgtable diff ");
 	//hyp_puts(doc);
 	//hyp_putc('\n');
-	abstract_pgtable ap = interpret_pgtable_ap(pg->pgd, false /*noisy*/);
+	interpret_pgtable_ap(ap_new, pg->pgd, false /*noisy*/);
 	if (dump) {
 		hyp_putspi(doc,i+2);
-		hyp_put_mapping(ap.mapping, i+4);
+		hyp_put_mapping(ap_new->mapping, i+4);
 	}
-	mapping_equal(ap_old.mapping, ap.mapping, "check equal", "old", doc, i+2);
+	mapping_equal(ap_old->mapping, ap_new->mapping, "check equal", "old", doc, i+2);
 	//	hyp_put_mapping(&maplets_a);
-	return ap;
 }
 
 
@@ -418,9 +420,9 @@ void ghost_dump_pgtable_diff(mapping map_old, struct kvm_pgtable *pg, char *doc,
 }
 
 
-void ghost_dump_pgtable_diff_ap(abstract_pgtable ap_old, struct kvm_pgtable *pg, char *doc, u64 i)
+void ghost_dump_pgtable_diff_ap(abstract_pgtable *ap_old, struct kvm_pgtable *pg, char *doc, u64 i)
 {
-	mapping map_old = ap_old.mapping;
+	mapping map_old = ap_old->mapping;
 	ghost_dump_pgtable_diff(map_old, pg, doc, i);
 }
 
@@ -428,10 +430,8 @@ void ghost_dump_pgtable_diff_ap(abstract_pgtable ap_old, struct kvm_pgtable *pg,
 void ghost_test(void) {
 }
 
-abstract_pgtable abstract_pgtable_copy(abstract_pgtable src)
+void abstract_pgtable_copy(abstract_pgtable *dst, abstract_pgtable *src)
 {
-	abstract_pgtable dest;
-	dest.root = src.root;
-	dest.mapping = mapping_copy(src.mapping);
-	return dest;
+	dst->root = src->root;
+	dst->mapping = mapping_copy(src->mapping);
 }

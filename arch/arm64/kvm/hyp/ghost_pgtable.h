@@ -73,13 +73,13 @@ void ghost_dump_pgtable_diff(mapping map_old, struct kvm_pgtable *pg, char *doc,
 
 
 // the ap variants are similar to the above but also record the mapping root
-abstract_pgtable interpret_pgtable_ap(kvm_pte_t *pgd, bool noisy);
-abstract_pgtable ghost_record_pgtable_ap(struct kvm_pgtable *pg, char *doc, u64 i);
-abstract_pgtable ghost_record_pgtable_and_check_ap(abstract_pgtable map_old, struct kvm_pgtable *pg, bool dump, char *doc, u64 i);
-void ghost_dump_pgtable_diff_ap(abstract_pgtable map_old, struct kvm_pgtable *pg, char *doc, u64 i);
+void interpret_pgtable_ap(abstract_pgtable *ap_out, kvm_pte_t *pgd, bool noisy);
+void ghost_record_pgtable_ap(abstract_pgtable *ap_out, struct kvm_pgtable *pg, char *doc, u64 i);
+void ghost_record_pgtable_and_check_ap(abstract_pgtable *map_new, abstract_pgtable *map_old, struct kvm_pgtable *pg, bool dump, char *doc, u64 i);
+void ghost_dump_pgtable_diff_ap(abstract_pgtable *map_old, struct kvm_pgtable *pg, char *doc, u64 i);
 
 void ghost_test(void);
 
-abstract_pgtable abstract_pgtable_copy(abstract_pgtable src);
+void abstract_pgtable_copy(abstract_pgtable *dst, abstract_pgtable *src);
 
 #endif // _GHOST_PGTABLE_H
