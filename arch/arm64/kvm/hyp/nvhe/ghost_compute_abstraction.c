@@ -478,9 +478,11 @@ void clear_abstraction_all(struct ghost_state *g)
 void clear_abstraction_thread_local(void)
 {
 	ghost_lock_maplets();
+	ghost_lock_vms_table();
 	clear_abstraction_all(this_cpu_ptr(&gs_recorded_pre));
 	clear_abstraction_all(this_cpu_ptr(&gs_recorded_post));
 	clear_abstraction_all(this_cpu_ptr(&gs_computed_post));
+	ghost_unlock_vms_table();
 	ghost_unlock_maplets();
 }
 
