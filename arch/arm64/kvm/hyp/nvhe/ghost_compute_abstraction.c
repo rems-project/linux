@@ -100,20 +100,21 @@ mapping compute_abstraction_hyp_memory(void)
 void compute_abstraction_pkvm(struct ghost_pkvm *dest)
 {
 	u64 i=0; /* base indent */ /* though we'll mostly want this to be quiet, later */
-	ghost_record_pgtable_ap(&dest->pkvm_abstract_pgtable, &pkvm_pgtable, "pkvm_pgtable", i);
+	u64 pool_range_start = (u64)hyp_pgt_base;
+	u64 pool_range_end = (u64)hyp_pgt_base + ghost_hyp_pgt_size * PAGE_SIZE;
+	ghost_record_pgtable_ap(&dest->pkvm_abstract_pgtable, &pkvm_pgtable, pool_range_start, pool_range_end, "pkvm_pgtable", i);
 	dest->present = true;
 }
 
 void compute_abstraction_host(struct ghost_host *dest)
 {
-	abstract_pgtable ap;
 	u64 i=0; /* base indent */ /* though we'll mostly want this to be quiet, later */
-	ghost_record_pgtable_ap(&ap, &host_mmu.pgt, "host_mmu.pgt", i);
-	dest->host_abstract_pgtable_annot = (abstract_pgtable){.root = ap.root, .mapping = mapping_annot(ap.mapping)};
-	dest->host_abstract_pgtable_shared = (abstract_pgtable){.root = ap.root, .mapping = mapping_shared(ap.mapping)};
-	dest->host_abstract_pgtable_nonannot = (abstract_pgtable){.root = ap.root, .mapping = mapping_nonannot(ap.mapping)};
+	u64 pool_range_start = (u64)host_s2_pgt_base;
+	u64 pool_range_end = (u64)host_s2_pgt_base + ghost_host_s2_pgt_size * PAGE_SIZE;
+	ghost_record_pgtable_ap(&dest->host_pgtable, &host_mmu.pgt, pool_range_start, pool_range_end, "host_mmu.pgt", i);
+	dest->host_abstract_pgtable_annot = mapping_annot(dest->host_pgtable.mapping);
+	dest->host_abstract_pgtable_shared = mapping_shared(dest->host_pgtable.mapping);
 	dest->present = true;
-	free_mapping(ap.mapping);
 }
 
 static struct ghost_vm_slot *__ghost_vm_or_free_slot_from_handle(struct ghost_vms *vms, pkvm_handle_t handle) {
@@ -193,7 +194,7 @@ void compute_abstraction_vm(struct ghost_vm *dest, struct pkvm_hyp_vm *vm) {
 	for (i=0; i<dest->nr_vcpus; i++) {
 		dest->vcpus[i].loaded = vm->vcpus[i]->loaded_hyp_vcpu ? true : false;
 	}
-	ghost_record_pgtable_ap(&dest->vm_abstract_pgtable, &vm->pgt, "guest_mmu.pgt", 0);
+	ghost_record_pgtable_ap(&dest->vm_abstract_pgtable, &vm->pgt, vm->pool.range_start, vm->pool.range_end, "guest_mmu.pgt", 0);
 	dest->lock = &vm->lock;
 }
 
@@ -436,9 +437,10 @@ void clear_abstraction_pkvm(struct ghost_state *g)
 void clear_abstraction_host(struct ghost_state *g)
 {
 	if (g->host.present) {
-		free_mapping(g->host.host_abstract_pgtable_annot.mapping);
-		free_mapping(g->host.host_abstract_pgtable_shared.mapping);
-		free_mapping(g->host.host_abstract_pgtable_nonannot.mapping);
+		free_mapping(g->host.host_abstract_pgtable_annot);
+		free_mapping(g->host.host_abstract_pgtable_shared);
+		free_mapping(g->host.host_pgtable.mapping);
+		ghost_pfn_set_clear(&g->host.host_pgtable.table_pfns);
 		g->host.present = false;
 	}
 }
@@ -521,12 +523,11 @@ void copy_abstraction_host(struct ghost_state *g_tgt, struct ghost_state *g_src)
 	ghost_assert(g_src->host.present);
 	clear_abstraction_host(g_tgt);
 	g_tgt->host.present = true;
-	g_tgt->host.host_abstract_pgtable_annot.root = g_src->host.host_abstract_pgtable_annot.root;
-	g_tgt->host.host_abstract_pgtable_annot.mapping = mapping_copy(g_src->host.host_abstract_pgtable_annot.mapping);
-	g_tgt->host.host_abstract_pgtable_shared.root = g_src->host.host_abstract_pgtable_shared.root;
-	g_tgt->host.host_abstract_pgtable_shared.mapping = mapping_copy(g_src->host.host_abstract_pgtable_shared.mapping);
-	g_tgt->host.host_abstract_pgtable_nonannot.root = g_src->host.host_abstract_pgtable_nonannot.root;
-	g_tgt->host.host_abstract_pgtable_nonannot.mapping = mapping_copy(g_src->host.host_abstract_pgtable_nonannot.mapping);
+	g_tgt->host.host_abstract_pgtable_annot = mapping_copy(g_src->host.host_abstract_pgtable_annot);
+	g_tgt->host.host_abstract_pgtable_shared = mapping_copy(g_src->host.host_abstract_pgtable_shared);
+	g_tgt->host.host_pgtable.root = g_src->host.host_pgtable.root;
+	ghost_pfn_set_copy(&g_tgt->host.host_pgtable.table_pfns, &g_src->host.host_pgtable.table_pfns);
+	g_tgt->host.host_pgtable.mapping = mapping_copy(g_src->host.host_pgtable.mapping);
 }
 
 void copy_abstraction_vms(struct ghost_state *g_tgt, struct ghost_state *g_src)

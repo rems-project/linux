@@ -112,9 +112,9 @@ static bool is_owned_exclusively_by(const struct ghost_state *g, enum ghost_host
 	switch(id) {
 	case GHOST_HOST: {
 		host_ipa_t host_ipa = host_ipa_of_phys(addr);
-		if (mapping_in_domain(host_ipa, g->host.host_abstract_pgtable_annot.mapping))
+		if (mapping_in_domain(host_ipa, g->host.host_abstract_pgtable_annot))
 			return false;
-		if (mapping_in_domain(host_ipa, g->host.host_abstract_pgtable_shared.mapping))
+		if (mapping_in_domain(host_ipa, g->host.host_abstract_pgtable_shared))
 			return false;
 		return true;
 	}
@@ -134,7 +134,7 @@ static bool is_owned_and_shared_by(const struct ghost_state *g, enum ghost_host_
 	switch (id) {
 	case GHOST_HOST: {
 		host_ipa_t host_ipa = host_ipa_of_phys(addr);
-		if (!mapping_lookup(host_ipa, g->host.host_abstract_pgtable_shared.mapping, &t))
+		if (!mapping_lookup(host_ipa, g->host.host_abstract_pgtable_shared, &t))
 			return false;
 		break;
 	}
@@ -159,7 +159,7 @@ static bool is_borrowed_by(const struct ghost_state *g, enum ghost_host_or_hyp i
 	struct maplet_target t;
 	switch (id) {
 	case GHOST_HOST:
-		if (!mapping_lookup(addr, g->host.host_abstract_pgtable_shared.mapping, &t))
+		if (!mapping_lookup(addr, g->host.host_abstract_pgtable_shared, &t))
 			return false;
 		break;
 	case GHOST_HYP:

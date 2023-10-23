@@ -14,7 +14,7 @@
 
 #pragma GCC diagnostic ignored "-Wdeclaration-after-statement"
 
-void ghost_pfn_set_init(struct pfn_set *set)
+void ghost_pfn_set_init(struct pfn_set *set, u64 pool_range_start, u64 pool_range_end)
 {
 	set->len = 0;
 }
@@ -23,14 +23,14 @@ void ghost_pfn_set_insert(struct pfn_set *set, u64 pfn)
 {
 	u64 idx = set->len++;
 	ghost_assert(idx < GHOST_MAX_PFN_SET_LEN);
-	set->pfns[idx] = pfn;
+	set->external_pfns[idx] = pfn;
 }
 
 bool ghost_pfn_set_contains(struct pfn_set *set, u64 pfn)
 {
 	ghost_assert(set->len < GHOST_MAX_PFN_SET_LEN);
 	for (int idx=0; idx < set->len; idx++) {
-		if (set->pfns[idx] == pfn)
+		if (set->external_pfns[idx] == pfn)
 			return true;
 	}
 	return false;
@@ -39,9 +39,13 @@ bool ghost_pfn_set_contains(struct pfn_set *set, u64 pfn)
 void ghost_pfn_set_dump(struct pfn_set *set)
 {
 	ghost_assert(set->len < GHOST_MAX_PFN_SET_LEN);
-	hyp_putsp("BEGIN PFNS\n");
+	hyp_putsp("BEGIN PFNS[pool_range: ");
+	__hyp_putx4np(set->pool_range_start, 64);
+	hyp_putsp(" ... ");
+	__hyp_putx4np(set->pool_range_end, 64);
+	hyp_putsp("]\n");
 	for (int idx=0; idx < set->len; idx++) {
-		hyp_putsxn("  pfs", set->pfns[idx], 64);
+		hyp_putsxn("  pfs", set->external_pfns[idx], 64);
 		hyp_putsp("\n");
 	}
 	hyp_putsp("END PFNS\n");
@@ -51,7 +55,7 @@ void ghost_pfn_set_copy(struct pfn_set *dst, struct pfn_set *src)
 {
 	dst->len = src->len;
 	for (int idx=0; idx<GHOST_MAX_PFN_SET_LEN; idx++) {
-		dst->pfns[idx] = src->pfns[idx];
+		dst->external_pfns[idx] = src->external_pfns[idx];
 	}
 }
 
@@ -189,7 +193,7 @@ void dump_pgtable(struct kvm_pgtable pg)
 }
 
 
-void _interpret_pgtable(mapping *mapp, kvm_pte_t *pgd, u8 level, u64 va_partial, struct aal aal, bool noisy)
+void _interpret_pgtable(mapping *mapp, kvm_pte_t *pgd, struct pfn_set *pfns, u8 level, u64 va_partial, struct aal aal, bool noisy)
 {
         u64 idx;
         u64 va_partial_new;
@@ -255,7 +259,9 @@ void _interpret_pgtable(mapping *mapp, kvm_pte_t *pgd, u8 level, u64 va_partial,
                         //hyp_putsxn("table phys", next_level_phys_address, 64);
                         //hyp_putsxn("table virt", next_level_virt_address, 64);
 			next_level_aal.attr_at_level[level] = pte & (GENMASK(63,59) | GENMASK(58,51) | GENMASK(11,2)); // the first are actual attributes, the second and third are Ignored bits
-                        _interpret_pgtable(mapp, (kvm_pte_t *)next_level_virt_address, level+1, va_partial_new, next_level_aal, noisy); break;
+			if(pfns)
+				ghost_pfn_set_insert(pfns, hyp_virt_to_pfn(next_level_virt_address));
+                        _interpret_pgtable(mapp, (kvm_pte_t *)next_level_virt_address, pfns, level+1, va_partial_new, next_level_aal, noisy); break;
                 case EK_PAGE_DESCRIPTOR:
                         oa = pte & GENMASK(47,12);
                         // hyp_putsxn("oa", oa, 64);
@@ -277,7 +283,8 @@ void _interpret_pgtable(mapping *mapp, kvm_pte_t *pgd, u8 level, u64 va_partial,
 }
 
 
-mapping interpret_pgtable(kvm_pte_t *pgd, bool noisy)
+// a caller is allowed to set @pfns to NULL if they don't care about the pfn set
+mapping interpret_pgtable(kvm_pte_t *pgd, struct pfn_set *pfns, bool noisy)
 {
 	//hyp_puts("interpret_pgtable");
 	mapping map = mapping_empty_();
@@ -290,22 +297,25 @@ mapping interpret_pgtable(kvm_pte_t *pgd, bool noisy)
 		return map;
 	else
 	{
-		_interpret_pgtable(&map, pgd, 0, 0, aal, noisy);
+		if(pfns)
+			ghost_pfn_set_insert(pfns, hyp_virt_to_pfn(pgd));
+		_interpret_pgtable(&map, pgd, pfns, 0, 0, aal, noisy);
 		//hyp_put_mapping(map,2);
 		return map;
 	}
 }
 
 
-void interpret_pgtable_ap(abstract_pgtable *ap_out, kvm_pte_t *pgd, bool noisy)
+void interpret_pgtable_ap(abstract_pgtable *ap_out, kvm_pte_t *pgd, u64 pool_range_start, u64 pool_range_end, bool noisy)
 {
+	ghost_pfn_set_init(&ap_out->table_pfns, pool_range_start, pool_range_end);
 	if (pgd==0) {
 		ap_out->root = 0;
 		ap_out->mapping=mapping_empty_();
 	}
 	else {
 		ap_out->root = hyp_virt_to_phys(pgd);
-		ap_out->mapping=interpret_pgtable(pgd, noisy);
+		ap_out->mapping=interpret_pgtable(pgd, &ap_out->table_pfns, noisy);
 	}
 }
 
@@ -319,7 +329,7 @@ void ghost_dump_pgtable_locked(struct kvm_pgtable *pg, char *doc, u64 i)
 		hyp_puts("empty");
 		return;
 	}
-	mapping map = interpret_pgtable(pg->pgd, false /*noisy*/);
+	mapping map = interpret_pgtable(pg->pgd, NULL, false /*noisy*/);
 	//hyp_puts("ghost_dump_pgtable post interpret_pgtable()\n");
 	hyp_put_mapping(map, i+2);
 	// dump_pgtable(*pg); // to look at the raw pgtable - verbosely!
@@ -339,18 +349,18 @@ mapping ghost_record_pgtable(struct kvm_pgtable *pg, char *doc, u64 i)
 	//hyp_puts("ghost_record_pgtable() ");
 	//hyp_puts(doc);
 	//hyp_putc('\n');
-	mapping map = interpret_pgtable(pg->pgd, false /*noisy*/);
+	mapping map = interpret_pgtable(pg->pgd, NULL, false /*noisy*/);
 	//	hyp_put_mapping(map, i+2)
 	return map;
 }
 
 
-void ghost_record_pgtable_ap(abstract_pgtable *ap_out, struct kvm_pgtable *pg, char *doc, u64 i)
+void ghost_record_pgtable_ap(abstract_pgtable *ap_out, struct kvm_pgtable *pg, u64 pool_range_start, u64 pool_range_end, char *doc, u64 i)
 {
 	//hyp_puts("ghost_record_pgtable() ");
 	//hyp_puts(doc);
 	//hyp_putc('\n');
-	interpret_pgtable_ap(ap_out, pg->pgd, false /*noisy*/);
+	interpret_pgtable_ap(ap_out, pg->pgd, pool_range_start, pool_range_end, false /*noisy*/);
 	//	hyp_put_mapping(map, i+2)
 }
 
@@ -360,7 +370,7 @@ mapping ghost_record_pgtable_and_check(mapping map_old, struct kvm_pgtable *pg, 
 	//hyp_puts("pgtable diff ");
 	//hyp_puts(doc);
 	//hyp_putc('\n');
-	mapping map = interpret_pgtable(pg->pgd, false /*noisy*/);
+	mapping map = interpret_pgtable(pg->pgd, NULL, false /*noisy*/);
 	if (dump) {
 		hyp_putspi(doc,i+2);
 		hyp_put_mapping(map, i+4);
@@ -370,12 +380,12 @@ mapping ghost_record_pgtable_and_check(mapping map_old, struct kvm_pgtable *pg, 
 	return map;
 }
 
-void ghost_record_pgtable_and_check_ap(abstract_pgtable *ap_new, abstract_pgtable *ap_old, struct kvm_pgtable *pg, bool dump, char *doc, u64 i)
+void ghost_record_pgtable_and_check_ap(abstract_pgtable *ap_new, abstract_pgtable *ap_old, struct kvm_pgtable *pg, bool dump, u64 pool_range_start, u64 pool_range_end, char *doc, u64 i)
 {
 	//hyp_puts("pgtable diff ");
 	//hyp_puts(doc);
 	//hyp_putc('\n');
-	interpret_pgtable_ap(ap_new, pg->pgd, false /*noisy*/);
+	interpret_pgtable_ap(ap_new, pg->pgd, pool_range_start, pool_range_end, false /*noisy*/);
 	if (dump) {
 		hyp_putspi(doc,i+2);
 		hyp_put_mapping(ap_new->mapping, i+4);
@@ -397,7 +407,7 @@ mapping ghost_record_pgtable_partial(kvm_pte_t *pgtable, u64 level, u64 va_parti
 		hyp_putspi("pgtable==NULL\n", i);
 		goto out;
 	}
-	_interpret_pgtable(&map, pgtable, level, va_partial, aal_partial, false /*noisy*/);
+	_interpret_pgtable(&map, pgtable, NULL, level, va_partial, aal_partial, false /*noisy*/);
 	hyp_put_mapping(map, i+2);
 out:
 	return map;
@@ -411,7 +421,7 @@ void ghost_dump_pgtable_diff(mapping map_old, struct kvm_pgtable *pg, char *doc,
 	hyp_putspi(doc, i);
 	hyp_putsp(" ");
 	hyp_puts("ghost_dump_pgtable_diff\n");
-	mapping map = interpret_pgtable(pg->pgd, false /*noisy*/);
+	mapping map = interpret_pgtable(pg->pgd, NULL, false /*noisy*/);
 	diff_mappings(map_old, map, i+2);
 	//	hyp_put_mapping(&maplets_a);
 	free_mapping(map);
@@ -433,5 +443,6 @@ void ghost_test(void) {
 void abstract_pgtable_copy(abstract_pgtable *dst, abstract_pgtable *src)
 {
 	dst->root = src->root;
+	ghost_pfn_set_copy(&dst->table_pfns, &src->table_pfns);
 	dst->mapping = mapping_copy(src->mapping);
 }

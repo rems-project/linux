@@ -41,10 +41,13 @@ typedef enum entry_kind {
 #define GHOST_MAX_PFN_SET_LEN 64
 
 struct pfn_set {
+	u64 pool_range_start;
+	u64 pool_range_end;
 	u64 len;
-	phys_addr_t pfns[GHOST_MAX_PFN_SET_LEN];
+	phys_addr_t external_pfns[GHOST_MAX_PFN_SET_LEN];
 };
 
+void ghost_pfn_set_clear(struct pfn_set *set);
 void ghost_pfn_set_insert(struct pfn_set *set, u64 pfn);
 bool ghost_pfn_set_contains(struct pfn_set *set, u64 pfn);
 void ghost_pfn_set_dump(struct pfn_set *set);
@@ -52,6 +55,7 @@ void ghost_pfn_set_copy(struct pfn_set *dst, struct pfn_set *src);
 
 struct abstract_pgtable_struct {
 	phys_addr_t root;
+	struct pfn_set table_pfns;
 	mapping mapping;
 };
 
@@ -64,7 +68,7 @@ void dump_pgtable(struct kvm_pgtable pg);
 void ghost_dump_pgtable(struct kvm_pgtable *pg, char *doc, u64 i);
 void ghost_dump_pgtable_locked(struct kvm_pgtable *pg, char *doc, u64 i);
 
-mapping interpret_pgtable(kvm_pte_t *pgd, bool noisy);
+mapping interpret_pgtable(kvm_pte_t *pgd, struct pfn_set *pfns, bool noisy);
 mapping ghost_record_pgtable(struct kvm_pgtable *pg, char *doc, u64 i);
 mapping ghost_record_pgtable_and_check(mapping map_old, struct kvm_pgtable *pg, bool dump, char *doc, u64 i);
 
@@ -73,9 +77,9 @@ void ghost_dump_pgtable_diff(mapping map_old, struct kvm_pgtable *pg, char *doc,
 
 
 // the ap variants are similar to the above but also record the mapping root
-void interpret_pgtable_ap(abstract_pgtable *ap_out, kvm_pte_t *pgd, bool noisy);
-void ghost_record_pgtable_ap(abstract_pgtable *ap_out, struct kvm_pgtable *pg, char *doc, u64 i);
-void ghost_record_pgtable_and_check_ap(abstract_pgtable *map_new, abstract_pgtable *map_old, struct kvm_pgtable *pg, bool dump, char *doc, u64 i);
+void interpret_pgtable_ap(abstract_pgtable *ap_out, kvm_pte_t *pgd, u64 pool_range_start, u64 pool_range_end, bool noisy);
+void ghost_record_pgtable_ap(abstract_pgtable *ap_out, struct kvm_pgtable *pg, u64 pool_range_start, u64 pool_range_end, char *doc, u64 i);
+void ghost_record_pgtable_and_check_ap(abstract_pgtable *map_new, abstract_pgtable *map_old, struct kvm_pgtable *pg, bool dump, u64 pool_range_start, u64 pool_range_end, char *doc, u64 i);
 void ghost_dump_pgtable_diff_ap(abstract_pgtable *map_old, struct kvm_pgtable *pg, char *doc, u64 i);
 
 void ghost_test(void);
