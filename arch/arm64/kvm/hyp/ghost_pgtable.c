@@ -9,9 +9,51 @@
 #include "./ghost_extra_debug-pl011.h"
 #include "./ghost_pgtable.h"
 #include "./include/nvhe/memory.h"   // for hyp_phys_to_virt
+#include <nvhe/ghost_asserts.h>
 
 
 #pragma GCC diagnostic ignored "-Wdeclaration-after-statement"
+
+void ghost_pfn_set_init(struct pfn_set *set)
+{
+	set->len = 0;
+}
+
+void ghost_pfn_set_insert(struct pfn_set *set, u64 pfn)
+{
+	u64 idx = set->len++;
+	ghost_assert(idx < GHOST_MAX_PFN_SET_LEN);
+	set->pfns[idx] = pfn;
+}
+
+bool ghost_pfn_set_contains(struct pfn_set *set, u64 pfn)
+{
+	ghost_assert(set->len < GHOST_MAX_PFN_SET_LEN);
+	for (int idx=0; idx < set->len; idx++) {
+		if (set->pfns[idx] == pfn)
+			return true;
+	}
+	return false;
+}
+
+void ghost_pfn_set_dump(struct pfn_set *set)
+{
+	ghost_assert(set->len < GHOST_MAX_PFN_SET_LEN);
+	hyp_putsp("BEGIN PFNS\n");
+	for (int idx=0; idx < set->len; idx++) {
+		hyp_putsxn("  pfs", set->pfns[idx], 64);
+		hyp_putsp("\n");
+	}
+	hyp_putsp("END PFNS\n");
+}
+
+void ghost_pfn_set_copy(struct pfn_set *dst, struct pfn_set *src)
+{
+	dst->len = src->len;
+	for (int idx=0; idx<GHOST_MAX_PFN_SET_LEN; idx++) {
+		dst->pfns[idx] = src->pfns[idx];
+	}
+}
 
 
 /* page table entry kind: classify kind of entry */
