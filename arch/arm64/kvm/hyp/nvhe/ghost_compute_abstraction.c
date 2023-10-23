@@ -51,6 +51,37 @@ extern hyp_spinlock_t vm_table_lock;
 // for all these, one needs to be in ghost_(un)lock_maplets()
 // and, unless we make the memory management more automatic, the context must carefully free any pre-existing mappings
 
+/* abstraction functions should not create whole ghost structs on the stack
+ * but, instead, read and write directly to an owned ghost object */
+
+void compute_abstraction_pkvm(struct ghost_pkvm *dest);
+void compute_abstraction_host(struct ghost_host *dest);
+void compute_abstraction_vm(struct ghost_vm *dest, struct pkvm_hyp_vm *src_vm);
+mapping compute_abstraction_hyp_memory(void);
+
+bool abstract_pgtable_equal(
+	char* cmp_name,
+	char* pgt1_name,
+	char* pgt2_name,
+	abstract_pgtable *pgt1,
+	abstract_pgtable *pgt2,
+	u64 indent
+);
+bool abstraction_equals_hyp_memory(struct ghost_state *g1, struct ghost_state *g2);
+bool abstraction_equals_reg(struct ghost_state *g1, struct ghost_state *g2);
+bool abstraction_equals_pkvm(struct ghost_pkvm *gp1, struct ghost_pkvm *gp2);
+bool abstraction_equals_host(struct ghost_host *gh1, struct ghost_host *gh2);
+bool abstraction_equals_loaded_vcpu(struct ghost_loaded_vcpu *loaded_vcpu1, struct ghost_loaded_vcpu *loaded_vcpu2);
+bool abstraction_equals_loaded_vcpus(struct ghost_state *g1, struct ghost_state *g2);
+bool abstraction_equals_vcpu(struct ghost_vcpu *vcpu1, struct ghost_vcpu *vcpu2);
+bool abstraction_equals_vm(struct ghost_vm *vm1, struct ghost_vm *vm2);
+bool abstraction_equals_vms(struct ghost_vms *gc, struct ghost_vms *gr_post);
+
+/**
+ * abstraction_equals_all() - Given the recorded (actual) pre/post and the computed (spec) post state, check it's consistent.
+ */
+bool abstraction_equals_all(struct ghost_state *gc, struct ghost_state *gr_post, struct ghost_state *gr_pre);
+
 // should these return abstract-state structs or update a ghost_state struct?  We really need the latter, but (looking towards the functional spec) nicer to factor via the former?
 
 mapping compute_abstraction_hyp_memory(void)
@@ -66,27 +97,23 @@ mapping compute_abstraction_hyp_memory(void)
 // should this read from the mapping, or from our ghost record of the mapping requests?  From the mapping, as this is to specify what EL2 Stage 1 translation does - correctness of the initialisation w.r.t. the requests is a different question
 // should this be usable only from a freshly initialised state, or from an arbitrary point during pKVM execution?  From an arbitrary point during execution.  (Do we have to remove any annot parts here?  not sure)
 // need to hold the pkvm lock
-struct ghost_pkvm compute_abstraction_pkvm(void)
+void compute_abstraction_pkvm(struct ghost_pkvm *dest)
 {
-	struct ghost_pkvm gp;
 	u64 i=0; /* base indent */ /* though we'll mostly want this to be quiet, later */
-	gp.pkvm_abstract_pgtable = ghost_record_pgtable_ap(&pkvm_pgtable, "pkvm_pgtable", i);
-	gp.present = true;
-	return gp;
+	dest->pkvm_abstract_pgtable = ghost_record_pgtable_ap(&pkvm_pgtable, "pkvm_pgtable", i);
+	dest->present = true;
 }
 
-struct ghost_host compute_abstraction_host(void)
+void compute_abstraction_host(struct ghost_host *dest)
 {
-	struct ghost_host gh;
 	abstract_pgtable ap;
 	u64 i=0; /* base indent */ /* though we'll mostly want this to be quiet, later */
 	ap = ghost_record_pgtable_ap(&host_mmu.pgt, "host_mmu.pgt", i);
-	gh.host_abstract_pgtable_annot = (abstract_pgtable){.root = ap.root, .mapping = mapping_annot(ap.mapping)};
-	gh.host_abstract_pgtable_shared = (abstract_pgtable){.root = ap.root, .mapping = mapping_shared(ap.mapping)};
-	gh.host_abstract_pgtable_nonannot = (abstract_pgtable){.root = ap.root, .mapping = mapping_nonannot(ap.mapping)};
-	gh.present = true;
+	dest->host_abstract_pgtable_annot = (abstract_pgtable){.root = ap.root, .mapping = mapping_annot(ap.mapping)};
+	dest->host_abstract_pgtable_shared = (abstract_pgtable){.root = ap.root, .mapping = mapping_shared(ap.mapping)};
+	dest->host_abstract_pgtable_nonannot = (abstract_pgtable){.root = ap.root, .mapping = mapping_nonannot(ap.mapping)};
+	dest->present = true;
 	free_mapping(ap.mapping);
-	return gh;
 }
 
 static struct ghost_vm_slot *__ghost_vm_or_free_slot_from_handle(struct ghost_vms *vms, pkvm_handle_t handle) {
@@ -157,26 +184,23 @@ bool ghost_vms_is_valid_handle(struct ghost_vms *vms, pkvm_handle_t handle)
 }
 
 /// from a vm_table index compute the abstract ghost VM
-struct ghost_vm compute_abstraction_vm(struct pkvm_hyp_vm *vm) {
+void compute_abstraction_vm(struct ghost_vm *dest, struct pkvm_hyp_vm *vm) {
 	int i;
-	struct ghost_vm abstract_vm;
 	ghost_assert(vm);
 	hyp_assert_lock_held(&vm->lock);
-	abstract_vm.pkvm_handle = vm->kvm.arch.pkvm.handle;
-	abstract_vm.nr_vcpus = vm->nr_vcpus;
-	for (i=0; i<abstract_vm.nr_vcpus; i++) {
-		abstract_vm.vcpus[i].loaded = vm->vcpus[i]->loaded_hyp_vcpu ? true : false;
+	dest->pkvm_handle = vm->kvm.arch.pkvm.handle;
+	dest->nr_vcpus = vm->nr_vcpus;
+	for (i=0; i<dest->nr_vcpus; i++) {
+		dest->vcpus[i].loaded = vm->vcpus[i]->loaded_hyp_vcpu ? true : false;
 	}
-	abstract_vm.vm_abstract_pgtable = ghost_record_pgtable_ap(&vm->pgt, "guest_mmu.pgt", 0);
-	abstract_vm.lock = &vm->lock;
-	return abstract_vm;
+	dest->vm_abstract_pgtable = ghost_record_pgtable_ap(&vm->pgt, "guest_mmu.pgt", 0);
+	dest->lock = &vm->lock;
 }
 
-bool abstract_pgtable_equal(char *cmp_name, abstract_pgtable ap1, abstract_pgtable ap2,
-	char *ap1_name, char* ap2_name, u64 indent)
+bool abstract_pgtable_equal(char *cmp_name, char* ap1_name, char* ap2_name, abstract_pgtable *ap1, abstract_pgtable *ap2, u64 indent)
 {
-	return (   ap1.root == ap2.root
-		&& mapping_equal(ap1.mapping, ap2.mapping, cmp_name, ap1_name, ap2_name, indent));
+	return (   ap1->root == ap2->root
+		&& mapping_equal(ap1->mapping, ap2->mapping, cmp_name, ap1_name, ap2_name, indent));
 }
 
 bool abstraction_equals_hyp_memory(struct ghost_state *g1, struct ghost_state *g2)
@@ -197,26 +221,26 @@ bool abstraction_equals_reg(struct ghost_state *g1, struct ghost_state *g2)
 	// TODO other regs
 }
 
-bool abstraction_equals_pkvm(struct ghost_pkvm gp1, struct ghost_pkvm gp2)
+bool abstraction_equals_pkvm(struct ghost_pkvm *gp1, struct ghost_pkvm *gp2)
 {
-	ghost_assert(gp1.present && gp2.present);
-	return abstract_pgtable_equal("abstraction_equals_pkvm", gp1.pkvm_abstract_pgtable, gp2.pkvm_abstract_pgtable, "gp1.pkvm_mapping", "gp2.pkvm_mapping", 4);
+	ghost_assert(gp1->present && gp2->present);
+	return abstract_pgtable_equal("abstraction_equals_pkvm", "gp1.pkvm_mapping", "gp2.pkvm_mapping", &gp1->pkvm_abstract_pgtable, &gp2->pkvm_abstract_pgtable, 4);
 }
 
-bool abstraction_equals_host(struct ghost_host gh1, struct ghost_host gh2)
+bool abstraction_equals_host(struct ghost_host *gh1, struct ghost_host *gh2)
 {
 	// note that this only checks the annot component
-	ghost_assert(gh1.present && gh2.present);
-	return (abstract_pgtable_equal("abstraction_equals_host", gh1.host_abstract_pgtable_annot, gh2.host_abstract_pgtable_annot, "gh1.host_mapping_annot", "gh2.host_mapping_annot", 4) &&
-		abstract_pgtable_equal("abstraction_equals_host", gh1.host_abstract_pgtable_shared, gh2.host_abstract_pgtable_shared, "gh1.host_mapping_shared", "gh2.host_mapping_shared", 4));
+	ghost_assert(gh1->present && gh2->present);
+	return (abstract_pgtable_equal("abstraction_equals_host", "gh1.host_mapping_annot", "gh2.host_mapping_annot", &gh1->host_abstract_pgtable_annot, &gh2->host_abstract_pgtable_annot, 4) &&
+		abstract_pgtable_equal("abstraction_equals_host", "gh1.host_mapping_shared", "gh2.host_mapping_shared", &gh1->host_abstract_pgtable_shared, &gh2->host_abstract_pgtable_shared, 4));
 }
 
-bool abstraction_equals_loaded_vcpu(struct ghost_loaded_vcpu loaded_vcpu1, struct ghost_loaded_vcpu loaded_vcpu2) 
+bool abstraction_equals_loaded_vcpu(struct ghost_loaded_vcpu *loaded_vcpu1, struct ghost_loaded_vcpu *loaded_vcpu2)
 {
-	ghost_assert(loaded_vcpu1.present && loaded_vcpu2.present);
-	if (loaded_vcpu1.loaded == loaded_vcpu2.loaded) {
-		return    loaded_vcpu1.vm_handle == loaded_vcpu2.vm_handle
-		       && loaded_vcpu1.vcpu_index == loaded_vcpu2.vcpu_index;
+	ghost_assert(loaded_vcpu1->present && loaded_vcpu2->present);
+	if (loaded_vcpu1->loaded == loaded_vcpu2->loaded) {
+		return    loaded_vcpu1->vm_handle == loaded_vcpu2->vm_handle
+		       && loaded_vcpu1->vcpu_index == loaded_vcpu2->vcpu_index;
 	} else {
 		return false;
 	}
@@ -227,7 +251,7 @@ bool abstraction_equals_loaded_vcpus(struct ghost_state *g1, struct ghost_state 
 	bool ret = true;
 	for (int i=0; i<NR_CPUS; i++) {
 		if (g1->loaded_hyp_vcpu[i].present && g2->loaded_hyp_vcpu[i].present) {
-			ret = ret && abstraction_equals_loaded_vcpu(g1->loaded_hyp_vcpu[i], g2->loaded_hyp_vcpu[i]);
+			ret = ret && abstraction_equals_loaded_vcpu(&g1->loaded_hyp_vcpu[i], &g2->loaded_hyp_vcpu[i]);
 		} else if (g1->loaded_hyp_vcpu[i].present && !g2->loaded_hyp_vcpu[i].present) {
 			ghost_assert(false);
 		}
@@ -235,36 +259,36 @@ bool abstraction_equals_loaded_vcpus(struct ghost_state *g1, struct ghost_state 
 	return ret;
 }
 
-bool abstraction_equals_vcpu(struct ghost_vcpu vcpu1, struct ghost_vcpu vcpu2)
+bool abstraction_equals_vcpu(struct ghost_vcpu *vcpu1, struct ghost_vcpu *vcpu2)
 {
-	return vcpu1.loaded == vcpu2.loaded;
+	return vcpu1->loaded == vcpu2->loaded;
 }
 
-bool abstraction_equals_vm(struct ghost_vm vm1, struct ghost_vm vm2)
+bool abstraction_equals_vm(struct ghost_vm *vm1, struct ghost_vm *vm2)
 {
 	// need to hold the vms lock to make sure the vm doesn't change out under us.
 	ghost_assert_vms_table_locked();
 
-	hyp_assert_lock_held(vm1.lock);
+	hyp_assert_lock_held(vm1->lock);
 
 	// if not for the same guest VM, then not equal
 	// technically the handles are fields on the vm and protected by the vm
 	// but if we hold the ghost vms lock they can't change out from under us
 	// and we don't want to lock vm2 if it's not the same guest as vm1
-	if (vm1.pkvm_handle != vm2.pkvm_handle)
+	if (vm1->pkvm_handle != vm2->pkvm_handle)
 		return false;
 
-	ghost_assert(vm1.lock == vm2.lock);
+	ghost_assert(vm1->lock == vm2->lock);
 
-	if (vm1.nr_vcpus != vm2.nr_vcpus)
+	if (vm1->nr_vcpus != vm2->nr_vcpus)
 		return false;
 	
 	bool vcpus_are_equal;
-	for (int i=0; i<vm1.nr_vcpus; i++) {
-		vcpus_are_equal = vcpus_are_equal && abstraction_equals_vcpu(vm1.vcpus[i], vm2.vcpus[i]);
+	for (int i=0; i<vm1->nr_vcpus; i++) {
+		vcpus_are_equal = vcpus_are_equal && abstraction_equals_vcpu(&vm1->vcpus[i], &vm2->vcpus[i]);
 	}
 
-	return (   abstract_pgtable_equal("abstraction_equals_vm", vm1.vm_abstract_pgtable, vm2.vm_abstract_pgtable, "vm1.vm_abstract_pgtable", "vm2.vm_abstract_pgtable", 4)
+	return (   abstract_pgtable_equal("abstraction_equals_vm", "vm1.vm_abstract_pgtable", "vm2.vm_abstract_pgtable", &vm1->vm_abstract_pgtable, &vm2->vm_abstract_pgtable, 4)
 		&& vcpus_are_equal);
 }
 
@@ -280,14 +304,14 @@ bool abstraction_vm_in_vms_and_equal(pkvm_handle_t vm_handle, struct ghost_state
 	if (found_vm == NULL)
 		return false;
 
-	return abstraction_equals_vm(*g_vm, *found_vm);
+	return abstraction_equals_vm(g_vm, found_vm);
 }
 
 bool __abstraction_vm_contained_in(struct ghost_vm *vm, struct ghost_vms *vms) {
 	struct ghost_vm *vm2 = ghost_vms_get(vms, vm->pkvm_handle);
 
 	if (vm2) {
-		return abstraction_equals_vm(*vm, *vm2);
+		return abstraction_equals_vm(vm, vm2);
 	} else {
 		return false;
 	}
@@ -307,13 +331,13 @@ bool __abstraction_vm_all_contained_in(struct ghost_vms *vms1, struct ghost_vms 
 	return all_found;
 }
 
-bool abstraction_equals_vms(struct ghost_vms gc, struct ghost_vms gr_post)
+bool abstraction_equals_vms(struct ghost_vms *gc, struct ghost_vms *gr_post)
 {
-	ghost_assert(gc.present && gr_post.present);
+	ghost_assert(gc->present && gr_post->present);
 	// the computed and recorded post states should have exactly the same set of touched VMs
 	return (
-		   __abstraction_vm_all_contained_in(&gc, &gr_post)
-		&& __abstraction_vm_all_contained_in(&gr_post, &gc)
+		   __abstraction_vm_all_contained_in(gc, gr_post)
+		&& __abstraction_vm_all_contained_in(gr_post, gc)
 	);
 }
 
@@ -325,21 +349,21 @@ bool abstraction_equals_all(struct ghost_state *gc, struct ghost_state *gr_post,
 {
 	bool ret_pkvm, ret_host, ret_vms, ret_loaded_vcpus;
 	if (gc->pkvm.present && gr_post->pkvm.present) {
-		ret_pkvm = abstraction_equals_pkvm(gc->pkvm, gr_post->pkvm);
+		ret_pkvm = abstraction_equals_pkvm(&gc->pkvm, &gr_post->pkvm);
 	}
 	else if (gc->pkvm.present && !gr_post->pkvm.present) {
 		ghost_assert(false);
 	}
 	else if (!gc->pkvm.present && gr_post->pkvm.present) {
 		ghost_assert(gr_pre->pkvm.present);
-		ret_pkvm = abstraction_equals_pkvm(gr_post->pkvm, gr_pre->pkvm);
+		ret_pkvm = abstraction_equals_pkvm(&gr_post->pkvm, &gr_pre->pkvm);
 	}
 	else
 		ret_pkvm = true;
 
 	if (gc->host.present && gr_post->host.present) {
 		hyp_putsp("case 1\n");
-		ret_host = abstraction_equals_host(gc->host, gr_post->host);
+		ret_host = abstraction_equals_host(&gc->host, &gr_post->host);
 	}
 	else if (gc->host.present && !gr_post->host.present) {
 		ghost_assert(false);
@@ -347,19 +371,19 @@ bool abstraction_equals_all(struct ghost_state *gc, struct ghost_state *gr_post,
 	else if (!gc->host.present && gr_post->host.present) {
 		hyp_putsp("case 3\n");
 		ghost_assert(gr_pre->host.present);
-		ret_host = abstraction_equals_host(gr_post->host, gr_pre->host);
+		ret_host = abstraction_equals_host(&gr_post->host, &gr_pre->host);
 	}
 	else
 		ret_host = true;
 
 	// TODO: ensure we actually own the locks of any VMs we touched in the hypercall before doing this...
 	if (gc->vms.present && gr_post->vms.present) {
-		ret_vms = abstraction_equals_vms(gc->vms, gr_post->vms);
+		ret_vms = abstraction_equals_vms(&gc->vms, &gr_post->vms);
 	} else if (gc->vms.present && !gr_post->vms.present) {
 		ghost_assert(false);
 	} else if (!gc->vms.present && gr_post->vms.present) {
 		ghost_assert(gr_pre->vms.present);
-		ret_vms = abstraction_equals_vms(gr_post->vms, gr_pre->vms);
+		ret_vms = abstraction_equals_vms(&gr_post->vms, &gr_pre->vms);
 	} else {
 		ret_vms = true;
 	}
@@ -563,7 +587,7 @@ void record_abstraction_hyp_memory(struct ghost_state *g)
 void record_abstraction_pkvm(struct ghost_state *g)
 {
 	ghost_assert(!g->pkvm.present);
-	g->pkvm = compute_abstraction_pkvm();
+	compute_abstraction_pkvm(&g->pkvm);
 }
 
 /* from nvhe/pkvm.c */
@@ -597,7 +621,7 @@ void record_abstraction_loaded_vcpu(struct ghost_state *g)
 void record_abstraction_host(struct ghost_state *g)
 {
 	ghost_assert(!g->host.present);
-	g->host = compute_abstraction_host();
+	compute_abstraction_host(&g->host);
 }
 
 void record_abstraction_vm(struct ghost_state *g, struct pkvm_hyp_vm *vm)
@@ -615,16 +639,15 @@ void record_abstraction_vm(struct ghost_state *g, struct pkvm_hyp_vm *vm)
 	hyp_assert_lock_held(&vm->lock);
 
 	pkvm_handle_t handle = vm->kvm.arch.pkvm.handle;
-	struct ghost_vm ghost_vm = compute_abstraction_vm(vm);
+	struct ghost_vm *slot = ghost_vms_get(&g->vms, handle);
 
 	// get, and if it doesn't exist, create one
-	struct ghost_vm *slot = ghost_vms_get(&g->vms, handle);
 	if (!slot) {
 		slot = ghost_vms_alloc(&g->vms, handle);
 	}
 
-	// just copy in, this should be safe
-	*slot = ghost_vm;
+	// write the vm directly into the slot
+	compute_abstraction_vm(slot, vm);
 }
 
 void record_abstraction_regs(struct ghost_state *g, struct kvm_cpu_context *ctxt)
@@ -690,7 +713,7 @@ void record_and_check_abstraction_pkvm_pre(void)
 	ghost_lock_maplets();
 	struct ghost_state *g = this_cpu_ptr(&gs_recorded_pre);
 	record_abstraction_pkvm(g);
-	ghost_spec_assert(abstraction_equals_pkvm(g->pkvm, gs.pkvm));
+	ghost_spec_assert(abstraction_equals_pkvm(&g->pkvm, &gs.pkvm));
 	ghost_unlock_maplets();
 }
 
@@ -711,7 +734,7 @@ void record_and_check_abstraction_host_pre(void)
 	struct ghost_state *g = this_cpu_ptr(&gs_recorded_pre);
 	record_abstraction_host(g);
 	hyp_putsp("a-e-h: record_and_check_abstraction_host_pre\n");
-	ghost_spec_assert(abstraction_equals_host(g->host, gs.host));
+	ghost_spec_assert(abstraction_equals_host(&g->host, &gs.host));
 	ghost_unlock_maplets();
 }
 
