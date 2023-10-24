@@ -14,7 +14,7 @@
 
 // GHOST
 // not sure what the proper way to do this is...
-#include "../../kvm/hyp/ghost_maplets.h"
+#include "../../kvm/hyp/include/nvhe/ghost_maplets.h"
 // /GHOST
 
 #define KVM_PGTABLE_MAX_LEVELS		4U

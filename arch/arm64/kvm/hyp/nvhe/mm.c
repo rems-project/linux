@@ -19,7 +19,7 @@
 #include <nvhe/spinlock.h>
 
 // GHOST
-#include "ghost_spec.h"
+#include <nvhe/ghost_spec.h>
 #include <nvhe/ghost_mapping_reqs.h>
 // /GHOST
 

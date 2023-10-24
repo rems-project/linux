@@ -53,9 +53,9 @@
 
 
 #include <asm/kvm_mmu.h>
-#include <../debug-pl011.h>
-#include <../ghost_extra_debug-pl011.h>
-#include "../ghost_pgtable.h"
+#include <nvhe/debug-pl011.h>
+#include <nvhe/ghost_extra_debug-pl011.h>
+#include <nvhe/ghost_pgtable.h>
 #include <nvhe/ghost_mapping_reqs.h>
 //#include <nvhe/spinlock.h>
 

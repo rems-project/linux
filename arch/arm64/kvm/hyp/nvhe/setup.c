@@ -20,13 +20,13 @@
 
 
 // GHOST
-#include <../debug-pl011.h>
-#include <../ghost_extra_debug-pl011.h>
+#include <nvhe/debug-pl011.h>
+#include <nvhe/ghost_extra_debug-pl011.h>
 #include <nvhe/ghost_mapping_reqs.h>
 #include <nvhe/ghost_misc.h>
-#include "./ghost_compute_abstraction.h"
-#include <../ghost_pgtable.h>
-#include "../ghost_control.h"
+#include <nvhe/ghost_compute_abstraction.h>
+#include <nvhe/ghost_pgtable.h>
+#include <nvhe/ghost_control.h>
 // /GHOST
 
 unsigned long hyp_nr_cpus;

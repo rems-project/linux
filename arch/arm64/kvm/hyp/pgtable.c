@@ -14,11 +14,11 @@
 
 // GHOST
 #include <asm/kvm_mmu.h>      // needed for debug-pl011.h
-#include <../debug-pl011.h>
-#include <../ghost_extra_debug-pl011.h>
+#include <nvhe/debug-pl011.h>
+#include <nvhe/ghost_extra_debug-pl011.h>
 //#include <nvhe/ghost_check_pgtables.h>
-#include "./ghost_pgtable.h"
-#include "./ghost_control.h"
+#include <nvhe/ghost_pgtable.h>
+#include <nvhe/ghost_control.h>
 
 #pragma GCC diagnostic ignored "-Wdeclaration-after-statement"
 // /GHOST

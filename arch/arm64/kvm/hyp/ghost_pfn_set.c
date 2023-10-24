@@ -3,8 +3,8 @@
 #include <nvhe/ghost_asserts.h>
 #include <nvhe/ghost_pfn_set.h>
 
-#include "./debug-pl011.h"
-#include "./ghost_extra_debug-pl011.h"
+#include <nvhe/debug-pl011.h>
+#include <nvhe/ghost_extra_debug-pl011.h>
 
 void ghost_pfn_set_init(struct pfn_set *set, u64 pool_range_start, u64 pool_range_end)
 {

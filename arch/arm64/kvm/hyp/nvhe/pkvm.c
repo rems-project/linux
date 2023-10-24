@@ -18,7 +18,7 @@
 #include <nvhe/trap_handler.h>
 
 // GHOST
-#include "./ghost_compute_abstraction.h"
+#include <nvhe/ghost_compute_abstraction.h>
 // /GHOST
 
 /* Used by icache_is_vpipt(). */

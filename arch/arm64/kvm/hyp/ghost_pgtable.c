@@ -5,10 +5,10 @@
 */
 #include <asm/kvm_mmu.h>
 
-#include "./debug-pl011.h"
-#include "./ghost_extra_debug-pl011.h"
-#include "./ghost_pgtable.h"
-#include "./include/nvhe/memory.h"   // for hyp_phys_to_virt
+#include <nvhe/debug-pl011.h>
+#include <nvhe/ghost_extra_debug-pl011.h>
+#include <nvhe/ghost_pgtable.h>
+#include <nvhe/memory.h>   // for hyp_phys_to_virt
 
 #include <nvhe/ghost_pfn_set.h>
 #include <nvhe/ghost_asserts.h>

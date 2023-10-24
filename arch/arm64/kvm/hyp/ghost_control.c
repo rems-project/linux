@@ -1,4 +1,4 @@
-#include "./ghost_control.h"
+#include <nvhe/ghost_control.h>
 #include <linux/types.h>
 
 /* switches for various ghost-code checks and logging output.

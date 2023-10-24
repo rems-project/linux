@@ -1,9 +1,9 @@
 #include <asm/kvm_mmu.h>    // needed for debug-pl011.h ?
-#include <../debug-pl011.h>
-#include <../ghost_extra_debug-pl011.h>
+#include <nvhe/debug-pl011.h>
+#include <nvhe/ghost_extra_debug-pl011.h>
 //#include <nvhe/ghost_check_pgtables.h>
 #include <nvhe/ghost_misc.h>
-#include <../ghost_pgtable.h>
+#include <nvhe/ghost_pgtable.h>
 #pragma GCC diagnostic ignored "-Wdeclaration-after-statement"
 
 #include <nvhe/spinlock.h>   
@@ -12,10 +12,10 @@
 #include <asm/kvm_asm.h>    // for __KVM_HOST_SMCCC_FUNC___pkvm_host_share_hyp etc
 #include <asm/kvm_hyp.h> // for read_sysreg_el2
 #include <asm/sysreg.h> // for SYS_ESR_EL2
-#include "nvhe/ghost_asm_ids.h"
-#include "./ghost_spec.h"
-#include "./ghost_compute_abstraction.h"
-#include "../ghost_kvm_pgtable.h"
+#include <nvhe/ghost_asm_ids.h>
+#include <nvhe/ghost_spec.h>
+#include <nvhe/ghost_compute_abstraction.h>
+#include <nvhe/ghost_kvm_pgtable.h>
 
 
 

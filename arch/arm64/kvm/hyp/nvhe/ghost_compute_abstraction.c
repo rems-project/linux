@@ -24,12 +24,12 @@
 
 
 // and the ghost headers from mem_protect.c
-#include <../debug-pl011.h>
-#include <../ghost_extra_debug-pl011.h>
-#include <../ghost_pgtable.h>
-#include "./ghost_spec.h"
+#include <nvhe/debug-pl011.h>
+#include <nvhe/ghost_extra_debug-pl011.h>
+#include <nvhe/ghost_pgtable.h>
+#include <nvhe/ghost_spec.h>
 #include <nvhe/ghost_asm.h>
-#include "nvhe/ghost_asm_ids.h"
+#include <nvhe/ghost_asm_ids.h>
 
 //horrible hack for ghost code in nvhe/iommu/s2mpu.c
 // but in the default build # CONFIG_KVM_S2MPU is not set
@@ -41,8 +41,8 @@
 // end of mem_protect.c ghost headers
 
 
-#include "./ghost_spec.h"
-#include "./ghost_compute_abstraction.h"
+#include <nvhe/ghost_spec.h>
+#include <nvhe/ghost_compute_abstraction.h>
 
 /* from nvhe/pkvm.c */
 extern struct pkvm_hyp_vm **vm_table;

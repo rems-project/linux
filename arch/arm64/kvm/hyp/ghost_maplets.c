@@ -41,11 +41,11 @@
 
 #include <asm/kvm_mmu.h>
 
-#include "./debug-pl011.h"
-#include "./ghost_extra_debug-pl011.h"
+#include <nvhe/debug-pl011.h>
+#include <nvhe/ghost_extra_debug-pl011.h>
 
-#include "./ghost_maplets.h"
-#include "./ghost_kvm_pgtable.h"
+#include <nvhe/ghost_maplets.h>
+#include <nvhe/ghost_kvm_pgtable.h>
 //#include <linux/list_sort.h>
 
 #include <nvhe/spinlock.h>   // no idea whether this will work - probably not
