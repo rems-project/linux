@@ -1124,3 +1124,8 @@ bool mapping_lookup(u64 virt, struct glist_head head, struct maplet_target *tp)
 	return false;
 }
 
+void mapping_move(mapping *map_out, mapping map)
+{
+	free_mapping(*map_out);
+	*map_out = map;
+}

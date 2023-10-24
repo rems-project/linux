@@ -233,6 +233,11 @@ void compute_new_abstract_state_handle___pkvm_host_share_hyp(struct ghost_state 
 		goto out;
 	}
 
+	// the host pfn_set and the annot mapping are unchanged
+	// but the host shared mapping and the pkvm mapping will be updated
+	copy_abstraction_host(g1, g0);
+	copy_abstraction_pkvm(g1, g0);
+
 	// __host_check_page_state_range(addr, size, PKVM_PAGE_OWNED);
 	if (!is_owned_exclusively_by(g0, GHOST_HOST, phys)) {
 		ret = -EPERM;
@@ -248,25 +253,22 @@ void compute_new_abstract_state_handle___pkvm_host_share_hyp(struct ghost_state 
 	u64 host_arch_prot = arch_prot_of_prot(ghost_default_host_prot(ghost_addr_is_memory(g0, phys)));
 	u64 hyp_arch_prot = host_arch_prot;
 
-	/* the host annot mapping is unchanged (we have established that host_addr is NOT already in there) */
-	g1->host.host_abstract_pgtable_annot = mapping_copy(g0->host.host_abstract_pgtable_annot);
-
-	/* add a new host shared mapping, PKVM_PAGE_SHARED_OWNED */
-	g1->host.host_abstract_pgtable_shared =
+	/* the host annot mapping is unchanged (we have established that host_addr is NOT already in there)
+	 * but, there is a new host shared mapping, PKVM_PAGE_SHARED_OWNED */
+	mapping_move(
+		&g1->host.host_abstract_pgtable_shared,
 		mapping_plus(
 			g0->host.host_abstract_pgtable_shared,
-			mapping_singleton(host_addr, 1, maplet_target_mapped_ext(phys, PKVM_PAGE_SHARED_OWNED, host_arch_prot)));
+			mapping_singleton(host_addr, 1, maplet_target_mapped_ext(phys, PKVM_PAGE_SHARED_OWNED, host_arch_prot)))
+	);
 	
-	ghost_pfn_set_copy(&g1->host.host_abstract_pgtable_pfns, &g0->host.host_abstract_pgtable_pfns);
-
 	/* add a new hyp mapping, PKVM_PAGE_SHARED_BORROWED */
-	// g1->pkvm.pkvm_abstract_pgtable.root = g0->pkvm.pkvm_abstract_pgtable.root; // TODO: BS: is this right?
-	abstract_pgtable_copy(&g1->pkvm.pkvm_abstract_pgtable, &g0->pkvm.pkvm_abstract_pgtable);
-	free_mapping(g1->pkvm.pkvm_abstract_pgtable.mapping);
-	g1->pkvm.pkvm_abstract_pgtable.mapping =
+	mapping_move(
+		&g1->pkvm.pkvm_abstract_pgtable.mapping,
 		mapping_plus(
 			g0->pkvm.pkvm_abstract_pgtable.mapping,
-			mapping_singleton(hyp_addr, 1, maplet_target_mapped_ext(phys, PKVM_PAGE_SHARED_BORROWED, hyp_arch_prot)));
+			mapping_singleton(hyp_addr, 1, maplet_target_mapped_ext(phys, PKVM_PAGE_SHARED_BORROWED, hyp_arch_prot)))
+	);
 out:
 	ghost_reg_gpr(g1, 1) = ret;
 }

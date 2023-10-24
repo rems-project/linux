@@ -169,6 +169,11 @@ bool mapping_disjoint(mapping map1, mapping map2, char *s, char *s1, char *s2, u
 bool mapping_in_domain(u64 virt, mapping map);
 bool mapping_lookup(u64 virt, mapping map, struct maplet_target *tp);
 
+// deallocate @map_out and set it to point to a new copy of the mapping in @map
+void mapping_move(mapping *map_out, mapping map);
+
+
+
 void ghost_lock_maplets(void);
 void ghost_unlock_maplets(void);
 inline void ghost_assert_maplets_locked(void);
