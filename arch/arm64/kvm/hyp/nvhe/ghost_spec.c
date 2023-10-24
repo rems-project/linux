@@ -283,6 +283,9 @@ void compute_new_abstract_state_handle___pkvm_host_unshare_hyp(struct ghost_stat
 	hyp_va_t hyp_addr = hyp_va_of_phys(g0, phys);
 	int ret = 0;
 
+	copy_abstraction_host(g1, g0);
+	copy_abstraction_pkvm(g1, g0);
+
 	// __host_check_page_state_range(addr, size, PKVM_PAGE_SHARED_OWNED);
 	if (!is_owned_and_shared_by(g0, GHOST_HOST, phys)) {
 		ret = -EPERM;
@@ -306,10 +309,10 @@ void compute_new_abstract_state_handle___pkvm_host_unshare_hyp(struct ghost_stat
 
 	/* remove 'host_addr' from the host shared finite map */
 	// in pKVM code: __host_set_page_state_range(host_addr, PAGE_SIZE, PKVM_PAGE_OWNED);
-	g1->host.host_abstract_pgtable_shared =
-		mapping_minus(g0->host.host_abstract_pgtable_shared, host_addr, 1);
-	g1->host.host_abstract_pgtable_annot = mapping_copy(g0->host.host_abstract_pgtable_annot);
-	ghost_pfn_set_copy(&g1->host.host_abstract_pgtable_pfns, &g0->host.host_abstract_pgtable_pfns);
+	mapping_move(
+		&g1->host.host_abstract_pgtable_shared,
+		mapping_minus(g0->host.host_abstract_pgtable_shared, host_addr, 1)
+	);
 
 	// PKVM can non-deterministically fail to unmap the page in its page table
 	// TODO: this may not be possible now that host_share_hyp cannot do a ENOMEM
@@ -318,10 +321,10 @@ void compute_new_abstract_state_handle___pkvm_host_unshare_hyp(struct ghost_stat
 		ret = -EFAULT;
 		goto out;
 	}
-	abstract_pgtable_copy(&g1->pkvm.pkvm_abstract_pgtable, &g0->pkvm.pkvm_abstract_pgtable);
-	free_mapping(g1->pkvm.pkvm_abstract_pgtable.mapping);
-	g1->pkvm.pkvm_abstract_pgtable.mapping =
-		mapping_minus(g0->pkvm.pkvm_abstract_pgtable.mapping, hyp_addr, 1);
+	mapping_move(
+		&g1->pkvm.pkvm_abstract_pgtable.mapping,
+		mapping_minus(g0->pkvm.pkvm_abstract_pgtable.mapping, hyp_addr, 1)
+	);
 out:
 	ghost_reg_gpr(g1, 1) = ret;
 }
