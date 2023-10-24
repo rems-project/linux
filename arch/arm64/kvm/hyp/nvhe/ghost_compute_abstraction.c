@@ -60,11 +60,11 @@ void compute_abstraction_vm(struct ghost_vm *dest, struct pkvm_hyp_vm *src_vm);
 mapping compute_abstraction_hyp_memory(void);
 
 bool abstract_pgtable_equal(
+	abstract_pgtable *pgt1,
+	abstract_pgtable *pgt2,
 	char* cmp_name,
 	char* pgt1_name,
 	char* pgt2_name,
-	abstract_pgtable *pgt1,
-	abstract_pgtable *pgt2,
 	u64 indent
 );
 bool abstraction_equals_hyp_memory(struct ghost_state *g1, struct ghost_state *g2);
@@ -76,6 +76,8 @@ bool abstraction_equals_loaded_vcpus(struct ghost_state *g1, struct ghost_state 
 bool abstraction_equals_vcpu(struct ghost_vcpu *vcpu1, struct ghost_vcpu *vcpu2);
 bool abstraction_equals_vm(struct ghost_vm *vm1, struct ghost_vm *vm2);
 bool abstraction_equals_vms(struct ghost_vms *gc, struct ghost_vms *gr_post);
+
+void clear_abstract_pgtable(abstract_pgtable *ap);
 
 /**
  * abstraction_equals_all() - Given the recorded (actual) pre/post and the computed (spec) post state, check it's consistent.
@@ -163,7 +165,7 @@ static void ghost_vm_clear_slot(struct ghost_vm_slot *slot)
 {
 	if (slot->exists) {
 		slot->exists = false;
-		free_mapping(slot->vm.vm_abstract_pgtable.mapping);
+		clear_abstract_pgtable(&slot->vm.vm_abstract_pgtable);
 	}
 }
 
@@ -198,10 +200,13 @@ void compute_abstraction_vm(struct ghost_vm *dest, struct pkvm_hyp_vm *vm) {
 	dest->lock = &vm->lock;
 }
 
-bool abstract_pgtable_equal(char *cmp_name, char* ap1_name, char* ap2_name, abstract_pgtable *ap1, abstract_pgtable *ap2, u64 indent)
+bool abstract_pgtable_equal(abstract_pgtable *ap1, abstract_pgtable *ap2, char *cmp_name, char* ap1_name, char* ap2_name, u64 indent)
 {
-	return (   ap1->root == ap2->root
-		&& mapping_equal(ap1->mapping, ap2->mapping, cmp_name, ap1_name, ap2_name, indent));
+	return (
+		   ap1->root == ap2->root
+		&& ghost_pfn_set_equal(&ap1->table_pfns, &ap2->table_pfns)
+		&& mapping_equal(ap1->mapping, ap2->mapping, cmp_name, ap1_name, ap2_name, indent)
+	);
 }
 
 bool abstraction_equals_hyp_memory(struct ghost_state *g1, struct ghost_state *g2)
@@ -225,15 +230,18 @@ bool abstraction_equals_reg(struct ghost_state *g1, struct ghost_state *g2)
 bool abstraction_equals_pkvm(struct ghost_pkvm *gp1, struct ghost_pkvm *gp2)
 {
 	ghost_assert(gp1->present && gp2->present);
-	return abstract_pgtable_equal("abstraction_equals_pkvm", "gp1.pkvm_mapping", "gp2.pkvm_mapping", &gp1->pkvm_abstract_pgtable, &gp2->pkvm_abstract_pgtable, 4);
+	return abstract_pgtable_equal(&gp1->pkvm_abstract_pgtable, &gp2->pkvm_abstract_pgtable, "abstraction_equals_pkvm", "gp1.pkvm_mapping", "gp2.pkvm_mapping", 4);
 }
 
 bool abstraction_equals_host(struct ghost_host *gh1, struct ghost_host *gh2)
 {
-	// note that this only checks the annot component
 	ghost_assert(gh1->present && gh2->present);
-	return (abstract_pgtable_equal("abstraction_equals_host", "gh1.host_mapping_annot", "gh2.host_mapping_annot", &gh1->host_abstract_pgtable_annot, &gh2->host_abstract_pgtable_annot, 4) &&
-		abstract_pgtable_equal("abstraction_equals_host", "gh1.host_mapping_shared", "gh2.host_mapping_shared", &gh1->host_abstract_pgtable_shared, &gh2->host_abstract_pgtable_shared, 4));
+	return (
+		   gh1->host_pgtable.root == gh2->host_pgtable.root
+		&& ghost_pfn_set_equal(&gh1->host_pgtable.table_pfns, &gh2->host_pgtable.table_pfns)
+		&& mapping_equal(gh1->host_abstract_pgtable_annot, gh2->host_abstract_pgtable_annot, "abstraction_equals_host", "gh1.host_mapping_annot", "gh2.host_mapping_annot", 4)
+		&& mapping_equal(gh1->host_abstract_pgtable_shared, gh2->host_abstract_pgtable_shared, "abstraction_equals_host", "gh1.host_mapping_shared", "gh2.host_mapping_shared", 4)
+	);
 }
 
 bool abstraction_equals_loaded_vcpu(struct ghost_loaded_vcpu *loaded_vcpu1, struct ghost_loaded_vcpu *loaded_vcpu2)
@@ -289,7 +297,7 @@ bool abstraction_equals_vm(struct ghost_vm *vm1, struct ghost_vm *vm2)
 		vcpus_are_equal = vcpus_are_equal && abstraction_equals_vcpu(&vm1->vcpus[i], &vm2->vcpus[i]);
 	}
 
-	return (   abstract_pgtable_equal("abstraction_equals_vm", "vm1.vm_abstract_pgtable", "vm2.vm_abstract_pgtable", &vm1->vm_abstract_pgtable, &vm2->vm_abstract_pgtable, 4)
+	return (   abstract_pgtable_equal(&vm1->vm_abstract_pgtable, &vm2->vm_abstract_pgtable, "abstraction_equals_vm", "vm1.vm_abstract_pgtable", "vm2.vm_abstract_pgtable", 4)
 		&& vcpus_are_equal);
 }
 
@@ -426,10 +434,16 @@ void init_abstraction_thread_local(void)
 	init_abstraction(this_cpu_ptr(&gs_computed_post));
 }
 
+void clear_abstract_pgtable(abstract_pgtable *ap)
+{
+	free_mapping(ap->mapping);
+	ghost_pfn_set_clear(&ap->table_pfns);
+}
+
 void clear_abstraction_pkvm(struct ghost_state *g)
 {
 	if (g->pkvm.present) {
-		free_mapping(g->pkvm.pkvm_abstract_pgtable.mapping);
+		clear_abstract_pgtable(&g->pkvm.pkvm_abstract_pgtable);
 		g->pkvm.present = false;
 	}
 }
@@ -437,10 +451,9 @@ void clear_abstraction_pkvm(struct ghost_state *g)
 void clear_abstraction_host(struct ghost_state *g)
 {
 	if (g->host.present) {
+		clear_abstract_pgtable(&g->host.host_pgtable);
 		free_mapping(g->host.host_abstract_pgtable_annot);
 		free_mapping(g->host.host_abstract_pgtable_shared);
-		free_mapping(g->host.host_pgtable.mapping);
-		ghost_pfn_set_clear(&g->host.host_pgtable.table_pfns);
 		g->host.present = false;
 	}
 }
@@ -512,9 +525,10 @@ void copy_abstraction_pkvm(struct ghost_state *g_tgt, struct ghost_state *g_src)
 	ghost_assert_maplets_locked();
 	ghost_assert(g_src->pkvm.present);
 	clear_abstraction_pkvm(g_tgt);
+
+	abstract_pgtable_copy(&g_tgt->pkvm.pkvm_abstract_pgtable, &g_src->pkvm.pkvm_abstract_pgtable);
+
 	g_tgt->pkvm.present = g_src->pkvm.present;
-	g_tgt->pkvm.pkvm_abstract_pgtable.root = g_src->pkvm.pkvm_abstract_pgtable.root;
-	g_tgt->pkvm.pkvm_abstract_pgtable.mapping = mapping_copy(g_src->pkvm.pkvm_abstract_pgtable.mapping);
 }
 
 void copy_abstraction_host(struct ghost_state *g_tgt, struct ghost_state *g_src)
@@ -522,12 +536,12 @@ void copy_abstraction_host(struct ghost_state *g_tgt, struct ghost_state *g_src)
 	ghost_assert_maplets_locked();
 	ghost_assert(g_src->host.present);
 	clear_abstraction_host(g_tgt);
-	g_tgt->host.present = true;
+
 	g_tgt->host.host_abstract_pgtable_annot = mapping_copy(g_src->host.host_abstract_pgtable_annot);
 	g_tgt->host.host_abstract_pgtable_shared = mapping_copy(g_src->host.host_abstract_pgtable_shared);
-	g_tgt->host.host_pgtable.root = g_src->host.host_pgtable.root;
-	ghost_pfn_set_copy(&g_tgt->host.host_pgtable.table_pfns, &g_src->host.host_pgtable.table_pfns);
-	g_tgt->host.host_pgtable.mapping = mapping_copy(g_src->host.host_pgtable.mapping);
+	abstract_pgtable_copy(&g_tgt->host.host_pgtable, &g_src->host.host_pgtable);
+
+	g_tgt->host.present = g_src->host.present;
 }
 
 void copy_abstraction_vms(struct ghost_state *g_tgt, struct ghost_state *g_src)

@@ -59,6 +59,29 @@ void ghost_pfn_set_copy(struct pfn_set *dst, struct pfn_set *src)
 	}
 }
 
+static bool range_equal(struct pfn_set *lhs, struct pfn_set *rhs)
+{
+	return (   (lhs->pool_range_start == rhs->pool_range_start)
+	        && (lhs->pool_range_end   == rhs->pool_range_end));
+}
+
+bool ghost_pfn_set_equal(struct pfn_set *lhs, struct pfn_set *rhs)
+{
+	if (!range_equal(lhs, rhs))
+		return false;
+
+	if (lhs->len != rhs->len)
+		return false;
+
+	bool all_external_pfns_equal = true;
+	for (int i=0; i<lhs->len; i++) {
+		all_external_pfns_equal = all_external_pfns_equal && (
+			lhs->external_pfns[i] == rhs->external_pfns[i]
+		);
+	}
+
+	return all_external_pfns_equal;
+}
 
 /* page table entry kind: classify kind of entry */
 enum entry_kind entry_kind(unsigned long long pte, unsigned char level)
