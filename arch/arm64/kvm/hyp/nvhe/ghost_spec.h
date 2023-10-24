@@ -15,6 +15,7 @@
 #include <asm/kvm_pkvm.h> // for KVM_MAX_PVMS
 
 #include <nvhe/ghost_asserts.h>
+#include <nvhe/ghost_pfn_set.h>
 
 // top-level spec types
 

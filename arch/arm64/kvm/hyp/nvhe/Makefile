@@ -36,6 +36,7 @@ hyp-obj-y += ghost_list_sort_hack.o
 hyp-obj-y += ../ghost_maplets.o
 hyp-obj-y += ../ghost_pgtable.o
 hyp-obj-y += ../ghost_control.o
+hyp-obj-y += ../ghost_pfn_set.o
 hyp-obj-y += ghost_compute_abstraction.o
 hyp-obj-y += ghost_spec.o
 # /GHOST
