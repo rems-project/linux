@@ -6,6 +6,17 @@
 
 #define GHOST_MAX_PFN_SET_LEN 64
 
+/**
+ * struct pfn_set - A set of pagetable table addresses
+ * @pool_range_start: the (physical) address the contiguous hyp_pool for this pagetable starts at.
+ * @pool_range_end: the (physical) address the contiguous hyp_pool for this pagetable ends at.
+ * @len: the count of extra-pool pages are in the pagetable.
+ * @external_pfns: the underlying buffer (up to `len`) of table page frame numbers.
+ *
+ * The pfn_set is split in two:
+ * - the hyp_pool range, which are (by the spec) required to always be mapped and owned by pKVM and no other.
+ * - an arbitrary set of other pages, once owned by the host, now stolen by pKVM for purposes of storing pagetables.
+ */
 struct pfn_set {
 	u64 pool_range_start;
 	u64 pool_range_end;
