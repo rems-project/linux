@@ -285,7 +285,9 @@ void ghost_dump_pgtable_locked(struct kvm_pgtable *pg, char *doc, u64 i)
 		hyp_puts("empty");
 		return;
 	}
-	mapping map = interpret_pgtable(pg->pgd, NULL, false /*noisy*/);
+	static struct pfn_set pfns;
+	mapping map = interpret_pgtable(pg->pgd, &pfns, false /*noisy*/);
+	ghost_pfn_set_dump(&pfns);
 	//hyp_puts("ghost_dump_pgtable post interpret_pgtable()\n");
 	hyp_put_mapping(map, i+2);
 	// dump_pgtable(*pg); // to look at the raw pgtable - verbosely!
