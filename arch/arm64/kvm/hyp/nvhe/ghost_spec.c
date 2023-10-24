@@ -379,13 +379,16 @@ void compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost_state 
 		goto out;
 	}
 
-	mapping g1_pkvm_mapping = mapping_copy(g0->pkvm.pkvm_abstract_pgtable.mapping);
-	mapping g1_host_annot_mapping = mapping_copy(g0->host.host_abstract_pgtable_annot);
-	mapping g1_host_shared_mapping = mapping_copy(g0->host.host_abstract_pgtable_shared);
-
-	// Guest VM same except pgtable mapping updated slightly and with the new pfns
-	ghost_vm_clone_into_nomappings(g1_vm, g0_vm);
-	ghost_pfn_set_copy(&g1_vm->vm_abstract_pgtable.table_pfns, &g0_vm->vm_abstract_pgtable.table_pfns);
+	/*
+	 * Take a snapshot of the host/pkvm and vm states, which we will update.
+	 *
+	 * if a donation happens, then we will update the pkvm state,
+	 * NOTE: we should be holding the pkvm pgd lock here, even if the underlying call didn't do a donation,
+	 * so it's safe to copy.
+	 */
+	copy_abstraction_host(g1, g0);
+	copy_abstraction_pkvm(g1, g0);
+	ghost_vm_clone_into(g1_vm, g0_vm);
 
 	for (int d=0; d<call->memcache_donations.len; d++) {
 		u64 pfn = call->memcache_donations.pages[d];
@@ -398,21 +401,31 @@ void compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost_state 
 		if (!(is_owned_and_shared_by(g0, GHOST_HOST, donated_phys) && is_borrowed_by(g0, GHOST_HYP, donated_phys)))
 			ghost_spec_assert(false);
 
-		g1_pkvm_mapping =
+		// Each memcache page that is donated must be swapped from shared to owned in pKVM's tables,
+		// removed from the host's shared mappings, and marked as owned by the hypervisor in the host's annotations.
+
+		mapping_move(
+			&g1->pkvm.pkvm_abstract_pgtable.mapping,
 			mapping_plus(
-				mapping_minus(g1_pkvm_mapping, hyp_page_addr, 1),
+				mapping_minus(g1->pkvm.pkvm_abstract_pgtable.mapping, hyp_page_addr, 1),
 				mapping_singleton(hyp_page_addr, 1, maplet_target_mapped_ext(donated_phys, PKVM_PAGE_OWNED, hyp_arch_prot))
-			);
+			)
+		);
 
-		g1_host_shared_mapping =
-			mapping_minus(g1_host_shared_mapping, host_page_ipa, 1);
+		mapping_move(
+			&g1->host.host_abstract_pgtable_shared,
+			mapping_minus(g1->host.host_abstract_pgtable_shared, host_page_ipa, 1)
+		);
 
-		g1_host_annot_mapping =
+		mapping_move(
+			&g1->host.host_abstract_pgtable_annot,
 			mapping_plus(
-				g1_host_annot_mapping,
+				g1->host.host_abstract_pgtable_annot,
 				mapping_singleton(host_page_ipa, 1, maplet_target_annot_ext(PKVM_ID_HYP))
-			);
+			)
+		);
 
+		// finally, we mark that this page as one potentially used for a pagetable for this guest.
 		ghost_pfn_set_insert(&g1_vm->vm_abstract_pgtable.table_pfns, pfn);
 	}
 
@@ -430,20 +443,23 @@ void compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost_state 
 	}
 
 	// TODO: other error cases
-	g1_host_annot_mapping =
-		mapping_plus(g1_host_annot_mapping,
-		             mapping_singleton(host_ipa, 1, maplet_target_annot(PKVM_ID_GUEST)));
 
+	// Mark as owned by a VM as annotation in the host table
+	mapping_move(
+		&g1->host.host_abstract_pgtable_annot,
+		mapping_plus(g1->host.host_abstract_pgtable_annot,
+		             mapping_singleton(host_ipa, 1, maplet_target_annot(PKVM_ID_GUEST)))
+	);
+
+	// Finally, add the mapping to the VM's pagetable.
 	u64 guest_arch_prot = arch_prot_of_prot(ghost_default_host_prot(ghost_addr_is_memory(g0, phys)));
-
-	g1_vm->vm_abstract_pgtable.mapping =
+	mapping_move(
+		&g1_vm->vm_abstract_pgtable.mapping,
 		mapping_plus(g0_vm->vm_abstract_pgtable.mapping,
-			     mapping_singleton(guest_ipa, 1, maplet_target_mapped_ext(phys, PKVM_PAGE_OWNED, guest_arch_prot)));
+			     mapping_singleton(guest_ipa, 1, maplet_target_mapped_ext(phys, PKVM_PAGE_OWNED, guest_arch_prot)))
+	);
 
-	g1->pkvm.pkvm_abstract_pgtable.mapping = g1_pkvm_mapping;
-	g1->host.host_abstract_pgtable_annot = g1_host_annot_mapping;
-	g1->host.host_abstract_pgtable_shared = g1_host_shared_mapping;
-
+	// success.
 	ret = 0;
 
 out:
