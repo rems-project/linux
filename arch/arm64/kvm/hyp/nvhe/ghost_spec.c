@@ -574,17 +574,21 @@ static bool ghost_map_donated_memory(struct ghost_state *g, u64 host_virt, size_
 			return false;
 	}
 
-	g->host.host_abstract_pgtable_annot =
+	mapping_move(
+		&g->host.host_abstract_pgtable_annot,
 		mapping_plus(g->host.host_abstract_pgtable_annot,
-			mapping_singleton(host_virt, nr_pages, maplet_target_annot(PKVM_ID_HYP)));
+			mapping_singleton(host_virt, nr_pages, maplet_target_annot(PKVM_ID_HYP)))
+	);
 
 	u64 host_arch_prot = arch_prot_of_prot(ghost_default_host_prot(ghost_addr_is_memory(g, phys_addr)));
 	u64 hyp_arch_prot = host_arch_prot;
 
-	g->pkvm.pkvm_abstract_pgtable.mapping =
+	mapping_move(
+		&g->pkvm.pkvm_abstract_pgtable.mapping,
 		mapping_plus(g->pkvm.pkvm_abstract_pgtable.mapping,
 			mapping_singleton(hyp_virt, nr_pages,
-				maplet_target_mapped_ext(phys_addr, PKVM_PAGE_OWNED, hyp_arch_prot)));
+				maplet_target_mapped_ext(phys_addr, PKVM_PAGE_OWNED, hyp_arch_prot)))
+	);
 	return true;
 }
 
