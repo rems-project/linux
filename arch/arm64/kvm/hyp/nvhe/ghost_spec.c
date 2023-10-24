@@ -61,7 +61,14 @@ static inline hyp_va_t hyp_va_of_phys(const struct ghost_state *g, phys_addr_t p
 	return phys - g->hyp_physvirt_offset;
 }
 
-#define host_ipa_of_phys(PHYS) PHYS
+static inline phys_addr_t phys_of_hyp_va(const struct ghost_state *g, hyp_va_t hyp_va)
+{
+	return hyp_va - g->hyp_physvirt_offset;
+}
+
+// the Host stage 2 mapping is the identity mapping
+#define host_ipa_of_phys(PHYS) ((host_ipa_t)PHYS)
+#define phys_of_host_ipa(HOST_IPA) ((phys_addr_t)HOST_IPA)
 
 // We convert a host virtual address to a pKVM virtual address by zero-ing out
 // the tag_val (which holds the hyp_va_msb and random tag for the kernel, which
@@ -544,7 +551,8 @@ out:
 //TODO: move somewhere else
 #define phys_of_host_va(X) X// TODO
 // performs the mapping checks of hyp_pin_shared_mem (from mem_protect.c)
-bool ghost_hyp_check_host_shared_mem(struct ghost_state *g, u64 from, u64 to)
+// @from and @to are host_va
+bool ghost_hyp_check_host_shared_mem(struct ghost_state *g, host_va_t from, host_va_t to)
 {
 	u64 start = ALIGN_DOWN((u64)from, PAGE_SIZE);
 	u64 end = PAGE_ALIGN((u64)to);
@@ -558,9 +566,9 @@ bool ghost_hyp_check_host_shared_mem(struct ghost_state *g, u64 from, u64 to)
 	return true;
 }
 
-static bool ghost_map_donated_memory(struct ghost_state *g, u64 host_virt, size_t size)
+static bool ghost_map_donated_memory(struct ghost_state *g, host_ipa_t host_ipa, size_t size)
 {
-	phys_addr_t phys_addr = host_virt; // TODO: have some macro
+	phys_addr_t phys_addr = phys_of_host_ipa(host_ipa); // TODO: have some macro
 	u64 hyp_virt = (u64)ghost__hyp_va(g, phys_addr);
 	u64 nr_pages = PAGE_ALIGN((u64)size);
 
@@ -577,7 +585,7 @@ static bool ghost_map_donated_memory(struct ghost_state *g, u64 host_virt, size_
 	mapping_move(
 		&g->host.host_abstract_pgtable_annot,
 		mapping_plus(g->host.host_abstract_pgtable_annot,
-			mapping_singleton(host_virt, nr_pages, maplet_target_annot(PKVM_ID_HYP)))
+			mapping_singleton(host_ipa, nr_pages, maplet_target_annot(PKVM_ID_HYP)))
 	);
 
 	u64 host_arch_prot = arch_prot_of_prot(ghost_default_host_prot(ghost_addr_is_memory(g, phys_addr)));
@@ -608,43 +616,50 @@ static size_t ghost_pkvm_get_last_ran_size(struct ghost_state *g)
 
 void compute_new_abstract_state_handle___pkvm_init_vm(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call) {
 	int ret;
-	GHOST_SPEC_DECLARE_REG(struct kvm *, host_kvm, g0, 1);       // TODO: this is a host_va
-	GHOST_SPEC_DECLARE_REG(unsigned long, vm_hva, g0, 2);        // TODO: this is a host_va
-	GHOST_SPEC_DECLARE_REG(unsigned long, pgd_hva, g0, 3);       // TODO: this is a host_va
-	GHOST_SPEC_DECLARE_REG(unsigned long, last_ran_hva, g0, 4);  // TODO: this is a host_va
 	size_t vm_size, pgd_size, last_ran_size;
+
+	GHOST_SPEC_DECLARE_REG(host_va_t, host_kvm_hva, g0, 1);
+	GHOST_SPEC_DECLARE_REG(host_va_t, vm_hva, g0, 2);
+	GHOST_SPEC_DECLARE_REG(host_va_t, pgd_hva, g0, 3);
+	GHOST_SPEC_DECLARE_REG(host_va_t, last_ran_hva, g0, 4);
+
+	struct kvm *host_kvm_hyp_va = (struct kvm*)hyp_va_of_host_va(g0, host_kvm_hva);
+	host_ipa_t vm_host_ipa = host_ipa_of_phys(phys_of_hyp_va(g0, hyp_va_of_host_va(g0, vm_hva)));
+	phys_addr_t pgd_phys = phys_of_hyp_va(g0, hyp_va_of_host_va(g0, pgd_hva));
+	host_ipa_t pgd_host_ipa = host_ipa_of_phys(pgd_phys);
+	host_ipa_t last_ran_host_ipa = host_ipa_of_phys(phys_of_hyp_va(g0, hyp_va_of_host_va(g0, last_ran_hva)));
+
+	copy_abstraction_host(g1, g0);
+	copy_abstraction_pkvm(g1, g0);
 
 	// checking that the pages underlying the host_kvm structure is owned by the host
 	// and shared with pKVM
-	if (!ghost_hyp_check_host_shared_mem(g0, (u64)host_kvm, (u64)(host_kvm + 1))) {
+	if (!ghost_hyp_check_host_shared_mem(g0, host_kvm_hva, host_kvm_hva + sizeof(struct kvm))) {
 		ret = -EPERM;
 		goto out;
 	}
 
 	u64 handle = call->return_value;
-	// TODO: insert_vm_table_entry() may return -EINVAL if during the init
-	// of pKVM vm_table could not allocated
+
+	// In the implementation, insert_vm_table_entry() may return -EINVAL,
+	// if during the init of pKVM vm_table could not allocated,
+	// so these ghost compute functions are only valid if properly initialised
+	ghost_assert(READ_ONCE(pkvm_prot_finalized_all));
+	
+	// if we've already allocated KVM_MAX_PVMS VMs, then fail with -ENOMEM
 	struct ghost_vm *vm1 = ghost_vms_alloc(&g1->vms, handle);
 	if (!vm1) {
 		ret = -ENOMEM;
 		goto out;
 	}
 
-	if (call->return_value <= 0)
-	 	// TODO: set ret
-		goto out;
-
 	// the calls to map_donated_memory() may run out of
 	// memory when updating the pKVM page table
 	// BS suspects there is an invariant preventing this from
-	// actually happening. If this is the case, the following
-	// check can be removed from the spec.
-	if (call->return_value == -ENOMEM) {
-		ret = call->return_value; // TODO
-		goto out;
-	}
+	// actually happening.
+	ghost_spec_assert(call->return_value != -ENOMEM);
 
-	u64 nr_vcpus = GHOST_READ_ONCE(call, host_kvm->created_vcpus);
+	u64 nr_vcpus = GHOST_READ_ONCE(call, host_kvm_hyp_va->created_vcpus);
 	if (nr_vcpus < 1) {
 		ret = -EINVAL;
 		goto out;
@@ -654,9 +669,9 @@ void compute_new_abstract_state_handle___pkvm_init_vm(struct ghost_state *g1, st
 	last_ran_size = ghost_pkvm_get_last_ran_size(g0);
 	pgd_size = kvm_pgtable_stage2_pgd_size(host_mmu.arch.vtcr);
 
-	if (   !PAGE_ALIGNED(vm_hva)
-	    && !PAGE_ALIGNED(last_ran_hva)
-	    && !PAGE_ALIGNED(pgd_hva)) {
+	if (   !PAGE_ALIGNED(vm_host_ipa)
+	    && !PAGE_ALIGNED(last_ran_host_ipa)
+	    && !PAGE_ALIGNED(pgd_host_ipa)) {
 		// if any of the calls to map_donated_memory()
 		// are given a non-page aligned va, it returns NULL
 		// which causes the hypercall to return -ENOMEM
@@ -664,19 +679,15 @@ void compute_new_abstract_state_handle___pkvm_init_vm(struct ghost_state *g1, st
 		goto out;
 	}
 
-	// TODO: how early to do this copy?
-	copy_abstraction_host(g1, g0);
-	copy_abstraction_pkvm(g1, g0);
-
-	if (!ghost_map_donated_memory(g1, vm_hva, vm_size)) {
+	if (!ghost_map_donated_memory(g1, vm_host_ipa, vm_size)) {
 		ret = -ENOMEM;
 		goto out;
 	}
-	if (!ghost_map_donated_memory(g1, last_ran_hva, last_ran_size)) {
+	if (!ghost_map_donated_memory(g1, last_ran_host_ipa, last_ran_size)) {
 		ret = -ENOMEM;
 		goto out;
 	}
-	if (!ghost_map_donated_memory(g1, pgd_hva, pgd_size)) {
+	if (!ghost_map_donated_memory(g1, pgd_host_ipa, pgd_size)) {
 		ret = -ENOMEM;
 		goto out;
 	}
@@ -691,11 +702,10 @@ void compute_new_abstract_state_handle___pkvm_init_vm(struct ghost_state *g1, st
 		// NOTE: we expect the VM's page table to be place at the beginning
 		// of the first page of the memory region donated by the host
 		// for that purpose
-		.vm_abstract_pgtable = { .root = phys_of_host_va(pgd_hva), .mapping= mapping_empty_() },
+		.vm_abstract_pgtable = { .root = pgd_phys, .mapping= mapping_empty_() },
 	};
 
 	ghost_vm_clone_into(vm1, &vm);
-	// TODO: free old mappings
 	ret = handle;
 out:
 	ghost_reg_gpr(g1, 1) = 0;
