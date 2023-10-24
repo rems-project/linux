@@ -118,7 +118,7 @@ void compute_abstraction_host(struct ghost_host *dest)
 	u64 pool_range_start = (u64)host_s2_pgt_base;
 	u64 pool_range_end = (u64)host_s2_pgt_base + ghost_host_s2_pgt_size * PAGE_SIZE;
 	ghost_record_pgtable_ap(&tmp_ap, &host_mmu.pgt, pool_range_start, pool_range_end, "host_mmu.pgt", i);
-	ghost_pfn_set_copy(&dest->host_abstract_pgtable_pfns, &tmp_ap.table_pfns);
+	ghost_pfn_set_copy(&dest->host_pgtable_pages, &tmp_ap.table_pfns);
 	dest->host_abstract_pgtable_annot = mapping_annot(tmp_ap.mapping);
 	dest->host_abstract_pgtable_shared = mapping_shared(tmp_ap.mapping);
 	dest->present = true;
@@ -244,7 +244,7 @@ bool abstraction_equals_host(struct ghost_host *gh1, struct ghost_host *gh2)
 {
 	ghost_assert(gh1->present && gh2->present);
 	return (
-		   ghost_pfn_set_equal(&gh1->host_abstract_pgtable_pfns, &gh2->host_abstract_pgtable_pfns)
+		   ghost_pfn_set_equal(&gh1->host_pgtable_pages, &gh2->host_pgtable_pages)
 		&& mapping_equal(gh1->host_abstract_pgtable_annot, gh2->host_abstract_pgtable_annot, "abstraction_equals_host", "gh1.host_mapping_annot", "gh2.host_mapping_annot", 4)
 		&& mapping_equal(gh1->host_abstract_pgtable_shared, gh2->host_abstract_pgtable_shared, "abstraction_equals_host", "gh1.host_mapping_shared", "gh2.host_mapping_shared", 4)
 	);
@@ -457,7 +457,7 @@ void clear_abstraction_pkvm(struct ghost_state *g)
 void clear_abstraction_host(struct ghost_state *g)
 {
 	if (g->host.present) {
-		ghost_pfn_set_clear(&g->host.host_abstract_pgtable_pfns);
+		ghost_pfn_set_clear(&g->host.host_pgtable_pages);
 		free_mapping(g->host.host_abstract_pgtable_annot);
 		free_mapping(g->host.host_abstract_pgtable_shared);
 		g->host.present = false;
@@ -545,7 +545,7 @@ void copy_abstraction_host(struct ghost_state *g_tgt, struct ghost_state *g_src)
 
 	g_tgt->host.host_abstract_pgtable_annot = mapping_copy(g_src->host.host_abstract_pgtable_annot);
 	g_tgt->host.host_abstract_pgtable_shared = mapping_copy(g_src->host.host_abstract_pgtable_shared);
-	ghost_pfn_set_copy(&g_tgt->host.host_abstract_pgtable_pfns, &g_src->host.host_abstract_pgtable_pfns);
+	ghost_pfn_set_copy(&g_tgt->host.host_pgtable_pages, &g_src->host.host_pgtable_pages);
 
 	g_tgt->host.present = g_src->host.present;
 }

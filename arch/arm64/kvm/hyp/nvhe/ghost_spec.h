@@ -78,23 +78,19 @@ struct ghost_vm {
  * @present: whether the parent ghost_state has some ghost host data
  * @host_abstract_pgtable_annot: if present, the annotated (invalid) parts of the host pgt with owner_id!=PKVM_ID_HOST
  * @host_abstract_pgtable_shared: if present, the valid parts of the host pgt with page state either PKVM_PAGE_SHARED_OWNED or PKVM_PAGE_SHARED_BORROWED
- * @host_abstract_pgtable_nonannot: if present, for debugging, the concrete parts of the table that are actually mapped right now.
+ * @host_pgtable_pages: if present, the (overapproximate) set of addresses of tables within the pagetable.
  *
  * The host (intermediate-physical, although idmapped) address space is represented in two parts:
  *  - The annot mapping, which are all unmapped in the host, includes all parts of hyp_memory (all the non-device memory the kernel knows about) which are owned by pkvm or the guests and not shared with the host (all shared locations will always be mapped)
  *  - The shared mapping, which are accessible by the host, but either shared with another (i.e marked PKVM_PAGE_SHARED_OWNED) or shared by someone else with the host (marked PKVM_PAGE_SHARED_BORROWED)
  *
- * The nonannot isn't really in the host part of the abstract state (it's not computed by the next-abstract-state function);
- * it's just so we can do an approximation to the check of host Stage 2 translations that the "real spec" will do
- *
  * Context: Protected by the host's hyp lock.
  */
 struct ghost_host {
 	bool present;
-	// abstract_pgtable host_pgtable;
-	struct pfn_set host_abstract_pgtable_pfns;
 	mapping host_abstract_pgtable_annot;
 	mapping host_abstract_pgtable_shared;
+	struct pfn_set host_pgtable_pages;
 };
 
 /**
