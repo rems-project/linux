@@ -20,5 +20,6 @@ bool ghost_pfn_set_contains(struct pfn_set *set, u64 pfn);
 void ghost_pfn_set_dump(struct pfn_set *set);
 void ghost_pfn_set_copy(struct pfn_set *dst, struct pfn_set *src);
 bool ghost_pfn_set_equal(struct pfn_set *lhs, struct pfn_set *rhs);
+bool ghost_pfn_set_subseteq(struct pfn_set *lhs, struct pfn_set *rhs);
 
 #endif /* __KVM_HYP_GHOST_PFN_SET */
