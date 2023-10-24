@@ -90,7 +90,8 @@ struct ghost_vm {
  */
 struct ghost_host {
 	bool present;
-	abstract_pgtable host_pgtable;
+	// abstract_pgtable host_pgtable;
+	struct pfn_set host_abstract_pgtable_pfns;
 	mapping host_abstract_pgtable_annot;
 	mapping host_abstract_pgtable_shared;
 };

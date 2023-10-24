@@ -249,16 +249,20 @@ void compute_new_abstract_state_handle___pkvm_host_share_hyp(struct ghost_state 
 	u64 hyp_arch_prot = host_arch_prot;
 
 	/* the host annot mapping is unchanged (we have established that host_addr is NOT already in there) */
-	g1->host.host_abstract_pgtable_annot.mapping = mapping_copy(g0->host.host_abstract_pgtable_annot.mapping);
+	g1->host.host_abstract_pgtable_annot = mapping_copy(g0->host.host_abstract_pgtable_annot);
 
 	/* add a new host shared mapping, PKVM_PAGE_SHARED_OWNED */
-	g1->host.host_abstract_pgtable_shared.mapping =
+	g1->host.host_abstract_pgtable_shared =
 		mapping_plus(
-			g0->host.host_abstract_pgtable_shared.mapping,
+			g0->host.host_abstract_pgtable_shared,
 			mapping_singleton(host_addr, 1, maplet_target_mapped_ext(phys, PKVM_PAGE_SHARED_OWNED, host_arch_prot)));
+	
+	ghost_pfn_set_copy(&g1->host.host_abstract_pgtable_pfns, &g0->host.host_abstract_pgtable_pfns);
 
 	/* add a new hyp mapping, PKVM_PAGE_SHARED_BORROWED */
 	// g1->pkvm.pkvm_abstract_pgtable.root = g0->pkvm.pkvm_abstract_pgtable.root; // TODO: BS: is this right?
+	abstract_pgtable_copy(&g1->pkvm.pkvm_abstract_pgtable, &g0->pkvm.pkvm_abstract_pgtable);
+	free_mapping(g1->pkvm.pkvm_abstract_pgtable.mapping);
 	g1->pkvm.pkvm_abstract_pgtable.mapping =
 		mapping_plus(
 			g0->pkvm.pkvm_abstract_pgtable.mapping,
@@ -300,8 +304,10 @@ void compute_new_abstract_state_handle___pkvm_host_unshare_hyp(struct ghost_stat
 
 	/* remove 'host_addr' from the host shared finite map */
 	// in pKVM code: __host_set_page_state_range(host_addr, PAGE_SIZE, PKVM_PAGE_OWNED);
-	g1->host.host_abstract_pgtable_shared.mapping =
-		mapping_minus(g0->host.host_abstract_pgtable_shared.mapping, host_addr, 1);
+	g1->host.host_abstract_pgtable_shared =
+		mapping_minus(g0->host.host_abstract_pgtable_shared, host_addr, 1);
+	g1->host.host_abstract_pgtable_annot = mapping_copy(g0->host.host_abstract_pgtable_annot);
+	ghost_pfn_set_copy(&g1->host.host_abstract_pgtable_pfns, &g0->host.host_abstract_pgtable_pfns);
 
 	// PKVM can non-deterministically fail to unmap the page in its page table
 	// TODO: this may not be possible now that host_share_hyp cannot do a ENOMEM
@@ -310,6 +316,8 @@ void compute_new_abstract_state_handle___pkvm_host_unshare_hyp(struct ghost_stat
 		ret = -EFAULT;
 		goto out;
 	}
+	abstract_pgtable_copy(&g1->pkvm.pkvm_abstract_pgtable, &g0->pkvm.pkvm_abstract_pgtable);
+	free_mapping(g1->pkvm.pkvm_abstract_pgtable.mapping);
 	g1->pkvm.pkvm_abstract_pgtable.mapping =
 		mapping_minus(g0->pkvm.pkvm_abstract_pgtable.mapping, hyp_addr, 1);
 out:
@@ -367,8 +375,12 @@ void compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost_state 
 	}
 
 	mapping g1_pkvm_mapping = mapping_copy(g0->pkvm.pkvm_abstract_pgtable.mapping);
-	mapping g1_host_annot_mapping = mapping_copy(g0->host.host_abstract_pgtable_annot.mapping);
-	mapping g1_host_shared_mapping = mapping_copy(g0->host.host_abstract_pgtable_shared.mapping);
+	mapping g1_host_annot_mapping = mapping_copy(g0->host.host_abstract_pgtable_annot);
+	mapping g1_host_shared_mapping = mapping_copy(g0->host.host_abstract_pgtable_shared);
+
+	// Guest VM same except pgtable mapping updated slightly and with the new pfns
+	ghost_vm_clone_into_nomappings(g1_vm, g0_vm);
+	ghost_pfn_set_copy(&g1_vm->vm_abstract_pgtable.table_pfns, &g0_vm->vm_abstract_pgtable.table_pfns);
 
 	for (int d=0; d<call->memcache_donations.len; d++) {
 		u64 pfn = call->memcache_donations.pages[d];
@@ -395,6 +407,8 @@ void compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost_state 
 				g1_host_annot_mapping,
 				mapping_singleton(host_page_ipa, 1, maplet_target_annot_ext(PKVM_ID_HYP))
 			);
+
+		ghost_pfn_set_insert(&g1_vm->vm_abstract_pgtable.table_pfns, pfn);
 	}
 
 	// TODO: non-protected VM/VCPUs?
@@ -417,15 +431,13 @@ void compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost_state 
 
 	u64 guest_arch_prot = arch_prot_of_prot(ghost_default_host_prot(ghost_addr_is_memory(g0, phys)));
 
-	// Guest VM same except pgtable mapping updated slightly
-	ghost_vm_clone_into_nomappings(g1_vm, g0_vm);
 	g1_vm->vm_abstract_pgtable.mapping =
 		mapping_plus(g0_vm->vm_abstract_pgtable.mapping,
-		             mapping_singleton(guest_ipa, 1, maplet_target_mapped_ext(phys, PKVM_PAGE_OWNED, guest_arch_prot)));
+			     mapping_singleton(guest_ipa, 1, maplet_target_mapped_ext(phys, PKVM_PAGE_OWNED, guest_arch_prot)));
 
 	g1->pkvm.pkvm_abstract_pgtable.mapping = g1_pkvm_mapping;
-	g1->host.host_abstract_pgtable_annot.mapping = g1_host_annot_mapping;
-	g1->host.host_abstract_pgtable_shared.mapping = g1_host_shared_mapping;
+	g1->host.host_abstract_pgtable_annot = g1_host_annot_mapping;
+	g1->host.host_abstract_pgtable_shared = g1_host_shared_mapping;
 
 	ret = 0;
 
@@ -525,31 +537,31 @@ bool ghost_hyp_check_host_shared_mem(struct ghost_state *g, u64 from, u64 to)
 	return true;
 }
 
-static bool ghost_map_donated_memory(struct ghost_state *g1, struct ghost_state *g0, u64 host_virt, size_t size)
+static bool ghost_map_donated_memory(struct ghost_state *g, u64 host_virt, size_t size)
 {
 	phys_addr_t phys_addr = host_virt; // TODO: have some macro
-	u64 hyp_virt = (u64)ghost__hyp_va(g0, phys_addr);
+	u64 hyp_virt = (u64)ghost__hyp_va(g, phys_addr);
 	u64 nr_pages = PAGE_ALIGN((u64)size);
 
 	for (u64 addr=phys_addr; addr < nr_pages * PAGE_SIZE; addr += PAGE_SIZE) {
-		if (!is_owned_exclusively_by(g0, GHOST_HOST, addr))
+		if (!is_owned_exclusively_by(g, GHOST_HOST, addr))
 			return false;
 
 	}
 	for (u64 addr=hyp_virt; addr < nr_pages * PAGE_SIZE; addr += PAGE_SIZE) {
-		if (mapping_in_domain(hyp_virt, g0->pkvm.pkvm_abstract_pgtable.mapping))
+		if (mapping_in_domain(hyp_virt, g->pkvm.pkvm_abstract_pgtable.mapping))
 			return false;
 	}
 
-	g1->host.host_abstract_pgtable_annot.mapping =
-		mapping_plus(g0->host.host_abstract_pgtable_annot.mapping,
+	g->host.host_abstract_pgtable_annot =
+		mapping_plus(g->host.host_abstract_pgtable_annot,
 			mapping_singleton(host_virt, nr_pages, maplet_target_annot(PKVM_ID_HYP)));
 
-	u64 host_arch_prot = arch_prot_of_prot(ghost_default_host_prot(ghost_addr_is_memory(g0, phys_addr)));
+	u64 host_arch_prot = arch_prot_of_prot(ghost_default_host_prot(ghost_addr_is_memory(g, phys_addr)));
 	u64 hyp_arch_prot = host_arch_prot;
 
-	g1->pkvm.pkvm_abstract_pgtable.mapping =
-		mapping_plus(g1->pkvm.pkvm_abstract_pgtable.mapping,
+	g->pkvm.pkvm_abstract_pgtable.mapping =
+		mapping_plus(g->pkvm.pkvm_abstract_pgtable.mapping,
 			mapping_singleton(hyp_virt, nr_pages,
 				maplet_target_mapped_ext(phys_addr, PKVM_PAGE_OWNED, hyp_arch_prot)));
 	return true;
@@ -625,16 +637,21 @@ void compute_new_abstract_state_handle___pkvm_init_vm(struct ghost_state *g1, st
 		// which causes the hypercall to return -ENOMEM
 		ret = -ENOMEM;
 		goto out;
-	    }
-	if (!ghost_map_donated_memory(g1, g0, vm_hva, vm_size)) {
+	}
+
+	// TODO: how early to do this copy?
+	copy_abstraction_host(g1, g0);
+	copy_abstraction_pkvm(g1, g0);
+
+	if (!ghost_map_donated_memory(g1, vm_hva, vm_size)) {
 		ret = -ENOMEM;
 		goto out;
 	}
-	if (!ghost_map_donated_memory(g1, g0, last_ran_hva, last_ran_size)) {
+	if (!ghost_map_donated_memory(g1, last_ran_hva, last_ran_size)) {
 		ret = -ENOMEM;
 		goto out;
 	}
-	if (!ghost_map_donated_memory(g1, g0, pgd_hva, pgd_size)) {
+	if (!ghost_map_donated_memory(g1, pgd_hva, pgd_size)) {
 		ret = -ENOMEM;
 		goto out;
 	}
