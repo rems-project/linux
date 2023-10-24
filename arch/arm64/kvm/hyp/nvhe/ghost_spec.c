@@ -596,7 +596,7 @@ static bool ghost_map_donated_memory(struct ghost_state *g, u64 host_virt, size_
 static size_t ghost_pkvm_get_hyp_vm_size(unsigned int nr_vcpus)
 {
 	return size_add(sizeof(struct pkvm_hyp_vm),
-		size_mul(sizeof(struct pkvm_hyp_vcpu *), nr_vcpus));
+		  size_mul(sizeof(struct pkvm_hyp_vcpu *), nr_vcpus));
 }
 
 static size_t ghost_pkvm_get_last_ran_size(struct ghost_state *g)
