@@ -1,6 +1,5 @@
-#include <asm/kvm_mmu.h>    // needed for debug-pl011.h ?
-#include <nvhe/debug-pl011.h>
-#include <nvhe/ghost_extra_debug-pl011.h>
+#include <asm/kvm_mmu.h>
+#include <hyp/ghost_extra_debug-pl011.h>
 //#include <nvhe/ghost_check_pgtables.h>
 #include <nvhe/ghost_misc.h>
 #include <nvhe/ghost_pgtable.h>

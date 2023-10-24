@@ -34,8 +34,7 @@
 static DEFINE_PER_CPU(struct user_fpsimd_state, loaded_host_fpsimd_state);
 
 // GHOST
-#include <nvhe/debug-pl011.h>
-#include <nvhe/ghost_extra_debug-pl011.h>
+#include <hyp/ghost_extra_debug-pl011.h>
 //#include <nvhe/ghost_check_pgtables.h>
 #include <nvhe/ghost_misc.h>
 #include <nvhe/ghost_pgtable.h>
@@ -1298,11 +1297,13 @@ static void handle_host_smc(struct kvm_cpu_context *host_ctxt)
 // GHOST
 void hyp_put_exception_heading(void)
 {
+	ghost_print_begin();
 	hyp_putsp("\n");
 	hyp_putsp(GHOST_WHITE_ON_BLUE);
 	hyp_putsp("******  handle_trap  ***************************************************************");
 	hyp_putsp(GHOST_NORMAL);
 	hyp_putsp("\n");
+	ghost_print_end();
 }
 // /GHOST
 

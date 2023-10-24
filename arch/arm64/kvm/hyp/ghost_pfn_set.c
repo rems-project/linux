@@ -3,8 +3,7 @@
 #include <nvhe/ghost_asserts.h>
 #include <nvhe/ghost_pfn_set.h>
 
-#include <nvhe/debug-pl011.h>
-#include <nvhe/ghost_extra_debug-pl011.h>
+#include <hyp/ghost_extra_debug-pl011.h>
 
 void ghost_pfn_set_init(struct pfn_set *set, u64 pool_range_start, u64 pool_range_end)
 {
@@ -37,9 +36,9 @@ void ghost_pfn_set_dump(struct pfn_set *set)
 {
 	ghost_assert(set->len < GHOST_MAX_PFN_SET_LEN);
 	hyp_putsp("BEGIN PFNS[pool_range: ");
-	__hyp_putx4np(set->pool_range_start, 64);
+	hyp_putx64(set->pool_range_start);
 	hyp_putsp(" ... ");
-	__hyp_putx4np(set->pool_range_end, 64);
+	hyp_putx64(set->pool_range_end);
 	hyp_putsp("]\n");
 	for (int idx=0; idx < set->len; idx++) {
 		hyp_putsxn("  pfs", set->external_pfns[idx], 64);

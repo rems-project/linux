@@ -1,8 +1,7 @@
 #ifndef _GHOST_SPEC_H
 #define _GHOST_SPEC_H
 
-#include <nvhe/debug-pl011.h>
-#include <nvhe/ghost_extra_debug-pl011.h>
+#include <hyp/ghost_extra_debug-pl011.h>
 //#include <nvhe/ghost_check_pgtables.h>
 #include <nvhe/ghost_asm_ids.h>
 #include <nvhe/ghost_misc.h>

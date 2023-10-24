@@ -24,8 +24,7 @@
 
 
 // and the ghost headers from mem_protect.c
-#include <nvhe/debug-pl011.h>
-#include <nvhe/ghost_extra_debug-pl011.h>
+#include <hyp/ghost_extra_debug-pl011.h>
 #include <nvhe/ghost_pgtable.h>
 #include <nvhe/ghost_spec.h>
 #include <nvhe/ghost_asm.h>

@@ -138,7 +138,7 @@ static inline void __hyp_writew(unsigned int val, void *ioaddr)
 	asm volatile("str %w0, [%1]" : : "r" (val), "r" (ioaddr));
 }
 
-static inline void hyp_putc(char c)
+static inline void __hyp_putc(char c)
 {
 	unsigned int val;
 	void *base = __hyp_pl011_base();
@@ -158,10 +158,10 @@ static inline void hyp_putc(char c)
  * Caller needs to ensure string is mapped. If it lives in .rodata, you should
  * be good as long as we're using PC-relative addressing (probably true).
  */
-static inline void hyp_puts(char *s)
+static inline void __hyp_puts(char *s)
 {
 	while (*s)
-		hyp_putc(*s++);
+		__hyp_putc(*s++);
 }
 
 static inline void __hyp_putx4(unsigned int x)
@@ -171,28 +171,28 @@ static inline void __hyp_putx4(unsigned int x)
 		x += '0';
 	else
 		x += ('a' - 0xa);
-	hyp_putc(x);
+	__hyp_putc(x);
 }
 
 static inline void __hyp_putx4n(unsigned long x, int n)
 {
 	int i = n >> 2;
 
-	hyp_putc('0');
-	hyp_putc('x');
+	__hyp_putc('0');
+	__hyp_putc('x');
 
 	while (i--)
 		__hyp_putx4(x >> (4 * i));
 
-	hyp_putc('\n');
+	__hyp_putc('\n');
 }
 
-static inline void hyp_putx32(unsigned int x)
+static inline void __hyp_putx32(unsigned int x)
 {
 	__hyp_putx4n(x, 32);
 }
 
-static inline void hyp_putx64(unsigned long x)
+static inline void __hyp_putx64(unsigned long x)
 {
 	__hyp_putx4n(x, 64);
 }
@@ -216,10 +216,10 @@ static inline void hyp_putx64(unsigned long x)
 
 #else
 
-static inline void hyp_putc(char c) { }
-static inline void hyp_puts(char *s) { }
-static inline void hyp_putx32(unsigned int x) { }
-static inline void hyp_putx64(unsigned long x) { }
+static inline void __hyp_putc(char c) { }
+static inline void __hyp_puts(char *s) { }
+static inline void __hyp_putx32(unsigned int x) { }
+static inline void __hyp_putx64(unsigned long x) { }
 
 #endif
 
