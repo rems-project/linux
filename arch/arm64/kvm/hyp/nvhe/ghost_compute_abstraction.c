@@ -122,6 +122,7 @@ void compute_abstraction_host(struct ghost_host *dest)
 	dest->host_abstract_pgtable_annot = mapping_annot(tmp_ap.mapping);
 	dest->host_abstract_pgtable_shared = mapping_shared(tmp_ap.mapping);
 	dest->present = true;
+	free_mapping(tmp_ap.mapping);
 }
 
 
