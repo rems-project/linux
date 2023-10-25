@@ -693,19 +693,31 @@ void compute_new_abstract_state_handle___pkvm_init_vm(struct ghost_state *g1, st
 	}
 
 	g1->vms.present = true;
-	struct ghost_vm vm = (struct ghost_vm) {
-		.pkvm_handle = handle,
-		.nr_vcpus = nr_vcpus,
-		// NOTE: this sets the .loaded fields of all the elements
-		// of the array to false
-		.vcpus = {0},
-		// NOTE: we expect the VM's page table to be place at the beginning
-		// of the first page of the memory region donated by the host
-		// for that purpose
-		.vm_abstract_pgtable = { .root = pgd_phys, .mapping= mapping_empty_() },
-	};
+	// struct ghost_vm vm = (struct ghost_vm) {
+	// 	.pkvm_handle = handle,
+	// 	.nr_vcpus = nr_vcpus,
+	// 	// NOTE: this sets the .loaded fields of all the elements
+	// 	// of the array to false
+	// 	.vcpus = {0},
+	// 	// NOTE: we expect the VM's page table to be place at the beginning
+	// 	// of the first page of the memory region donated by the host
+	// 	// for that purpose
+	// 	.vm_abstract_pgtable = { .root = pgd_phys, .mapping= mapping_empty_() },
+	// };
+	vm1->pkvm_handle = handle;
+	vm1->nr_vcpus = nr_vcpus;
+	// NOTE: this sets the .loaded fields of all the elements
+	// of the array to false
+	memset(vm1->vcpus, 0, sizeof(struct ghost_vcpu[KVM_MAX_VCPUS]));
 
-	ghost_vm_clone_into(vm1, &vm);
+	// NOTE: we expect the VM's page table to be place at the beginning
+	// of the first page of the memory region donated by the host
+	// for that purpose
+	vm1->vm_abstract_pgtable.root = pgd_phys;
+	ghost_pfn_set_init(&vm1->vm_abstract_pgtable.table_pfns, pgd_phys, pgd_phys + pgd_size);
+	vm1->vm_abstract_pgtable.mapping = mapping_empty_();
+
+	// ghost_vm_clone_into(vm1, &vm);
 	ret = handle;
 out:
 	ghost_reg_gpr(g1, 1) = 0;

@@ -38,6 +38,24 @@ struct ghost_loaded_vcpu {
 };
 
 /**
+ * struct ghost_register_state - per-CPU register state
+ *
+ * @present: whether the parent ghost state has some ghost register state for this CPU.
+ * @ctxt: if present, the EL0/1 register values on entry/exit to the C.
+ * @el2_sysregs: if present, ghost copy of the current value of the EL2 system registers.
+ *
+ * Not all the register values are present, but it's not explicitly marked which are,
+ * although which are present should be constant for all present register states.
+ *
+ * Context: thread-local, so not protected by any lock.
+ */
+struct ghost_register_state {
+	bool present;
+	struct kvm_cpu_context ctxt;
+	u64 el2_sysregs[GHOST_NR_SYSREGS];
+};
+
+/**
  * struct ghost_vcpu - A single vcpu within a VM
  *
  * @loaded: whether this vcpu is currently loaded on a physical CPU
@@ -48,7 +66,10 @@ struct ghost_loaded_vcpu {
  * Context: Protected by the parent VM's lock.
  */
 struct ghost_vcpu {
+	u64 vcpu_handle; // really the index
 	bool loaded;
+	bool initialised;
+	struct ghost_register_state regs;
 };
 
 
@@ -57,6 +78,7 @@ struct ghost_vcpu {
  *
  * @vm_abstract_pgtable: an abstract mapping of the concrete guest pagetable
  * @nr_vcpus: the number of VCPUs this VM has
+ * @nr_initialised_vcpus: the number VCPUs that have been initialised
  * @vcpus: the table of ghost_vcpu objects, valid up to nr_vcpus
  * @pkvm_handle: the opaque pkvm-assigned handle corresponding to this guest
  * @lock: a reference to the internal VM lock in pkvm.
@@ -67,6 +89,7 @@ struct ghost_vcpu {
 struct ghost_vm {
 	abstract_pgtable vm_abstract_pgtable;
 	u64 nr_vcpus;
+	u64 nr_initialised_vcpus;
 	struct ghost_vcpu vcpus[KVM_MAX_VCPUS];
 	pkvm_handle_t pkvm_handle;
 	hyp_spinlock_t *lock;
@@ -106,23 +129,6 @@ struct ghost_pkvm {
 	abstract_pgtable pkvm_abstract_pgtable;
 };
 
-/**
- * struct ghost_register_state - per-CPU register state
- *
- * @present: whether the parent ghost state has some ghost register state for this CPU.
- * @ctxt: if present, the EL0/1 register values on entry/exit to the C.
- * @el2_sysregs: if present, ghost copy of the current value of the EL2 system registers.
- *
- * Not all the register values are present, but it's not explicitly marked which are,
- * although which are present should be constant for all present register states.
- *
- * Context: thread-local, so not protected by any lock.
- */
-struct ghost_register_state {
-	bool present;
-	struct kvm_cpu_context ctxt;
-	u64 el2_sysregs[GHOST_NR_SYSREGS];
-};
 
 /**
  * struct ghost_vm_slot - A slot in the VMS table
