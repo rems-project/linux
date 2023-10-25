@@ -16,7 +16,7 @@
  */
 
 /*
- * Each chunks starts with the header; allocation reqs return a pointer just
+ * Each chunk starts with the header; allocation reqs return a pointer just
  * past the header.
  */
 typedef union hdr {
@@ -74,14 +74,13 @@ static int add_region(pool *pool, void *buf, size_t s) {
 }
 
 static void *__g_malloc(pool *pool, size_t s) {
-	void *res = NULL;
 	unsigned slot, i;
 	hdr *nd1, *nd2;
 
 	slot = i = bin(pow_2_ceil(s + sizeof(hdr)));
-	while (!pool->mem[i] && i < SLOTS)
+	while (i < SLOTS && !pool->mem[i])
 		i++;
-	if (i == SLOTS)
+	if (i >= SLOTS)
 		return NULL;
 
 	for (; slot < i; --i) {
@@ -96,8 +95,7 @@ static void *__g_malloc(pool *pool, size_t s) {
 	nd1 = pool->mem[slot];
 	pool->mem[slot] = nd1->nxt;
 	nd1->src = &(pool->mem[slot]);
-	res = ((void *)nd1) + sizeof(hdr);
-	return res;
+	return ((void *)nd1) + sizeof(hdr);
 }
 
 static void __g_free(void *p) {
@@ -114,7 +112,7 @@ static void __g_free(void *p) {
 
 #define HEAP (1 << GHOST_ALLOC_MAX_ORDER)
 
-static char reserved_for_heap[HEAP];
+static unsigned char reserved_for_heap[HEAP];
 static pool heap;
 
 static DEFINE_HYP_SPINLOCK(lock);
