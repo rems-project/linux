@@ -42,6 +42,7 @@ ghosts += ../ghost_control.o
 ghosts += ../ghost_pfn_set.o
 ghosts += ghost_compute_abstraction.o
 ghosts += ghost_spec.o
+ghosts += ../ghost_alloc.o
 
 hyp-obj-y += $(ghosts)
 # /GHOST
