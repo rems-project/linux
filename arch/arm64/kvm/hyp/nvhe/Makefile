@@ -25,24 +25,26 @@ hyp-obj-y := timer-sr.o sysreg-sr.o debug-sr.o switch.o tlb.o hyp-init.o host.o 
 	 cache.o setup.o mm.o mem_protect.o sys_regs.o pkvm.o stacktrace.o
 hyp-obj-y += ../vgic-v3-sr.o ../aarch32.o ../vgic-v2-cpuif-proxy.o ../entry.o \
 	 ../fpsimd.o ../hyp-entry.o ../exception.o ../pgtable.o
-# GHOST
-# this should be made conditional on whether the ghost code is being used
-hyp-obj-y += ../ghost_extra_debug-pl011.o
-hyp-obj-y += ghost_mapping_reqs.o
-hyp-obj-y += ghost_misc.o
-hyp-obj-y += ghost_asm.o
-hyp-obj-y += ghost_sort_hack.o
-hyp-obj-y += ghost_list_sort_hack.o
-hyp-obj-y += ../ghost_maplets.o
-hyp-obj-y += ../ghost_pgtable.o
-hyp-obj-y += ../ghost_control.o
-hyp-obj-y += ../ghost_pfn_set.o
-hyp-obj-y += ghost_compute_abstraction.o
-hyp-obj-y += ghost_spec.o
-# /GHOST
-
 hyp-obj-$(CONFIG_DEBUG_LIST) += list_debug.o
 hyp-obj-y += $(lib-objs)
+
+# GHOST
+# this should be made conditional on whether the ghost code is being used
+ghosts += ../ghost_extra_debug-pl011.o
+ghosts += ghost_mapping_reqs.o
+ghosts += ghost_misc.o
+ghosts += ghost_asm.o
+ghosts += ghost_sort_hack.o
+ghosts += ghost_list_sort_hack.o
+ghosts += ../ghost_maplets.o
+ghosts += ../ghost_pgtable.o
+ghosts += ../ghost_control.o
+ghosts += ../ghost_pfn_set.o
+ghosts += ghost_compute_abstraction.o
+ghosts += ghost_spec.o
+
+hyp-obj-y += $(ghosts)
+# /GHOST
 
 ##
 ## Build rules for compiling nVHE hyp code
