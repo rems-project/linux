@@ -245,7 +245,7 @@ struct ghost_state {
 	mapping hyp_memory;
 	struct ghost_pkvm pkvm;
 	struct ghost_host host;
-	struct ghost_register_state regs; // TODO: make per-cpu
+	struct ghost_register_state regs[NR_CPUS];
 	struct ghost_vms vms;
 	s64 hyp_physvirt_offset;
 	u64 tag_lsb;
@@ -257,6 +257,7 @@ struct ghost_state {
  * this_cpu_read_ghost_loaded_vcpu() - Get the loaded_hyp_vcpu for this CPU
  */
 struct ghost_loaded_vcpu *this_cpu_ghost_loaded_vcpu(struct ghost_state *g);
+struct ghost_register_state *this_cpu_ghost_register_state(struct ghost_state *g);
 
 /**
  * max number of recorded READ_ONCEs
@@ -407,9 +408,9 @@ void ghost_clear_call_data(void);
 
 //struct ghost_state spec_handle_trap(struct ghost_state *g);
 
-// macros to make ghost register accesses more uniform
-#define ghost_reg_gpr(g,r) g->regs.ctxt.regs.regs[r]
-#define ghost_reg_el2(g,r) g->regs.el2_sysregs[r]
+// functions to make ghost register accesses more uniform
+#define ghost_reg_gpr(g, reg_index) (this_cpu_ghost_register_state(g)->ctxt.regs.regs[reg_index])
+#define ghost_reg_el2(g, reg_index) (this_cpu_ghost_register_state(g)->el2_sysregs[reg_index])
 //#define ghost_reg_ctxt(g,r)
 
 

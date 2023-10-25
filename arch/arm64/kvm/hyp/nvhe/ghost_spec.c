@@ -774,7 +774,7 @@ void compute_new_abstract_state_handle_trap(struct ghost_state *g1 /*new*/, stru
 {
 
 	// assumes *g1 has been cleared
-	ghost_assert(!g1->pkvm.present && !g1->host.present && !g1->regs.present);
+	ghost_assert(!g1->pkvm.present && !g1->host.present && !this_cpu_ghost_register_state(g1)->present);
 
 	// copy the g0 regs to g1; we'll update them to make the final g1
 	copy_abstraction_regs(g1, g0);

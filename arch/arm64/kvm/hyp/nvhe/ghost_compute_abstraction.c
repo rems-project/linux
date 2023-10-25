@@ -421,7 +421,7 @@ void init_abstraction(struct ghost_state *g)
 {
 	g->pkvm.present = false;
 	g->host.present = false;
-	g->regs.present = false;
+	this_cpu_ghost_register_state(g)->present = false;
 	g->vms.present = false;
 	for (int cpu=0; cpu<NR_CPUS; cpu++) {
 		g->loaded_hyp_vcpu[cpu].present = false;
@@ -466,7 +466,7 @@ void clear_abstraction_host(struct ghost_state *g)
 
 void clear_abstraction_regs(struct ghost_state *g)
 {
-	g->regs.present = false;
+	this_cpu_ghost_register_state(g)->present = false;
 }
 
 void clear_abstraction_vm(struct ghost_state *g, pkvm_handle_t handle)
@@ -509,8 +509,8 @@ void clear_abstraction_thread_local(void)
 
 void copy_abstraction_regs(struct ghost_state *g_tgt, struct ghost_state *g_src)
 {
-	ghost_assert(g_src->regs.present);
-	ghost_assert(!g_tgt->regs.present);
+	ghost_assert(this_cpu_ghost_register_state(g_src)->present);
+	ghost_assert(!this_cpu_ghost_register_state(g_tgt)->present);
 	memcpy((void*) &(g_tgt->regs), (void*) &(g_src->regs), sizeof(struct ghost_register_state));
 }
 
@@ -690,14 +690,14 @@ void record_abstraction_vm(struct ghost_state *g, struct pkvm_hyp_vm *vm)
 void record_abstraction_regs(struct ghost_state *g, struct kvm_cpu_context *ctxt)
 {
 	int i;
-	g->regs.present = true;
+	this_cpu_ghost_register_state(g)->present = true;
 
 	// copy GPR values from the ctxt saved by the exception vector
 	for (i=0; i<=30; i++) {
-		g->regs.ctxt.regs.regs[i] = ctxt->regs.regs[i];
+		this_cpu_ghost_register_state(g)->ctxt.regs.regs[i] = ctxt->regs.regs[i];
 	}
 	// save EL2 registers
-	ghost_get_sysregs(g->regs.el2_sysregs);
+	ghost_get_sysregs(this_cpu_ghost_register_state(g)->el2_sysregs);
 	// save EL1 registers comprising pKVM's view of the context
 	// __sysreg_save_state_nvhe(ctxt);
 }
@@ -906,19 +906,25 @@ void ghost_memcache_donations_insert(struct ghost_memcache_donations *ds, u64 pf
 }
 
 /********************************************/
-// ghost loaded vcpu
+// ghost per-cpu state helpers
 
+// important: we do not use the multiproc affinity register (mpidr)
+// as that contains the real affinity, which structures the output into logical groups
+// but we want something that is sequential 0,1,2,...
+// so we rely on Linux setting up the software-defined tpidr_el2 register correctly
+//
+// TODO, KM: there is a macro for shifting that we should probably use, but don't we can
+// at the moment because we are probably not declaring the per_cpu field properly.
+//
+// u64 cpu_offset = read_sysreg(tpidr_el2);
+// return *SHIFT_PERCPU_PTR(&g->loaded_hyp_vcpu, cpu_offset);
 struct ghost_loaded_vcpu *this_cpu_ghost_loaded_vcpu(struct ghost_state *g)
 {
-	// important: we do not use the multiproc affinity register (mpidr)
-	// as that contains the real affinity, which structures the output into logical groups
-	// but we want something that is sequential 0,1,2,...
-	// so we rely on Linux setting up the software-defined tpidr_el2 register correctly
 	u64 idx = read_sysreg(tpidr_el2);
 	return &g->loaded_hyp_vcpu[idx];
-	// TODO, KM: there is a macro for shifting that we should probably use, but don't we can
-	// at the moment because we are probably not declaring the per_cpu field properly.
-	//
-	// u64 cpu_offset = read_sysreg(tpidr_el2);
-	// return *SHIFT_PERCPU_PTR(&g->loaded_hyp_vcpu, cpu_offset);
+}
+struct ghost_register_state *this_cpu_ghost_register_state(struct ghost_state *g)
+{
+	u64 idx = read_sysreg(tpidr_el2);
+	return &g->regs[idx];
 }
