@@ -566,11 +566,11 @@ bool ghost_hyp_check_host_shared_mem(struct ghost_state *g, host_va_t from, host
 	return true;
 }
 
-static bool ghost_map_donated_memory(struct ghost_state *g, host_ipa_t host_ipa, size_t size)
+static bool ghost_map_donated_memory(struct ghost_state *g, host_ipa_t host_ipa, size_t size_in_bytes)
 {
 	phys_addr_t phys_addr = phys_of_host_ipa(host_ipa); // TODO: have some macro
 	u64 hyp_virt = (u64)ghost__hyp_va(g, phys_addr);
-	u64 nr_pages = PAGE_ALIGN((u64)size);
+	u64 nr_pages = PAGE_ALIGN((u64)size_in_bytes) >> PAGE_SHIFT;
 
 	for (u64 addr=phys_addr; addr < nr_pages * PAGE_SIZE; addr += PAGE_SIZE) {
 		if (!is_owned_exclusively_by(g, GHOST_HOST, addr))
