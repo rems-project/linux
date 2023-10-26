@@ -12,6 +12,7 @@ void record_abstraction_shared_state(struct ghost_state *g);
 void init_abstraction_common(void);
 void record_abstraction_common(void);
 void clear_abstraction_thread_local(void);
+void record_abstraction_hyp_memory_pre(void);
 void record_abstraction_regs_pre(struct kvm_cpu_context *ctxt);
 void record_abstraction_regs_post(struct kvm_cpu_context *ctxt);
 void record_abstraction_constants_pre(void);

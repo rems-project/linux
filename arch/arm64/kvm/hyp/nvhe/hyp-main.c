@@ -1300,6 +1300,9 @@ void handle_trap(struct kvm_cpu_context *host_ctxt)
 	_Bool check_this_transition=false;
 	if (GHOST_EXEC_SPEC && READ_ONCE(pkvm_init_finalized)) {
 		clear_abstraction_thread_local();
+		ghost_lock_maplets();
+		record_abstraction_hyp_memory(this_cpu_ptr(&gs_recorded_pre));
+		ghost_unlock_maplets();
 		record_abstraction_regs_pre(host_ctxt);
 		record_abstraction_constants_pre();
 		check_this_transition = true;

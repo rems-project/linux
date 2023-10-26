@@ -692,6 +692,13 @@ void record_abstraction_regs(struct ghost_state *g, struct kvm_cpu_context *ctxt
 	// __sysreg_save_state_nvhe(ctxt);
 }
 
+void record_abstraction_hyp_memory_pre(void)
+{
+		ghost_lock_maplets();
+		record_abstraction_hyp_memory(this_cpu_ptr(&gs_recorded_pre));
+		ghost_unlock_maplets();
+}
+
 void record_abstraction_regs_pre(struct kvm_cpu_context *ctxt)
 {
 	struct ghost_state *g = this_cpu_ptr(&gs_recorded_pre);
