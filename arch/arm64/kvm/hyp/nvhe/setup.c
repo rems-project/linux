@@ -435,6 +435,7 @@ int __pkvm_init(phys_addr_t phys, unsigned long size, unsigned long nr_cpus,
 	init_ghost_control();
 
 	hyp_puts("\n__pkvm_init:\n");
+	hyp_putsxnl("    CPU", hyp_smp_processor_id(), 32);
 	hyp_puts("  arguments:");
 	hyp_putsxnl("    phys", phys, 64);
 	hyp_putsxnl("    size", size, 32);

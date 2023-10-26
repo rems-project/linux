@@ -1028,6 +1028,8 @@ static void handle___pkvm_create_private_mapping(struct kvm_cpu_context *host_ct
 
 static void handle___pkvm_prot_finalize(struct kvm_cpu_context *host_ctxt)
 {
+	hyp_puts("\n__pkvm_prot_finalize:\n");
+	hyp_putsxnl("    CPU", hyp_smp_processor_id(), 32);
 	cpu_reg(host_ctxt, 1) = __pkvm_prot_finalize();
 }
 

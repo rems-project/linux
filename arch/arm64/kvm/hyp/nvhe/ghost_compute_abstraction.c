@@ -899,24 +899,11 @@ void ghost_memcache_donations_insert(struct ghost_memcache_donations *ds, u64 pf
 /********************************************/
 // ghost per-cpu state helpers
 
-static inline u64 ghost_thiscpu_idx(void)
-{
-	u64 idx = ~BIT(31) & read_sysreg(mpidr_el1);
-	ghost_assert(idx < NR_CPUS);
-	return idx;
-}
-
-
 struct ghost_loaded_vcpu *this_cpu_ghost_loaded_vcpu(struct ghost_state *g)
 {
-//	u64 idx = read_sysreg(tpidr_el2);
-	u64 idx = ghost_thiscpu_idx();
-	return &g->loaded_hyp_vcpu[idx];
+	return &g->loaded_hyp_vcpu[hyp_smp_processor_id()];
 }
 struct ghost_register_state *this_cpu_ghost_register_state(struct ghost_state *g)
 {
-	// u64 idx = read_sysreg(tpidr_el2);
-	// return &g->regs[idx];
-	u64 idx = ghost_thiscpu_idx();
-	return &g->regs[idx];
+	return &g->regs[hyp_smp_processor_id()];
 }
