@@ -149,6 +149,12 @@ static struct ghost_vm_slot *__ghost_vm_or_free_slot_from_handle(struct ghost_vm
 	return free_slot;
 }
 
+hyp_spinlock_t *ghost_pointer_to_vm_lock(pkvm_handle_t handle)
+{
+	ghost_assert_vms_table_locked();
+	return &vm_table[handle - /*HANDLE_OFFSET*/ 0x1000]->lock;
+}
+
 struct ghost_vm *ghost_vms_get(struct ghost_vms *vms, pkvm_handle_t handle)
 {
 	ghost_assert_vms_table_locked();

@@ -171,6 +171,7 @@ struct ghost_vms {
  * Must own the ghost vms table lock
  */
 struct ghost_vm *ghost_vms_get(struct ghost_vms *vms, pkvm_handle_t handle);
+hyp_spinlock_t *ghost_pointer_to_vm_lock(pkvm_handle_t handle);
 
 /**
  * ghost_vms_alloc() - Get a reference to a fresh (empty) ghost_vm in the table
