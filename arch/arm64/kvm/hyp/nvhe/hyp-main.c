@@ -1292,6 +1292,10 @@ void handle_trap(struct kvm_cpu_context *host_ctxt)
 {
 	// GHOST
 	// ghost_dump_sysregs();
+	u64 cpu = hyp_smp_processor_id();
+	GHOST_LOG_CONTEXT_ENTER();
+	GHOST_LOG(cpu, u64);
+
 	ghost_clear_call_data();
 	bool new_state_computed=false;
 	_Bool check_this_transition=false;

@@ -216,10 +216,24 @@ void check_abstraction_equals_reg(struct ghost_state *g1, struct ghost_state *g2
 	GHOST_LOG_CONTEXT_ENTER();
 	u64 i;
 	u64 ghost_el2_regs[] = (u64[])GHOST_EL2_REGS;
-	for (i=0; i<=30; i++)
-		ghost_spec_assert(ghost_reg_gpr(g1,i) == ghost_reg_gpr(g2,i));
-	for (i=0; i<sizeof(ghost_el2_regs)/sizeof(u64); i++)
-		ghost_spec_assert(ghost_reg_el2(g1,ghost_el2_regs[i]) == ghost_reg_el2(g2,ghost_el2_regs[i]));
+	for (i=0; i<=30; i++) {
+		if (ghost_reg_gpr(g1,i) != ghost_reg_gpr(g2,i)) {
+			GHOST_LOG(i, u64);
+			GHOST_LOG(ghost_reg_gpr(g1,i), u64);
+			GHOST_LOG(ghost_reg_gpr(g2,i), u64);
+			GHOST_WARN("gpr register mismatch");
+			ghost_spec_assert(false);
+		}
+	}
+	for (i=0; i<sizeof(ghost_el2_regs)/sizeof(u64); i++) {
+		if (ghost_reg_el2(g1,ghost_el2_regs[i]) != ghost_reg_el2(g2,ghost_el2_regs[i])) {
+			GHOST_LOG(i, u64);
+			GHOST_LOG(ghost_reg_el2(g1,i), u64);
+			GHOST_LOG(ghost_reg_el2(g2,i), u64);
+			GHOST_WARN("el2_sysreg register mismatch");
+			ghost_spec_assert(false);
+		}
+	}
 	// TODO other regs
 	GHOST_LOG_CONTEXT_EXIT();
 }
