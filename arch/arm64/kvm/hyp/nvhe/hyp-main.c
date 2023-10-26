@@ -1362,23 +1362,9 @@ void handle_trap(struct kvm_cpu_context *host_ctxt)
 		BUG();
 	}
 
-
 	// GHOST
 	if (check_this_transition) {
-		// record the remaining parts of the new impl abstract state
-		// (the pkvm, host, and vm components having been recorded at impl lock points)
-		ghost_lock_maplets();
-		record_abstraction_hyp_memory(this_cpu_ptr(&gs_recorded_post));
-		record_abstraction_regs_post(host_ctxt);
-		record_abstraction_constants_post();
-		// compute the new spec abstract state
-		this_cpu_ptr(&gs_call_data)->return_value = cpu_reg(host_ctxt, 0);
-		compute_new_abstract_state_handle_trap(this_cpu_ptr(&gs_computed_post), this_cpu_ptr(&gs_recorded_pre), this_cpu_ptr(&gs_call_data), &new_state_computed);
-		// and check the two are equal on relevant components
-		if (new_state_computed) 
-			ghost_spec_assert(abstraction_equals_all(this_cpu_ptr(&gs_computed_post), this_cpu_ptr(&gs_recorded_post), this_cpu_ptr(&gs_recorded_pre)));
-		ghost_unlock_maplets();
+		ghost_handle_trap_epilogue(host_ctxt);
 	}
 	// /GHOST
-
 }

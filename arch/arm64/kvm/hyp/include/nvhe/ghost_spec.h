@@ -420,6 +420,7 @@ void ghost_clear_call_data(void);
 
 
 void compute_new_abstract_state_handle_trap(struct ghost_state *g1 /*new*/, struct ghost_state *g0 /*old*/, struct ghost_call_data *call, bool *new_state_computed);
+void ghost_handle_trap_epilogue(struct kvm_cpu_context *host_ctxt);
 
 /**
  * READ_ONCE_GHOST_RECORD(ptr) - Perform a READ_ONCE(ptr) but remember the address and value in the ghost state.
