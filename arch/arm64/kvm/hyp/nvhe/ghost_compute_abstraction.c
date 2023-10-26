@@ -40,6 +40,8 @@
 // end of mem_protect.c ghost headers
 
 
+#include <hyp/ghost_alloc.h>
+
 #include <nvhe/ghost_spec.h>
 #include <nvhe/ghost_compute_abstraction.h>
 
@@ -137,7 +139,7 @@ static struct ghost_vm_slot *__ghost_vm_or_free_slot_from_handle(struct ghost_vm
 		if (this->exists && this->handle == handle) {
 			// sanity check: the included vm has the same handle as the slot marker
 			// they should always match for slots that exist, but are technically owned by separate locks.
-			ghost_assert(this->vm.pkvm_handle == this->handle);
+			ghost_assert(this->vm->pkvm_handle == this->handle);
 			return this;
 		} else if (!this->exists) {
 			free_slot = this;
@@ -152,7 +154,7 @@ struct ghost_vm *ghost_vms_get(struct ghost_vms *vms, pkvm_handle_t handle)
 	ghost_assert_vms_table_locked();
 	struct ghost_vm_slot *slot = __ghost_vm_or_free_slot_from_handle(vms, handle);
 	if (slot->exists)
-		return &slot->vm;
+		return slot->vm;
 	return NULL;
 }
 
@@ -161,7 +163,11 @@ struct ghost_vm *ghost_vms_alloc(struct ghost_vms *vms, pkvm_handle_t handle)
 	ghost_assert_vms_table_locked();
 	struct ghost_vm_slot *slot = __ghost_vm_or_free_slot_from_handle(vms, handle);
 	if (!slot->exists) {
-		return &slot->vm;
+		if (!(slot->vm = malloc(sizeof(struct ghost_vm)))) {
+			hyp_puts("ghost malloc failed\n");
+			ghost_assert(false);
+		}
+		return slot->vm;
 	}
 
 	return NULL;
@@ -171,7 +177,8 @@ static void ghost_vm_clear_slot(struct ghost_vm_slot *slot)
 {
 	if (slot->exists) {
 		slot->exists = false;
-		clear_abstract_pgtable(&slot->vm.vm_abstract_pgtable);
+		clear_abstract_pgtable(&slot->vm->vm_abstract_pgtable);
+		free(slot->vm);
 	}
 }
 
@@ -339,7 +346,7 @@ bool __abstraction_vm_all_contained_in(struct ghost_vms *vms1, struct ghost_vms 
 	for (i=0; i<KVM_MAX_PVMS; i++) {
 		struct ghost_vm_slot *slot = &vms1->table[i];
 		if (slot->exists) {
-			all_found = all_found && __abstraction_vm_contained_in(&slot->vm, vms2);
+			all_found = all_found && __abstraction_vm_contained_in(slot->vm, vms2);
 		}
 	}
 	return all_found;
@@ -564,7 +571,7 @@ void copy_abstraction_vms(struct ghost_state *g_tgt, struct ghost_state *g_src)
 		bool exists = src_slot->exists;
 		tgt_slot->exists = src_slot->exists;
 		if (exists) {
-			ghost_vm_clone_into(&tgt_slot->vm, &src_slot->vm);
+			ghost_vm_clone_into(tgt_slot->vm, src_slot->vm);
 		}
 	}
 }

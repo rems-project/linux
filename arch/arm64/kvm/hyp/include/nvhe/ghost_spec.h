@@ -142,7 +142,7 @@ struct ghost_pkvm {
 struct ghost_vm_slot {
 	bool exists;
 	pkvm_handle_t handle;
-	struct ghost_vm vm;
+	struct ghost_vm *vm;
 };
 
 /**
