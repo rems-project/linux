@@ -121,9 +121,6 @@ void ghost_log_context_traceback(void)
 		indent(i*4);
 		hyp_putsp("in ");
 		hyp_putsp((char *)frame->ctx_name);
-		hyp_putsp(" (");
-		hyp_putx64(frame->nr_attached_data);
-		hyp_putsp(")");
 		hyp_putsp("\n");
 
 		for (int d = 0; d < frame->nr_attached_data; d++) {

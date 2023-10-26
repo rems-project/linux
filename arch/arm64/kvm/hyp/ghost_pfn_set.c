@@ -63,30 +63,43 @@ static bool range_equal(struct pfn_set *lhs, struct pfn_set *rhs)
 
 bool ghost_pfn_set_equal(struct pfn_set *lhs, struct pfn_set *rhs)
 {
-	return (
+	bool ret;
+	GHOST_LOG_CONTEXT_ENTER();
+	ret = (
 		   ghost_pfn_set_subseteq(lhs, rhs)
 		&& ghost_pfn_set_subseteq(rhs, lhs)
 	);
+	GHOST_LOG_CONTEXT_EXIT();
+	return ret;
 }
 
 bool ghost_pfn_set_subseteq(struct pfn_set *lhs, struct pfn_set *rhs)
 {
-	bool all_external_pfns_contained;
+	bool ret, all_external_pfns_contained;
+	GHOST_LOG_CONTEXT_ENTER();
 
-	if (!range_equal(lhs, rhs))
-		return false;
+	if (!range_equal(lhs, rhs)) {
+		ret = false;
+		goto out;
+	}
 
-	if (lhs->len != rhs->len)
-		return false;
+	if (lhs->len != rhs->len) {
+		ret = false;
+		goto out;
+	}
 
 	all_external_pfns_contained = true;
 	for (int i=0; i<lhs->len; i++) {
-		all_external_pfns_contained = all_external_pfns_contained && (
-			ghost_pfn_set_contains(rhs, lhs->external_pfns[i])
-		);
+		if (!ghost_pfn_set_contains(rhs, lhs->external_pfns[i])) {
+			ret = false;
+			goto out;
+		}
 	}
 
-	return all_external_pfns_contained;
+	ret = true;
+out:
+	GHOST_LOG_CONTEXT_EXIT();
+	return ret;
 }
 
 void ghost_pfn_set_clear(struct pfn_set *set)

@@ -837,6 +837,6 @@ void ghost_handle_trap_epilogue(struct kvm_cpu_context *host_ctxt, bool from_hos
 	compute_new_abstract_state_handle_trap(this_cpu_ptr(&gs_computed_post), this_cpu_ptr(&gs_recorded_pre), this_cpu_ptr(&gs_call_data), &new_state_computed);
 	// and check the two are equal on relevant components
 	if (new_state_computed)
-		ghost_spec_assert(abstraction_equals_all(this_cpu_ptr(&gs_computed_post), this_cpu_ptr(&gs_recorded_post), this_cpu_ptr(&gs_recorded_pre)));
+		check_abstraction_equals_all(this_cpu_ptr(&gs_computed_post), this_cpu_ptr(&gs_recorded_post), this_cpu_ptr(&gs_recorded_pre));
 	ghost_unlock_maplets();
 }

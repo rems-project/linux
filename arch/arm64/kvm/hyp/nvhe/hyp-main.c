@@ -1136,6 +1136,7 @@ static const char * ghost_host_hcall_string[] = {
 
 /* the following is a horrible-hack copy of functions from mem_protect.c - really these should be pulled out into a common file, but then they also have to be unified with functions in iommu.c that I don't want to touch right now */
 // GHOST
+/*
 static void host_lock_component(void)
 {
 	hyp_spin_lock(&host_mmu.lock);
@@ -1167,6 +1168,7 @@ static void hyp_unlock_component(void)
 	// /GHOST
 	hyp_spin_unlock(&pkvm_pgd_lock);
 }
+*/
 // /GHOST
 
 static void handle_host_hcall(struct kvm_cpu_context *host_ctxt)
