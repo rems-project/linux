@@ -755,18 +755,22 @@ void compute_new_abstract_state_handle_host_hcall(struct ghost_state *g1, struct
 
 	__KVM_HOST_SMCCC_FUNC___pkvm_host_map_guest:
 		compute_new_abstract_state_handle___pkvm_host_map_guest(g1, g0, call);
+		*new_state_computed = true;
 		break;
 
 	__KVM_HOST_SMCCC_FUNC___pkvm_vcpu_load:
 		compute_new_abstract_state_handle___pkvm_vcpu_load(g1, g0, call);
+		*new_state_computed = true;
 		break;
 
 	__KVM_HOST_SMCCC_FUNC___pkvm_vcpu_put:
 		compute_new_abstract_state_handle___pkvm_vcpu_put(g1, g0, call);
+		*new_state_computed = true;
 		break;
 
 	__KVM_HOST_SMCCC_FUNC___pkvm_init_vm:
 		compute_new_abstract_state_handle___pkvm_init_vm(g1, g0, call);
+		*new_state_computed = true;
 		break;
 
 		// TODO: and their bodies, and all the other cases
