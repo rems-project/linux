@@ -108,3 +108,8 @@ void check_assert_fail(char *s)
 	hyp_spin_unlock(&g_print_lock);
 }
 
+DEFINE_HYP_PTR_PRINTER(c, char, hyp_putc);
+DEFINE_HYP_PTR_PRINTER(s, char*, hyp_putsp);
+DEFINE_HYP_PTR_PRINTER(x32, u32, hyp_putx32);
+DEFINE_HYP_PTR_PRINTER(x64, u64, hyp_putx64);
+DEFINE_HYP_PTR_PRINTER(bool, bool, hyp_putbool);

@@ -46,6 +46,24 @@ void check_assert_fail(char *s);
 void ghost_print_begin(void);
 void ghost_print_end(void);
 
+/*
+ * Helpers that duplicate the previous hyp_put* but that take pointers
+ */
+
+#define DECLARE_HYP_PTR_PRINTER(NAME) \
+	void hyp_put##NAME##ptr(void *p);
+
+#define DEFINE_HYP_PTR_PRINTER(NAME, TY, fn) \
+	void hyp_put##NAME##ptr(void *p) { \
+		fn(*(TY *)p); \
+	}
+
+DECLARE_HYP_PTR_PRINTER(c);
+DECLARE_HYP_PTR_PRINTER(s);
+DECLARE_HYP_PTR_PRINTER(x32);
+DECLARE_HYP_PTR_PRINTER(x64);
+DECLARE_HYP_PTR_PRINTER(bool);
+
 #else /* __ARM64_KVM_HYP_GHOST_EXTRA_DEBUG_PL011_H__ */
 //
 //void hyp_putsp(char *s);
