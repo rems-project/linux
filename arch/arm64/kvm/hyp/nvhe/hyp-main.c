@@ -1364,7 +1364,7 @@ void handle_trap(struct kvm_cpu_context *host_ctxt)
 
 	// GHOST
 	if (check_this_transition) {
-		ghost_handle_trap_epilogue(host_ctxt);
+		ghost_handle_trap_epilogue(host_ctxt, /*from_host*/true);
 	}
 	// /GHOST
 }

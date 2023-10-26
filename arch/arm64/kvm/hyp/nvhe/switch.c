@@ -29,6 +29,12 @@
 #include <nvhe/mem_protect.h>
 #include <nvhe/pkvm.h>
 
+// GHOST
+#include <nvhe/ghost_control.h>
+#include <nvhe/ghost_spec.h>
+#include <nvhe/ghost_compute_abstraction.h>
+// /GHOST
+
 /* Non-VHE specific context */
 DEFINE_PER_CPU(struct kvm_host_data, kvm_host_data);
 DEFINE_PER_CPU(struct kvm_cpu_context, kvm_hyp_ctxt);
@@ -237,6 +243,15 @@ static void early_exit_filter(struct kvm_vcpu *vcpu, u64 *exit_code)
 	}
 }
 
+// GHOST
+bool ghost_wrap_guest_post(struct kvm_cpu_context *host_ctxt, bool ret)
+{
+	// recording post state, computing expected post and comparing
+	ghost_handle_trap_epilogue(host_ctxt, /*from_host*/false);
+	return ret;
+}
+// /GHOST
+
 /* Switch to the guest for legacy non-VHE systems */
 int __kvm_vcpu_run(struct kvm_vcpu *vcpu)
 {
@@ -310,8 +325,17 @@ int __kvm_vcpu_run(struct kvm_vcpu *vcpu)
 		/* Jump in the fire! */
 		exit_code = __guest_enter(vcpu);
 
+		// GHOST
+		// recording pre state before a guest hcall/... handler
+		if (GHOST_EXEC_SPEC) {
+			clear_abstraction_thread_local();
+			record_abstraction_regs_pre(host_ctxt);
+			record_abstraction_constants_pre();
+		}
+		// /GHOST
+
 		/* And we're baaack! */
-	} while (fixup_guest_exit(vcpu, &exit_code));
+	} while (ghost_wrap_guest_post(host_ctxt, fixup_guest_exit(vcpu, &exit_code)));
 
 	__sysreg_save_state_nvhe(guest_ctxt);
 	__sysreg32_save_state(vcpu);

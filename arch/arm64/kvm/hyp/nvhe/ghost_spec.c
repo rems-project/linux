@@ -816,7 +816,7 @@ void compute_new_abstract_state_handle_trap(struct ghost_state *g1 /*new*/, stru
 	}
 }
 
-void ghost_handle_trap_epilogue(struct kvm_cpu_context *host_ctxt)
+void ghost_handle_trap_epilogue(struct kvm_cpu_context *host_ctxt, bool from_host)
 {
 	bool new_state_computed=false;
 
