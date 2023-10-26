@@ -12,6 +12,8 @@
 
 struct ghost_context_data {
 	const char *data_name;
+	enum ghost_log_level level;
+	bool has_data;
 	void *data_ptr;
 	ghost_printer_fn fn;
 };
@@ -69,6 +71,8 @@ void ghost_log_context_attach(const char *s, void *data, ghost_printer_fn printe
 	i = frame->nr_attached_data++;
 
 	ctx_data = &frame->data[i];
+	ctx_data->level = GHOST_LOG_TRACE;
+	ctx_data->has_data = true;
 	ctx_data->data_name = s;
 	ctx_data->data_ptr = data;
 	ctx_data->fn = printer;
@@ -78,6 +82,32 @@ void ghost_log_context_attach(const char *s, void *data, ghost_printer_fn printe
 	hyp_putsp((char *)s);
 	hyp_putsp(":");
 	printer(data);
+	hyp_putsp("\n");
+	ghost_print_end();
+}
+
+void ghost_log_context_log(const char *s, enum ghost_log_level level)
+{
+	struct ghost_context *ctx;
+	struct ghost_context_frame *frame;
+	struct ghost_context_data *ctx_data;
+	u64 framei, i;
+	
+	ctx = this_cpu_ptr(&g_context);
+
+	framei = ctx->nr_frames - 1;
+	frame = &ctx->frames[framei];
+
+	ghost_assert(frame->nr_attached_data < GHOST_MAX_CONTEXT_DATA);
+
+	i = frame->nr_attached_data++;
+
+	ctx_data = &frame->data[i];
+	ctx_data->level = level;
+	ctx_data->has_data = false;
+
+	ghost_print_begin();
+	hyp_putsp((char *)s);
 	hyp_putsp("\n");
 	ghost_print_end();
 }
@@ -127,9 +157,17 @@ void ghost_log_context_traceback(void)
 			struct ghost_context_data *data = &frame->data[d];
 			indent(i*4);
 			hyp_putsp("| ");
+			if (data->level == GHOST_LOG_ERROR) {
+			      hyp_putsp(GHOST_WHITE_ON_RED);
+			}
 			hyp_putsp((char *)data->data_name);
-			hyp_putsp(":");
-			data->fn(data->data_ptr);
+			if (data->has_data) {
+				hyp_putsp(":");
+				data->fn(data->data_ptr);
+			}
+			if (data->level == GHOST_LOG_ERROR) {
+			      hyp_putsp(GHOST_NORMAL);
+			}
 			hyp_putsp("\n");
 		}
 	}
