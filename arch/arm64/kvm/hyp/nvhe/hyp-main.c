@@ -1297,7 +1297,6 @@ void handle_trap(struct kvm_cpu_context *host_ctxt)
 	GHOST_LOG(cpu, u64);
 
 	ghost_clear_call_data();
-	bool new_state_computed=false;
 	_Bool check_this_transition=false;
 	if (GHOST_EXEC_SPEC && READ_ONCE(pkvm_init_finalized)) {
 		clear_abstraction_thread_local();
