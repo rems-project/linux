@@ -18,8 +18,7 @@
 
 
 
-_Bool pkvm_prot_finalized_cpu[NR_CPUS];
-_Bool pkvm_prot_finalized_all=false;
+_Bool pkvm_init_finalized=false;
 DEFINE_HYP_SPINLOCK(ghost_prot_finalized_lock);
 
 
@@ -651,7 +650,7 @@ void compute_new_abstract_state_handle___pkvm_init_vm(struct ghost_state *g1, st
 	// In the implementation, insert_vm_table_entry() may return -EINVAL,
 	// if during the init of pKVM vm_table could not allocated,
 	// so these ghost compute functions are only valid if properly initialised
-	ghost_assert(READ_ONCE(pkvm_prot_finalized_all));
+	ghost_assert(READ_ONCE(pkvm_init_finalized));
 	
 	// if we've already allocated KVM_MAX_PVMS VMs, then fail with -ENOMEM
 	struct ghost_vm *vm1 = ghost_vms_alloc(&g1->vms, handle);

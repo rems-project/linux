@@ -359,12 +359,6 @@ void __noreturn __pkvm_init_finalise(void)
 	int ret;
 
 	// GHOST
-	int i;
-	// mark all CPUs as not yet finished __pkvm_prot_finalize
-	//hyp_spin_lock(ghost_prot_finalized_lock); // no need for this here
-	for (i=0; i<NR_CPUS; i++)
-		pkvm_prot_finalized_cpu[i]=false;
-	//hyp_spin_unlock(ghost_prot_finalized_lock);
 	// register the debug output
 	ghost_extra_debug_initialised = true;
 	// dump some mappings
@@ -412,6 +406,12 @@ void __noreturn __pkvm_init_finalise(void)
 		goto out;
 
 	pkvm_hyp_vm_table_init(vm_table_base);
+			
+	// GHOST
+	init_abstraction_common();
+	record_abstraction_common();
+	WRITE_ONCE(pkvm_init_finalized, true);
+	// /GHOST
 
 out:
 	/*

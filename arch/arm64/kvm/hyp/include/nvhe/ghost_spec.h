@@ -393,10 +393,9 @@ struct ghost_transition {
 
 // top-level spec ghost state
 
-// whether each CPU has finished its __pkvm_prot_finalize
-extern hyp_spinlock_t ghost_prot_finalized_lock;
-extern _Bool pkvm_prot_finalized_cpu[NR_CPUS];
-extern _Bool pkvm_prot_finalized_all;
+// whether __pkvm_init is finished.
+extern _Bool pkvm_init_finalized;
+
 // TODO: do we need more synchronisation for accesses to the last of those?
 
 
