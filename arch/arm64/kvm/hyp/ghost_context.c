@@ -103,6 +103,7 @@ void ghost_log_context_log(const char *s, enum ghost_log_level level)
 	i = frame->nr_attached_data++;
 
 	ctx_data = &frame->data[i];
+	ctx_data->data_name = s;
 	ctx_data->level = level;
 	ctx_data->has_data = false;
 
@@ -157,16 +158,10 @@ void ghost_log_context_traceback(void)
 			struct ghost_context_data *data = &frame->data[d];
 			indent(i*4);
 			hyp_putsp("| ");
-			if (data->level == GHOST_LOG_ERROR) {
-			      hyp_putsp(GHOST_WHITE_ON_RED);
-			}
 			hyp_putsp((char *)data->data_name);
 			if (data->has_data) {
 				hyp_putsp(":");
 				data->fn(data->data_ptr);
-			}
-			if (data->level == GHOST_LOG_ERROR) {
-			      hyp_putsp(GHOST_NORMAL);
 			}
 			hyp_putsp("\n");
 		}

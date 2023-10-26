@@ -10,7 +10,8 @@
 typedef void (*ghost_printer_fn)(void *data);
 
 enum ghost_log_level {
-	GHOST_LOG_TRACE,
+	GHOST_LOG_TRACE = 0,
+	GHOST_LOG_INFO,
 	GHOST_LOG_ERROR
 };
 
@@ -49,5 +50,8 @@ void ghost_log_context_traceback(void);
 
 #define GHOST_WARN(msg) \
 	ghost_log_context_log(msg, GHOST_LOG_ERROR)
+
+#define GHOST_INFO(msg) \
+	ghost_log_context_log(msg, GHOST_LOG_INFO)
 
 #endif /* GHOST_CONTEXT_H */

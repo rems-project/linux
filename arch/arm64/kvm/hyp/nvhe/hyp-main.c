@@ -41,6 +41,7 @@ static DEFINE_PER_CPU(struct user_fpsimd_state, loaded_host_fpsimd_state);
 #include <nvhe/ghost_control.h>
 #include <nvhe/ghost_spec.h>
 #include <nvhe/ghost_compute_abstraction.h>
+#include <nvhe/ghost_context.h>
 #pragma GCC diagnostic ignored "-Wdeclaration-after-statement"
 // /GHOST
 
@@ -1194,6 +1195,11 @@ static void handle_host_hcall(struct kvm_cpu_context *host_ctxt)
 	id -= KVM_HOST_SMCCC_ID(0);
 
 	// GHOST
+	char *hcall_name = (char*)ghost_host_hcall_string[id];
+	GHOST_LOG_CONTEXT_ENTER();
+	GHOST_LOG(id, u64);
+	GHOST_LOG(hcall_name, str);
+
 
 	_Bool b;
 	_Bool ghost_dump = ghost_control.dump_handle_host_hcall;
@@ -1203,7 +1209,7 @@ static void handle_host_hcall(struct kvm_cpu_context *host_ctxt)
 		hyp_puti(i);
 		hyp_putsp(GHOST_WHITE_ON_BLUE);
 		hyp_putsxn("handle_host_hcall id",id,64);
-		hyp_putsp((char*)ghost_host_hcall_string[id]);
+		hyp_putsp(hcall_name);
 		hyp_putsp(GHOST_NORMAL);
 		hyp_putc('\n');
 	}
@@ -1337,6 +1343,9 @@ void handle_trap(struct kvm_cpu_context *host_ctxt)
 	u64 esr = read_sysreg_el2(SYS_ESR);
 	switch (ESR_ELx_EC(esr)) {
 	case ESR_ELx_EC_HVC64:
+		// GHOST
+		GHOST_INFO("HVC64");
+		// /GHOST
 		handle_host_hcall(host_ctxt);
 		break;
 	case ESR_ELx_EC_SMC64:
@@ -1357,6 +1366,7 @@ void handle_trap(struct kvm_cpu_context *host_ctxt)
 	case ESR_ELx_EC_IABT_LOW:
 	case ESR_ELx_EC_DABT_LOW:
 		// GHOST
+		GHOST_INFO("IABT/DABT");
 		if (ghost_control.dump_handle_trap) 
 			hyp_putsp(GHOST_WHITE_ON_BLUE "handle_host_mem_abort" GHOST_NORMAL "\n");
 		// /GHOST
@@ -1370,5 +1380,6 @@ void handle_trap(struct kvm_cpu_context *host_ctxt)
 	if (check_this_transition) {
 		ghost_handle_trap_epilogue(host_ctxt, /*from_host*/true);
 	}
+	GHOST_LOG_CONTEXT_EXIT();
 	// /GHOST
 }
