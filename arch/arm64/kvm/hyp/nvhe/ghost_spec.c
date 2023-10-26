@@ -565,9 +565,10 @@ bool ghost_hyp_check_host_shared_mem(struct ghost_state *g, host_va_t from, host
 	return true;
 }
 
-static bool ghost_map_donated_memory(struct ghost_state *g, host_ipa_t host_ipa, size_t size_in_bytes)
+
+static bool ghost_map_donated_memory_checkonly(struct ghost_state *g, host_ipa_t host_ipa, size_t size_in_bytes)
 {
-	phys_addr_t phys_addr = phys_of_host_ipa(host_ipa); // TODO: have some macro
+	phys_addr_t phys_addr = phys_of_host_ipa(host_ipa);
 	u64 hyp_virt = (u64)ghost__hyp_va(g, phys_addr);
 	u64 nr_pages = PAGE_ALIGN((u64)size_in_bytes) >> PAGE_SHIFT;
 
@@ -580,6 +581,14 @@ static bool ghost_map_donated_memory(struct ghost_state *g, host_ipa_t host_ipa,
 		if (mapping_in_domain(hyp_virt, g->pkvm.pkvm_abstract_pgtable.mapping))
 			return false;
 	}
+	return true;
+}
+
+static void ghost_map_donated_memory_nocheck(struct ghost_state *g, host_ipa_t host_ipa, size_t size_in_bytes)
+{
+	phys_addr_t phys_addr = phys_of_host_ipa(host_ipa);
+	u64 hyp_virt = (u64)ghost__hyp_va(g, phys_addr);
+	u64 nr_pages = PAGE_ALIGN((u64)size_in_bytes) >> PAGE_SHIFT;
 
 	mapping_move(
 		&g->host.host_abstract_pgtable_annot,
@@ -596,7 +605,6 @@ static bool ghost_map_donated_memory(struct ghost_state *g, host_ipa_t host_ipa,
 			mapping_singleton(hyp_virt, nr_pages,
 				maplet_target_mapped_ext(phys_addr, PKVM_PAGE_OWNED, hyp_arch_prot)))
 	);
-	return true;
 }
 
 // TODO: duplicating pkvm_get_hyp_vm_size() because it is static (in arch/arm64/kvm/hyp/nvhe/pkvm.c)
@@ -678,47 +686,46 @@ void compute_new_abstract_state_handle___pkvm_init_vm(struct ghost_state *g1, st
 		goto out;
 	}
 
-	if (!ghost_map_donated_memory(g1, vm_host_ipa, vm_size)) {
+	// NOTE: to avoid having to do the equivalent of any unmap_donated_memory() in
+	// the spec, we group the checks and we then do the three mapping updates
+	// only if all of their checks succeeded.
+	if (!ghost_map_donated_memory_checkonly(g1, vm_host_ipa, vm_size)) {
 		ret = -ENOMEM;
 		goto out;
 	}
-	if (!ghost_map_donated_memory(g1, last_ran_host_ipa, last_ran_size)) {
+	if (!ghost_map_donated_memory_checkonly(g1, last_ran_host_ipa, last_ran_size)) {
 		ret = -ENOMEM;
 		goto out;
 	}
-	if (!ghost_map_donated_memory(g1, pgd_host_ipa, pgd_size)) {
+	if (!ghost_map_donated_memory_checkonly(g1, pgd_host_ipa, pgd_size)) {
 		ret = -ENOMEM;
 		goto out;
 	}
 
+	ghost_map_donated_memory_nocheck(g1, vm_host_ipa, vm_size);
+	ghost_map_donated_memory_nocheck(g1, last_ran_host_ipa, last_ran_size);
+	ghost_map_donated_memory_nocheck(g1, pgd_host_ipa, pgd_size);
+
 	g1->vms.present = true;
-	// struct ghost_vm vm = (struct ghost_vm) {
-	// 	.pkvm_handle = handle,
-	// 	.nr_vcpus = nr_vcpus,
-	// 	// NOTE: this sets the .loaded fields of all the elements
-	// 	// of the array to false
-	// 	.vcpus = {0},
-	// 	// NOTE: we expect the VM's page table to be place at the beginning
-	// 	// of the first page of the memory region donated by the host
-	// 	// for that purpose
-	// 	.vm_abstract_pgtable = { .mapping= mapping_empty_() },
-	// };
-	vm1->pkvm_handle = handle;
-	vm1->nr_vcpus = nr_vcpus;
-	// NOTE: this sets the .loaded fields of all the elements
-	// of the array to false
-	memset(vm1->vcpus, 0, sizeof(struct ghost_vcpu[KVM_MAX_VCPUS]));
 
 	// NOTE: we expect the VM's page table to be place at the beginning
 	// of the first page of the memory region donated by the host
 	// for that purpose
 	ghost_pfn_set_init(&vm1->vm_abstract_pgtable.table_pfns, pgd_phys, pgd_phys + pgd_size);
 	vm1->vm_abstract_pgtable.mapping = mapping_empty_();
+	vm1->nr_vcpus = nr_vcpus;
+	vm1->nr_initialised_vcpus = 0;
+	// NOTE: this sets the .loaded fields of all the elements
+	// of the array to false
+	memset(vm1->vcpus, 0, sizeof(struct ghost_vcpu[KVM_MAX_VCPUS]));
+	vm1->pkvm_handle = handle;
+	ghost_lock_vms_table();
+	vm1->lock = ghost_pointer_to_vm_lock(handle);
+	ghost_unlock_vms_table();
 
-	// ghost_vm_clone_into(vm1, &vm);
 	ret = handle;
 out:
-	ghost_reg_gpr(g1, 1) = 0;
+	ghost_reg_gpr(g1, 1) = ret;
 }
 
 void compute_new_abstract_state_handle_host_hcall(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call, bool *new_state_computed)
