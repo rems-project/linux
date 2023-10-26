@@ -376,9 +376,9 @@ void check_abstraction_equals_all(struct ghost_state *gc, struct ghost_state *gr
 
 	// check that a bunch of global state bits, that 'in theory' should be constant, really didn't change.
 	ghost_spec_assert(
-		   gc->hyp_physvirt_offset == gr_post->hyp_physvirt_offset
-		&& gc->tag_lsb == gr_post->tag_lsb
-		&& gc->tag_val == gr_post->tag_val
+		   gc->globals.hyp_physvirt_offset == gr_post->globals.hyp_physvirt_offset
+		&& gc->globals.tag_lsb == gr_post->globals.tag_lsb
+		&& gc->globals.tag_val == gr_post->globals.tag_val
 	);
 
 	check_abstraction_equals_hyp_memory(gc, gr_post);
@@ -487,9 +487,9 @@ void copy_abstraction_regs(struct ghost_state *g_tgt, struct ghost_state *g_src)
 
 void copy_abstraction_constants(struct ghost_state *g_tgt, struct ghost_state *g_src)
 {
-	g_tgt->hyp_physvirt_offset = g_src->hyp_physvirt_offset;
-	g_tgt->tag_lsb = g_src->tag_lsb;
-	g_tgt->tag_val = g_src->tag_val;
+	g_tgt->globals.hyp_physvirt_offset = g_src->globals.hyp_physvirt_offset;
+	g_tgt->globals.tag_lsb = g_src->globals.tag_lsb;
+	g_tgt->globals.tag_val = g_src->globals.tag_val;
 }
 
 void copy_abstraction_hyp_memory(struct ghost_state *g_tgt, struct ghost_state *g_src)
@@ -696,9 +696,9 @@ u64 tag_val;
 
 void record_abstraction_constants(struct ghost_state *g)
 {
-	g->hyp_physvirt_offset = hyp_physvirt_offset;
-	g->tag_lsb = tag_lsb;
-	g->tag_val = tag_val;
+	g->globals.hyp_physvirt_offset = hyp_physvirt_offset;
+	g->globals.tag_lsb = tag_lsb;
+	g->globals.tag_val = tag_val;
 }
 
 void record_abstraction_constants_pre(void)

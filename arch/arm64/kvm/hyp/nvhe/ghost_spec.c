@@ -40,7 +40,7 @@ void ghost_clear_call_data(void)
 
 
 // adapted from memory.h to make it a pure function of the ghost state rather than depend on the impl global hyp_phys_virt_offset
-#define ghost__hyp_va(g,phys)	((void *)((phys_addr_t)(phys) - g->hyp_physvirt_offset))
+#define ghost__hyp_va(g,phys)	((void *)((phys_addr_t)(phys) - g->globals.hyp_physvirt_offset))
 
 // type of pKVM virtual addresses
 typedef u64 hyp_va_t;
@@ -57,12 +57,12 @@ typedef u64 guest_ipa_t;
 // THAT IS: memstart_addr <= phys && phys < memstart_addr + 2^tag_lsb
 static inline hyp_va_t hyp_va_of_phys(const struct ghost_state *g, phys_addr_t phys)
 {
-	return phys - g->hyp_physvirt_offset;
+	return phys - g->globals.hyp_physvirt_offset;
 }
 
 static inline phys_addr_t phys_of_hyp_va(const struct ghost_state *g, hyp_va_t hyp_va)
 {
-	return hyp_va - g->hyp_physvirt_offset;
+	return hyp_va - g->globals.hyp_physvirt_offset;
 }
 
 // the Host stage 2 mapping is the identity mapping
@@ -81,8 +81,8 @@ static inline phys_addr_t phys_of_hyp_va(const struct ghost_state *g, hyp_va_t h
 // I.E. do NOT expect: phys_of_hyp_va(hyp_va_of_host_va(ADDR)) == AArch64.TranslateAddress(ADDR) in EL1&0 Regime
 static inline hyp_va_t hyp_va_of_host_va(const struct ghost_state *g, host_va_t host_va)
 {
-	u64 va_mask = GENMASK_ULL(g->tag_lsb - 1, 0);;
-	return (host_va & va_mask) | (g->tag_val << g->tag_lsb);
+	u64 va_mask = GENMASK_ULL(g->globals.tag_lsb - 1, 0);
+	return (host_va & va_mask) | (g->globals.tag_val << g->globals.tag_lsb);
 }
 
 // adapted from mem_protect.c to use the hyp_memory map
