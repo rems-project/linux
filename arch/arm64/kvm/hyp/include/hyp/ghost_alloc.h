@@ -13,4 +13,6 @@ void g_free(void *p);
 #define malloc(s) g_malloc(s)
 #define free(p) g_free(p)
 
+void *malloc_or_die(size_t s);
+
 #endif

@@ -1,5 +1,6 @@
 #include <nvhe/pkvm.h>
 #include <hyp/ghost_alloc.h>
+#include <asm-generic/bug.h>
 
 /*
  * The allocator keeps an array of free lists, each one containing blocks with
@@ -133,4 +134,10 @@ void g_free(void *p) {
 	hyp_spin_lock(&lock);
 	__g_free(p);
 	hyp_spin_unlock(&lock);
+}
+
+void *malloc_or_die(size_t s) {
+	void *p = g_malloc(s);
+	BUG_ON(!p);
+	return p;
 }

@@ -163,10 +163,7 @@ struct ghost_vm *ghost_vms_alloc(struct ghost_vms *vms, pkvm_handle_t handle)
 	ghost_assert_vms_table_locked();
 	struct ghost_vm_slot *slot = __ghost_vm_or_free_slot_from_handle(vms, handle);
 	if (!slot->exists) {
-		if (!(slot->vm = malloc(sizeof(struct ghost_vm)))) {
-			hyp_puts("ghost malloc failed\n");
-			ghost_assert(false);
-		}
+		slot->vm = malloc_or_die(sizeof(struct ghost_vm));
 		return slot->vm;
 	}
 
