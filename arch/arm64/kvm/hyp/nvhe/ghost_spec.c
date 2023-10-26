@@ -826,7 +826,7 @@ void ghost_handle_trap_epilogue(struct kvm_cpu_context *host_ctxt, bool from_hos
 	record_abstraction_regs_post(host_ctxt);
 	record_abstraction_constants_post();
 	// compute the new spec abstract state
-	this_cpu_ptr(&gs_call_data)->return_value = cpu_reg(host_ctxt, 0);
+	this_cpu_ptr(&gs_call_data)->return_value = cpu_reg(host_ctxt, 1);
 	compute_new_abstract_state_handle_trap(this_cpu_ptr(&gs_computed_post), this_cpu_ptr(&gs_recorded_pre), this_cpu_ptr(&gs_call_data), &new_state_computed);
 	// and check the two are equal on relevant components
 	if (new_state_computed)
