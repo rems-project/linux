@@ -61,45 +61,35 @@ static bool range_equal(struct pfn_set *lhs, struct pfn_set *rhs)
 	        && (lhs->pool_range_end   == rhs->pool_range_end));
 }
 
-bool ghost_pfn_set_equal(struct pfn_set *lhs, struct pfn_set *rhs)
+void ghost_pfn_set_assert_equal(struct pfn_set *lhs, struct pfn_set *rhs)
 {
-	bool ret;
 	GHOST_LOG_CONTEXT_ENTER();
-	ret = (
-		   ghost_pfn_set_subseteq(lhs, rhs)
-		&& ghost_pfn_set_subseteq(rhs, lhs)
-	);
+	ghost_pfn_set_assert_subseteq(lhs, rhs);
+	ghost_pfn_set_assert_subseteq(rhs, lhs);
 	GHOST_LOG_CONTEXT_EXIT();
-	return ret;
 }
 
-bool ghost_pfn_set_subseteq(struct pfn_set *lhs, struct pfn_set *rhs)
+static void print_set(void *set)
 {
-	bool ret, all_external_pfns_contained;
+	struct pfn_set *s = *(struct pfn_set**)set;
+	ghost_pfn_set_dump(s);
+}
+
+void ghost_pfn_set_assert_subseteq(struct pfn_set *lhs, struct pfn_set *rhs)
+{
 	GHOST_LOG_CONTEXT_ENTER();
 
-	if (!range_equal(lhs, rhs)) {
-		ret = false;
-		goto out;
-	}
+	GHOST_LOG_P(lhs, print_set);
+	GHOST_LOG_P(rhs, print_set);
 
-	if (lhs->len != rhs->len) {
-		ret = false;
-		goto out;
-	}
+	ghost_spec_assert(range_equal(lhs, rhs));
+	ghost_spec_assert(lhs->len == rhs->len);
 
-	all_external_pfns_contained = true;
 	for (int i=0; i<lhs->len; i++) {
-		if (!ghost_pfn_set_contains(rhs, lhs->external_pfns[i])) {
-			ret = false;
-			goto out;
-		}
+		ghost_spec_assert(ghost_pfn_set_contains(rhs, lhs->external_pfns[i]));
 	}
 
-	ret = true;
-out:
 	GHOST_LOG_CONTEXT_EXIT();
-	return ret;
 }
 
 void ghost_pfn_set_clear(struct pfn_set *set)

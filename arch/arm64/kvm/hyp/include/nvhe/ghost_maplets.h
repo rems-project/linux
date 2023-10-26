@@ -165,6 +165,7 @@ mapping mapping_nonannot(mapping map);
 
 bool mapping_submapping(mapping map1, mapping map2, char *s, char *s1, char *s2, u64 indent);
 bool mapping_equal(mapping map1, mapping map2, char *s, char *s1, char *s2, u64 indent);
+void check_mapping_equal(mapping map1, mapping map2);
 bool mapping_disjoint(mapping map1, mapping map2, char *s, char *s1, char *s2, u64 indent);
 bool mapping_in_domain(u64 virt, mapping map);
 bool mapping_lookup(u64 virt, mapping map, struct maplet_target *tp);

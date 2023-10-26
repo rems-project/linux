@@ -50,6 +50,8 @@
 #include <nvhe/spinlock.h>   // no idea whether this will work - probably not
 #include <asm/kvm_pgtable.h>
 #include <nvhe/mem_protect.h>
+#include <nvhe/ghost_asserts.h>
+#include <nvhe/ghost_context.h>
 
 
 
@@ -362,6 +364,12 @@ void hyp_put_maplet(struct maplet *maplet, u64 i)
 	}
 }
 
+void hyp_put_mapletptr(void *d)
+{
+	struct maplet *m = *(struct maplet**)d;
+	hyp_put_maplet(m, 0);
+}
+
 void hyp_put_mapping(struct glist_head head, u64 i)
 {
         struct glist_node *pos = NULL;
@@ -523,6 +531,51 @@ hyp_putsp(GHOST_NORMAL);
 	return true;
 }
 
+void check_interpret_equals(struct glist_head head1, struct glist_head head2, u64 i)
+{
+	struct glist_node *pos1, *pos2;
+	struct maplet *m1, *m2;
+
+	ghost_assert_maplets_locked();
+	GHOST_LOG_CONTEXT_ENTER();
+
+	if (glist_empty(&head1) && glist_empty(&head2))
+		goto out;
+
+	if (glist_empty(&head1) || glist_empty(&head2)) {
+		if (glist_empty(&head1))
+			GHOST_WARN("check_interpret_equals mismatch first empty");
+		else
+			GHOST_WARN("check_interpret_equals mismatch second empty");
+		ghost_spec_assert(false);
+	}
+
+	for ( (pos1 = head1.first, pos2 = head2.first);
+	      (pos1 != NULL && pos2 != NULL);
+	      (pos1 = pos1->next, pos2=pos2->next) ) {
+		      m1 = glist_entry(pos1, struct maplet, list);
+		      m2 = glist_entry(pos2, struct maplet, list);
+		      if ( !(maplet_eq_nonattr(m1, m2)) ) {
+			      hyp_puti(i);
+			      hyp_putsp(GHOST_WHITE_ON_RED);
+			      GHOST_LOG(m1->virt, u64);
+			      GHOST_LOG(m2->virt, u64);
+			      GHOST_LOG_P(m1, hyp_put_mapletptr);
+			      GHOST_LOG_P(m2, hyp_put_mapletptr);
+			      GHOST_WARN("interpret_equals mismatch at virt1");
+		      }
+        }
+
+	if (! (pos1 == NULL && pos2 == NULL)) {
+		GHOST_LOG(pos1, u64);
+		GHOST_LOG(pos2, u64);
+		GHOST_WARN("interpret_equals mismatch different lengths");
+	}
+
+out:
+	GHOST_LOG_CONTEXT_EXIT();
+}
+
 
 
 /* ****************** maplets diff ****************** */
@@ -586,6 +639,11 @@ bool mapping_equal(struct glist_head head1, struct glist_head head2, char *s, ch
 		hyp_putsp("\n");
 		return false;
 	}
+}
+
+void check_mapping_equal(mapping map1, mapping map2)
+{
+	check_interpret_equals((struct glist_head)map1, (struct glist_head)map2, 0);
 }
 
 // check that head1 is a sub-finite-map of head2, i.e.

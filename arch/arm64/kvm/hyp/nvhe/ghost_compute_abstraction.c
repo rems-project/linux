@@ -196,20 +196,24 @@ void compute_abstraction_vm(struct ghost_vm *dest, struct pkvm_hyp_vm *vm) {
 void check_abstract_pgtable_equal(abstract_pgtable *ap1, abstract_pgtable *ap2, char *cmp_name, char* ap1_name, char* ap2_name, u64 indent)
 {
 	GHOST_LOG_CONTEXT_ENTER();
-	ghost_spec_assert(ghost_pfn_set_equal(&ap1->table_pfns, &ap2->table_pfns));
-	ghost_spec_assert(mapping_equal(ap1->mapping, ap2->mapping, cmp_name, ap1_name, ap2_name, indent));
+	GHOST_LOG(cmp_name, str);
+	GHOST_LOG(ap1_name, str);
+	GHOST_LOG(ap2_name, str);
+	ghost_pfn_set_assert_equal(&ap1->table_pfns, &ap2->table_pfns);
+	check_mapping_equal(ap1->mapping, ap2->mapping);
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
 void check_abstraction_equals_hyp_memory(struct ghost_state *g1, struct ghost_state *g2)
 {
-	ghost_spec_assert(
-		mapping_equal(g1->hyp_memory, g2->hyp_memory, "abstraction_equals_hyp_memory", "g1.hyp_memory", "g2.hyp_memory", 4)
-	);
+	GHOST_LOG_CONTEXT_ENTER();
+	check_mapping_equal(g1->hyp_memory, g2->hyp_memory);
+	GHOST_LOG_CONTEXT_EXIT();
 }
 
 void check_abstraction_equals_reg(struct ghost_state *g1, struct ghost_state *g2)
 {
+	GHOST_LOG_CONTEXT_ENTER();
 	u64 i;
 	u64 ghost_el2_regs[] = (u64[])GHOST_EL2_REGS;
 	for (i=0; i<=30; i++)
@@ -217,6 +221,7 @@ void check_abstraction_equals_reg(struct ghost_state *g1, struct ghost_state *g2
 	for (i=0; i<sizeof(ghost_el2_regs)/sizeof(u64); i++)
 		ghost_spec_assert(ghost_reg_el2(g1,ghost_el2_regs[i]) == ghost_reg_el2(g2,ghost_el2_regs[i]));
 	// TODO other regs
+	GHOST_LOG_CONTEXT_EXIT();
 }
 
 void check_abstraction_equals_pkvm(struct ghost_pkvm *gp1, struct ghost_pkvm *gp2)
@@ -233,7 +238,7 @@ void check_abstraction_equals_host(struct ghost_host *gh1, struct ghost_host *gh
 	GHOST_LOG(gh1->present, bool);
 	GHOST_LOG(gh2->present, bool);
 	ghost_assert(gh1->present && gh2->present);
-	ghost_spec_assert(ghost_pfn_set_equal(&gh1->host_pgtable_pages, &gh2->host_pgtable_pages));
+	ghost_pfn_set_assert_equal(&gh1->host_pgtable_pages, &gh2->host_pgtable_pages);
 	ghost_spec_assert(mapping_equal(gh1->host_abstract_pgtable_annot, gh2->host_abstract_pgtable_annot, "abstraction_equals_host", "gh1.host_mapping_annot", "gh2.host_mapping_annot", 4));
 	ghost_spec_assert(mapping_equal(gh1->host_abstract_pgtable_shared, gh2->host_abstract_pgtable_shared, "abstraction_equals_host", "gh1.host_mapping_shared", "gh2.host_mapping_shared", 4));
 	GHOST_LOG_CONTEXT_EXIT();
