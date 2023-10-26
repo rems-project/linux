@@ -265,11 +265,9 @@ void interpret_pgtable_ap(abstract_pgtable *ap_out, kvm_pte_t *pgd, u64 pool_ran
 {
 	ghost_pfn_set_init(&ap_out->table_pfns, pool_range_start, pool_range_end);
 	if (pgd==0) {
-		ap_out->root = 0;
 		ap_out->mapping=mapping_empty_();
 	}
 	else {
-		ap_out->root = hyp_virt_to_phys(pgd);
 		ap_out->mapping=interpret_pgtable(pgd, &ap_out->table_pfns, noisy);
 	}
 }
@@ -397,7 +395,6 @@ void ghost_test(void) {
 
 void abstract_pgtable_copy(abstract_pgtable *dst, abstract_pgtable *src)
 {
-	dst->root = src->root;
 	ghost_pfn_set_copy(&dst->table_pfns, &src->table_pfns);
 	dst->mapping = mapping_copy(src->mapping);
 }

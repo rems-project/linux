@@ -41,7 +41,6 @@ typedef enum entry_kind {
 #define DUMMY_ATTR 0
 
 struct abstract_pgtable_struct {
-	phys_addr_t root;
 	struct pfn_set table_pfns;
 	mapping mapping;
 };

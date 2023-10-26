@@ -701,7 +701,7 @@ void compute_new_abstract_state_handle___pkvm_init_vm(struct ghost_state *g1, st
 	// 	// NOTE: we expect the VM's page table to be place at the beginning
 	// 	// of the first page of the memory region donated by the host
 	// 	// for that purpose
-	// 	.vm_abstract_pgtable = { .root = pgd_phys, .mapping= mapping_empty_() },
+	// 	.vm_abstract_pgtable = { .mapping= mapping_empty_() },
 	// };
 	vm1->pkvm_handle = handle;
 	vm1->nr_vcpus = nr_vcpus;
@@ -712,7 +712,6 @@ void compute_new_abstract_state_handle___pkvm_init_vm(struct ghost_state *g1, st
 	// NOTE: we expect the VM's page table to be place at the beginning
 	// of the first page of the memory region donated by the host
 	// for that purpose
-	vm1->vm_abstract_pgtable.root = pgd_phys;
 	ghost_pfn_set_init(&vm1->vm_abstract_pgtable.table_pfns, pgd_phys, pgd_phys + pgd_size);
 	vm1->vm_abstract_pgtable.mapping = mapping_empty_();
 

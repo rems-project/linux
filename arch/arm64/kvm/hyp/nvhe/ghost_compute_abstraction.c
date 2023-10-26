@@ -216,8 +216,7 @@ void compute_abstraction_vm(struct ghost_vm *dest, struct pkvm_hyp_vm *vm) {
 bool abstract_pgtable_equal(abstract_pgtable *ap1, abstract_pgtable *ap2, char *cmp_name, char* ap1_name, char* ap2_name, u64 indent)
 {
 	return (
-		   ap1->root == ap2->root
-		&& ghost_pfn_set_equal(&ap1->table_pfns, &ap2->table_pfns)
+		   ghost_pfn_set_equal(&ap1->table_pfns, &ap2->table_pfns)
 		&& mapping_equal(ap1->mapping, ap2->mapping, cmp_name, ap1_name, ap2_name, indent)
 	);
 }
