@@ -29,7 +29,6 @@ hyp-obj-$(CONFIG_DEBUG_LIST) += list_debug.o
 hyp-obj-y += $(lib-objs)
 
 # GHOST
-# this should be made conditional on whether the ghost code is being used
 ghosts += ../ghost_extra_debug-pl011.o
 ghosts += ghost_mapping_reqs.o
 ghosts += ghost_misc.o
@@ -45,7 +44,7 @@ ghosts += ghost_compute_abstraction.o
 ghosts += ghost_spec.o
 ghosts += ../ghost_alloc.o
 
-hyp-obj-y += $(ghosts)
+hyp-obj-$(CONFIG_NVHE_GHOST_SPEC) += $(ghosts)
 # /GHOST
 
 ##

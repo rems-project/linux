@@ -82,6 +82,16 @@ config PROTECTED_NVHE_STACKTRACE
 
 	  If unsure, or not using protected nVHE (pKVM), say N.
 
+config NVHE_GHOST_SPEC
+	bool "A ghost haunts nVHE EL2"
+	depends on KVM
+	default n
+	select NVHE_EL2_DEBUG
+	select PROTECTED_NVHE_STACKTRACE
+	select KVM_ARM_HYP_DEBUG_UART
+	help
+	  And it's watching you.
+
 config KVM_ARM_HYP_DEBUG_UART
 	bool "Hack up some basic UART functionality at EL2"
 
