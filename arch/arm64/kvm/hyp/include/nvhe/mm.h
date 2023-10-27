@@ -21,22 +21,23 @@ int hyp_create_idmap(u32 hyp_va_bits);
 int hyp_map_vectors(void);
 int hyp_back_vmemmap(phys_addr_t back);
 int pkvm_cpu_set_vector(enum arm64_hyp_spectre_vector slot);
-int pkvm_create_mappings(void *from, void *to, enum kvm_pgtable_prot prot);
-int pkvm_create_mappings_locked(void *from, void *to, enum kvm_pgtable_prot prot);
-
 #ifdef CONFIG_NVHE_GHOST_SPEC
-
 #include <nvhe/ghost_mapping_reqs.h>
-int pkvm_create_mappings_ghost(void *from, void *to, enum kvm_pgtable_prot prot, enum mapping_req_kind kind, u64 cpu);
-int __pkvm_create_private_mapping_ghost(phys_addr_t phys, size_t size,
-					enum kvm_pgtable_prot prot,unsigned long *haddr, enum mapping_req_kind kind);
+int pkvm_create_mappings(void *from, void *to, enum kvm_pgtable_prot prot, enum mapping_req_kind kind, u64 cpu);
 #else /* CONFIG_NVHE_GHOST_SPEC */
-
+int pkvm_create_mappings(void *from, void *to, enum kvm_pgtable_prot prot);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
+int pkvm_create_mappings_locked(void *from, void *to, enum kvm_pgtable_prot prot);
+#ifdef CONFIG_NVHE_GHOST_SPEC
+int __pkvm_create_private_mapping(phys_addr_t phys, size_t size,
+				  enum kvm_pgtable_prot prot,
+				  unsigned long *haddr,
+				  enum mapping_req_kind kind);
+#else /* CONFIG_NVHE_GHOST_SPEC */
 int __pkvm_create_private_mapping(phys_addr_t phys, size_t size,
 				  enum kvm_pgtable_prot prot,
 				  unsigned long *haddr);
 #endif /* CONFIG_NVHE_GHOST_SPEC */
-
 int pkvm_alloc_private_va_range(size_t size, unsigned long *haddr);
 
 #endif /* __KVM_HYP_MM_H */

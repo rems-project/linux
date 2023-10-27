@@ -39,37 +39,27 @@ struct hyp_fixmap_slot {
 };
 static DEFINE_PER_CPU(struct hyp_fixmap_slot, fixmap_slots);
 
-#ifdef CONFIG_NVHE_GHOST_SPEC
-
-static int __pkvm_create_mappings_ghost(unsigned long start, unsigned long size,
-					unsigned long phys, enum kvm_pgtable_prot prot, enum mapping_req_kind kind)
-{
-	int err;
-
-	hyp_spin_lock(&pkvm_pgd_lock);
-	err = kvm_pgtable_hyp_map(&pkvm_pgtable, start, size, phys, prot);
-	if (!err) {
-		ghost_record_mapping_req(start, size, phys, prot, kind);
-	}
-	hyp_spin_unlock(&pkvm_pgd_lock);
-
-	return err;
-}
-
-#else
-
 static int __pkvm_create_mappings(unsigned long start, unsigned long size,
+#ifdef CONFIG_NVHE_GHOST_SPEC
+				  unsigned long phys, enum kvm_pgtable_prot prot, enum mapping_req_kind kind)
+#else /* CONFIG_NVHE_GHOST_SPEC */
 				  unsigned long phys, enum kvm_pgtable_prot prot)
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 {
 	int err;
 
 	hyp_spin_lock(&pkvm_pgd_lock);
 	err = kvm_pgtable_hyp_map(&pkvm_pgtable, start, size, phys, prot);
+
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	if (!err)
+		ghost_record_mapping_req(start, size, phys, prot, kind);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
+
 	hyp_spin_unlock(&pkvm_pgd_lock);
 
 	return err;
 }
-#endif /* CONFIG_NVHE_GHOST_SPEC */
 
 /**
  * pkvm_alloc_private_va_range - Allocates a private VA range.
@@ -107,33 +97,14 @@ int pkvm_alloc_private_va_range(size_t size, unsigned long *haddr)
 	return ret;
 }
 
-#ifdef CONFIG_NVHE_GHOST_SPEC
-
-int __pkvm_create_private_mapping_ghost(phys_addr_t phys, size_t size,
-				  enum kvm_pgtable_prot prot,
-					unsigned long *haddr,
-					/*GHOST*/enum mapping_req_kind kind)
-{
-	unsigned long addr;
-	int err;
-
-	size = PAGE_ALIGN(size + offset_in_page(phys));
-	err = pkvm_alloc_private_va_range(size, &addr);
-	if (err)
-		return err;
-
-	err = __pkvm_create_mappings_ghost(addr, size, phys, prot, kind);
-	if (err)
-		return err;
-
-	*haddr = addr + offset_in_page(phys);
-	return err;
-}
-#else
-
 int __pkvm_create_private_mapping(phys_addr_t phys, size_t size,
 				  enum kvm_pgtable_prot prot,
+#ifdef CONFIG_NVHE_GHOST_SPEC
+					unsigned long *haddr,
+					enum mapping_req_kind kind)
+#else /* CONFIG_NVHE_GHOST_SPEC */
 				  unsigned long *haddr)
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 {
 	unsigned long addr;
 	int err;
@@ -143,15 +114,17 @@ int __pkvm_create_private_mapping(phys_addr_t phys, size_t size,
 	if (err)
 		return err;
 
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	err = __pkvm_create_mappings(addr, size, phys, prot, kind);
+#else /* CONFIG_NVHE_GHOST_SPEC */
 	err = __pkvm_create_mappings(addr, size, phys, prot);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	if (err)
 		return err;
 
 	*haddr = addr + offset_in_page(phys);
 	return err;
 }
-
-#endif /* CONFIG_NVHE_GHOST_SPEC */
 
 int pkvm_create_mappings_locked(void *from, void *to, enum kvm_pgtable_prot prot)
 {
@@ -178,34 +151,25 @@ int pkvm_create_mappings_locked(void *from, void *to, enum kvm_pgtable_prot prot
 	return 0;
 }
 
-int pkvm_create_mappings(void *from, void *to, enum kvm_pgtable_prot prot)
-{
-	int ret;
-
-	hyp_spin_lock(&pkvm_pgd_lock);
-	ret = pkvm_create_mappings_locked(from, to, prot);
-	hyp_spin_unlock(&pkvm_pgd_lock);
-
-	return ret;
-}
-
 #ifdef CONFIG_NVHE_GHOST_SPEC
-int pkvm_create_mappings_ghost(void *from, void *to, enum kvm_pgtable_prot prot
-			, enum mapping_req_kind kind, u64 cpu
-			)
+int pkvm_create_mappings(void *from, void *to, enum kvm_pgtable_prot prot,
+			 enum mapping_req_kind kind, u64 cpu)
+#else /* CONFIG_NVHE_GHOST_SPEC */
+int pkvm_create_mappings(void *from, void *to, enum kvm_pgtable_prot prot)
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 {
 	int ret;
 
 	hyp_spin_lock(&pkvm_pgd_lock);
 	ret = pkvm_create_mappings_locked(from, to, prot);
-	if (!ret) {
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	if (!ret)
 		ghost_record_mapping_req_virt(from, to, prot, kind, cpu);
-	}
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_spin_unlock(&pkvm_pgd_lock);
 
 	return ret;
 }
-#endif /* CONFIG_NVHE_GHOST_SPEC */
 
 int hyp_back_vmemmap(phys_addr_t back)
 {
@@ -229,7 +193,7 @@ int hyp_back_vmemmap(phys_addr_t back)
 
 		size = end - start;
 #ifdef CONFIG_NVHE_GHOST_SPEC
-		ret = __pkvm_create_mappings_ghost(start, size, back, PAGE_HYP, HYP_VMEMMAP);
+		ret = __pkvm_create_mappings(start, size, back, PAGE_HYP, HYP_VMEMMAP);
 #else
 		ret = __pkvm_create_mappings(start, size, back, PAGE_HYP);
 #endif /* CONFIG_NVHE_GHOST_SPEC */
@@ -285,7 +249,7 @@ int hyp_map_vectors(void)
 
 	phys = __hyp_pa(__bp_harden_hyp_vecs);
 #ifdef CONFIG_NVHE_GHOST_SPEC
-	ret = __pkvm_create_private_mapping_ghost(phys, __BP_HARDEN_HYP_VECS_SZ,
+	ret = __pkvm_create_private_mapping(phys, __BP_HARDEN_HYP_VECS_SZ,
 						PAGE_HYP_EXEC, &bp_base, HYP_BP_HARDEN_HYP_VECS);
 #else
 	ret = __pkvm_create_private_mapping(phys, __BP_HARDEN_HYP_VECS_SZ,
@@ -418,7 +382,7 @@ int hyp_create_idmap(u32 hyp_va_bits)
 	__hyp_vmemmap = __io_map_base | BIT(hyp_va_bits - 3);
 
 #ifdef CONFIG_NVHE_GHOST_SPEC
-	return __pkvm_create_mappings_ghost(start, end - start, start, PAGE_HYP_EXEC, HYP_IDMAP);
+	return __pkvm_create_mappings(start, end - start, start, PAGE_HYP_EXEC, HYP_IDMAP);
 #else
 	return __pkvm_create_mappings(start, end - start, start, PAGE_HYP_EXEC);
 #endif /* CONFIG_NVHE_GHOST_SPEC */

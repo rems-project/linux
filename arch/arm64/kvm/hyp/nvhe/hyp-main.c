@@ -1021,7 +1021,7 @@ static void handle___pkvm_create_private_mapping(struct kvm_cpu_context *host_ct
 	 */
 	unsigned long haddr;
 #ifdef CONFIG_NVHE_GHOST_SPEC
-	int err = __pkvm_create_private_mapping_ghost(phys, size, prot, &haddr, HYP_HCALL);
+	int err = __pkvm_create_private_mapping(phys, size, prot, &haddr, HYP_HCALL);
 #else /* CONFIG_NVHE_GHOST_SPEC */
 	int err = __pkvm_create_private_mapping(phys, size, prot, &haddr);
 #endif /* CONFIG_NVHE_GHOST_SPEC */

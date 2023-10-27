@@ -41,11 +41,10 @@ static int create_hyp_debug_uart_mapping(void)
 {
 	phys_addr_t base = CONFIG_KVM_ARM_HYP_DEBUG_UART_ADDR;
 
+	return __pkvm_create_private_mapping(base, PAGE_SIZE, PAGE_HYP_DEVICE,
 #ifdef CONFIG_NVHE_GHOST_SPEC
-	return __pkvm_create_private_mapping_ghost(base, PAGE_SIZE, PAGE_HYP_DEVICE,
 					           &arm64_kvm_hyp_debug_uart_addr, HYP_UART);
 #else
-	return __pkvm_create_private_mapping(base, PAGE_SIZE, PAGE_HYP_DEVICE,
 					           &arm64_kvm_hyp_debug_uart_addr);
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 }
@@ -65,6 +64,7 @@ static void *vm_table_base;
 static void *hyp_pgt_base;
 static void *host_s2_pgt_base;
 #endif /* CONFIG_NVHE_GHOST_SPEC */
+
 static struct kvm_pgtable_mm_ops pkvm_pgtable_mm_ops;
 static struct hyp_pool hpool;
 
@@ -149,7 +149,7 @@ static int recreate_hyp_mappings(phys_addr_t phys, unsigned long size,
 		return ret;
 
 #ifdef CONFIG_NVHE_GHOST_SPEC
-	ret = pkvm_create_mappings_ghost(__hyp_text_start, __hyp_text_end, PAGE_HYP_EXEC, HYP_TEXT, DUMMY_CPU);
+	ret = pkvm_create_mappings(__hyp_text_start, __hyp_text_end, PAGE_HYP_EXEC, HYP_TEXT, DUMMY_CPU);
 
 	// PS HACK: in principle we should guard the extra ghost arguments with a preprocessor conditional, eg as below. But that's very ugly, so I'll skip for now, and use the _ghost function instead
 	//
@@ -165,7 +165,7 @@ static int recreate_hyp_mappings(phys_addr_t phys, unsigned long size,
 		return ret;
 
 #ifdef CONFIG_NVHE_GHOST_SPEC
-	ret = pkvm_create_mappings_ghost(__hyp_rodata_start, __hyp_rodata_end, PAGE_HYP_RO, HYP_RODATA, DUMMY_CPU);
+	ret = pkvm_create_mappings(__hyp_rodata_start, __hyp_rodata_end, PAGE_HYP_RO, HYP_RODATA, DUMMY_CPU);
 #else
 	ret = pkvm_create_mappings(__hyp_rodata_start, __hyp_rodata_end, PAGE_HYP_RO);
 #endif /* CONFIG_NVHE_GHOST_SPEC */
@@ -173,7 +173,7 @@ static int recreate_hyp_mappings(phys_addr_t phys, unsigned long size,
 		return ret;
 
 #ifdef CONFIG_NVHE_GHOST_SPEC
-	ret = pkvm_create_mappings_ghost(__hyp_bss_start, __hyp_bss_end, PAGE_HYP, HYP_BSS, DUMMY_CPU);
+	ret = pkvm_create_mappings(__hyp_bss_start, __hyp_bss_end, PAGE_HYP, HYP_BSS, DUMMY_CPU);
 #else
 	ret = pkvm_create_mappings(__hyp_bss_start, __hyp_bss_end, PAGE_HYP);
 #endif /* CONFIG_NVHE_GHOST_SPEC */
@@ -181,7 +181,7 @@ static int recreate_hyp_mappings(phys_addr_t phys, unsigned long size,
 		return ret;
 
 #ifdef CONFIG_NVHE_GHOST_SPEC
-	ret = pkvm_create_mappings_ghost(virt, virt + size, PAGE_HYP, HYP_WORKSPACE, DUMMY_CPU);
+	ret = pkvm_create_mappings(virt, virt + size, PAGE_HYP, HYP_WORKSPACE, DUMMY_CPU);
 #else
 	ret = pkvm_create_mappings(virt, virt + size, PAGE_HYP);
 #endif /* CONFIG_NVHE_GHOST_SPEC */
@@ -195,7 +195,7 @@ static int recreate_hyp_mappings(phys_addr_t phys, unsigned long size,
 		start = (void *)kern_hyp_va(per_cpu_base[i]);
 		end = start + PAGE_ALIGN(hyp_percpu_size);
 #ifdef CONFIG_NVHE_GHOST_SPEC
-		ret = pkvm_create_mappings_ghost(start, end, PAGE_HYP, HYP_PERCPU, i);
+		ret = pkvm_create_mappings(start, end, PAGE_HYP, HYP_PERCPU, i);
 #else
 		ret = pkvm_create_mappings(start, end, PAGE_HYP);
 #endif /* CONFIG_NVHE_GHOST_SPEC */
@@ -257,8 +257,8 @@ static int recreate_hyp_mappings(phys_addr_t phys, unsigned long size,
 	prot = pkvm_mkstate(PAGE_HYP_RO, PKVM_PAGE_SHARED_OWNED);
 
 #ifdef CONFIG_NVHE_GHOST_SPEC
-	ret = pkvm_create_mappings_ghost(&kvm_vgic_global_state,
-					&kvm_vgic_global_state + 1, prot, HYP_VGIC, DUMMY_CPU);
+	ret = pkvm_create_mappings(&kvm_vgic_global_state,
+				   &kvm_vgic_global_state + 1, prot, HYP_VGIC, DUMMY_CPU);
 #else
 	ret = pkvm_create_mappings(&kvm_vgic_global_state,
 				   &kvm_vgic_global_state + 1, prot);
