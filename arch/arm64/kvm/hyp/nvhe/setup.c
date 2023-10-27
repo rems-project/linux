@@ -18,15 +18,16 @@
 #include <nvhe/pkvm.h>
 #include <nvhe/trap_handler.h>
 
+#ifdef CONFIG_NVHE_GHOST_SPEC
 
-// GHOST
 #include <hyp/ghost_extra_debug-pl011.h>
 #include <nvhe/ghost_mapping_reqs.h>
 #include <nvhe/ghost_misc.h>
 #include <nvhe/ghost_compute_abstraction.h>
 #include <nvhe/ghost_pgtable.h>
 #include <nvhe/ghost_control.h>
-// /GHOST
+
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 
 unsigned long hyp_nr_cpus;
 
@@ -40,25 +41,34 @@ static int create_hyp_debug_uart_mapping(void)
 {
 	phys_addr_t base = CONFIG_KVM_ARM_HYP_DEBUG_UART_ADDR;
 
+#ifdef CONFIG_NVHE_GHOST_SPEC
 	return __pkvm_create_private_mapping_ghost(base, PAGE_SIZE, PAGE_HYP_DEVICE,
 					           &arm64_kvm_hyp_debug_uart_addr, HYP_UART);
+#else
+	return __pkvm_create_private_mapping(base, PAGE_SIZE, PAGE_HYP_DEVICE,
+					           &arm64_kvm_hyp_debug_uart_addr);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 }
 #else
 static int create_hyp_debug_uart_mapping(void) { return 0; }
 #endif
 
-// GHOST
+#ifdef CONFIG_NVHE_GHOST_SPEC
 // Ghost: removed static (perhaps better to add explicit ghost copies?)
 /*static*/ void *vmemmap_base;
 /*static*/ void *vm_table_base;
 /*static*/ void *hyp_pgt_base;
 /*static*/ void *host_s2_pgt_base;
-// /GHOST
-
+#else
+static void *vmemmap_base;
+static void *vm_table_base;
+static void *hyp_pgt_base;
+static void *host_s2_pgt_base;
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 static struct kvm_pgtable_mm_ops pkvm_pgtable_mm_ops;
 static struct hyp_pool hpool;
 
-// GHOST
+#ifdef CONFIG_NVHE_GHOST_SPEC
 u64 ghost_vmemmap_size;
 u64 ghost_vm_table_size;
 u64 ghost_hyp_pgt_size;
@@ -67,8 +77,7 @@ u64 ghost_host_s2_pgt_size;
 u64 ghost__pkvm_init_phys;
 u64 ghost__pkvm_init_size;
 u64 ghost__pkvm_init_virt;
-// /GHOST
-
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 
 static int divide_memory_pool(void *virt, unsigned long size)
 {
@@ -77,33 +86,33 @@ static int divide_memory_pool(void *virt, unsigned long size)
 	hyp_early_alloc_init(virt, size);
 
 	nr_pages = hyp_vmemmap_pages(sizeof(struct hyp_page));
-	// GHOST
+#ifdef CONFIG_NVHE_GHOST_SPEC
 	ghost_vmemmap_size = nr_pages;
-	// /GHOST
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	vmemmap_base = hyp_early_alloc_contig(nr_pages);
 	if (!vmemmap_base)
 		return -ENOMEM;
 
 	nr_pages = hyp_vm_table_pages();
-	// GHOST
+#ifdef CONFIG_NVHE_GHOST_SPEC
 	ghost_vm_table_size = nr_pages;
-	// /GHOST
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	vm_table_base = hyp_early_alloc_contig(nr_pages);
 	if (!vm_table_base)
 		return -ENOMEM;
 
 	nr_pages = hyp_s1_pgtable_pages();
-	// GHOST
+#ifdef CONFIG_NVHE_GHOST_SPEC
 	ghost_hyp_pgt_size = nr_pages;
-	// /GHOST
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_pgt_base = hyp_early_alloc_contig(nr_pages);
 	if (!hyp_pgt_base)
 		return -ENOMEM;
 
 	nr_pages = host_s2_pgtable_pages();
-	// GHOST
+#ifdef CONFIG_NVHE_GHOST_SPEC
 	ghost_host_s2_pgt_size = nr_pages;
-	// /GHOST
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	host_s2_pgt_base = hyp_early_alloc_contig(nr_pages);
 	if (!host_s2_pgt_base)
 		return -ENOMEM;
@@ -139,6 +148,7 @@ static int recreate_hyp_mappings(phys_addr_t phys, unsigned long size,
 	if (ret)
 		return ret;
 
+#ifdef CONFIG_NVHE_GHOST_SPEC
 	ret = pkvm_create_mappings_ghost(__hyp_text_start, __hyp_text_end, PAGE_HYP_EXEC, HYP_TEXT, DUMMY_CPU);
 
 	// PS HACK: in principle we should guard the extra ghost arguments with a preprocessor conditional, eg as below. But that's very ugly, so I'll skip for now, and use the _ghost function instead
@@ -148,18 +158,33 @@ static int recreate_hyp_mappings(phys_addr_t phys, unsigned long size,
 	//				, HYP_TEXT
 	//#endif
 	//);
+#else
+	ret = pkvm_create_mappings(__hyp_text_start, __hyp_text_end, PAGE_HYP_EXEC);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	if (ret)
 		return ret;
 
+#ifdef CONFIG_NVHE_GHOST_SPEC
 	ret = pkvm_create_mappings_ghost(__hyp_rodata_start, __hyp_rodata_end, PAGE_HYP_RO, HYP_RODATA, DUMMY_CPU);
+#else
+	ret = pkvm_create_mappings(__hyp_rodata_start, __hyp_rodata_end, PAGE_HYP_RO);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	if (ret)
 		return ret;
 
+#ifdef CONFIG_NVHE_GHOST_SPEC
 	ret = pkvm_create_mappings_ghost(__hyp_bss_start, __hyp_bss_end, PAGE_HYP, HYP_BSS, DUMMY_CPU);
+#else
+	ret = pkvm_create_mappings(__hyp_bss_start, __hyp_bss_end, PAGE_HYP);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	if (ret)
 		return ret;
 
+#ifdef CONFIG_NVHE_GHOST_SPEC
 	ret = pkvm_create_mappings_ghost(virt, virt + size, PAGE_HYP, HYP_WORKSPACE, DUMMY_CPU);
+#else
+	ret = pkvm_create_mappings(virt, virt + size, PAGE_HYP);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	if (ret)
 		return ret;
 
@@ -169,7 +194,11 @@ static int recreate_hyp_mappings(phys_addr_t phys, unsigned long size,
 
 		start = (void *)kern_hyp_va(per_cpu_base[i]);
 		end = start + PAGE_ALIGN(hyp_percpu_size);
+#ifdef CONFIG_NVHE_GHOST_SPEC
 		ret = pkvm_create_mappings_ghost(start, end, PAGE_HYP, HYP_PERCPU, i);
+#else
+		ret = pkvm_create_mappings(start, end, PAGE_HYP);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 		if (ret)
 			return ret;
 
@@ -180,12 +209,12 @@ static int recreate_hyp_mappings(phys_addr_t phys, unsigned long size,
 		 */
 		ret = pkvm_alloc_private_va_range(PAGE_SIZE + EL2_STACKSIZE, &hyp_addr);
 
-		// GHOST
-		// the stack instrumentation was
-		//end = (void *)per_cpu_ptr(&kvm_init_params, i)->stack_hyp_va;
-		//start = end - PAGE_SIZE;
-		//ret = pkvm_create_mappings_ghost(start, end, PAGE_HYP, HYP_STACKS, i);
-		// /GHOST
+/* #ifdef CONFIG_NVHE_GHOST_SPEC */
+/* 		// the stack instrumentation was */
+/* 		end = (void *)per_cpu_ptr(&kvm_init_params, i)->stack_hyp_va; */
+/* 		start = end - PAGE_SIZE; */
+/* 		ret = pkvm_create_mappings_ghost(start, end, PAGE_HYP, HYP_STACKS, i); */
+/* #endif /1* CONFIG_NVHE_GHOST_SPEC *1/ */
 
 		if (ret)
 			return ret;
@@ -203,10 +232,10 @@ static int recreate_hyp_mappings(phys_addr_t phys, unsigned long size,
 		ret = kvm_pgtable_hyp_map(&pkvm_pgtable, hyp_addr + PAGE_SIZE,
 					EL2_STACKSIZE, params->stack_pa, PAGE_HYP);
 
-		// GHOST XXX REVIEW RE: variable stack size!
+#ifdef CONFIG_NVHE_GHOST_SPEC
 		ghost_record_mapping_req(hyp_addr + PAGE_SIZE,
 					EL2_STACKSIZE, params->stack_pa, PAGE_HYP, HYP_STACKS);
-		// /GHOST
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 
 		hyp_spin_unlock(&pkvm_pgd_lock);
 		if (ret)
@@ -227,8 +256,13 @@ static int recreate_hyp_mappings(phys_addr_t phys, unsigned long size,
 	 */
 	prot = pkvm_mkstate(PAGE_HYP_RO, PKVM_PAGE_SHARED_OWNED);
 
+#ifdef CONFIG_NVHE_GHOST_SPEC
 	ret = pkvm_create_mappings_ghost(&kvm_vgic_global_state,
 					&kvm_vgic_global_state + 1, prot, HYP_VGIC, DUMMY_CPU);
+#else
+	ret = pkvm_create_mappings(&kvm_vgic_global_state,
+				   &kvm_vgic_global_state + 1, prot);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	if (ret)
 		return ret;
 
@@ -358,7 +392,7 @@ void __noreturn __pkvm_init_finalise(void)
 	unsigned long nr_pages, reserved_pages, pfn;
 	int ret;
 
-	// GHOST
+#ifdef CONFIG_NVHE_GHOST_SPEC
 	// register the debug output
 	ghost_extra_debug_initialised = true;
 	// dump some mappings
@@ -367,9 +401,7 @@ void __noreturn __pkvm_init_finalise(void)
 	ghost_hyp_put_mapping_reqs();
 	ghost_dump_pgtable(&pkvm_pgtable,"pkvm_pgtable", 0);
 	ghost_check_hyp_mapping_reqs(&pkvm_pgtable,false /*noisy*/);
-	// /GHOST
-
-
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 
 	/* Now that the vmemmap is backed, install the full-fledged allocator */
 	pfn = hyp_virt_to_pfn(hyp_pgt_base);
@@ -407,11 +439,11 @@ void __noreturn __pkvm_init_finalise(void)
 
 	pkvm_hyp_vm_table_init(vm_table_base);
 			
-	// GHOST
+#ifdef CONFIG_NVHE_GHOST_SPEC
 	init_abstraction_common();
 	record_abstraction_common();
 	WRITE_ONCE(pkvm_init_finalized, true);
-	// /GHOST
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 
 out:
 	/*
@@ -431,7 +463,7 @@ int __pkvm_init(phys_addr_t phys, unsigned long size, unsigned long nr_cpus,
 	void (*fn)(phys_addr_t params_pa, void *finalize_fn_va);
 	int ret;
 
-	// GHOST
+#ifdef CONFIG_NVHE_GHOST_SPEC
 	init_ghost_control();
 
 	hyp_puts("\n__pkvm_init:\n");
@@ -445,7 +477,7 @@ int __pkvm_init(phys_addr_t phys, unsigned long size, unsigned long nr_cpus,
 
 	hyp_puts("\n  interesting globals:\n");
 	hyp_putsxnl("    hyp_physvirt_offset", hyp_physvirt_offset, 64);
-	// /GHOST
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 
 	BUG_ON(kvm_check_pvm_sysreg_table());
 
@@ -459,11 +491,11 @@ int __pkvm_init(phys_addr_t phys, unsigned long size, unsigned long nr_cpus,
 	if (ret)
 		return ret;
 
-	// GHOST
+#ifdef CONFIG_NVHE_GHOST_SPEC
 	ghost__pkvm_init_phys = phys;
 	ghost__pkvm_init_size = size;
 	ghost__pkvm_init_virt = (u64)virt;
-	// /GHOST
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 
 	ret = recreate_hyp_mappings(phys, size, per_cpu_base, hyp_va_bits);
 	if (ret)
@@ -471,10 +503,9 @@ int __pkvm_init(phys_addr_t phys, unsigned long size, unsigned long nr_cpus,
 
 	update_nvhe_init_params();
 
-	// GHOST
+#ifdef CONFIG_NVHE_GHOST_SPEC
 	//	hyp_putc('P');hyp_putc('S');hyp_putc('H');hyp_putc('A');hyp_putc('C');hyp_putc('k');hyp_putc('\n');
-	// /GHOST
-
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 
 	/* Jump in the idmap page to switch to the new page-tables */
 	params = this_cpu_ptr(&kvm_init_params);

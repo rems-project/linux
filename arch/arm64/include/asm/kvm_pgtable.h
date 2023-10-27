@@ -11,11 +11,12 @@
 #include <linux/kvm_host.h>
 #include <linux/types.h>
 
+#ifdef CONFIG_NVHE_GHOST_SPEC
 
-// GHOST
 // not sure what the proper way to do this is...
 #include "../../kvm/hyp/include/nvhe/ghost_maplets.h"
-// /GHOST
+
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 
 #define KVM_PGTABLE_MAX_LEVELS		4U
 
@@ -331,9 +332,9 @@ struct kvm_pgtable {
 	enum kvm_pgtable_stage2_flags		flags;
 	kvm_pgtable_force_pte_cb_t		force_pte_cb;
 
-        // GHOST
+#ifdef CONFIG_NVHE_GHOST_SPEC
 	mapping ghost_mapping;
-	// /GHOST
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 };
 
 /**

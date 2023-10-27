@@ -12,7 +12,8 @@
 #include <asm/stage2_pgtable.h>
 
 
-// GHOST
+#ifdef CONFIG_NVHE_GHOST_SPEC
+
 #include <asm/kvm_mmu.h>
 #include <hyp/ghost_extra_debug-pl011.h>
 //#include <nvhe/ghost_check_pgtables.h>
@@ -20,8 +21,8 @@
 #include <nvhe/ghost_control.h>
 
 #pragma GCC diagnostic ignored "-Wdeclaration-after-statement"
-// /GHOST
 
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 
 #define KVM_PTE_TYPE			BIT(1)
 #define KVM_PTE_TYPE_BLOCK		0
@@ -74,7 +75,7 @@ struct kvm_pgtable_walk_data {
 	const u64			end;
 };
 
-
+#ifdef CONFIG_NVHE_GHOST_SPEC
 // for GHOST code: this type definition was just before kvm_get_vtcr, but we need it earlier to state pre/postconditions in __kvm_pgtable_walk, as we're doing that specific for the stage2, not for arbitrary callbacks
 struct stage2_map_data {
 	const u64			phys;
@@ -90,8 +91,9 @@ struct stage2_map_data {
 	/* Force mappings to page granularity */
 	bool				force_pte;
 };
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 
-// GHOST
+#ifdef CONFIG_NVHE_GHOST_SPEC
 bool is_stage2_map_walker(struct kvm_pgtable_walk_data *data);
 
 void ghost_dump_kvm_pgtable(struct kvm_pgtable *pgt, u64 i)
@@ -111,8 +113,7 @@ void ghost_dump_kvm_pgtable_walk_data(struct kvm_pgtable_walk_data *data, u64 i)
 	hyp_putsxn("end",data->end,64);
 	hyp_putc('\n');
 }
-
-// /GHOST
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 
 static bool kvm_phys_is_valid(u64 phys)
 {
@@ -239,14 +240,25 @@ static bool kvm_pgtable_walk_continue(const struct kvm_pgtable_walker *walker,
 	return !r;
 }
 
+#ifdef CONFIG_NVHE_GHOST_SPEC
 static int __kvm_pgtable_walk(struct kvm_pgtable_walk_data *data,
 			      struct kvm_pgtable_mm_ops *mm_ops, kvm_pteref_t pgtable, u32 level,
 			      u64 ghost_va_partial);
+#else
+static int __kvm_pgtable_walk(struct kvm_pgtable_walk_data *data,
+			      struct kvm_pgtable_mm_ops *mm_ops, kvm_pteref_t pgtable, u32 level);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 
+#ifdef CONFIG_NVHE_GHOST_SPEC
 static inline int __kvm_pgtable_visit(struct kvm_pgtable_walk_data *data,
 				      struct kvm_pgtable_mm_ops *mm_ops,
 				      kvm_pteref_t pteref, u32 level,
 				      u64 ghost_va_partial)
+#else
+static inline int __kvm_pgtable_visit(struct kvm_pgtable_walk_data *data,
+				      struct kvm_pgtable_mm_ops *mm_ops,
+				      kvm_pteref_t pteref, u32 level)
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 {
 	enum kvm_pgtable_walk_flags flags = data->walker->flags;
 	kvm_pte_t *ptep = kvm_dereference_pteref(data->walker, pteref);
@@ -266,12 +278,12 @@ static inline int __kvm_pgtable_visit(struct kvm_pgtable_walk_data *data,
 	kvm_pteref_t childp;
 	bool table = kvm_pte_table(ctx.old, level);
 
-	// GHOST
-	//if (ghost_extra_debug_initialised) {
-	//	hyp_putsxn("__kvm_pgtable_visit &ret",(u64)&ret,64);
-	//	hyp_putc('\n');
-	//}
-	// /GHOST
+/* #ifdef CONFIG_NVHE_GHOST_SPEC */
+/* 	if (ghost_extra_debug_initialised) { */
+/* 		hyp_putsxn("__kvm_pgtable_visit &ret",(u64)&ret,64); */
+/* 		hyp_putc('\n'); */
+/* 	} */
+/* #endif /1* CONFIG_NVHE_GHOST_SPEC *1/ */
 
 	if (table && (ctx.flags & KVM_PGTABLE_WALK_TABLE_PRE)) {
 		ret = kvm_pgtable_visitor_cb(data, &ctx, KVM_PGTABLE_WALK_TABLE_PRE);
@@ -303,7 +315,11 @@ static inline int __kvm_pgtable_visit(struct kvm_pgtable_walk_data *data,
 	}
 
 	childp = (kvm_pteref_t)kvm_pte_follow(ctx.old, mm_ops);
+#ifdef CONFIG_NVHE_GHOST_SPEC
 	ret = __kvm_pgtable_walk(data, mm_ops, childp, level + 1, ghost_va_partial);
+#else
+	ret = __kvm_pgtable_walk(data, mm_ops, childp, level + 1);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	if (!kvm_pgtable_walk_continue(data->walker, ret))
 		goto out;
 
@@ -317,14 +333,19 @@ out:
 	return ret;
 }
 
+#ifdef CONFIG_NVHE_GHOST_SPEC
 static int __kvm_pgtable_walk(struct kvm_pgtable_walk_data *data,
 			      struct kvm_pgtable_mm_ops *mm_ops, kvm_pteref_t pgtable, u32 level,
 			      u64 ghost_va_partial)
+#else
+static int __kvm_pgtable_walk(struct kvm_pgtable_walk_data *data,
+			      struct kvm_pgtable_mm_ops *mm_ops, kvm_pteref_t pgtable, u32 level)
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 {
 	u32 idx;
 	int ret = 0;
 
-	// GHOST
+#ifdef CONFIG_NVHE_GHOST_SPEC
 	bool ghost_check = ghost_control.check___kvm_pgtable_walk && is_stage2_map_walker(data); // turning off for now
 	u64 i = 4 + level * 2;  /* base indent */
 	u64 ghost_va_partial_new;
@@ -351,11 +372,17 @@ static int __kvm_pgtable_walk(struct kvm_pgtable_walk_data *data,
 		}
 		ghost_unlock_maplets();
 	}
-	// /GHOST
-	if (WARN_ON_ONCE(level >= KVM_PGTABLE_MAX_LEVELS)) {
+#endif /* CONFIG_NVHE_GHOST_SPEC */
+
+	if (WARN_ON_ONCE(level >= KVM_PGTABLE_MAX_LEVELS))
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	{
 		ret = -EINVAL;
 		goto out;
 	}
+#else
+		return -EINVAL;
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 
 	for (idx = kvm_pgtable_idx(data, level); idx < PTRS_PER_PTE; ++idx) {
 		kvm_pteref_t pteref = &pgtable[idx];
@@ -363,7 +390,7 @@ static int __kvm_pgtable_walk(struct kvm_pgtable_walk_data *data,
 		if (data->addr >= data->end)
 			break;
 
-		// GHOST
+#ifdef CONFIG_NVHE_GHOST_SPEC
                 switch (level) {
                 case 0: ghost_va_partial_new = ghost_va_partial | ((u64)idx << 39); break;
                 case 1: ghost_va_partial_new = ghost_va_partial | ((u64)idx << 30); break;
@@ -371,14 +398,16 @@ static int __kvm_pgtable_walk(struct kvm_pgtable_walk_data *data,
                 case 3: ghost_va_partial_new = ghost_va_partial | ((u64)idx << 12); break;
                 default: check_assert_fail("unhandled level"); // cases are exhaustive
                 }
-		// /GHOST
 		ret = __kvm_pgtable_visit(data, mm_ops, pteref, level, ghost_va_partial_new);
+#else
+		ret = __kvm_pgtable_visit(data, mm_ops, pteref, level);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 		if (ret)
 			break;
 	}
 
+#ifdef CONFIG_NVHE_GHOST_SPEC
 out:
-	// GHOST
 	if (ghost_check) {
 		// sketch of the postcondition - punting on sundry rounding and error/edge cases
 		// some of this is shared with the kvm_pgtable_stage2_map postcondition, but for a subtable
@@ -403,7 +432,7 @@ out:
 		// in addition to these, we need various properties of the intervening memory+tlbi+dsb state, as sketched for kvm_pgtable_stage2_map
 		// if the anchor was set on entry, the mapping_requested was empty, but we should have free'd all the pages below, and cleared the anchor when we got back to it
 	}
-	// /GHOST
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	return ret;
 }
 
@@ -412,8 +441,9 @@ static int _kvm_pgtable_walk(struct kvm_pgtable *pgt, struct kvm_pgtable_walk_da
 	u32 idx;
 	int ret = 0;
 	u64 limit = BIT(pgt->ia_bits);
+
+#ifdef CONFIG_NVHE_GHOST_SPEC
 	u64 ghost_va_partial;
-	// GHOST
 	bool ghost_check = ghost_control.check__kvm_pgtable_walk &&  is_stage2_map_walker(data);/* turning off for now to reduce noise */
 	u64 i=2; /* base indent */
 	if (ghost_check) {
@@ -422,7 +452,8 @@ static int _kvm_pgtable_walk(struct kvm_pgtable *pgt, struct kvm_pgtable_walk_da
 		hyp_putsxn("pgt",(u64)pgt,64);
 		hyp_putc('\n');
 	}
-	// /GHOST
+#endif /* CONFIG_NVHE_GHOST_SPEC */
+
 	if (data->addr > limit || data->end > limit)
 		return -ERANGE;
 
@@ -432,10 +463,12 @@ static int _kvm_pgtable_walk(struct kvm_pgtable *pgt, struct kvm_pgtable_walk_da
 	for (idx = kvm_pgd_page_idx(pgt, data->addr); data->addr < data->end; ++idx) {
 		kvm_pteref_t pteref = &pgt->pgd[idx * PTRS_PER_PTE];
 
-		// GHOST
+#ifdef CONFIG_NVHE_GHOST_SPEC
 		ghost_va_partial = 0;  // TODO?
-		// /GHOST
 		ret = __kvm_pgtable_walk(data, pgt->mm_ops, pteref, pgt->start_level, ghost_va_partial);
+#else
+		ret = __kvm_pgtable_walk(data, pgt->mm_ops, pteref, pgt->start_level);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 		if (ret)
 			break;
 	}
@@ -730,8 +763,23 @@ void kvm_pgtable_hyp_destroy(struct kvm_pgtable *pgt)
 	pgt->pgd = NULL;
 }
 
+#ifndef CONFIG_NVHE_GHOST_SPEC
 //  GHOST: struct stage2_map_data  was here; moved above
-// /GHOST
+struct stage2_map_data {
+	const u64			phys;
+	kvm_pte_t			attr;
+	u8				owner_id;
+
+	kvm_pte_t			*anchor;
+	kvm_pte_t			*childp;
+
+	struct kvm_s2_mmu		*mmu;
+	void				*memcache;
+
+	/* Force mappings to page granularity */
+	bool				force_pte;
+};
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 
 u64 kvm_get_vtcr(u64 mmfr0, u64 mmfr1, u32 phys_shift)
 {
@@ -977,12 +1025,12 @@ static int stage2_map_walker_try_leaf(const struct kvm_pgtable_visit_ctx *ctx,
 	struct kvm_pgtable *pgt = data->mmu->pgt;
 	struct kvm_pgtable_mm_ops *mm_ops = ctx->mm_ops;
 
-	// GHOST
-	//if (ghost_extra_debug_initialised) {
-	//	hyp_putsxn("stage2_map_walker_try_leaf &new",(u64)&new,64);
-	//	hyp_putc('\n');
-	//}
-	// /GHOST
+/* #ifdef CONFIG_NVHE_GHOST_SPEC */
+/* 	if (ghost_extra_debug_initialised) { */
+/* 		hyp_putsxn("stage2_map_walker_try_leaf &new",(u64)&new,64); */
+/* 		hyp_putc('\n'); */
+/* 	} */
+/* #endif /1* CONFIG_NVHE_GHOST_SPEC *1/ */
 
 	if (!stage2_leaf_mapping_allowed(ctx, data))
 		return -E2BIG;
@@ -1048,12 +1096,13 @@ static int stage2_map_walk_leaf(const struct kvm_pgtable_visit_ctx *ctx,
 	struct kvm_pgtable_mm_ops *mm_ops = ctx->mm_ops;
 	kvm_pte_t *childp, new;
 	int ret;
-	// GHOST
-	//	if (ghost_extra_debug_initialised) {
-	//	hyp_putsxn("stage2_map_walk_leaf &ret",(u64)&ret,64);
-	//	hyp_putc('\n');
-	//}
-	// /GHOST
+
+/* #ifdef CONFIG_NVHE_GHOST_SPEC */
+/* 	if (ghost_extra_debug_initialised) { */
+/* 		hyp_putsxn("stage2_map_walk_leaf &ret",(u64)&ret,64); */
+/* 		hyp_putc('\n'); */
+/* 	} */
+/* #endif /1* CONFIG_NVHE_GHOST_SPEC *1/ */
 
 	ret = stage2_map_walker_try_leaf(ctx, data);
 	if (ret != -E2BIG)
@@ -1115,7 +1164,8 @@ int kvm_pgtable_stage2_map(struct kvm_pgtable *pgt, u64 addr, u64 size,
 {
 	int ret;
 
-	// GHOST
+#ifdef CONFIG_NVHE_GHOST_SPEC
+
 	bool ghost_check = ghost_control.check_kvm_pgtable_stage2_map;
 	int i=0;  /* base indent */
 	mapping mapping_pre, mapping_post; // interpretation of pgt on entry and exit
@@ -1146,7 +1196,7 @@ int kvm_pgtable_stage2_map(struct kvm_pgtable *pgt, u64 addr, u64 size,
 		// record mapping on entry
 		mapping_pre = ghost_record_pgtable(pgt, "kvm_pgtable_stage2_map pre", i+2);
 	}
-        // /GHOST
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 
 	struct stage2_map_data map_data = {
 		.phys		= ALIGN_DOWN(phys, PAGE_SIZE),
@@ -1162,19 +1212,29 @@ int kvm_pgtable_stage2_map(struct kvm_pgtable *pgt, u64 addr, u64 size,
 		.arg		= &map_data,
 	};
 
-	if (WARN_ON((pgt->flags & KVM_PGTABLE_S2_IDMAP) && (addr != phys))) {
+	if (WARN_ON((pgt->flags & KVM_PGTABLE_S2_IDMAP) && (addr != phys)))
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	{
 		ret = -EINVAL;
 		goto out;
 	}
+#else
+		return -EINVAL;
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 
 	ret = stage2_set_prot_attr(pgt, prot, &map_data.attr);
 	if (ret)
+#ifdef CONFIG_NVHE_GHOST_SPEC
 		goto out;
+#else
+		return ret;
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 
 	ret = kvm_pgtable_walk(pgt, addr, size, &walker);
 	dsb(ishst);
+
+#ifdef CONFIG_NVHE_GHOST_SPEC
 out:
-	// GHOST
 	if (ghost_check) {
 		// sketch of the postcondition - punting on sundry rounding and error/edge cases
 		ghost_lock_maplets();
@@ -1201,17 +1261,18 @@ out:
 		//  - the ownership transfer of pages between the pgt and by the allocator is handled correctly (standard separation-logic stuff)
 		// perhaps we also need to know that new mappings are not block mappings, and that only block mappings will be lost?  Without that, mem_protect.c:host_stage2_idmap can't guarantee to actually establish the new mapping, as another thread could come in after the host_unlock_component().  If the code actually relies in that case on again trapping and remapping, liveness is questionable.
 	}
-	// /GHOST
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 
 	return ret;
 }
 
-// GHOST
+#ifdef CONFIG_NVHE_GHOST_SPEC
+
 bool is_stage2_map_walker(struct kvm_pgtable_walk_data *data)
 {
 	return data->walker->cb == stage2_map_walker;
 }
-// /GHOST
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 
 int kvm_pgtable_stage2_set_owner(struct kvm_pgtable *pgt, u64 addr, u64 size,
 				 void *mc, u8 owner_id)
@@ -1488,9 +1549,9 @@ int __kvm_pgtable_stage2_init(struct kvm_pgtable *pgt, struct kvm_s2_mmu *mmu,
 	pgt->flags		= flags;
 	pgt->force_pte_cb	= force_pte_cb;
 
-	// GHOST
+#ifdef CONFIG_NVHE_GHOST_SPEC
 	pgt->ghost_mapping = mapping_empty_();
-	// /GHOST
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 
 	/* Ensure zeroed PGD pages are visible to the hardware walker */
 	dsb(ishst);
@@ -1557,10 +1618,12 @@ void kvm_pgtable_stage2_free_removed(struct kvm_pgtable_mm_ops *mm_ops, void *pg
 		.end	= kvm_granule_size(level),
 	};
 
-	// GHOST
+#ifdef CONFIG_NVHE_GHOST_SPEC
 	u64 ghost_va_partial = 0;  // TODO?
-	// /GHOST
 	WARN_ON(__kvm_pgtable_walk(&data, mm_ops, ptep, level + 1, ghost_va_partial));
+#else
+	WARN_ON(__kvm_pgtable_walk(&data, mm_ops, ptep, level + 1));
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 
 	WARN_ON(mm_ops->page_count(pgtable) != 1);
 	mm_ops->put_page(pgtable);

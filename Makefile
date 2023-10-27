@@ -553,7 +553,11 @@ LINUXINCLUDE    := \
 		-I$(objtree)/include \
 		$(USERINCLUDE)
 
-KBUILD_AFLAGS   := -D__ASSEMBLY__ -fno-PIE -gdwarf-4
+KBUILD_AFLAGS   := -D__ASSEMBLY__ -fno-PIE
+ifdef CONFIG_NVHE_GHOST_SPEC
+KBUILD_AFLAGS   += -gdwarf-4
+endif
+
 KBUILD_CFLAGS   := -Wall -Wundef -Werror=strict-prototypes -Wno-trigraphs \
 		   -fno-strict-aliasing -fno-common -fshort-wchar -fno-PIE \
 		   -Werror=implicit-function-declaration -Werror=implicit-int \

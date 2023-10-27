@@ -19,7 +19,8 @@
 #include <nvhe/mem_protect.h>
 #include <nvhe/mm.h>
 
-// GHOST
+#ifdef CONFIG_NVHE_GHOST_SPEC
+
 #include <hyp/ghost_extra_debug-pl011.h>
 #include <nvhe/ghost_pgtable.h>
 #include <nvhe/ghost_compute_abstraction.h>
@@ -33,7 +34,7 @@
 #pragma GCC diagnostic ignored "-Wdeclaration-after-statement"
 #pragma GCC diagnostic ignored "-Wunused-variable"
 
-// /GHOST
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 
 #define KVM_HOST_S2_FLAGS (KVM_PGTABLE_S2_NOFWB | KVM_PGTABLE_S2_IDMAP)
 
@@ -48,16 +49,16 @@ static void guest_lock_component(struct pkvm_hyp_vm *vm)
 {
 	hyp_spin_lock(&vm->lock);
 	current_vm = vm;
-	// GHOST
+#ifdef CONFIG_NVHE_GHOST_SPEC
 	record_and_check_abstraction_vm_pre(vm);
-	// /GHOST
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 }
 
 static void guest_unlock_component(struct pkvm_hyp_vm *vm)
 {
-	// GHOST
+#ifdef CONFIG_NVHE_GHOST_SPEC
 	record_and_copy_abstraction_vm_post(vm);
-	// /GHOST
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	current_vm = NULL;
 	hyp_spin_unlock(&vm->lock);
 }
@@ -65,36 +66,36 @@ static void guest_unlock_component(struct pkvm_hyp_vm *vm)
 static void host_lock_component(void)
 {
 	hyp_spin_lock(&host_mmu.lock);
-	// GHOST
+#ifdef CONFIG_NVHE_GHOST_SPEC
 	if (GHOST_EXEC_SPEC)
 		record_and_check_abstraction_host_pre();
-	// /GHOST
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 }
 
 static void host_unlock_component(void)
 {
-	// GHOST
+#ifdef CONFIG_NVHE_GHOST_SPEC
 	if (GHOST_EXEC_SPEC)
 		record_and_copy_abstraction_host_post();
-	// /GHOST
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_spin_unlock(&host_mmu.lock);
 }
 
 static void hyp_lock_component(void)
 {
 	hyp_spin_lock(&pkvm_pgd_lock);
-	// GHOST
+#ifdef CONFIG_NVHE_GHOST_SPEC
 	if (GHOST_EXEC_SPEC)
 		record_and_check_abstraction_pkvm_pre();
-	// /GHOST
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 }
 
 static void hyp_unlock_component(void)
 {
-	// GHOST
+#ifdef CONFIG_NVHE_GHOST_SPEC
 	if (GHOST_EXEC_SPEC)
 		record_and_copy_abstraction_pkvm_post();
-	// /GHOST
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_spin_unlock(&pkvm_pgd_lock);
 }
 
@@ -581,6 +582,7 @@ static bool host_stage2_force_pte_cb(u64 addr, u64 end, enum kvm_pgtable_prot pr
 static int host_stage2_idmap(u64 addr)
 {
 	struct kvm_mem_range range;
+
 	// PS: t012345he mm.c struct memblock_region hyp_memory[] is initialised by pkvm.c register_memblock_regions to a sorted copy of the regions available to linux, using the include/linux/memblock.h for_each_mem_region (struct memblock_region is also defined there).  I guess hyp_memory[] is constant after initialisation?   The find_mem_range above finds the enclosing region for addr if there is one, writing into range.  The memblock_region's have flags (HOTPLUG/MIRROR/NOMAP), but find_mem_range ignores them, so I think we can abstract hyp_memory[] to just a set of physical addresses (closed under the same-4K-page relation) (or, equivalently, a set of page addresses or page frame numbers) (or reuse our mapping and maplet code).
 	// In the QEMU boot these are:
 	//  base:0x........40000000 base':0x.......1385b0000 size:0x........f85b0000 flags:
@@ -590,6 +592,7 @@ static int host_stage2_idmap(u64 addr)
 	// -base:0x.......13c000000 base':0x.......140000000 size:0x.........4000000 flags:
 	// Why five contiguous regions?   Different permissions.
         // I'll only pay attention to the memory case for now, not the device case
+
 	bool is_memory = !!find_mem_range(addr, &range);
 	enum kvm_pgtable_prot prot;
 	int ret;
@@ -598,7 +601,7 @@ static int host_stage2_idmap(u64 addr)
 
 	host_lock_component();
 
- 	// GHOST
+#ifdef CONFIG_NVHE_GHOST_SPEC
 	bool ghost_check = ghost_control.check_host_stage2_idmap;
 	u64 i=0; /* base indent */
 	int cur;
@@ -615,9 +618,7 @@ static int host_stage2_idmap(u64 addr)
 		//	ghost_dump_s2mpus(i+2);
 		// (we can't meaningfully record the on-entry host pagetable abstraction until we've taken the lock - and in any case, instead of recomputing the abstraction, we should be able to pull it from the lock invariant)
 	}
-	// /GHOST
 
-	// GHOST
 	if (ghost_check) {
 		ghost_lock_maplets();
 		mapping_pre = ghost_record_pgtable_and_check(host_mmu.pgt.ghost_mapping, &host_mmu.pgt, true/*dump*/, "host_mmu.pgt", i+2);
@@ -625,7 +626,7 @@ static int host_stage2_idmap(u64 addr)
 		ghost_unlock_maplets();
 	}
 	// PS: the host_stage2_adjust_range uses kvm_pgtable_get_leaf (which does a kvm_pgtable_walk) to find the current pte and level for addr. If there's a valid entry, it returns -EAGAIN (presumably another thread has mapped it since the fault); if there's a nonzero invalid entry, it returns -EPERM (indicating that there's another owner and we shouldn't map it); otherwise it iterates from this level downwards looking for a level at which the level supports a block mapping for a block included in the range.  (Though in the pKVM boot it doesn't seem to ever make block mappings for actual memory??)  The tree geometry means that there won't be any annotated ptes if we find a proper block mapping.
-	// /GHOST
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 
 	ret = host_stage2_adjust_range(addr, &range);
 	if (ret)
@@ -633,7 +634,7 @@ static int host_stage2_idmap(u64 addr)
 
 	ret = host_stage2_idmap_locked(range.start, range.end - range.start, prot);
 
-	// GHOST
+#ifdef CONFIG_NVHE_GHOST_SPEC
 	if (ghost_check) {
 		// sketch of the postcondition - punting on sundry cases
 		// some of this is common with pgtable.c stage2 postconditions and should be abstracted out when we know better what they all are
@@ -686,7 +687,7 @@ static int host_stage2_idmap(u64 addr)
 		//ghost_dump_pgtable_diff(mapping_pre, host_mmu.pgt,"host_mmu.pgt", i);
 		// and we need to wrap this local postcondition back up into the host lock invariant when we unlock it below
 	}
-	// /GHOST
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 
 unlock:
 	host_unlock_component();
@@ -744,7 +745,7 @@ void handle_host_mem_abort(struct kvm_cpu_context *host_ctxt)
 	u64 esr, addr;
 	int ret = 0;
 
-	// GHOST
+#ifdef CONFIG_NVHE_GHOST_SPEC
 	bool ghost_check = ghost_control.check_handle_host_mem_abort;
 	if (ghost_check) {
 		hyp_putsp(GHOST_WHITE_ON_BLUE);
@@ -752,7 +753,7 @@ void handle_host_mem_abort(struct kvm_cpu_context *host_ctxt)
 		hyp_putsp(GHOST_NORMAL);
 		hyp_putsp("\n");
 	}
-	// /GHOST
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 
 	esr = read_sysreg_el2(SYS_ESR);
 	BUG_ON(!__get_fault_info(esr, &fault));
@@ -1848,7 +1849,7 @@ int __pkvm_host_donate_guest(u64 pfn, u64 gfn, struct pkvm_hyp_vcpu *vcpu)
 	host_lock_component();
 	guest_lock_component(vm);
 
-	// GHOST
+#ifdef CONFIG_NVHE_GHOST_SPEC
 	// here (inside the locks) we could snapshot the abstraction of the host and guest pagetables, or (if we maintain them) use prevoiusly recorded ghost state for them in the postcondition
 	// do_donate uses check_donation which uses host_request_owned_transition and (if the donation works) calls guest_ack_donation. The former uses kvm_pgtable_walk for __check_page_stage_visitor to check that all this address range is PKVM_PAGE_OWNED (and that any valid ptes satisfy addr_is_allowed_memory() )
 	// Then host_initiate_donation uses host_stage2_set_owner_locked
@@ -1871,14 +1872,16 @@ int __pkvm_host_donate_guest(u64 pfn, u64 gfn, struct pkvm_hyp_vcpu *vcpu)
 
 	}
 
-	// /GHOST
+#endif /* CONFIG_NVHE_GHOST_SPEC */
+
 	ret = do_donate(&donation);
-	// GHOST
+
+#ifdef CONFIG_NVHE_GHOST_SPEC
 	// postcondition: if that PKVM_PAGE_OWNED check then the host ownership (and any mapping) has been removed, and the guest mapping has been added.  Plus magic for pvmfw
 
 	// TODO
 	// now we need a more slick way of computing the different parts of the host pgt, for different predicates on the annotations
-	// /GHOST0
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 
 	guest_unlock_component(vm);
 	host_unlock_component();

@@ -28,7 +28,6 @@ hyp-obj-y += ../vgic-v3-sr.o ../aarch32.o ../vgic-v2-cpuif-proxy.o ../entry.o \
 hyp-obj-$(CONFIG_DEBUG_LIST) += list_debug.o
 hyp-obj-y += $(lib-objs)
 
-# GHOST
 ghosts += ../ghost_extra_debug-pl011.o
 ghosts += ghost_mapping_reqs.o
 ghosts += ghost_misc.o
@@ -45,7 +44,6 @@ ghosts += ghost_spec.o
 ghosts += ../ghost_alloc.o
 
 hyp-obj-$(CONFIG_NVHE_GHOST_SPEC) += $(ghosts)
-# /GHOST
 
 ##
 ## Build rules for compiling nVHE hyp code
@@ -130,4 +128,5 @@ KCOV_INSTRUMENT	:= n
 # non-standard build rules.
 OBJECT_FILES_NON_STANDARD := y
 
-ccflags-y += -O1
+# Vergissmeinnicht...
+ccflags-$(CONFIG_NVHE_GHOST_SPEC) += -O1
