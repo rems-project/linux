@@ -92,6 +92,18 @@ config NVHE_GHOST_SPEC
 	help
 	  And it's watching you.
 
+config NVHE_GHOST_MEM_LOG2_MB
+	int "Ghost dynamic memory pool size (log_2)"
+	depends on NVHE_GHOST_SPEC
+	default 22
+	range 5 30
+	help
+	  Ghost will statically allocate its dynamic memory pool, mostly to
+	  contradict in terms.
+
+	  This number denotes log_2 of the memory pool size, in bytes. For instance,
+	  22 denotes 4 MB.
+
 config KVM_ARM_HYP_DEBUG_UART
 	bool "Hack up some basic UART functionality at EL2"
 
