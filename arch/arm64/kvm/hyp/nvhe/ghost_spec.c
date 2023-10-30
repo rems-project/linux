@@ -34,6 +34,7 @@ void ghost_clear_call_data(void)
 	call->return_value = 0;
 	call->relaxed_reads.len = 0;
 	call->memcache_donations.len = 0;
+	call->at_translations.len = 0;
 }
 
 
