@@ -782,9 +782,41 @@ void compute_new_abstract_state_handle_host_hcall(struct ghost_state *g1, struct
 }
 
 
+// TODO: move this somewhere more sensible
+#define HPFAR_FIPA_SHIFT UL(4)
+
 void compute_new_abstract_state_handle_host_mem_abort(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call, bool *new_state_computed)
 {
-	//TODO
+	u64 esr = ghost_reg_el2(g0, GHOST_ESR_EL2);
+	u64 hpfar;
+	host_ipa_t addr;
+
+	if (!(esr & ESR_ELx_S1PTW) && (esr & ESR_ELx_FSC_TYPE) == ESR_ELx_FSC_PERM) {
+		u64 far = ghost_reg_el2(g0, GHOST_FAR_EL2);
+		struct ghost_at_translation *at_status = ghost_at_translations_get(&call->at_translations, far);
+		if (at_status->success)
+			hpfar = at_status->ipa;
+		else
+			// this should not be accessible because the pKVM code will have panicked
+			// in this situation
+			ghost_spec_assert(false);
+	} else {
+		hpfar = ghost_reg_el2(g0, GHOST_HPFAR_EL2);
+	}
+
+	// the bits [51:12] of the faulting IPA are in bits [47:4] of the HPFAR_EL2 register
+	// (the mismatch of the upper bites offset is because the upper bits are FIPA are RES0)
+	addr = (hpfar >> HPFAR_FIPA_SHIFT) << PAGE_SHIFT;
+
+	/* TODO: modelling of host_stage2_adjust_range()
+
+		1. ==> non-deterministic -EGAIN (when the pte for addr is valid)
+
+		2. ==> return -EPERM pte == 0, which means:
+			* the page stage is PKVM_PAGE_OWNED (by host)
+
+		3. ==> calculation of some range (which is going to be passed to the idmap function)
+	*/
 }
 
 
