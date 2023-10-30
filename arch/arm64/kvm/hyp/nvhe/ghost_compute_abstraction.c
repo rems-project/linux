@@ -917,6 +917,36 @@ void ghost_memcache_donations_insert(struct ghost_memcache_donations *ds, u64 pf
 	ds->pages[ds->len++] = pfn;
 }
 
+void ghost_at_translations_insert_fail(struct ghost_at_translations *ts, u64 va)
+{
+	ghost_assert(ts->len < GHOST_MAX_AT_TRANSLATIONS);
+	ts->translations[ts->len++] = (struct ghost_at_translation){
+		.va = va,
+		.success = false,
+	};
+}
+
+void ghost_at_translations_insert_success(struct ghost_at_translations *ts, u64 va, u64 ipa)
+{
+	ghost_assert(ts->len < GHOST_MAX_AT_TRANSLATIONS);
+	ts->translations[ts->len++] = (struct ghost_at_translation){
+		.va = va,
+		.success = true,
+		.ipa = ipa,
+	};
+}
+
+struct ghost_at_translation *ghost_at_translations_get(struct ghost_at_translations *ts, u64 va)
+{
+	for (int i = 0; i < ts->len; i++) {
+		struct ghost_at_translation *t = &ts->translations[i];
+		if (t->va == va)
+			return t;
+	}
+
+	return NULL;
+}
+
 /********************************************/
 // ghost per-cpu state helpers
 

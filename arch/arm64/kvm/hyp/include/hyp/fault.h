@@ -12,6 +12,10 @@
 #include <asm/kvm_hyp.h>
 #include <asm/kvm_mmu.h>
 
+#ifdef CONFIG_NVHE_GHOST_SPEC
+#include <nvhe/ghost_spec.h>
+#endif /* CONFIG_NVHE_GHOST_SPEC */
+
 static inline bool __translate_far_to_hpfar(u64 far, u64 *hpfar)
 {
 	u64 par, tmp;
@@ -27,10 +31,20 @@ static inline bool __translate_far_to_hpfar(u64 far, u64 *hpfar)
 	 * saved the guest context yet, and we may return early...
 	 */
 	par = read_sysreg_par();
+#if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SPEC)
+	if (!__kvm_at("s1e1r", far)) {
+		tmp = read_sysreg_par();
+		GHOST_RECORD_AT_SUCCESS(far, tmp);
+	} else {
+		tmp = SYS_PAR_EL1_F; /* back to the guest */
+		GHOST_RECORD_AT_FAIL(far);
+	}
+#else /* CONFIG_NVHE_GHOST_SPEC */
 	if (!__kvm_at("s1e1r", far))
 		tmp = read_sysreg_par();
 	else
 		tmp = SYS_PAR_EL1_F; /* back to the guest */
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	write_sysreg(par, par_el1);
 
 	if (unlikely(tmp & SYS_PAR_EL1_F))
