@@ -14,6 +14,10 @@
 #include <asm/kvm_asm.h>
 #include <asm/mmu.h>
 #include <asm/spectre.h>
+#ifdef __KVM_NVHE_HYPERVISOR__
+#include <asm/kvm_mmu.h>
+#include "debug-pl011.h"
+#endif
 
 .macro save_caller_saved_regs_vect
 	/* x0 and x1 were saved in the vector entry */
@@ -50,7 +54,7 @@ el1_sync:				// Guest trapped into EL2
 	b.ne	el1_trap
 
 	/*
-	 * Fastest possible path for ARM_SMCCC_ARCH_WORKAROUND_1.
+	 ;; * Fastest possible path for ARM_SMCCC_ARCH_WORKAROUND_1.
 	 * The workaround has already been applied on the host,
 	 * so let's quickly get back to the guest. We don't bother
 	 * restoring x1, as it can be clobbered anyway.
@@ -104,6 +108,15 @@ el2_sync:
 	eret
 
 1:
+#ifdef __KVM_NVHE_HYPERVISOR__
+	// Can't use hyp_puts, because, I only have 2 usable registers.
+	mov w0, 'I'
+	hyp_putc w0, 1
+	mov w0, 'L'
+	hyp_putc w0, 1
+	mov w0, '\n'
+	hyp_putc w0, 1
+#endif
 	/* Let's attempt a recovery from the illegal exception return */
 	get_vcpu_ptr	x1, x0
 	mov	x0, #ARM_EXCEPTION_IL

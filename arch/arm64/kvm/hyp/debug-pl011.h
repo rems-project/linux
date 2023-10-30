@@ -30,7 +30,7 @@
 	tbz		\tmp, #0, 9990f
 	isb
 
-alternative_cb kvm_hyp_debug_uart_set_basep
+alternative_cb ARM64_ALWAYS_SYSTEM, kvm_hyp_debug_uart_set_basep
 	movz		\tmp, #0
 	movk		\tmp, #0, lsl #16
 	movk		\tmp, #0, lsl #32
@@ -183,8 +183,6 @@ static inline void __hyp_putx4n(unsigned long x, int n)
 
 	while (i--)
 		__hyp_putx4(x >> (4 * i));
-
-	hyp_putc('\n');
 }
 
 static inline void hyp_putx32(unsigned int x)

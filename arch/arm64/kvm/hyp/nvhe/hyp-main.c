@@ -25,6 +25,8 @@
 
 #include "../../sys_regs.h"
 
+#include "../debug-pl011.h"
+
 /*
  * Host FPSIMD state. Written to when the guest accesses its own FPSIMD state,
  * and read when the guest state is live and we need to switch back to the host.
@@ -745,6 +747,7 @@ static void handle___kvm_vcpu_run(struct kvm_cpu_context *host_ctxt)
 	if (unlikely(hyp_vcpu)) {
 		flush_hyp_vcpu(hyp_vcpu);
 
+                hyp_puts("Running __kvm_vcpu_run\n");
 		ret = __kvm_vcpu_run(&hyp_vcpu->vcpu);
 
 		sync_hyp_vcpu(hyp_vcpu, ret);
@@ -793,10 +796,14 @@ static void handle___pkvm_host_map_guest(struct kvm_cpu_context *host_ctxt)
 	if (!hyp_vcpu)
 		goto out;
 
+        hyp_puts("Map guest: before memcache\n");
+
 	/* Top-up our per-vcpu memcache from the host's */
 	ret = pkvm_refill_memcache(hyp_vcpu);
 	if (ret)
 		goto out;
+
+	hyp_puts("Map guest: after memcache topup\n");
 
 	if (pkvm_hyp_vcpu_is_protected(hyp_vcpu))
 		ret = __pkvm_host_donate_guest(pfn, gfn, hyp_vcpu);

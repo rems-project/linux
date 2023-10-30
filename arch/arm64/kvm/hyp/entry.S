@@ -44,7 +44,8 @@ alternative_if ARM64_HAS_RAS_EXTN
 alternative_else_nop_endif
 	mrs	x1, isr_el1
 	cbz	x1,  1f
-	mov	x0, #ARM_EXCEPTION_IRQ
+	// mov	x0, #ARM_EXCEPTION_IRQ
+	mov	x0, #42
 	ret
 
 1:

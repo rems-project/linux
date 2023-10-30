@@ -29,6 +29,8 @@
 #include <nvhe/mem_protect.h>
 #include <nvhe/pkvm.h>
 
+#include "../debug-pl011.h"
+
 /* Non-VHE specific context */
 DEFINE_PER_CPU(struct kvm_host_data, kvm_host_data);
 DEFINE_PER_CPU(struct kvm_cpu_context, kvm_hyp_ctxt);
@@ -234,6 +236,7 @@ static void early_exit_filter(struct kvm_vcpu *vcpu, u64 *exit_code)
 		vcpu->arch.target = -1;
 		*exit_code &= BIT(ARM_EXIT_WITH_SERROR_BIT);
 		*exit_code |= ARM_EXCEPTION_IL;
+		hyp_puts("32 bit protected guest: forbidden\n");
 	}
 }
 
@@ -306,9 +309,19 @@ int __kvm_vcpu_run(struct kvm_vcpu *vcpu)
 
 	__debug_switch_to_guest(vcpu);
 
+	hyp_puts("Fire jumping with spsr: ");
+	hyp_putx64(read_sysreg(SPSR_EL2));
+	hyp_puts("and HCR: ");
+	hyp_putx64(read_sysreg(HCR_EL2));
+	hyp_putc('\n');
 	do {
 		/* Jump in the fire! */
 		exit_code = __guest_enter(vcpu);
+
+		if(exit_code == 42){
+			hyp_puts("Early exit");
+			exit_code = ARM_EXCEPTION_IRQ;
+		}
 
 		/* And we're baaack! */
 	} while (fixup_guest_exit(vcpu, &exit_code));
@@ -348,6 +361,10 @@ int __kvm_vcpu_run(struct kvm_vcpu *vcpu)
 		gic_write_pmr(GIC_PRIO_IRQOFF);
 
 	host_ctxt->__hyp_running_vcpu = NULL;
+
+        hyp_puts("Finished running with code ");
+        hyp_putx32(exit_code);
+        hyp_putc('\n');
 
 	return exit_code;
 }

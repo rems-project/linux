@@ -1135,6 +1135,7 @@ int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu)
 		 * a fatal error.
 		 */
 		if (vcpu_mode_is_bad_32bit(vcpu)) {
+			pr_warn("Host decided to return IL");
 			/*
 			 * As we have caught the guest red-handed, decide that
 			 * it isn't fit for purpose anymore by making the vcpu

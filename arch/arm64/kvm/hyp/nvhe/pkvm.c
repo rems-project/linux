@@ -4,6 +4,7 @@
  * Author: Fuad Tabba <tabba@google.com>
  */
 
+#include "asm/memory.h"
 #include <linux/kvm_host.h>
 #include <linux/mm.h>
 
@@ -16,6 +17,7 @@
 #include <nvhe/memory.h>
 #include <nvhe/pkvm.h>
 #include <nvhe/trap_handler.h>
+#include "../debug-pl011.h"
 
 /* Used by icache_is_vpipt(). */
 unsigned long __icache_flags;
@@ -652,11 +654,20 @@ int __pkvm_init_vm(struct kvm *host_kvm, unsigned long vm_hva,
 	void *pgd = NULL;
 	int ret;
 
+        hyp_puts("Entered __pkvm_init_vm\n");
+
 	ret = hyp_pin_shared_mem(host_kvm, host_kvm + 1);
 	if (ret)
 		return ret;
 
 	nr_vcpus = READ_ONCE(host_kvm->created_vcpus);
+	hyp_puts("Got ");
+	hyp_putx32(nr_vcpus);
+	hyp_puts(" at ");
+	hyp_putx64(hyp_virt_to_phys(host_kvm));
+	hyp_puts(" at offset ");
+	hyp_putx64((void*)&host_kvm->created_vcpus - (void*)host_kvm);
+	hyp_putc('\n');
 	if (nr_vcpus < 1) {
 		ret = -EINVAL;
 		goto err_unpin_kvm;
@@ -680,17 +691,26 @@ int __pkvm_init_vm(struct kvm *host_kvm, unsigned long vm_hva,
 	if (!pgd)
 		goto err_remove_mappings;
 
+	hyp_puts("Memory donated\n");
+
 	init_pkvm_hyp_vm(host_kvm, hyp_vm, last_ran, nr_vcpus);
+
+	hyp_puts("VM initialized\n");
 
 	hyp_spin_lock(&vm_table_lock);
 	ret = insert_vm_table_entry(host_kvm, hyp_vm);
 	if (ret < 0)
 		goto err_unlock;
 
+	hyp_puts("VM inserted\n");
+
 	ret = kvm_guest_prepare_stage2(hyp_vm, pgd);
 	if (ret)
 		goto err_remove_vm_table_entry;
 	hyp_spin_unlock(&vm_table_lock);
+
+	hyp_puts("VM page table set up\n");
+	hyp_puts("VM initialization complete\n");
 
 	return hyp_vm->kvm.arch.pkvm.handle;
 
@@ -726,6 +746,8 @@ int __pkvm_init_vcpu(pkvm_handle_t handle, struct kvm_vcpu *host_vcpu,
 	unsigned int idx;
 	int ret;
 
+	hyp_puts("Entered __pkvm_init_vm\n");
+
 	hyp_vcpu = map_donated_memory(vcpu_hva, sizeof(*hyp_vcpu));
 	if (!hyp_vcpu)
 		return -ENOMEM;
@@ -743,6 +765,8 @@ int __pkvm_init_vcpu(pkvm_handle_t handle, struct kvm_vcpu *host_vcpu,
 		ret = -EINVAL;
 		goto unlock;
 	}
+
+	hyp_puts("Got VM lock \n");
 
 	ret = init_pkvm_hyp_vcpu(hyp_vcpu, hyp_vm, host_vcpu, idx);
 	if (ret)

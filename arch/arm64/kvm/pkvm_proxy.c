@@ -95,6 +95,7 @@ static int pkvm_proxy_alloc_release(struct inode *inode, struct file *filep)
 {
 	struct pkvm_proxy_alloc *alloc = filep->private_data;
 	if(!alloc) return -EBADFD;
+	pr_warn("hprox releasing block at %lx of size %lx\n", alloc->kaddr, alloc->size);
 	if (alloc->state == OWNED)
 		pkvm_proxy_alloc_free(alloc);
 	kfree(alloc);
@@ -118,6 +119,7 @@ static int pkvm_proxy_alloc_mmap(struct file *filep,
 	if (vma->vm_pgoff != 0 || vma->vm_end - vma->vm_start != PAGE_ALIGN(alloc->size))
 		return -EINVAL;
 	BUG_ON(!alloc->kaddr);
+	pr_warn("mmaping hprox alloc of size %lx at %lx\n", alloc->size, alloc->kaddr);
 
 	switch (alloc->type) {
 	case HPROX_VMALLOC:
@@ -132,6 +134,7 @@ static int pkvm_proxy_alloc_mmap(struct file *filep,
 
 	for (off = 0; off < alloc->size; off += PAGE_SIZE) {
 		page = vtop(alloc->kaddr + off);
+		pr_warn("mmap phys %lx\n", page_to_phys(page));
 		res = vm_insert_page(vma, vma->vm_start + off, page);
 		if (res)
 			return res;
@@ -198,6 +201,7 @@ static long pkvm_proxy_alloc_ioctl(struct file *filep, unsigned int cmd,
 	}
 	BUG_ON(file->private_data != alloc);
 	fd_install(fd, file);
+	pr_warn("Returning fd %d for alloc at %lx\n", fd, alloc->kaddr);
 	return fd;
 
 put_fd:
@@ -309,12 +313,19 @@ static long pkvm_proxy_hvc_ioctl(struct file *filep, unsigned int cmd,
 	u64 args[7] = {};
 	int id;
 	struct arm_smccc_res res;
+	pr_warn("Entering HVC ioctl\n");
 	id = _IOC_NR(cmd);
 	args_size = ALIGN(_IOC_SIZE(cmd), sizeof(u64));
 	if (args_size > 7 * sizeof(u64))
 		return -EINVAL;
 	if (args_size && copy_from_user(args, (void __user *)uarg, args_size))
 		return -EACCES;
+	if(id == __KVM_HOST_SMCCC_FUNC___pkvm_host_share_hyp){
+		void* addr = pfn_to_kaddr(args[0]);
+		int* test = addr + 0x908;
+		pr_warn ("Content of test at 0x908 %d", *test);
+	}
+	pr_warn("Calling hvc %d\n", id);
 	arm_smccc_1_1_hvc(KVM_HOST_SMCCC_ID(id), args[0], args[1], args[2],
 			  args[3], args[4], args[5], args[6], &res);
 	if (res.a0 != SMCCC_RET_SUCCESS)
