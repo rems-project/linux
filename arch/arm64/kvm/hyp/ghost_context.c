@@ -43,6 +43,13 @@ void ghost_log_enter_context(const char *s)
 	ctx = this_cpu_ptr(&g_context);
 	ghost_assert(ctx->nr_frames < GHOST_MAX_CONTEXT_FRAMES);
 
+	ghost_print_begin();
+	hyp_puti(ctx->nr_frames * 2);
+	hyp_putsp("[enter ");
+	hyp_putsp((char *)s);
+	hyp_putsp("\n");
+	ghost_print_end();
+
 	i = ctx->nr_frames++;
 	++ctx->count;
 
@@ -50,12 +57,6 @@ void ghost_log_enter_context(const char *s)
 	frame->ctx_name = s;
 	frame->nr_attached_data = 0;
 	frame->frame_id = ctx->count;
-
-	ghost_print_begin();
-	hyp_putsp("[enter ");
-	hyp_putsp((char *)s);
-	hyp_putsp("\n");
-	ghost_print_end();
 }
 
 void ghost_log_context_attach(const char *s, void *data, ghost_printer_fn printer)
@@ -126,13 +127,14 @@ void ghost_log_exit_context(void)
 	ghost_assert(ctx->nr_frames > 0);
 	frame = &ctx->frames[ctx->nr_frames - 1];
 
+	ctx->nr_frames--;
+
 	ghost_print_begin();
+	hyp_puti(ctx->nr_frames * 2);
 	hyp_putsp("... end ");
 	hyp_putsp((char *)frame->ctx_name);
 	hyp_putsp("] \n");
 	ghost_print_end();
-
-	ctx->nr_frames--;
 }
 
 static void indent(u64 width)
