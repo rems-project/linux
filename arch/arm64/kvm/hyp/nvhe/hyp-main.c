@@ -1256,6 +1256,11 @@ static void handle_host_hcall(struct kvm_cpu_context *host_ctxt)
 
 	return;
 inval:
+
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	GHOST_LOG_CONTEXT_EXIT();
+#endif /* CONFIG_NVHE_GHOST_SPEC */
+
 	cpu_reg(host_ctxt, 0) = SMCCC_RET_NOT_SUPPORTED;
 }
 

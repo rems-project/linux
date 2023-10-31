@@ -446,6 +446,12 @@ void __noreturn __pkvm_init_finalise(void)
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 
 out:
+
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	GHOST_LOG_CONTEXT_EXIT();
+	GHOST_LOG_CONTEXT_EXIT();
+#endif /* CONFIG_NVHE_GHOST_SPEC */
+
 	/*
 	 * We tail-called to here from handle___pkvm_init() and will not return,
 	 * so make sure to propagate the return value to the host.
