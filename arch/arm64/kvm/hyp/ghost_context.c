@@ -21,11 +21,13 @@ struct ghost_context_data {
 struct ghost_context_frame {
 	const char *ctx_name;
 	u64 nr_attached_data;
+	u64 frame_id;
 	struct ghost_context_data data[GHOST_MAX_CONTEXT_DATA];
 };
 
 struct ghost_context {
 	u64 nr_frames;
+	u64 count;
 	struct ghost_context_frame frames[GHOST_MAX_CONTEXT_FRAMES];
 };
 
@@ -42,10 +44,12 @@ void ghost_log_enter_context(const char *s)
 	ghost_assert(ctx->nr_frames < GHOST_MAX_CONTEXT_FRAMES);
 
 	i = ctx->nr_frames++;
+	++ctx->count;
 
 	frame = &ctx->frames[i];
 	frame->ctx_name = s;
 	frame->nr_attached_data = 0;
+	frame->frame_id = ctx->count;
 
 	ghost_print_begin();
 	hyp_putsp("[enter ");
