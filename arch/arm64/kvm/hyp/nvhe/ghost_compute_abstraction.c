@@ -275,23 +275,42 @@ void check_abstraction_equals_host(struct ghost_host *gh1, struct ghost_host *gh
 
 void check_abstraction_equals_loaded_vcpu(struct ghost_loaded_vcpu *loaded_vcpu1, struct ghost_loaded_vcpu *loaded_vcpu2)
 {
+	GHOST_LOG_CONTEXT_ENTER();
+	GHOST_LOG(loaded_vcpu1->present, bool);
+	GHOST_LOG(loaded_vcpu2->present, bool);
 	ghost_assert(loaded_vcpu1->present && loaded_vcpu2->present);
+
+	GHOST_LOG(loaded_vcpu1->loaded, bool);
+	GHOST_LOG(loaded_vcpu2->loaded, bool);
 	ghost_spec_assert(loaded_vcpu1->loaded == loaded_vcpu2->loaded);
+
 	if (loaded_vcpu1->loaded) {
+		GHOST_LOG(loaded_vcpu1->vm_handle, u32);
+		GHOST_LOG(loaded_vcpu2->vm_handle, u32);
+		GHOST_LOG(loaded_vcpu1->vcpu_index, u64);
+		GHOST_LOG(loaded_vcpu2->vcpu_index, u64);
 		ghost_spec_assert(loaded_vcpu1->vm_handle == loaded_vcpu2->vm_handle);
 		ghost_spec_assert(loaded_vcpu1->vcpu_index == loaded_vcpu2->vcpu_index);
 	}
+	GHOST_LOG_CONTEXT_EXIT();
 }
 
 void check_abstraction_equals_loaded_vcpus(struct ghost_state *g1, struct ghost_state *g2)
 {
+	GHOST_LOG_CONTEXT_ENTER();
 	for (int i=0; i<NR_CPUS; i++) {
+		GHOST_LOG_CONTEXT_ENTER_INNER();
+		GHOST_LOG(i, u32);
+		GHOST_LOG(g1->loaded_hyp_vcpu[i].present, bool);
+		GHOST_LOG(g2->loaded_hyp_vcpu[i].present, bool);
 		if (g1->loaded_hyp_vcpu[i].present && g2->loaded_hyp_vcpu[i].present) {
 			check_abstraction_equals_loaded_vcpu(&g1->loaded_hyp_vcpu[i], &g2->loaded_hyp_vcpu[i]);
 		} else if (g1->loaded_hyp_vcpu[i].present && !g2->loaded_hyp_vcpu[i].present) {
 			ghost_assert(false);
 		}
+		GHOST_LOG_CONTEXT_EXIT();
 	}
+	GHOST_LOG_CONTEXT_EXIT();
 }
 
 void check_abstraction_equals_vcpu(struct ghost_vcpu *vcpu1, struct ghost_vcpu *vcpu2)
@@ -608,6 +627,7 @@ void ghost_vm_clone_into(struct ghost_vm *dest, struct ghost_vm *src)
 
 void copy_abstraction_vm(struct ghost_state *g_tgt, struct ghost_state *g_src, pkvm_handle_t handle)
 {
+	GHOST_LOG_CONTEXT_ENTER();
 	ghost_assert_maplets_locked();
 	ghost_assert_vms_table_locked();
 
@@ -620,6 +640,7 @@ void copy_abstraction_vm(struct ghost_state *g_tgt, struct ghost_state *g_src, p
 	struct ghost_vm *tgt_vm = ghost_vms_alloc(&g_tgt->vms, handle);
 
 	ghost_vm_clone_into(tgt_vm, src_vm);
+	GHOST_LOG_CONTEXT_EXIT();
 }
 
 void copy_abstraction_loaded_vcpus(struct ghost_state *g_tgt, struct ghost_state *g_src)
@@ -644,6 +665,7 @@ void record_abstraction_pkvm(struct ghost_state *g)
 
 void record_abstraction_loaded_vcpu(struct ghost_state *g)
 {
+	GHOST_LOG_CONTEXT_ENTER();
 	bool loaded = false;
 	pkvm_handle_t vm_handle = 0;
 	u64 vcpu_index = 0;
@@ -661,6 +683,7 @@ void record_abstraction_loaded_vcpu(struct ghost_state *g)
 		.vm_handle = vm_handle,
 		.vcpu_index = vcpu_index,
 	};
+	GHOST_LOG_CONTEXT_EXIT();
 }
 
 void record_abstraction_host(struct ghost_state *g)
