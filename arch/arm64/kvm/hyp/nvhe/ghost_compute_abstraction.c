@@ -298,7 +298,7 @@ void check_abstraction_equals_loaded_vcpu(struct ghost_loaded_vcpu *loaded_vcpu1
 void check_abstraction_equals_loaded_vcpus(struct ghost_state *g1, struct ghost_state *g2)
 {
 	GHOST_LOG_CONTEXT_ENTER();
-	for (int i=0; i<NR_CPUS; i++) {
+	for (int i=0; i < g1->globals.hyp_nr_cpus; i++) {
 		GHOST_LOG_CONTEXT_ENTER_INNER();
 		GHOST_LOG(i, u32);
 		GHOST_LOG(g1->loaded_hyp_vcpu[i].present, bool);
@@ -441,7 +441,8 @@ void check_abstraction_equals_all(struct ghost_state *gc, struct ghost_state *gr
 
 	// check that a bunch of global state bits, that 'in theory' should be constant, really didn't change.
 	ghost_spec_assert(
-		   gc->globals.hyp_physvirt_offset == gr_post->globals.hyp_physvirt_offset
+		   gc->globals.hyp_nr_cpus == gr_post->globals.hyp_nr_cpus
+		&& gc->globals.hyp_physvirt_offset == gr_post->globals.hyp_physvirt_offset
 		&& gc->globals.tag_lsb == gr_post->globals.tag_lsb
 		&& gc->globals.tag_val == gr_post->globals.tag_val
 	);
@@ -645,7 +646,7 @@ void copy_abstraction_vm(struct ghost_state *g_tgt, struct ghost_state *g_src, p
 
 void copy_abstraction_loaded_vcpus(struct ghost_state *g_tgt, struct ghost_state *g_src)
 {
-	for (int i=0; i<NR_CPUS; i++) {
+	for (int i=0; i < g_src->globals.hyp_nr_cpus; i++) {
 		if (g_src->loaded_hyp_vcpu[i].present) {
 			g_tgt->loaded_hyp_vcpu[i] = g_src->loaded_hyp_vcpu[i];
 		}
@@ -791,8 +792,12 @@ void record_abstraction_regs_post(struct kvm_cpu_context *ctxt)
 u8 tag_lsb;
 u64 tag_val;
 
+/* defined in setup.c */
+extern unsigned long hyp_nr_cpus;
+
 void record_abstraction_constants(struct ghost_state *g)
 {
+	g->globals.hyp_nr_cpus = hyp_nr_cpus;
 	g->globals.hyp_physvirt_offset = hyp_physvirt_offset;
 	g->globals.tag_lsb = tag_lsb;
 	g->globals.tag_val = tag_val;

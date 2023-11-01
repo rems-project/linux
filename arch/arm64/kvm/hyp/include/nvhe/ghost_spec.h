@@ -233,6 +233,7 @@ void ghost_assert_vms_table_locked(void);
 
 /**
  * struct ghost_constant_globals - Copy of the hypervisor read-only globals
+ * @hyp_nr_cpus: the actual count of the number of CPUs there are.
  * @hyp_physvirt_offset: the global physical offset of physical memory within the hyp VA space.
  * @tag_lsb: the pKVM VA tag (NOT the one of the Host kernel).
  * @tag_val: the pKVM VA tag value (the random offset and the bit indicating whether we are
@@ -242,6 +243,7 @@ void ghost_assert_vms_table_locked(void);
  * Context: not protected by any lock, as should be read-only globals.
  */
 struct ghost_constant_globals {
+	u64 hyp_nr_cpus;
 	s64 hyp_physvirt_offset;
 	u64 tag_lsb;
 	u64 tag_val;
