@@ -915,22 +915,18 @@ void record_abstraction_loaded_vcpu_and_check_none(void)
 void record_and_check_abstraction_loaded_hyp_vcpu_pre(void)
 {
 	GHOST_LOG_CONTEXT_ENTER();
-	ghost_lock_maplets();
 	struct ghost_state *g = this_cpu_ptr(&gs_recorded_pre);
 	record_abstraction_loaded_vcpu(g);
 	check_abstraction_equals_loaded_vcpus(g, &gs);
-	ghost_unlock_maplets();
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
 void record_and_copy_abstraction_loaded_hyp_vcpu_post(void)
 {
 	GHOST_LOG_CONTEXT_ENTER();
-	ghost_lock_maplets();
 	struct ghost_state *g = this_cpu_ptr(&gs_recorded_post);
 	record_abstraction_loaded_vcpu(g);
 	copy_abstraction_loaded_vcpus(&gs, g);
-	ghost_unlock_maplets();
 	GHOST_LOG_CONTEXT_EXIT();
 }
 

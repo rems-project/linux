@@ -330,7 +330,9 @@ int __kvm_vcpu_run(struct kvm_vcpu *vcpu)
 #ifdef CONFIG_NVHE_GHOST_SPEC
 		// recording pre state before a guest hcall/... handler
 		if (GHOST_EXEC_SPEC) {
+			ghost_lock_vms_table();
 			clear_abstraction_thread_local();
+			ghost_unlock_vms_table();
 			record_abstraction_regs_pre(host_ctxt);
 			record_abstraction_constants_pre();
 		}
