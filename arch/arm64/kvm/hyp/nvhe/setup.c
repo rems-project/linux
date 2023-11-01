@@ -456,8 +456,9 @@ out:
 	GHOST_LOG_CONTEXT_EXIT(); // __pkvm_init_finalise
 
 	// because we tail called here with no intention of returning,
-	// pop the two parents off as well.
+	// pop the parents off as well.
 	GHOST_LOG_CONTEXT_EXIT(); // __pkvm_init
+	GHOST_LOG_CONTEXT_EXIT(); // handle_host_hcall
 	GHOST_LOG_CONTEXT_EXIT(); // handle_trap
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 
@@ -497,15 +498,29 @@ int __pkvm_init(phys_addr_t phys, unsigned long size, unsigned long nr_cpus,
 
 	BUG_ON(kvm_check_pvm_sysreg_table());
 
-	if (!PAGE_ALIGNED(phys) || !PAGE_ALIGNED(size))
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	if (!PAGE_ALIGNED(phys) || !PAGE_ALIGNED(size)) {
+		GHOST_LOG_CONTEXT_EXIT();
 		return -EINVAL;
+	}
+#else /* CONFIG_NVHE_GHOST_SPEC */
+	if (!PAGE_ALIGNED(phys) || !PAGE_ALIGNED(size)) {
+		return -EINVAL;
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 
 	hyp_spin_lock_init(&pkvm_pgd_lock);
 	hyp_nr_cpus = nr_cpus;
 
 	ret = divide_memory_pool(virt, size);
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	if (ret) {
+		GHOST_LOG_CONTEXT_EXIT();
+		return ret;
+	}
+#else /* CONFIG_NVHE_GHOST_SPEC */
 	if (ret)
 		return ret;
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 
 #ifdef CONFIG_NVHE_GHOST_SPEC
 	ghost__pkvm_init_phys = phys;
@@ -514,8 +529,15 @@ int __pkvm_init(phys_addr_t phys, unsigned long size, unsigned long nr_cpus,
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 
 	ret = recreate_hyp_mappings(phys, size, per_cpu_base, hyp_va_bits);
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	if (ret) {
+		GHOST_LOG_CONTEXT_EXIT();
+		return ret;
+	}
+#else /* CONFIG_NVHE_GHOST_SPEC */
 	if (ret)
 		return ret;
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 
 	update_nvhe_init_params();
 

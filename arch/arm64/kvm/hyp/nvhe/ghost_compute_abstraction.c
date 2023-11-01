@@ -327,13 +327,24 @@ void check_abstraction_equals_vm(struct ghost_vm *vm1, struct ghost_vm *vm2)
 	// technically the handles are fields on the vm and protected by the vm
 	// but if we hold the vm_table lock they can't change out from under us
 	// and we don't want to lock vm2 if it's not the same guest as vm1
+	GHOST_LOG(vm1->pkvm_handle, u32);
+	GHOST_LOG(vm2->pkvm_handle, u32);
 	ghost_spec_assert(vm1->pkvm_handle == vm2->pkvm_handle);
 	ghost_assert(vm1->lock == vm2->lock);
 
+	GHOST_LOG(vm1->nr_vcpus, u64);
+	GHOST_LOG(vm2->nr_vcpus, u64);
 	ghost_spec_assert(vm1->nr_vcpus == vm2->nr_vcpus);
+
+	// GHOST_LOG(vm1->nr_initialised_vcpus, u64);
+	// GHOST_LOG(vm2->nr_initialised_vcpus, u64);
+	// ghost_spec_assert(vm1->nr_initialised_vcpus == vm2->nr_initialised_vcpus);
 	
-	for (int i=0; i<vm1->nr_vcpus; i++) {
+	for (int i=0; i < vm1->nr_vcpus; i++) {
+		GHOST_LOG_CONTEXT_ENTER_INNER();
+		GHOST_LOG(i, u32);
 		check_abstraction_equals_vcpu(vm1->vcpus[i], vm2->vcpus[i]);
+		GHOST_LOG_CONTEXT_EXIT();
 	}
 
 	check_abstract_pgtable_equal(&vm1->vm_abstract_pgtable, &vm2->vm_abstract_pgtable, "abstraction_equals_vm", "vm1.vm_abstract_pgtable", "vm2.vm_abstract_pgtable", 4);

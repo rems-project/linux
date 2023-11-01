@@ -738,6 +738,7 @@ out:
 
 void compute_new_abstract_state_handle_host_hcall(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call, bool *new_state_computed)
 {
+	GHOST_LOG_CONTEXT_ENTER();
 	int smccc_ret = SMCCC_RET_SUCCESS;
 	// allow any hcall to fail with ENOMEM, with an otherwise-identity abstract state
 	if (call->return_value == -ENOMEM) {
@@ -787,6 +788,7 @@ void compute_new_abstract_state_handle_host_hcall(struct ghost_state *g1, struct
 		break;
 	}
 	ghost_reg_gpr(g1, 0) = smccc_ret;
+	GHOST_LOG_CONTEXT_EXIT();
 }
 
 
@@ -833,8 +835,12 @@ void compute_new_abstract_state_handle_host_mem_abort(struct ghost_state *g1, st
 void compute_new_abstract_state_handle_trap(struct ghost_state *g1 /*new*/, struct ghost_state *g0 /*old*/, struct ghost_call_data *call, bool *new_state_computed)
 	// pointer or struct arguments and results?  For more obvious correspondence to math, struct - but that may be too terrible for executability, and distracting for those used to idiomatic C.  Doesn't matter too much.
 {
+	GHOST_LOG_CONTEXT_ENTER();
 
 	// assumes *g1 has been cleared
+	GHOST_LOG(g1->pkvm.present, bool);
+	GHOST_LOG(g1->host.present, bool);
+	GHOST_LOG(this_cpu_ghost_register_state(g1)->present, bool);
 	ghost_assert(!g1->pkvm.present && !g1->host.present && !this_cpu_ghost_register_state(g1)->present);
 
 	// copy the g0 regs to g1; we'll update them to make the final g1
@@ -864,6 +870,7 @@ void compute_new_abstract_state_handle_trap(struct ghost_state *g1 /*new*/, stru
 	default:
 		ghost_assert(false);
 	}
+	GHOST_LOG_CONTEXT_EXIT();
 }
 
 void ghost_handle_trap_epilogue(struct kvm_cpu_context *host_ctxt, bool from_host)
