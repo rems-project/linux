@@ -394,6 +394,9 @@ int __pkvm_prot_finalize(void)
 	dsb(nsh);
 	isb();
 
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	record_abstraction_loaded_vcpu_and_check_none();
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	return 0;
 }
 

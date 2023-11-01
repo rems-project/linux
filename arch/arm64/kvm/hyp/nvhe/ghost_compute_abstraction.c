@@ -875,6 +875,15 @@ void record_and_copy_abstraction_host_post(void)
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
+void record_abstraction_loaded_vcpu_and_check_none(void)
+{
+	struct pkvm_hyp_vcpu *loaded_vcpu = pkvm_get_loaded_hyp_vcpu();
+	// this cpu should have a loaded vcpu yet
+	ghost_assert(!loaded_vcpu);
+	this_cpu_ghost_loaded_vcpu(&gs)->present = true;
+	this_cpu_ghost_loaded_vcpu(&gs)->loaded = false;
+}
+
 void record_and_check_abstraction_loaded_hyp_vcpu_pre(void)
 {
 	GHOST_LOG_CONTEXT_ENTER();

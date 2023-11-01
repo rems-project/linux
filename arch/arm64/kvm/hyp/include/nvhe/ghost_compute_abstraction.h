@@ -19,6 +19,7 @@ void record_abstraction_constants_pre(void);
 void record_abstraction_constants_post(void);
 void record_and_check_abstraction_pkvm_pre(void);
 void record_and_check_abstraction_host_pre(void);
+void record_abstraction_loaded_vcpu_and_check_none(void);
 void record_and_check_abstraction_loaded_hyp_vcpu_pre(void);
 void record_and_check_abstraction_vm_pre(struct pkvm_hyp_vm *vm);
 void record_and_copy_abstraction_pkvm_post(void);
