@@ -987,8 +987,14 @@ static enum pkvm_page_state hyp_get_page_state(kvm_pte_t pte, u64 addr)
 	return pkvm_getstate(kvm_pgtable_hyp_pte_prot(pte));
 }
 
+#ifdef CONFIG_NVHE_GHOST_SPEC
+// non-static to expose to ghost.
+/*static*/ int __hyp_check_page_state_range(u64 addr, u64 size,
+					enum pkvm_page_state state)
+#else /* CONFIG_NVHE_GHOST_SPEC */
 static int __hyp_check_page_state_range(u64 addr, u64 size,
 					enum pkvm_page_state state)
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 {
 	struct check_walk_data d = {
 		.desired	= state,

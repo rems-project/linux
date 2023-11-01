@@ -6,8 +6,18 @@
 #include <nvhe/spinlock.h>
 #include <nvhe/ghost_asserts.h>
 #include <nvhe/ghost_context.h>
+#include <nvhe/mem_protect.h>
 
+/**
+ * GHOST_MAX_CONTEXT_FRAMES - Max depth of stack frames (per CPU)
+ */
 #define GHOST_MAX_CONTEXT_FRAMES 16
+
+/**
+ * GHOST_MAX_CONTEXT_DATA - Max count of log messages per stack frame
+ *
+ * Includes GHOST_LOG() vars as well as GHOST_WARN()/GHOST_MSG()
+ */
 #define GHOST_MAX_CONTEXT_DATA 16
 
 struct ghost_context_data {
@@ -144,6 +154,10 @@ static void indent(u64 width)
 	}
 }
 
+// we want to use the pkvm pgtable walker to check validity of the VAs before trying to print them
+extern int kvm_nvhe_sym(__hyp_check_page_state_range)(u64 addr, u64 size, enum pkvm_page_state state);
+extern hyp_spinlock_t kvm_nvhe_sym(pkvm_pgd_lock);
+
 void ghost_log_context_traceback(void)
 {
 	struct ghost_context *ctx;
@@ -166,8 +180,28 @@ void ghost_log_context_traceback(void)
 			hyp_putsp("| ");
 			hyp_putsp((char *)data->data_name);
 			if (data->has_data) {
+				u64 va;
+				bool va_valid;
+
 				hyp_putsp(":");
-				data->fn(data->data_ptr);
+
+				// don't just dereference it, check if it's accessible first
+				// ... by actually doing a pgtable walk!
+				hyp_spin_lock(&kvm_nvhe_sym(pkvm_pgd_lock));
+				va = (u64)data->data_ptr;
+				va_valid = !kvm_nvhe_sym(__hyp_check_page_state_range)(va, sizeof(void*), PKVM_PAGE_OWNED);
+				hyp_spin_unlock(&kvm_nvhe_sym(pkvm_pgd_lock));
+
+				// don't try to dereference NULL pointers
+				if (! data->data_ptr) {
+					hyp_putsp("<inacessible>@NULL");
+				// also check we can read it.
+				} else if (! va_valid) {
+					hyp_putsp("<inaccessible>@");
+					hyp_putx64(va);
+				} else {
+					data->fn(data->data_ptr);
+				}
 			}
 			hyp_putsp("\n");
 		}

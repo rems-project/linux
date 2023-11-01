@@ -36,7 +36,7 @@ void ghost_log_context_traceback(void);
 #define GHOST_LOG_CONTEXT_EXIT() ghost_log_exit_context()
 
 #define GHOST_LOG_P(var, printer) \
-	ghost_log_context_attach(#var, &var, printer)
+	ghost_log_context_attach(#var, (void*)&(var), printer)
 
 #define GHOST_u64printer hyp_putx64ptr
 #define GHOST_u32printer hyp_putx32ptr
