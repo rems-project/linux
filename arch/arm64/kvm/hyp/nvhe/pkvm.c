@@ -338,7 +338,7 @@ unlock:
 		__this_cpu_write(loaded_hyp_vcpu, hyp_vcpu);
 
 #ifdef CONFIG_NVHE_GHOST_SPEC
-	// /GHOST
+	record_and_copy_abstraction_loaded_hyp_vcpu_post();
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 
 	return hyp_vcpu;
