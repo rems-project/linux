@@ -228,6 +228,7 @@ void ghost_lock_vms_table(void);
 
 void ghost_unlock_vms_table(void);
 
+void ghost_assert_vm_locked(struct ghost_vm *vm);
 void ghost_assert_vms_table_locked(void);
 
 

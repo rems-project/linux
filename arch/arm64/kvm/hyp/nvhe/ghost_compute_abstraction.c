@@ -105,7 +105,6 @@ void compute_abstraction_host(struct ghost_host *dest)
 
 
 static struct ghost_vm_slot *__ghost_vm_or_free_slot_from_handle(struct ghost_vms *vms, pkvm_handle_t handle) {
-	ghost_assert_vms_table_locked();
 	ghost_assert(vms->present);
 
 	struct ghost_vm_slot *free_slot = NULL;
@@ -134,7 +133,6 @@ hyp_spinlock_t *ghost_pointer_to_vm_lock(pkvm_handle_t handle)
 
 struct ghost_vm *ghost_vms_get(struct ghost_vms *vms, pkvm_handle_t handle)
 {
-	ghost_assert_vms_table_locked();
 	struct ghost_vm_slot *slot = __ghost_vm_or_free_slot_from_handle(vms, handle);
 	if (slot->exists)
 		return slot->vm;
@@ -143,7 +141,6 @@ struct ghost_vm *ghost_vms_get(struct ghost_vms *vms, pkvm_handle_t handle)
 
 struct ghost_vm *ghost_vms_alloc(struct ghost_vms *vms, pkvm_handle_t handle)
 {
-	ghost_assert_vms_table_locked();
 	struct ghost_vm_slot *slot = __ghost_vm_or_free_slot_from_handle(vms, handle);
 	if (!slot->exists) {
 		slot->vm = malloc_or_die(sizeof(struct ghost_vm));
@@ -157,7 +154,6 @@ struct ghost_vm *ghost_vms_alloc(struct ghost_vms *vms, pkvm_handle_t handle)
 
 static void ghost_vm_clear_slot(struct ghost_vm_slot *slot)
 {
-	ghost_assert_vms_table_locked();
 	if (slot->exists) {
 		slot->exists = false;
 		clear_abstract_pgtable(&slot->vm->vm_abstract_pgtable);
@@ -171,7 +167,6 @@ static void ghost_vm_clear_slot(struct ghost_vm_slot *slot)
 
 void ghost_vms_free(struct ghost_vms *vms, pkvm_handle_t handle)
 {
-	ghost_assert_vms_table_locked();
 	struct ghost_vm_slot *slot = __ghost_vm_or_free_slot_from_handle(vms, handle);
 	// can only free something that exists in the table
 	ghost_assert(slot);
@@ -180,7 +175,6 @@ void ghost_vms_free(struct ghost_vms *vms, pkvm_handle_t handle)
 
 bool ghost_vms_is_valid_handle(struct ghost_vms *vms, pkvm_handle_t handle)
 {
-	ghost_assert_vms_table_locked();
 	ghost_assert(vms->present);
 	struct ghost_vm *vm = ghost_vms_get(vms, handle);
 	return vm != NULL;
@@ -327,10 +321,7 @@ void check_abstraction_equals_vcpu(struct ghost_vcpu *vcpu1, struct ghost_vcpu *
 void check_abstraction_equals_vm(struct ghost_vm *vm1, struct ghost_vm *vm2)
 {
 	GHOST_LOG_CONTEXT_ENTER();
-	// need to hold the vms lock to make sure the vm doesn't change out under us.
-	ghost_assert_vms_table_locked();
-
-	hyp_assert_lock_held(vm1->lock);
+	ghost_assert_vm_locked(vm1);
 
 	// if not for the same guest VM, then not equal
 	// technically the handles are fields on the vm and protected by the vm
@@ -354,8 +345,6 @@ void check_abstraction_vm_in_vms_and_equal(pkvm_handle_t vm_handle, struct ghost
 	int i;	
 	GHOST_LOG_CONTEXT_ENTER();
 	GHOST_LOG(vm_handle, u32);
-
-	ghost_assert_vms_table_locked();
 
 	struct ghost_vm *g_vm = ghost_vms_get(&g->vms, vm_handle);
 	struct ghost_vm *found_vm = ghost_vms_get(vms, vm_handle);
@@ -508,14 +497,12 @@ void clear_abstraction_regs(struct ghost_state *g)
 
 void clear_abstraction_vm(struct ghost_state *g, pkvm_handle_t handle)
 {
-	ghost_assert_vms_table_locked();
 	ghost_vms_free(&g->vms, handle);
 }
 
 void clear_abstraction_vms(struct ghost_state *g)
 {
 	int i;
-	ghost_assert_vms_table_locked();
 	g->vms.present = false;
 	for (i=0; i<KVM_MAX_PVMS; i++) {
 		ghost_vm_clear_slot(&g->vms.table[i]);
@@ -588,7 +575,6 @@ void copy_abstraction_host(struct ghost_state *g_tgt, struct ghost_state *g_src)
 void copy_abstraction_vms(struct ghost_state *g_tgt, struct ghost_state *g_src)
 {
 	ghost_assert_maplets_locked();
-	ghost_assert_vms_table_locked();
 	ghost_assert(g_src->vms.present);
 
 	clear_abstraction_vms(g_tgt);
@@ -607,8 +593,7 @@ void copy_abstraction_vms(struct ghost_state *g_tgt, struct ghost_state *g_src)
 
 void ghost_vm_clone_into_nomappings(struct ghost_vm *dest, struct ghost_vm *src)
 {
-	ghost_assert_vms_table_locked();
-	hyp_assert_lock_held(src->lock);
+	ghost_assert_vm_locked(src);
 
 	dest->nr_vcpus = src->nr_vcpus;
 	ghost_assert(src->nr_vcpus <= KVM_MAX_VCPUS);
@@ -621,7 +606,6 @@ void ghost_vm_clone_into_nomappings(struct ghost_vm *dest, struct ghost_vm *src)
 
 void ghost_vm_clone_into(struct ghost_vm *dest, struct ghost_vm *src)
 {
-	ghost_assert_vms_table_locked();
 	ghost_vm_clone_into_nomappings(dest, src);
 	abstract_pgtable_copy(&dest->vm_abstract_pgtable, &src->vm_abstract_pgtable);
 }
@@ -630,12 +614,11 @@ void copy_abstraction_vm(struct ghost_state *g_tgt, struct ghost_state *g_src, p
 {
 	GHOST_LOG_CONTEXT_ENTER();
 	ghost_assert_maplets_locked();
-	ghost_assert_vms_table_locked();
 
 	struct ghost_vm *src_vm = ghost_vms_get(&g_src->vms, handle);
 	ghost_assert(src_vm);
 
-	hyp_assert_lock_held(src_vm->lock);
+	ghost_assert_vm_locked(src_vm);
 
 	clear_abstraction_vm(g_tgt, handle);
 	struct ghost_vm *tgt_vm = ghost_vms_alloc(&g_tgt->vms, handle);
@@ -696,7 +679,6 @@ void record_abstraction_host(struct ghost_state *g)
 void record_abstraction_vm(struct ghost_state *g, struct pkvm_hyp_vm *vm)
 {
 	GHOST_LOG_CONTEXT_ENTER();
-	ghost_assert_vms_table_locked();
 
 	// if recording the first vm, make an empty dictionary.
 	if (!g->vms.present) {
@@ -978,6 +960,11 @@ void ghost_unlock_vms_table(void) {
 
 inline void ghost_assert_vms_table_locked(void) {
 	hyp_assert_lock_held(&vm_table_lock);
+}
+
+void ghost_assert_vm_locked(struct ghost_vm *vm)
+{
+	hyp_assert_lock_held(vm->lock);
 }
 
 /****************************************/
