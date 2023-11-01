@@ -492,8 +492,9 @@ void compute_new_abstract_state_handle___pkvm_vcpu_load(struct ghost_state *g1, 
 	if (vcpu_idx >= vm->nr_vcpus)
 		goto out;
 
-	struct ghost_vcpu *vcpu = &vm->vcpus[vcpu_idx];
+	struct ghost_vcpu *vcpu = vm->vcpus[vcpu_idx];
 	ghost_assert(vcpu_idx < KVM_MAX_VCPUS);
+	ghost_assert(vcpu);
 
 	// if the vcpu is already loaded (potentially in another CPU), then do nothing
 	if (vcpu->loaded)
@@ -502,7 +503,8 @@ void compute_new_abstract_state_handle___pkvm_vcpu_load(struct ghost_state *g1, 
 	// record in the ghost state of the vcpu 'vcpu_idx' that is has been loaded
 	struct ghost_vm *vm1 = ghost_vms_alloc(&g1->vms, vm->pkvm_handle);
 	ghost_vm_clone_into(vm1, vm);
-	vm1->vcpus[vcpu_idx].loaded = true;
+	ghost_assert(vm1->vcpus[vcpu_idx]);
+	vm1->vcpus[vcpu_idx]->loaded = true;
 
 	// record in the ghost state that the current CPU has loaded
 	// the vcpu 'vcpu_idx' of vm 'vm_idx'
@@ -536,7 +538,9 @@ void compute_new_abstract_state_handle___pkvm_vcpu_put(struct ghost_state *g1, s
 	ghost_assert(vm1);
 
 	ghost_vm_clone_into(vm1, vm0);
-	vm1->vcpus[vcpu_idx].loaded = false;
+
+	ghost_assert(vm1->vcpus[vcpu_idx]);
+	vm1->vcpus[vcpu_idx]->loaded = false;
 
 	*this_cpu_ghost_loaded_vcpu(g1) = (struct ghost_loaded_vcpu){
 		.present = true,

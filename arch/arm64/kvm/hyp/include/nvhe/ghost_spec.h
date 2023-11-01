@@ -89,7 +89,7 @@ struct ghost_vm {
 	abstract_pgtable vm_abstract_pgtable;
 	u64 nr_vcpus;
 	u64 nr_initialised_vcpus;
-	struct ghost_vcpu vcpus[KVM_MAX_VCPUS];
+	struct ghost_vcpu *vcpus[KVM_MAX_VCPUS];
 	pkvm_handle_t pkvm_handle;
 	hyp_spinlock_t *lock;
 };

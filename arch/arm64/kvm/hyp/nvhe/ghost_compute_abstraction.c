@@ -161,6 +161,10 @@ static void ghost_vm_clear_slot(struct ghost_vm_slot *slot)
 	if (slot->exists) {
 		slot->exists = false;
 		clear_abstract_pgtable(&slot->vm->vm_abstract_pgtable);
+		for (int i = 0; i < KVM_MAX_VCPUS; i++) {
+			if (slot->vm->vcpus[i])
+				free(slot->vm->vcpus[i]);
+		}
 		free(slot->vm);
 	}
 }
@@ -189,8 +193,16 @@ void compute_abstraction_vm(struct ghost_vm *dest, struct pkvm_hyp_vm *vm) {
 	hyp_assert_lock_held(&vm->lock);
 	dest->pkvm_handle = vm->kvm.arch.pkvm.handle;
 	dest->nr_vcpus = vm->nr_vcpus;
-	for (i=0; i<dest->nr_vcpus; i++) {
-		dest->vcpus[i].loaded = vm->vcpus[i]->loaded_hyp_vcpu ? true : false;
+	for (i=0; i < KVM_MAX_VCPUS; i++) {
+		if (i < vm->nr_vcpus) {
+			dest->vcpus[i] = malloc_or_die(sizeof (struct ghost_vcpu));
+			dest->vcpus[i]->vcpu_handle = i;
+			dest->vcpus[i]->loaded = vm->vcpus[i]->loaded_hyp_vcpu ? true : false;
+			dest->vcpus[i]->initialised = false; // TODO
+			// TODO: regs
+		} else {
+			dest->vcpus[i] = NULL;
+		}
 	}
 	ghost_record_pgtable_ap(&dest->vm_abstract_pgtable, &vm->pgt, vm->pool.range_start, vm->pool.range_end, "guest_mmu.pgt", 0);
 	dest->lock = &vm->lock;
@@ -311,7 +323,7 @@ void check_abstraction_equals_vm(struct ghost_vm *vm1, struct ghost_vm *vm2)
 	ghost_spec_assert(vm1->nr_vcpus == vm2->nr_vcpus);
 	
 	for (int i=0; i<vm1->nr_vcpus; i++) {
-		check_abstraction_equals_vcpu(&vm1->vcpus[i], &vm2->vcpus[i]);
+		check_abstraction_equals_vcpu(vm1->vcpus[i], vm2->vcpus[i]);
 	}
 
 	check_abstract_pgtable_equal(&vm1->vm_abstract_pgtable, &vm2->vm_abstract_pgtable, "abstraction_equals_vm", "vm1.vm_abstract_pgtable", "vm2.vm_abstract_pgtable", 4);
