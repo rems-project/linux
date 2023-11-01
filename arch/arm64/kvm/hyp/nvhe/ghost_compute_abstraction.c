@@ -147,6 +147,8 @@ struct ghost_vm *ghost_vms_alloc(struct ghost_vms *vms, pkvm_handle_t handle)
 	struct ghost_vm_slot *slot = __ghost_vm_or_free_slot_from_handle(vms, handle);
 	if (!slot->exists) {
 		slot->vm = malloc_or_die(sizeof(struct ghost_vm));
+		slot->exists = true;
+		slot->handle = handle;
 		return slot->vm;
 	}
 
