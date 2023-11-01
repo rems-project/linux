@@ -186,7 +186,8 @@ void compute_abstraction_vm(struct ghost_vm *dest, struct pkvm_hyp_vm *vm) {
 	ghost_assert(vm);
 	hyp_assert_lock_held(&vm->lock);
 	dest->pkvm_handle = vm->kvm.arch.pkvm.handle;
-	dest->nr_vcpus = vm->nr_vcpus;
+	dest->nr_vcpus = vm->kvm.created_vcpus;
+	dest->nr_initialised_vcpus = vm->nr_vcpus;
 	for (i=0; i < KVM_MAX_VCPUS; i++) {
 		if (i < vm->nr_vcpus) {
 			dest->vcpus[i] = malloc_or_die(sizeof (struct ghost_vcpu));
@@ -608,6 +609,7 @@ void ghost_vm_clone_into_nomappings(struct ghost_vm *dest, struct ghost_vm *src)
 	ghost_assert_vm_locked(src);
 
 	dest->nr_vcpus = src->nr_vcpus;
+	dest->nr_initialised_vcpus = src->nr_initialised_vcpus;
 	ghost_assert(src->nr_vcpus <= KVM_MAX_VCPUS);
 	for (int vcpu_idx=0; vcpu_idx<src->nr_vcpus; vcpu_idx++) {
 		dest->vcpus[vcpu_idx] = src->vcpus[vcpu_idx];
