@@ -642,19 +642,12 @@ void record_abstraction_pkvm(struct ghost_state *g)
 	compute_abstraction_pkvm(&g->pkvm);
 }
 
-/* from nvhe/pkvm.c */
-extern DEFINE_PER_CPU(struct pkvm_hyp_vcpu *, loaded_hyp_vcpu);
-
-/*
- * record the currently loaded vcpu on this core
- * this must be called after loading pkvm
- */
 void record_abstraction_loaded_vcpu(struct ghost_state *g)
 {
 	bool loaded = false;
 	pkvm_handle_t vm_handle = 0;
 	u64 vcpu_index = 0;
-	struct pkvm_hyp_vcpu *loaded_vcpu = this_cpu_ptr(loaded_hyp_vcpu);
+	struct pkvm_hyp_vcpu *loaded_vcpu = pkvm_get_loaded_hyp_vcpu();
 	if (loaded_vcpu) {
 		// Now we dereference the vcpu struct, even though we're not protected by a lock
 		// this is somehow ok?
