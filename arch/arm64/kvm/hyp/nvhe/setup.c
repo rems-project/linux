@@ -393,6 +393,7 @@ void __noreturn __pkvm_init_finalise(void)
 	int ret;
 
 #ifdef CONFIG_NVHE_GHOST_SPEC
+	GHOST_LOG_CONTEXT_ENTER();
 	// register the debug output
 	ghost_extra_debug_initialised = true;
 	// dump some mappings
@@ -452,8 +453,12 @@ void __noreturn __pkvm_init_finalise(void)
 out:
 
 #ifdef CONFIG_NVHE_GHOST_SPEC
-	GHOST_LOG_CONTEXT_EXIT();
-	GHOST_LOG_CONTEXT_EXIT();
+	GHOST_LOG_CONTEXT_EXIT(); // __pkvm_init_finalise
+
+	// because we tail called here with no intention of returning,
+	// pop the two parents off as well.
+	GHOST_LOG_CONTEXT_EXIT(); // __pkvm_init
+	GHOST_LOG_CONTEXT_EXIT(); // handle_trap
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 
 	/*
@@ -475,6 +480,7 @@ int __pkvm_init(phys_addr_t phys, unsigned long size, unsigned long nr_cpus,
 
 #ifdef CONFIG_NVHE_GHOST_SPEC
 	init_ghost_control();
+	GHOST_LOG_CONTEXT_ENTER();
 
 	hyp_puts("\n__pkvm_init:\n");
 	hyp_putsxnl("    CPU", hyp_smp_processor_id(), 32);

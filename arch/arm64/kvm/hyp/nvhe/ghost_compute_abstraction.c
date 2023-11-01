@@ -282,11 +282,18 @@ void check_abstraction_equals_loaded_vcpus(struct ghost_state *g1, struct ghost_
 
 void check_abstraction_equals_vcpu(struct ghost_vcpu *vcpu1, struct ghost_vcpu *vcpu2)
 {
+	GHOST_LOG_CONTEXT_ENTER();
+	GHOST_LOG(vcpu1->vcpu_handle, u64);
+	GHOST_LOG(vcpu1->loaded, bool);
+	GHOST_LOG(vcpu2->vcpu_handle, u64);
+	GHOST_LOG(vcpu2->loaded, bool);
 	ghost_spec_assert(vcpu1->loaded == vcpu2->loaded);
+	GHOST_LOG_CONTEXT_EXIT();
 }
 
 void check_abstraction_equals_vm(struct ghost_vm *vm1, struct ghost_vm *vm2)
 {
+	GHOST_LOG_CONTEXT_ENTER();
 	// need to hold the vms lock to make sure the vm doesn't change out under us.
 	ghost_assert_vms_table_locked();
 
@@ -306,11 +313,15 @@ void check_abstraction_equals_vm(struct ghost_vm *vm1, struct ghost_vm *vm2)
 	}
 
 	check_abstract_pgtable_equal(&vm1->vm_abstract_pgtable, &vm2->vm_abstract_pgtable, "abstraction_equals_vm", "vm1.vm_abstract_pgtable", "vm2.vm_abstract_pgtable", 4);
+	GHOST_LOG_CONTEXT_EXIT();
 }
 
 /// Check that `vm` is found in `vms` and that the two ghost vms are equal
 void check_abstraction_vm_in_vms_and_equal(pkvm_handle_t vm_handle, struct ghost_state *g, struct ghost_vms *vms) {
 	int i;	
+	GHOST_LOG_CONTEXT_ENTER();
+	GHOST_LOG(vm_handle, u32);
+
 	ghost_assert_vms_table_locked();
 
 	struct ghost_vm *g_vm = ghost_vms_get(&g->vms, vm_handle);
@@ -320,6 +331,7 @@ void check_abstraction_vm_in_vms_and_equal(pkvm_handle_t vm_handle, struct ghost
 	ghost_spec_assert(found_vm);
 
 	check_abstraction_equals_vm(g_vm, found_vm);
+	GHOST_LOG_CONTEXT_EXIT();
 }
 
 void __check_abstraction_vm_contained_in(struct ghost_vm *vm, struct ghost_vms *vms) {
