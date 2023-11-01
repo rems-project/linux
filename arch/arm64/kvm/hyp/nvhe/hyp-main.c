@@ -1311,7 +1311,13 @@ void handle_trap(struct kvm_cpu_context *host_ctxt)
 	ghost_clear_call_data();
 	_Bool check_this_transition=false;
 	if (GHOST_EXEC_SPEC && READ_ONCE(pkvm_init_finalized)) {
+		// we have to own the pKVM vm_table table to clear the vms dict.
+		// technically it's safe to do it anyway, as this is just thread-local abstraction
+		// but we assert that it's held
+		ghost_lock_vms_table();
 		clear_abstraction_thread_local();
+		ghost_unlock_vms_table();
+
 		ghost_lock_maplets();
 		record_abstraction_hyp_memory(this_cpu_ptr(&gs_recorded_pre));
 		ghost_unlock_maplets();

@@ -441,7 +441,11 @@ void __noreturn __pkvm_init_finalise(void)
 			
 #ifdef CONFIG_NVHE_GHOST_SPEC
 	init_abstraction_common();
+	// we take the hyp vm_table lock here for the ghost machinery cheking
+	// it's not technically required
+	ghost_lock_vms_table();
 	record_abstraction_common();
+	ghost_unlock_vms_table();
 	WRITE_ONCE(pkvm_init_finalized, true);
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 

@@ -155,6 +155,7 @@ struct ghost_vm *ghost_vms_alloc(struct ghost_vms *vms, pkvm_handle_t handle)
 
 static void ghost_vm_clear_slot(struct ghost_vm_slot *slot)
 {
+	ghost_assert_vms_table_locked();
 	if (slot->exists) {
 		slot->exists = false;
 		clear_abstract_pgtable(&slot->vm->vm_abstract_pgtable);
@@ -293,7 +294,7 @@ void check_abstraction_equals_vm(struct ghost_vm *vm1, struct ghost_vm *vm2)
 
 	// if not for the same guest VM, then not equal
 	// technically the handles are fields on the vm and protected by the vm
-	// but if we hold the ghost vms lock they can't change out from under us
+	// but if we hold the vm_table lock they can't change out from under us
 	// and we don't want to lock vm2 if it's not the same guest as vm1
 	ghost_spec_assert(vm1->pkvm_handle == vm2->pkvm_handle);
 	ghost_assert(vm1->lock == vm2->lock);
@@ -489,11 +490,9 @@ void clear_abstraction_all(struct ghost_state *g)
 void clear_abstraction_thread_local(void)
 {
 	ghost_lock_maplets();
-	ghost_lock_vms_table();
 	clear_abstraction_all(this_cpu_ptr(&gs_recorded_pre));
 	clear_abstraction_all(this_cpu_ptr(&gs_recorded_post));
 	clear_abstraction_all(this_cpu_ptr(&gs_computed_post));
-	ghost_unlock_vms_table();
 	ghost_unlock_maplets();
 }
 
@@ -849,11 +848,9 @@ void record_and_copy_abstraction_vm_post(struct pkvm_hyp_vm *vm)
 {
 	GHOST_LOG_CONTEXT_ENTER();
 	ghost_lock_maplets();
-	ghost_lock_vms_table();
 	struct ghost_state *g = this_cpu_ptr(&gs_recorded_post);
 	record_abstraction_vm(g, vm);
 	copy_abstraction_vm(&gs, g, vm->kvm.arch.pkvm.handle);
-	ghost_unlock_vms_table();
 	ghost_unlock_maplets();
 	GHOST_LOG_CONTEXT_EXIT();
 }
@@ -862,18 +859,16 @@ void record_and_copy_abstraction_vm_post(struct pkvm_hyp_vm *vm)
 /****************************************/
 // locking
 
-DEFINE_HYP_SPINLOCK(ghost_vms_lock);
-
 void ghost_lock_vms_table(void) {
-	hyp_spin_lock(&ghost_vms_lock);
+	hyp_spin_lock(&vm_table_lock);
 }
 
 void ghost_unlock_vms_table(void) {
-	hyp_spin_unlock(&ghost_vms_lock);
+	hyp_spin_unlock(&vm_table_lock);
 }
 
 inline void ghost_assert_vms_table_locked(void) {
-	hyp_assert_lock_held(&ghost_vms_lock);
+	hyp_assert_lock_held(&vm_table_lock);
 }
 
 /****************************************/

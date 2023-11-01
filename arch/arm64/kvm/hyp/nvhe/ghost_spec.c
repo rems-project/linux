@@ -719,10 +719,9 @@ void compute_new_abstract_state_handle___pkvm_init_vm(struct ghost_state *g1, st
 	// of the array to false
 	memset(vm1->vcpus, 0, sizeof(struct ghost_vcpu[KVM_MAX_VCPUS]));
 	vm1->pkvm_handle = handle;
-	ghost_lock_vms_table();
+	
+	ghost_assert_vms_table_locked();
 	vm1->lock = ghost_pointer_to_vm_lock(handle);
-	ghost_unlock_vms_table();
-
 	ret = handle;
 out:
 	ghost_reg_gpr(g1, 1) = ret;
