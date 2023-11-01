@@ -504,7 +504,7 @@ int __pkvm_init(phys_addr_t phys, unsigned long size, unsigned long nr_cpus,
 		return -EINVAL;
 	}
 #else /* CONFIG_NVHE_GHOST_SPEC */
-	if (!PAGE_ALIGNED(phys) || !PAGE_ALIGNED(size)) {
+	if (!PAGE_ALIGNED(phys) || !PAGE_ALIGNED(size))
 		return -EINVAL;
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 
