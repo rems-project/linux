@@ -538,6 +538,7 @@ void copy_abstraction_regs(struct ghost_state *g_tgt, struct ghost_state *g_src)
 
 void copy_abstraction_constants(struct ghost_state *g_tgt, struct ghost_state *g_src)
 {
+	g_tgt->globals.hyp_nr_cpus = g_src->globals.hyp_nr_cpus;
 	g_tgt->globals.hyp_physvirt_offset = g_src->globals.hyp_physvirt_offset;
 	g_tgt->globals.tag_lsb = g_src->globals.tag_lsb;
 	g_tgt->globals.tag_val = g_src->globals.tag_val;
