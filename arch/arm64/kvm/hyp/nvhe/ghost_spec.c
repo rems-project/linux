@@ -521,13 +521,16 @@ out:
 
 void compute_new_abstract_state_handle___pkvm_vcpu_put(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call)
 {
+	bool loaded;
 
 	struct ghost_loaded_vcpu *loaded_vcpu = this_cpu_ghost_loaded_vcpu(g0);
 	ghost_assert(loaded_vcpu->present);
 
 	// have to have done a previous vcpu_load
-	if (!loaded_vcpu->loaded)
+	if (!loaded_vcpu->loaded) {
+		loaded = false;
 		goto out;
+	}
 
 	pkvm_handle_t vm_handle = loaded_vcpu->vm_handle;
 	u64 vcpu_idx = loaded_vcpu->vcpu_index;
@@ -542,11 +545,13 @@ void compute_new_abstract_state_handle___pkvm_vcpu_put(struct ghost_state *g1, s
 	ghost_assert(vm1->vcpus[vcpu_idx]);
 	vm1->vcpus[vcpu_idx]->loaded = false;
 
+	loaded = true;
+
+out:
 	*this_cpu_ghost_loaded_vcpu(g1) = (struct ghost_loaded_vcpu){
 		.present = true,
-		.loaded = false,
+		.loaded = loaded,
 	};
-out:
 	/* NOTE: vcpu_put does not write back to any general purpose register */
 	return;
 }
