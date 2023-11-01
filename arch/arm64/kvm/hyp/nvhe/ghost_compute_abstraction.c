@@ -711,7 +711,7 @@ void record_abstraction_vm(struct ghost_state *g, struct pkvm_hyp_vm *vm)
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
-void record_abstraction_vms(struct ghost_state *g)
+void record_abstraction_vms_and_check_none(struct ghost_state *g)
 {
 	GHOST_LOG_CONTEXT_ENTER();
 	ghost_assert_vms_table_locked();
@@ -725,9 +725,8 @@ void record_abstraction_vms(struct ghost_state *g)
 	for (int vm_index = 0; vm_index < KVM_MAX_PVMS; vm_index++) {
 		struct pkvm_hyp_vm *hyp_vm = vm_table[vm_index];
 		if (hyp_vm) {
-			// TODO: this is probably unreachable as there should be no VMs yet
-			hyp_assert_lock_held(&hyp_vm->lock);
-			record_abstraction_vm(g, hyp_vm);
+			// should be that there were no vms at this point.
+			ghost_assert(false);
 		}
 	}
 	GHOST_LOG_CONTEXT_EXIT();
@@ -802,7 +801,7 @@ void record_abstraction_all(struct ghost_state *g, struct kvm_cpu_context *ctxt)
 	record_abstraction_hyp_memory(g);
 	record_abstraction_pkvm(g);
 	record_abstraction_host(g);
-	record_abstraction_vms(g);
+	record_abstraction_vms_and_check_none(g);
 	if (ctxt) {
 		record_abstraction_regs(g,ctxt);
 	}
