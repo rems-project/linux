@@ -1550,7 +1550,9 @@ int __kvm_pgtable_stage2_init(struct kvm_pgtable *pgt, struct kvm_s2_mmu *mmu,
 	pgt->force_pte_cb	= force_pte_cb;
 
 #ifdef CONFIG_NVHE_GHOST_SPEC
+	ghost_lock_maplets();
 	pgt->ghost_mapping = mapping_empty_();
+	ghost_unlock_maplets();
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 
 	/* Ensure zeroed PGD pages are visible to the hardware walker */
