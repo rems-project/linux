@@ -798,8 +798,15 @@ void record_and_check_abstraction_pkvm_pre(void)
 	GHOST_LOG_CONTEXT_ENTER();
 	ghost_lock_maplets();
 	struct ghost_state *g = this_cpu_ptr(&gs_recorded_pre);
-	record_abstraction_pkvm(g);
-	check_abstraction_equals_pkvm(&g->pkvm, &gs.pkvm);
+	// For pKVM and Host we believe there is no single synchronisation point during a hypercall
+	// because the hypercalls may take and release the locks on these multiple times.
+	//
+	// For now we just record the pre for the very first lock, and assume no interference.
+	// ... but later on we'll have to do some this-thread-diff/trajectory tracking instead
+	if (!g->pkvm.present) {
+		record_abstraction_pkvm(g);
+		check_abstraction_equals_pkvm(&g->pkvm, &gs.pkvm);
+	}
 	ghost_unlock_maplets();
 	GHOST_LOG_CONTEXT_EXIT();
 }
@@ -809,6 +816,11 @@ void record_and_copy_abstraction_pkvm_post(void)
 	GHOST_LOG_CONTEXT_ENTER();
 	ghost_lock_maplets();
 	struct ghost_state *g = this_cpu_ptr(&gs_recorded_post);
+	// TODO: for pKVM and Host we believe there is no single synchronisation point
+	// (see comment in record_and_check_abstraction_pkvm_pre)
+	// so on the post we must clear if there was a previous recorded post
+	if (g->pkvm.present)
+		clear_abstraction_pkvm(g);
 	record_abstraction_pkvm(g);
 	copy_abstraction_pkvm(&gs, g);
 	ghost_unlock_maplets();
@@ -820,8 +832,11 @@ void record_and_check_abstraction_host_pre(void)
 	GHOST_LOG_CONTEXT_ENTER();
 	ghost_lock_maplets();
 	struct ghost_state *g = this_cpu_ptr(&gs_recorded_pre);
-	record_abstraction_host(g);
-	check_abstraction_equals_host(&g->host, &gs.host);
+	// TODO: see comment in record_and_check_abstraction_pkvm_pre
+	if (!g->host.present) {
+		record_abstraction_host(g);
+		check_abstraction_equals_host(&g->host, &gs.host);
+	}
 	ghost_unlock_maplets();
 	GHOST_LOG_CONTEXT_EXIT();
 }
@@ -831,6 +846,11 @@ void record_and_copy_abstraction_host_post(void)
 	GHOST_LOG_CONTEXT_ENTER();
 	ghost_lock_maplets();
 	struct ghost_state *g = this_cpu_ptr(&gs_recorded_post);
+	// TODO: for pKVM and Host we believe there is no single synchronisation point
+	// (see comment in record_and_check_abstraction_pkvm_pre)
+	// so on the post we must clear if there was a previous recorded post
+	if (g->host.present)
+		clear_abstraction_host(g);
 	record_abstraction_host(g);
 	copy_abstraction_host(&gs, g);
 	ghost_unlock_maplets();
