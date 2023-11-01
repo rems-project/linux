@@ -652,10 +652,15 @@ void record_abstraction_host(struct ghost_state *g)
 
 void record_abstraction_vm(struct ghost_state *g, struct pkvm_hyp_vm *vm)
 {
+	GHOST_LOG_CONTEXT_ENTER();
 	ghost_assert_vms_table_locked();
+
+	// if recording the first vm, make an empty dictionary.
 	if (!g->vms.present) {
 		// this creates an empty table of vm slots (where all .exists are false)
-		g->vms = (struct ghost_vms){ 0 };
+		for (int vm_index = 0; vm_index < KVM_MAX_PVMS; vm_index++) {
+			g->vms.table[vm_index].exists = false;
+		}
 		g->vms.present = true;
 	}
 
@@ -672,8 +677,34 @@ void record_abstraction_vm(struct ghost_state *g, struct pkvm_hyp_vm *vm)
 		slot = ghost_vms_alloc(&g->vms, handle);
 	}
 
+	// if pKVM has space for a VM, the infrastructure should too.
+	ghost_assert(slot);
+
 	// write the vm directly into the slot
 	compute_abstraction_vm(slot, vm);
+	GHOST_LOG_CONTEXT_EXIT();
+}
+
+void record_abstraction_vms(struct ghost_state *g)
+{
+	GHOST_LOG_CONTEXT_ENTER();
+	ghost_assert_vms_table_locked();
+
+	// empty the dictionary first;
+	clear_abstraction_vms(g);
+
+	// set it to be present, but empty.
+	g->vms.present = true;
+
+	for (int vm_index = 0; vm_index < KVM_MAX_PVMS; vm_index++) {
+		struct pkvm_hyp_vm *hyp_vm = vm_table[vm_index];
+		if (hyp_vm) {
+			// TODO: this is probably unreachable as there should be no VMs yet
+			hyp_assert_lock_held(&hyp_vm->lock);
+			record_abstraction_vm(g, hyp_vm);
+		}
+	}
+	GHOST_LOG_CONTEXT_EXIT();
 }
 
 void record_abstraction_regs(struct ghost_state *g, struct kvm_cpu_context *ctxt)
@@ -745,6 +776,7 @@ void record_abstraction_all(struct ghost_state *g, struct kvm_cpu_context *ctxt)
 	record_abstraction_hyp_memory(g);
 	record_abstraction_pkvm(g);
 	record_abstraction_host(g);
+	record_abstraction_vms(g);
 	if (ctxt) {
 		record_abstraction_regs(g,ctxt);
 	}
@@ -834,12 +866,18 @@ void record_and_check_abstraction_vm_pre(struct pkvm_hyp_vm *vm)
 	// but this isn't right (e.g. for vpu_run), and it should be at least this
 	// (if not more!) fine-grained locking for maplets and the vms.vms table.
 	ghost_lock_maplets();
-	ghost_lock_vms_table();
 	struct ghost_state *g = this_cpu_ptr(&gs_recorded_pre);
 	pkvm_handle_t handle = vm->kvm.arch.pkvm.handle;
 	record_abstraction_vm(g, vm);
-	check_abstraction_vm_in_vms_and_equal(handle, g, &gs.vms);
-	ghost_unlock_vms_table();
+
+	// Edge case: it might be that this is actually the very first time we take the vm lock
+	// just after creating the vm, therefore it wont exist in gs.vms yet!
+	// so only do the check if it was really there before we started.
+	// NOTE: this is ok, because at the unlock we will put this vm in there,
+	// so on future locks we will do the check.
+	if (ghost_vms_is_valid_handle(&gs.vms, handle))
+		check_abstraction_vm_in_vms_and_equal(handle, g, &gs.vms);
+
 	ghost_unlock_maplets();
 	GHOST_LOG_CONTEXT_EXIT();
 }
