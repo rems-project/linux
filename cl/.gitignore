@@ -2,3 +2,5 @@
 /qemu-host/*.img
 /qemu-host/*.iso
 /qemu-host/firmware/
+/PKVM_USER
+/PKVM_PASS
