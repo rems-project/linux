@@ -730,7 +730,10 @@ void compute_new_abstract_state_handle___pkvm_init_vm(struct ghost_state *g1, st
 	memset(vm1->vcpus, 0, sizeof(struct ghost_vcpu[KVM_MAX_VCPUS]));
 	vm1->pkvm_handle = handle;
 	
-	ghost_assert_vms_table_locked();
+	// TODO:
+	// in theory this is unsafe, as another thread could've swooped in between the end of the hypercall
+	// and this check, and removed the VM.
+	// In future this should be part of the call data or something.
 	vm1->lock = ghost_pointer_to_vm_lock(handle);
 	ret = handle;
 out:
@@ -883,12 +886,7 @@ void ghost_record_pre(struct kvm_cpu_context *ctxt)
 	struct ghost_running_state *cpu_run_state = this_cpu_ptr(&ghost_cpu_run_state);
 	struct ghost_state *gr_pre = this_cpu_ptr(&gs_recorded_pre);
 	if (GHOST_EXEC_SPEC && READ_ONCE(pkvm_init_finalized)) {
-		// we have to own the pKVM vm_table table to clear the vms dict.
-		// technically it's safe to do it anyway, as this is just thread-local abstraction
-		// but we assert that it's held
-		ghost_lock_vms_table();
 		clear_abstraction_thread_local();
-		ghost_unlock_vms_table();
 
 		ghost_lock_maplets();
 		record_abstraction_hyp_memory(gr_pre);
@@ -918,6 +916,7 @@ void ghost_post(struct kvm_cpu_context *ctxt)
 		// record the remaining parts of the new impl abstract state
 		// (the pkvm, host, and vm components having been recorded at impl lock points)
 		ghost_lock_maplets();
+		ghost_lock_vms();
 		record_abstraction_hyp_memory(gr_post);
 		record_abstraction_regs_post(ctxt);
 		record_abstraction_constants_post();
@@ -933,6 +932,7 @@ void ghost_post(struct kvm_cpu_context *ctxt)
 		// and check the two are equal on relevant components
 		if (new_state_computed)
 			check_abstraction_equals_all(gc_post, gr_post, gr_pre);
+		ghost_unlock_vms();
 		ghost_unlock_maplets();
 	}
 }

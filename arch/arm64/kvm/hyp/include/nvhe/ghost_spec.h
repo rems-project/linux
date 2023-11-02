@@ -136,8 +136,8 @@ struct ghost_pkvm {
  * @handle: if exists, the pKVM-assigned VM handle this slot is for (the key).
  * @vm: if exists, the actual VM in this slot.
  *
- * Context: exists and handle are protected by the pKVM vm_table table lock,
- *          the ghost vm itself is protected by that VM's lock.
+ * Context: the fields are protected by the ghost vms lock,
+ *          the vm itself is protected by that VM's lock.
  */
 struct ghost_vm_slot {
 	bool exists;
@@ -152,7 +152,7 @@ struct ghost_vm_slot {
  * @table: if present, a dictionary of ```VM handle -> VM```, implemented as a table of slots.
  *
  * Code should not access .table directly, but through the abstract ghost_vms_* functions below.
- * Context: the structure is protected by the pKVM vm_table lock,
+ * Context: the structure is protected by the ghost_vms_lock
  *          but the internal VMs are protected by their respective VM locks.
  */
 struct ghost_vms {
@@ -170,7 +170,7 @@ struct ghost_vms {
  *  - Reference to the ghost_vm* if it exists in the table
  *  - NULL if there is no VM with that handle in the table
  *
- * Context: Must own the pKVM vm_table table lock
+ * Context: Must own the ghost vms lock
  */
 struct ghost_vm *ghost_vms_get(struct ghost_vms *vms, pkvm_handle_t handle);
 hyp_spinlock_t *ghost_pointer_to_vm_lock(pkvm_handle_t handle);
@@ -187,7 +187,7 @@ hyp_spinlock_t *ghost_pointer_to_vm_lock(pkvm_handle_t handle);
  *  A reference to an empty vm slot that can be used.
  *  is marked non-empty on return
  *
- * Context: Must own the pKVM vm_table lock, panics if all slots were used up.
+ * Context: Must own the ghost vms lock, panics if all slots were used up.
  */
 struct ghost_vm *ghost_vms_alloc(struct ghost_vms *vms, pkvm_handle_t );
 
@@ -199,21 +199,21 @@ struct ghost_vm *ghost_vms_alloc(struct ghost_vms *vms, pkvm_handle_t );
  *
  * Marks any slot (if it exists) for that VM as empty.
  *
- * Must own the pKVM vm_table lock
+ * Must own the ghost vms lock
  */
 void ghost_vms_free(struct ghost_vms *vms, pkvm_handle_t handle);
 
 /**
  * ghost_vms_is_valid_handle() - Checks that the guest associated with an opaque pkvm-assigned handle exists in the vm table
  *
- * Must own the pKVM vm_table lock
+ * Must own the ghost vms lock
  */
 bool ghost_vms_is_valid_handle(struct ghost_vms *vms, pkvm_handle_t handle);
 
 /**
  * ghost_vm_clone_into_nomappings() - Copies all the fields (not mappings) from one VM slot to another
  *
- * Must own the pKVM vm_table lock, *and* both VMs locks
+ * Must own the  ghost vms lock, *and* both VMs locks
  */
 void ghost_vm_clone_into_nomappings(struct ghost_vm *dest, struct ghost_vm *src);
 
@@ -224,12 +224,35 @@ void ghost_vm_clone_into_nomappings(struct ghost_vm *dest, struct ghost_vm *src)
  */
 void ghost_vm_clone_into(struct ghost_vm *dest, struct ghost_vm *src);
 
-void ghost_lock_vms_table(void);
+/*
+ * Lock order (in order to be taken): pKVM vm_table -> Host pgtable -> pKVM pgtable -> VM lock -> maplets -> ghost_vms
+ *
+ * Because the pKVM locks might be taken and inside the locked region some ghost machinery is done,
+ * the inner ghost machinery should never itself try take a pKVM lock.
+ */
+extern hyp_spinlock_t ghost_vms_hyp_lock; /* defined in ghost_compute_abstraction.c */
+extern hyp_spinlock_t vm_table_lock; /* defined in nvhe/pkvm.c */
 
-void ghost_unlock_vms_table(void);
+void ghost_lock_vms(void);
+void ghost_unlock_vms(void);
 
-void ghost_assert_vm_locked(struct ghost_vm *vm);
-void ghost_assert_vms_table_locked(void);
+void ghost_lock_pkvm_vm_table(void);
+void ghost_unlock_pkvm_vm_table(void);
+
+static inline void ghost_assert_vm_locked(struct ghost_vm *vm)
+{
+	hyp_assert_lock_held(vm->lock);
+}
+
+static inline void ghost_assert_vms_locked(void)
+{
+	hyp_assert_lock_held(&ghost_vms_hyp_lock);
+}
+
+static inline void ghost_assert_pkvm_vm_table_locked(void)
+{
+	hyp_assert_lock_held(&vm_table_lock);
+}
 
 
 /**
