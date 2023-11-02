@@ -346,7 +346,7 @@ static int __kvm_pgtable_walk(struct kvm_pgtable_walk_data *data,
 	int ret = 0;
 
 #ifdef CONFIG_NVHE_GHOST_SPEC
-	bool ghost_check = ghost_control.check___kvm_pgtable_walk && is_stage2_map_walker(data); // turning off for now
+	bool ghost_check = ghost_control_check_enabled(__func__) && is_stage2_map_walker(data); // turning off for now
 	u64 i = 4 + level * 2;  /* base indent */
 	u64 ghost_va_partial_new;
 	mapping mapping_pre, mapping_post; // interpretation of pgt on entry and exit
@@ -444,7 +444,7 @@ static int _kvm_pgtable_walk(struct kvm_pgtable *pgt, struct kvm_pgtable_walk_da
 
 #ifdef CONFIG_NVHE_GHOST_SPEC
 	u64 ghost_va_partial;
-	bool ghost_check = ghost_control.check__kvm_pgtable_walk &&  is_stage2_map_walker(data);/* turning off for now to reduce noise */
+	bool ghost_check = ghost_control_check_enabled(__func__) &&  is_stage2_map_walker(data);/* turning off for now to reduce noise */
 	u64 i=2; /* base indent */
 	if (ghost_check) {
 		hyp_putspi("_kvm_pgtable_walk\n", i);
@@ -1166,7 +1166,7 @@ int kvm_pgtable_stage2_map(struct kvm_pgtable *pgt, u64 addr, u64 size,
 
 #ifdef CONFIG_NVHE_GHOST_SPEC
 
-	bool ghost_check = ghost_control.check_kvm_pgtable_stage2_map;
+	bool ghost_check = ghost_control_check_enabled(__func__);
 	int i=0;  /* base indent */
 	mapping mapping_pre, mapping_post; // interpretation of pgt on entry and exit
 	mapping mapping_pre_annot, mapping_post_annot; // interpretation of pgt on entry and exit, cut down to annot parts

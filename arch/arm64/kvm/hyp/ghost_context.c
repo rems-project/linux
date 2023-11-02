@@ -4,9 +4,11 @@
 #include <hyp/ghost_extra_debug-pl011.h>
 
 #include <nvhe/spinlock.h>
+#include <nvhe/mem_protect.h>
+
 #include <nvhe/ghost_asserts.h>
 #include <nvhe/ghost_context.h>
-#include <nvhe/mem_protect.h>
+#include <nvhe/ghost_control.h>
 
 /**
  * GHOST_MAX_CONTEXT_FRAMES - Max depth of stack frames (per CPU)
@@ -44,6 +46,19 @@ struct ghost_context {
 DECLARE_PER_CPU(struct ghost_context, g_context);
 DEFINE_PER_CPU(struct ghost_context, g_context);
 
+static bool frame_should_print_immediately(void)
+{
+	struct ghost_context *ctx = this_cpu_ptr(&g_context);
+
+	for (int i = 0; i < ctx->nr_frames; i++) {
+		const char *frame_name = ctx->frames[i].ctx_name;
+		if (ghost_control_is_controlled(frame_name) && !ghost_control_print_enabled(frame_name))
+			return false;
+	}
+
+	return true;
+}
+
 void ghost_log_enter_context(const char *s)
 {
 	u64 i;
@@ -53,13 +68,6 @@ void ghost_log_enter_context(const char *s)
 	ctx = this_cpu_ptr(&g_context);
 	ghost_assert(ctx->nr_frames < GHOST_MAX_CONTEXT_FRAMES);
 
-	ghost_print_begin();
-	hyp_puti(ctx->nr_frames * 2);
-	hyp_putsp("[enter ");
-	hyp_putsp((char *)s);
-	hyp_putsp("\n");
-	ghost_print_end();
-
 	i = ctx->nr_frames++;
 	++ctx->count;
 
@@ -67,6 +75,15 @@ void ghost_log_enter_context(const char *s)
 	frame->ctx_name = s;
 	frame->nr_attached_data = 0;
 	frame->frame_id = ctx->count;
+
+	if (frame_should_print_immediately()) {
+		ghost_print_begin();
+		hyp_puti(i * 2);
+		hyp_putsp("[enter ");
+		hyp_putsp((char *)s);
+		hyp_putsp("\n");
+		ghost_print_end();
+	}
 }
 
 void ghost_log_context_attach(const char *s, void *data, ghost_printer_fn printer)
@@ -92,13 +109,15 @@ void ghost_log_context_attach(const char *s, void *data, ghost_printer_fn printe
 	ctx_data->data_ptr = data;
 	ctx_data->fn = printer;
 
-	ghost_print_begin();
-	hyp_putsp(".");
-	hyp_putsp((char *)s);
-	hyp_putsp(":");
-	printer(data);
-	hyp_putsp("\n");
-	ghost_print_end();
+	if (frame_should_print_immediately()) {
+		ghost_print_begin();
+		hyp_putsp(".");
+		hyp_putsp((char *)s);
+		hyp_putsp(":");
+		printer(data);
+		hyp_putsp("\n");
+		ghost_print_end();
+	}
 }
 
 void ghost_log_context_log(const char *s, enum ghost_log_level level)
@@ -122,10 +141,12 @@ void ghost_log_context_log(const char *s, enum ghost_log_level level)
 	ctx_data->level = level;
 	ctx_data->has_data = false;
 
-	ghost_print_begin();
-	hyp_putsp((char *)s);
-	hyp_putsp("\n");
-	ghost_print_end();
+	if (frame_should_print_immediately()) {
+		ghost_print_begin();
+		hyp_putsp((char *)s);
+		hyp_putsp("\n");
+		ghost_print_end();
+	}
 }
 
 void ghost_log_exit_context(void)
@@ -137,14 +158,16 @@ void ghost_log_exit_context(void)
 	ghost_assert(ctx->nr_frames > 0);
 	frame = &ctx->frames[ctx->nr_frames - 1];
 
-	ctx->nr_frames--;
+	if (frame_should_print_immediately()) {
+		ghost_print_begin();
+		hyp_puti(ctx->nr_frames * 2);
+		hyp_putsp("... end ");
+		hyp_putsp((char *)frame->ctx_name);
+		hyp_putsp("] \n");
+		ghost_print_end();
+	}
 
-	ghost_print_begin();
-	hyp_puti(ctx->nr_frames * 2);
-	hyp_putsp("... end ");
-	hyp_putsp((char *)frame->ctx_name);
-	hyp_putsp("] \n");
-	ghost_print_end();
+	ctx->nr_frames--;
 }
 
 static void indent(u64 width)

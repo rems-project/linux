@@ -607,7 +607,7 @@ static int host_stage2_idmap(u64 addr)
 	host_lock_component();
 
 #ifdef CONFIG_NVHE_GHOST_SPEC
-	bool ghost_check = ghost_control.check_host_stage2_idmap;
+	bool ghost_check = ghost_control_check_enabled(__func__);
 	u64 i=0; /* base indent */
 	int cur;
 	mapping mapping_pre, mapping_post; // interpretation of pgt on entry and exit
@@ -751,7 +751,8 @@ void handle_host_mem_abort(struct kvm_cpu_context *host_ctxt)
 	int ret = 0;
 
 #ifdef CONFIG_NVHE_GHOST_SPEC
-	bool ghost_check = ghost_control.check_handle_host_mem_abort;
+	GHOST_LOG_CONTEXT_ENTER();
+	bool ghost_check = ghost_control_print_enabled(__func__);
 	if (ghost_check) {
 		hyp_putsp(GHOST_WHITE_ON_BLUE);
 		hyp_putsp("handle_host_mem_abort");
@@ -770,6 +771,9 @@ void handle_host_mem_abort(struct kvm_cpu_context *host_ctxt)
 		host_inject_abort(host_ctxt);
 	else
 		BUG_ON(ret && ret != -EAGAIN);
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	GHOST_LOG_CONTEXT_EXIT();
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 }
 
 struct pkvm_mem_transition {
@@ -1867,7 +1871,7 @@ int __pkvm_host_donate_guest(u64 pfn, u64 gfn, struct pkvm_hyp_vcpu *vcpu)
 	// and guest_complete_donation uses kvm_pgtable_stage2_map (plus magic for pvmfw)
 
 	// Do we anywhere tell the guest we've done this?  Not as far as I can see
-	bool ghost_check = ghost_control.check___pkvm_host_donate_guest;
+	bool ghost_check = ghost_control_check_enabled(__func__);
 	u64 i=0; /* base indent */
 	mapping mapping_host_pre, mapping_host_post; // interpretation of pgt on entry and exit
 	mapping mapping_guest_pre, mapping_guest_post; // interpretation of pgt on entry and exit

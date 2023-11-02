@@ -32,7 +32,7 @@ void ghost_log_context_traceback(void);
 
 
 #define GHOST_LOG_CONTEXT_ENTER() ghost_log_enter_context(__func__)
-#define GHOST_LOG_CONTEXT_ENTER_INNER() ghost_log_enter_context("inner")
+#define GHOST_LOG_CONTEXT_ENTER_INNER(name) ghost_log_enter_context("inner " name)
 #define GHOST_LOG_CONTEXT_EXIT() ghost_log_exit_context()
 
 #define GHOST_LOG_P(var, printer) \

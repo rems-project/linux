@@ -2,6 +2,7 @@
 
 #include <nvhe/ghost_asserts.h>
 #include <nvhe/ghost_pfn_set.h>
+#include <nvhe/ghost_context.h>
 
 #include <hyp/ghost_extra_debug-pl011.h>
 
@@ -68,7 +69,9 @@ void ghost_pfn_set_assert_equal(struct pfn_set *lhs, struct pfn_set *rhs)
 {
 	GHOST_LOG_CONTEXT_ENTER();
 	ghost_pfn_set_assert_subseteq(lhs, rhs);
+	GHOST_LOG_CONTEXT_ENTER_INNER("subseteq flipped");
 	ghost_pfn_set_assert_subseteq(rhs, lhs);
+	GHOST_LOG_CONTEXT_EXIT();
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
@@ -82,8 +85,8 @@ void ghost_pfn_set_assert_subseteq(struct pfn_set *lhs, struct pfn_set *rhs)
 {
 	GHOST_LOG_CONTEXT_ENTER();
 
-	//GHOST_LOG_P(lhs, print_set);
-	//GHOST_LOG_P(rhs, print_set);
+	GHOST_LOG_P(lhs, print_set);
+	GHOST_LOG_P(rhs, print_set);
 
 	ghost_spec_assert(range_equal(lhs, rhs));
 	ghost_spec_assert(lhs->len == rhs->len);

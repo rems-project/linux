@@ -1207,8 +1207,8 @@ static void handle_host_hcall(struct kvm_cpu_context *host_ctxt)
 	GHOST_LOG(hcall_name, str);
 
 
-	_Bool ghost_dump = ghost_control.dump_handle_host_hcall;
-	_Bool ghost_dump_verbose = ghost_control.dump_handle_host_hcall_verbose;
+	_Bool ghost_dump = ghost_control_print_enabled(__func__);
+	_Bool ghost_dump_verbose = ghost_control_print_enabled_verbose(__func__);
 	u64 i=0; /* base indent */
 	if (ghost_dump) {
 		hyp_puti(i);
@@ -1318,7 +1318,7 @@ void handle_trap(struct kvm_cpu_context *host_ctxt)
 
 	ghost_record_pre(host_ctxt);
 
-	if (ghost_control.dump_handle_trap) {
+	if (ghost_control_print_enabled(__func__)) {
 		hyp_put_exception_heading();
 		//ghost_dump_sysregs();
 	}
@@ -1334,7 +1334,7 @@ void handle_trap(struct kvm_cpu_context *host_ctxt)
 		break;
 	case ESR_ELx_EC_SMC64:
 #ifdef CONFIG_NVHE_GHOST_SPEC
-		if (ghost_control.dump_handle_trap) 
+		if (ghost_control_print_enabled(__func__))
 			hyp_putsp(GHOST_WHITE_ON_BLUE "handle_host_smc" GHOST_NORMAL "\n");
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 		handle_host_smc(host_ctxt);
@@ -1342,7 +1342,7 @@ void handle_trap(struct kvm_cpu_context *host_ctxt)
 	case ESR_ELx_EC_FP_ASIMD:
 	case ESR_ELx_EC_SVE:
 #ifdef CONFIG_NVHE_GHOST_SPEC
-		if (ghost_control.dump_handle_trap) 
+		if (ghost_control_print_enabled(__func__))
 			hyp_putsp(GHOST_WHITE_ON_BLUE "fmsimd_host_restore" GHOST_NORMAL "\n");
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 		fpsimd_host_restore();
@@ -1351,7 +1351,7 @@ void handle_trap(struct kvm_cpu_context *host_ctxt)
 	case ESR_ELx_EC_DABT_LOW:
 #ifdef CONFIG_NVHE_GHOST_SPEC
 		GHOST_INFO("IABT/DABT");
-		if (ghost_control.dump_handle_trap) 
+		if (ghost_control_print_enabled(__func__))
 			hyp_putsp(GHOST_WHITE_ON_BLUE "handle_host_mem_abort" GHOST_NORMAL "\n");
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 		handle_host_mem_abort(host_ctxt);

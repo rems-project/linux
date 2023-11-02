@@ -619,26 +619,35 @@ void diff_mappings(struct glist_head head1, struct glist_head head2, u64 i)
 // check that ms1 and ms2 are equal mappings
 bool mapping_equal(struct glist_head head1, struct glist_head head2, char *s, char *s1, char *s2, u64 i)
 {
+	bool equal;
+	GHOST_LOG_CONTEXT_ENTER();
 	ghost_assert_maplets_locked();
 
-	hyp_putspi(s, i);
-	hyp_putsp(" ");
-	hyp_putsp("mapping_equal ");
-	hyp_putsp(s1);
-	hyp_putsp(" ");
-	hyp_putsp(s2);
-	hyp_putsp(" ");
-	if (interpret_equals(head1, head2, i+2)) {
-		hyp_puts("true\n");
-		return true;
+	// hyp_putspi(s, i);
+	// hyp_putsp(" ");
+	// hyp_putsp("mapping_equal ");
+	// hyp_putsp(s1);
+	// hyp_putsp(" ");
+	// hyp_putsp(s2);
+	// hyp_putsp(" ");
+	equal = interpret_equals(head1, head2, i+2);
+	if (!equal) {
+		GHOST_LOG(s, str);
+		GHOST_LOG(s1, str);
+		GHOST_LOG(s2, str);
+		GHOST_WARN("mappings not equal");
 	}
-	else {
-		hyp_putsp(GHOST_WHITE_ON_RED);
-		hyp_putsp("false");
-		hyp_putsp(GHOST_NORMAL);
-		hyp_putsp("\n");
-		return false;
-	}
+	// if (equal) {
+	// 	hyp_puts("true\n");
+	// }
+	// else {
+	// 	hyp_putsp(GHOST_WHITE_ON_RED);
+	// 	hyp_putsp("false");
+	// 	hyp_putsp(GHOST_NORMAL);
+	// 	hyp_putsp("\n");
+	// }
+	GHOST_LOG_CONTEXT_EXIT();
+	return equal;
 }
 
 void check_mapping_equal(mapping map1, mapping map2)
