@@ -1058,15 +1058,16 @@ void record_and_check_abstraction_vm_pre(struct pkvm_hyp_vm *vm)
 	ghost_lock_vms();
 	struct ghost_state *g = this_cpu_ptr(&gs_recorded_pre);
 	pkvm_handle_t handle = vm->kvm.arch.pkvm.handle;
-	record_abstraction_vm(g, vm);
 
 	// Edge case: it might be that this is actually the very first time we take the vm lock
 	// just after creating the vm, therefore it wont exist in gs.vms yet!
 	// so only do the check if it was really there before we started.
 	// NOTE: this is ok, because at the unlock we will put this vm in there,
 	// so on future locks we will do the check.
-	if (ghost_vms_is_valid_handle(&gs.vms, handle))
+	if (ghost_vms_is_valid_handle(&gs.vms, handle)) {
+		record_abstraction_vm(g, vm);
 		check_abstraction_vm_in_vms_and_equal(handle, g, &gs.vms);
+	}
 
 	ghost_unlock_vms();
 	ghost_unlock_maplets();
