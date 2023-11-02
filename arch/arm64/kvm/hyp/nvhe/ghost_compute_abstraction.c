@@ -322,12 +322,14 @@ void check_abstraction_equals_vcpu(struct ghost_vcpu *vcpu1, struct ghost_vcpu *
 			GHOST_SPEC_FAIL("vcpu2 did not exist.");
 		}
 
+		GHOST_LOG_CONTEXT_EXIT();
 		return;
 	} else if (!vcpu2) {
 		if (!vcpu1) {
 			GHOST_SPEC_FAIL("vcpu1 did not exist.");
 		}
 
+		GHOST_LOG_CONTEXT_EXIT();
 		return;
 	}
 
