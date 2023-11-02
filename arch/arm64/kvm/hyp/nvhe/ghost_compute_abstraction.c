@@ -158,8 +158,12 @@ static void ghost_vm_clear_slot(struct ghost_vm_slot *slot)
 {
 	ghost_assert_vms_locked();
 	if (slot->exists) {
+		// if the slot says it has a vm, then it must have one.
+		ghost_assert(slot->vm);
+
 		slot->exists = false;
 		clear_abstract_pgtable(&slot->vm->vm_abstract_pgtable);
+
 		for (int i = 0; i < KVM_MAX_VCPUS; i++) {
 			if (slot->vm->vcpus[i])
 				free(slot->vm->vcpus[i]);
@@ -698,14 +702,12 @@ void copy_abstraction_vms(struct ghost_state *g_tgt, struct ghost_state *g_src)
 
 	clear_abstraction_vms(g_tgt);
 
-	// since we just cleared the whole table in tgt, can just copy the src one over.
+	// for each VM, copy it.
 	for (int i=0; i<KVM_MAX_PVMS; i++) {
 		struct ghost_vm_slot *src_slot = &g_src->vms.table[i];
-		struct ghost_vm_slot *tgt_slot = &g_tgt->vms.table[i];
 		bool exists = src_slot->exists;
-		tgt_slot->exists = src_slot->exists;
-		if (exists) {
-			ghost_vm_clone_into(tgt_slot->vm, src_slot->vm);
+		if (src_slot->exists) {
+			copy_abstraction_vm(g_tgt, g_src, src_slot->handle);
 		}
 	}
 }
@@ -718,7 +720,12 @@ void ghost_vm_clone_into_nomappings(struct ghost_vm *dest, struct ghost_vm *src)
 	dest->nr_initialised_vcpus = src->nr_initialised_vcpus;
 	ghost_assert(src->nr_vcpus <= KVM_MAX_VCPUS);
 	for (int vcpu_idx=0; vcpu_idx<src->nr_vcpus; vcpu_idx++) {
-		dest->vcpus[vcpu_idx] = src->vcpus[vcpu_idx];
+		if (src->vcpus[vcpu_idx]) {
+			dest->vcpus[vcpu_idx] = malloc_or_die(sizeof(struct ghost_vcpu));
+			*dest->vcpus[vcpu_idx] = *src->vcpus[vcpu_idx];
+		} else {
+			dest->vcpus[vcpu_idx] = NULL;
+		}
 	}
 	dest->pkvm_handle = src->pkvm_handle;
 	dest->lock = src->lock;
