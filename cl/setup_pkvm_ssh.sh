@@ -1,10 +1,6 @@
 set -e
-if [ ! -f cl/PKVM_USER ]
-then
-  echo 'Please copy cl/DEFAULT_PKVM_USER cl/PKVM_USER' && false
-fi
 
-PKVM_USER="$(cat cl/PKVM_USER)"
+read -p "login: " PKVM_USER
 
 # copy in lkvm
 scp -P 8022 cl/lkvm/lkvm-static.zst ${PKVM_USER}@localhost:/home/${PKVM_USER}/
