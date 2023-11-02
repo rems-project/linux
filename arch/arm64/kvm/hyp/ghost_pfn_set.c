@@ -51,6 +51,8 @@ void ghost_pfn_set_dump(struct pfn_set *set)
 void ghost_pfn_set_copy(struct pfn_set *dst, struct pfn_set *src)
 {
 	dst->len = src->len;
+	dst->pool_range_start = src->pool_range_start;
+	dst->pool_range_end = src->pool_range_end;
 	for (int idx=0; idx<GHOST_MAX_PFN_SET_LEN; idx++) {
 		dst->external_pfns[idx] = src->external_pfns[idx];
 	}
