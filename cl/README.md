@@ -92,6 +92,8 @@ To attach a debugger, in one terminal run:
 
 ```./cl/run_pkvm.sh -s -S```
 
+NOTE: lkvm requires sudo privileges to run, the default Debian user might not have sudo privileges so you may want to add the user to sudoers.
+
 Then in another, run:
 
 ```./cl/run_gdb.sh```
