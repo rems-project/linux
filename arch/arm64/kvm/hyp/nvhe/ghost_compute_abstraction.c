@@ -80,8 +80,8 @@ mapping compute_abstraction_hyp_memory(void)
 void compute_abstraction_pkvm(struct ghost_pkvm *dest)
 {
 	u64 i=0; /* base indent */ /* though we'll mostly want this to be quiet, later */
-	u64 pool_range_start = (u64)hyp_pgt_base;
-	u64 pool_range_end = (u64)hyp_pgt_base + ghost_hyp_pgt_size * PAGE_SIZE;
+	u64 pool_range_start = (u64)hyp_virt_to_phys(hyp_pgt_base);
+	u64 pool_range_end = pool_range_start + ghost_hyp_pgt_size * PAGE_SIZE;
 	ghost_record_pgtable_ap(&dest->pkvm_abstract_pgtable, &pkvm_pgtable, pool_range_start, pool_range_end, "pkvm_pgtable", i);
 	dest->present = true;
 }
@@ -93,8 +93,8 @@ void compute_abstraction_host(struct ghost_host *dest)
 	// making this static to avoid wasting stack space
 	static abstract_pgtable tmp_ap;
 	u64 i=0; /* base indent */ /* though we'll mostly want this to be quiet, later */
-	u64 pool_range_start = (u64)host_s2_pgt_base;
-	u64 pool_range_end = (u64)host_s2_pgt_base + ghost_host_s2_pgt_size * PAGE_SIZE;
+	u64 pool_range_start = (u64)hyp_virt_to_phys(host_s2_pgt_base);
+	u64 pool_range_end = pool_range_start + ghost_host_s2_pgt_size * PAGE_SIZE;
 	ghost_record_pgtable_ap(&tmp_ap, &host_mmu.pgt, pool_range_start, pool_range_end, "host_mmu.pgt", i);
 	ghost_pfn_set_copy(&dest->host_pgtable_pages, &tmp_ap.table_pfns);
 	dest->host_abstract_pgtable_annot = mapping_annot(tmp_ap.mapping);
