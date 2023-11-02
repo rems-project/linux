@@ -184,7 +184,6 @@ static inline void __hyp_putx4n(unsigned long x, int n)
 	while (i--)
 		__hyp_putx4(x >> (4 * i));
 
-	__hyp_putc('\n');
 }
 
 static inline void __hyp_putx32(unsigned int x)
