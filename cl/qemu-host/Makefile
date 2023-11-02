@@ -1,4 +1,4 @@
-DEB_ISO = debian-12.1.0-arm64-netinst.iso
+DEB_ISO = debian-12.2.0-arm64-netinst.iso
 EFI_DEB = qemu-efi-aarch64_2023-05-1_all.deb
 EFI_LOC = /usr/share/qemu-efi-aarch64/QEMU_EFI.fd 
 

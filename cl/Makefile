@@ -1,21 +1,53 @@
 ARCH = $(shell uname -p)
-include clang/Makefile-$(ARCH)
+
+all: help
+.PHONY: all
 
 # path to Linux config script
 CONFIG = ../scripts/config
 CONFIG_FLAGS = --file ../.config
 
-all:
-.PHONY: all
+help:
+	@echo "Targets:"
+	@echo "	prepare			get and set toolchains"
+	@echo "	  clang			get compatible clang, and set CC"
+	@echo "	  qemu-host		get qemu images and firmware"
+	@echo "	  configure		re-make .config"
+	@echo "	 build			re-build pKVM Image"
+	@echo "	 deep-clean		clean everything to a fresh start"
+	@echo "	  clean-clang		clean downloaded clang (if any)"
+	@echo "	  clean-pkvm		clean generated kernel files"
+	@echo "	  clean-qemu		clean qemu images and firmware"
+.PHONY: help
 
-prepare: clang qemu-host get-deps clean-pkvm configure
+clang-x86_64: clang/linux-x86/
+clang/linux-x86/:
+	git clone --depth=1 https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86 clang/linux-x86
+	echo '$(abspath ./clang/linux-x86/clang-r498229b/bin/clang)' > CC
+
+clean-clang-x86_64:
+	rm -rf clang/linux-x86
+.PHONY: clean-clang-x86_64
+
+clang-aarch64:
+	echo 'clang-15' > CC
+
+clean-clang-aarch64:
+
+clang: clang-$(ARCH)
+
+clean-clang: clean-clang-$(ARCH)
+clean-clang:
+	@rm -f CC
+
+CC = $(shell cat CC)
+
+prepare: clang qemu-host clean-pkvm configure
 .PHONY: prepare
 
 clean-qemu:
 	$(MAKE) -C qemu-host clean
 .PHONY: clean-qemu
-
-clean: clean-qemu
 
 qemu-host:
 	$(MAKE) -C qemu-host
@@ -37,9 +69,6 @@ prepare-container:
 	sudo apt install -y qemu-system-aarch64
 .PHONY: prepare-container
 
-get-deps:
-.PHONY: get-deps
-
 configure:
 	@echo ... now run configure
 	$(MAKE) -C .. ARCH=arm64 CC=$(CC) CROSS_COMPILE=aarch64-linux-gnu- -j $$(nproc) defconfig
@@ -59,6 +88,8 @@ configure:
 .PHONY: configure
 
 build:
-	@echo ... building kernel
+	@echo ... building kernel image
 	$(MAKE) -C $(abspath ..) ARCH=arm64 CC=$(CC) CROSS_COMPILE=aarch64-linux-gnu- -j $$(nproc) Image
 .PHONY: build
+
+deep-clean: clean-clang clean-pkvm clean-qemu

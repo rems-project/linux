@@ -10,5 +10,5 @@ qemu-system-aarch64 -M virt        \
     -device virtio-net-pci,netdev=net0                \
     -netdev user,id=net0,hostfwd=tcp::8022-:22            \
     -nographic                            \
-    -drive if=none,id=cd,file=cl/qemu-host/debian-12.1.0-arm64-netinst.iso \
+    -drive if=none,id=cd,file=cl/qemu-host/debian-12.2.0-arm64-netinst.iso \
     -device scsi-cd,drive=cd
