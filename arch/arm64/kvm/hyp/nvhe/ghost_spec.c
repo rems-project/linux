@@ -658,6 +658,9 @@ void compute_new_abstract_state_handle___pkvm_init_vm(struct ghost_state *g1, st
 
 	u64 handle = call->return_value;
 
+	// pKVM should not allocate the same handle to a previously existent VM
+	ghost_spec_assert(ghost_vms_get(&g0->vms, handle) == NULL);
+
 	// In the implementation, insert_vm_table_entry() may return -EINVAL,
 	// if during the init of pKVM vm_table could not allocated,
 	// so these ghost compute functions are only valid if properly initialised
@@ -721,14 +724,16 @@ void compute_new_abstract_state_handle___pkvm_init_vm(struct ghost_state *g1, st
 	// NOTE: we expect the VM's page table to be place at the beginning
 	// of the first page of the memory region donated by the host
 	// for that purpose
+	hyp_putsxnl("!!! vm_init, pgd_phys", pgd_phys, 64);
 	ghost_pfn_set_init(&vm1->vm_abstract_pgtable.table_pfns, pgd_phys, pgd_phys + pgd_size);
 	vm1->vm_abstract_pgtable.mapping = mapping_empty_();
 	vm1->nr_vcpus = nr_vcpus;
 	vm1->nr_initialised_vcpus = 0;
-	// NOTE: this sets the .loaded fields of all the elements
-	// of the array to false
-	memset(vm1->vcpus, 0, sizeof(struct ghost_vcpu[KVM_MAX_VCPUS]));
 	vm1->pkvm_handle = handle;
+
+	for (int i = 0; i < KVM_MAX_VCPUS; i++) {
+		vm1->vcpus[i] = NULL;
+	}
 	
 	// TODO:
 	// in theory this is unsafe, as another thread could've swooped in between the end of the hypercall
