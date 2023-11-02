@@ -311,10 +311,28 @@ void check_abstraction_equals_loaded_vcpus(struct ghost_state *g1, struct ghost_
 void check_abstraction_equals_vcpu(struct ghost_vcpu *vcpu1, struct ghost_vcpu *vcpu2)
 {
 	GHOST_LOG_CONTEXT_ENTER();
-	GHOST_LOG(vcpu1->vcpu_handle, u64);
+
+	if (!vcpu1) {
+		if (!vcpu2) {
+			GHOST_SPEC_FAIL("vcpu2 did not exist.");
+		}
+
+		return;
+	} else if (!vcpu2) {
+		if (!vcpu1) {
+			GHOST_SPEC_FAIL("vcpu1 did not exist.");
+		}
+
+		return;
+	}
+
+	ghost_assert(vcpu1);
+	ghost_assert(vcpu2);
+
 	GHOST_LOG(vcpu1->loaded, bool);
-	GHOST_LOG(vcpu2->vcpu_handle, u64);
 	GHOST_LOG(vcpu2->loaded, bool);
+	GHOST_LOG(vcpu1->vcpu_handle, u64);
+	GHOST_LOG(vcpu2->vcpu_handle, u64);
 	ghost_spec_assert(vcpu1->loaded == vcpu2->loaded);
 	GHOST_LOG_CONTEXT_EXIT();
 }
