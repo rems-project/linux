@@ -398,13 +398,49 @@ void check_abstraction_equals_vms(struct ghost_vms *gc, struct ghost_vms *gr_pos
 	__check_abstraction_vm_all_contained_in(gr_post, gc);
 }
 
-
-// do we want these for an arbitrary g or for the global gs ?
-
-
-void check_abstraction_equals_all(struct ghost_state *gc, struct ghost_state *gr_post, struct ghost_state *gr_pre)
+void check_abstraction_equals_run_state(struct ghost_running_state *spec, struct ghost_running_state *recorded)
 {
 	GHOST_LOG_CONTEXT_ENTER();
+	ghost_assert(spec->present);
+	ghost_assert(recorded->present);
+
+	GHOST_SPEC_ASSERT_VAR_EQ(spec->guest_running, recorded->guest_running, bool);
+
+	if (spec->guest_running) {
+		GHOST_SPEC_ASSERT_VAR_EQ(spec->vm_handle, recorded->vm_handle, u32);
+		GHOST_SPEC_ASSERT_VAR_EQ(spec->vcpu_index, recorded->vcpu_index, u64);
+	}
+}
+
+void check_abstraction_refined_run_state(struct ghost_state *gc, struct ghost_state *gr_post, struct ghost_state *gr_pre)
+{
+	GHOST_LOG_CONTEXT_ENTER();
+	struct ghost_running_state *gc_run = this_cpu_ghost_run_state(gc);
+	struct ghost_running_state *gr_post_run = this_cpu_ghost_run_state(gr_post);
+	struct ghost_running_state *gr_pre_run = this_cpu_ghost_run_state(gr_pre);
+	GHOST_LOG(gc_run->present, bool);
+	GHOST_LOG(gr_post_run->present, bool);
+
+
+	if (gc_run->present && gr_post_run->present) {
+		check_abstraction_equals_run_state(gc_run, gr_post_run);
+	} else if (gc_run->present && !gr_post_run->present) {
+		GHOST_SPEC_FAIL("recorded post has no cpu_run_state");
+	} else if (!gc_run->present && gr_post_run->present) {
+		check_abstraction_equals_run_state(gr_post_run, gr_pre_run);
+	} else {
+		ghost_spec_assert(true);
+	}
+
+	GHOST_LOG_CONTEXT_EXIT();
+}
+
+void check_abstraction_refined_pkvm(struct ghost_state *gc, struct ghost_state *gr_post, struct ghost_state *gr_pre)
+{
+	GHOST_LOG_CONTEXT_ENTER();
+
+	GHOST_LOG(gc->pkvm.present, bool);
+	GHOST_LOG(gr_post->pkvm.present, bool);
 
 	if (gc->pkvm.present && gr_post->pkvm.present) {
 		check_abstraction_equals_pkvm(&gc->pkvm, &gr_post->pkvm);
@@ -417,6 +453,16 @@ void check_abstraction_equals_all(struct ghost_state *gc, struct ghost_state *gr
 		check_abstraction_equals_pkvm(&gr_post->pkvm, &gr_pre->pkvm);
 	}
 
+	GHOST_LOG_CONTEXT_EXIT();
+}
+
+void check_abstraction_refined_host(struct ghost_state *gc, struct ghost_state *gr_post, struct ghost_state *gr_pre)
+{
+	GHOST_LOG_CONTEXT_ENTER();
+
+	GHOST_LOG(gc->host.present, bool);
+	GHOST_LOG(gr_post->host.present, bool);
+
 	if (gc->host.present && gr_post->host.present) {
 		check_abstraction_equals_host(&gc->host, &gr_post->host);
 	}
@@ -428,6 +474,13 @@ void check_abstraction_equals_all(struct ghost_state *gc, struct ghost_state *gr
 		check_abstraction_equals_host(&gr_post->host, &gr_pre->host);
 	}
 
+	GHOST_LOG_CONTEXT_EXIT();
+}
+
+void check_abstraction_refined_vms(struct ghost_state *gc, struct ghost_state *gr_post, struct ghost_state *gr_pre)
+{
+	GHOST_LOG_CONTEXT_ENTER();
+
 	// TODO: ensure we actually own the locks of any VMs we touched in the hypercall before doing this...
 	if (gc->vms.present && gr_post->vms.present) {
 		check_abstraction_equals_vms(&gc->vms, &gr_post->vms);
@@ -438,9 +491,13 @@ void check_abstraction_equals_all(struct ghost_state *gc, struct ghost_state *gr
 		check_abstraction_equals_vms(&gr_post->vms, &gr_pre->vms);
 	}
 
-	check_abstraction_equals_loaded_vcpus(gc, gr_post);
+	GHOST_LOG_CONTEXT_EXIT();
+}
 
-	// check that a bunch of global state bits, that 'in theory' should be constant, really didn't change.
+void check_abstraction_equals_globals(struct ghost_state *gc, struct ghost_state *gr_post)
+{
+	GHOST_LOG_CONTEXT_ENTER();
+
 	ghost_spec_assert(
 		   gc->globals.hyp_nr_cpus == gr_post->globals.hyp_nr_cpus
 		&& gc->globals.hyp_physvirt_offset == gr_post->globals.hyp_physvirt_offset
@@ -448,8 +505,30 @@ void check_abstraction_equals_all(struct ghost_state *gc, struct ghost_state *gr
 		&& gc->globals.tag_val == gr_post->globals.tag_val
 	);
 
+
+
+	GHOST_LOG_CONTEXT_EXIT();
+}
+
+
+// do we want these for an arbitrary g or for the global gs ?
+
+
+void check_abstraction_equals_all(struct ghost_state *gc, struct ghost_state *gr_post, struct ghost_state *gr_pre)
+{
+	GHOST_LOG_CONTEXT_ENTER();
+
+	// these things might not be present, in which case we check conditionally
+	check_abstraction_refined_pkvm(gc, gr_post, gr_pre);
+	check_abstraction_refined_host(gc, gr_post, gr_pre);
+	check_abstraction_refined_vms(gc, gr_post, gr_pre);
+	check_abstraction_refined_run_state(gc, gr_post, gr_pre);
+
+	// these must always be present and therefore always checked
 	check_abstraction_equals_hyp_memory(gc, gr_post);
 	check_abstraction_equals_reg(gc, gr_post);
+	check_abstraction_equals_globals(gc, gr_post);
+	check_abstraction_equals_loaded_vcpus(gc, gr_post);
 
 	GHOST_LOG_CONTEXT_EXIT();
 }
@@ -779,6 +858,16 @@ void record_abstraction_regs_post(struct kvm_cpu_context *ctxt)
 	record_abstraction_regs(g, ctxt);
 }
 
+
+void ghost_cpu_running_state_copy(struct ghost_running_state *run_tgt, struct ghost_running_state *g_src)
+{
+	run_tgt->present = g_src->present;
+	run_tgt->guest_running = g_src->guest_running;
+	run_tgt->vm_handle = g_src->vm_handle;
+	run_tgt->vcpu_index = g_src->vcpu_index;
+}
+
+
 /**
  * these are here to make __kvm_nvhe_ versions of them that are accessible in both the nvhe and non-nvhe code
  * as they were static in va_layout.c but now we need to access them in the ghost spec.
@@ -1062,4 +1151,8 @@ struct ghost_loaded_vcpu *this_cpu_ghost_loaded_vcpu(struct ghost_state *g)
 struct ghost_register_state *this_cpu_ghost_register_state(struct ghost_state *g)
 {
 	return &g->regs[hyp_smp_processor_id()];
+}
+struct ghost_running_state *this_cpu_ghost_run_state(struct ghost_state *g)
+{
+	return &g->cpu_state[hyp_smp_processor_id()];
 }

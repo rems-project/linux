@@ -245,14 +245,6 @@ static void early_exit_filter(struct kvm_vcpu *vcpu, u64 *exit_code)
 	}
 }
 
-#ifdef CONFIG_NVHE_GHOST_SPEC
-bool ghost_wrap_guest_post(struct kvm_cpu_context *host_ctxt, bool ret)
-{
-	// recording post state, computing expected post and comparing
-	ghost_handle_trap_epilogue(host_ctxt, /*from_host*/false);
-	return ret;
-}
-#endif /* CONFIG_NVHE_GHOST_SPEC */
 
 /* Switch to the guest for legacy non-VHE systems */
 int __kvm_vcpu_run(struct kvm_vcpu *vcpu)
@@ -324,27 +316,26 @@ int __kvm_vcpu_run(struct kvm_vcpu *vcpu)
 	__debug_switch_to_guest(vcpu);
 
 	do {
+#ifdef CONFIG_NVHE_GHOST_SPEC
+		this_cpu_ptr(&ghost_cpu_run_state)->guest_running = true;
+		this_cpu_ptr(&ghost_cpu_run_state)->vm_handle = vcpu->kvm->arch.pkvm.handle;
+		this_cpu_ptr(&ghost_cpu_run_state)->vcpu_index = vcpu->vcpu_idx;
+		ghost_post(&vcpu->arch.ctxt);
+#endif  /* CONFIG_NVHE_GHOST_SPEC */
+
 		/* Jump in the fire! */
 		exit_code = __guest_enter(vcpu);
 
 #ifdef CONFIG_NVHE_GHOST_SPEC
-		// recording pre state before a guest hcall/... handler
-		if (GHOST_EXEC_SPEC) {
-			ghost_lock_vms_table();
-			clear_abstraction_thread_local();
-			ghost_unlock_vms_table();
-			record_abstraction_regs_pre(host_ctxt);
-			record_abstraction_constants_pre();
-		}
-#endif /* CONFIG_NVHE_GHOST_SPEC */
+		ghost_record_pre(&vcpu->arch.ctxt);
+#endif  /* CONFIG_NVHE_GHOST_SPEC */
 
 		/* And we're baaack! */
-#ifdef CONFIG_NVHE_GHOST_SPEC
-	} while (ghost_wrap_guest_post(host_ctxt, fixup_guest_exit(vcpu, &exit_code)));
-#else /* CONFIG_NVHE_GHOST_SPEC */
 	} while (fixup_guest_exit(vcpu, &exit_code));
-#endif /* CONFIG_NVHE_GHOST_SPEC */
 
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	this_cpu_ptr(&ghost_cpu_run_state)->guest_running = false;
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	__sysreg_save_state_nvhe(guest_ctxt);
 	__sysreg32_save_state(vcpu);
 	__timer_disable_traps(vcpu);

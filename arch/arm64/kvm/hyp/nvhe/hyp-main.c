@@ -1300,6 +1300,14 @@ void hyp_put_exception_heading(void)
 }
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 
+#ifdef CONFIG_NVHE_GHOST_SPEC
+/*
+ * keep track, per-cpu of what pKVM thinks is running on this cpu.
+ * NOTE: this is part of the recording machinery, not the spec computing machinery.
+ */
+DEFINE_PER_CPU(struct ghost_running_state, ghost_cpu_run_state);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
+
 void handle_trap(struct kvm_cpu_context *host_ctxt)
 {
 #ifdef CONFIG_NVHE_GHOST_SPEC
@@ -1308,23 +1316,7 @@ void handle_trap(struct kvm_cpu_context *host_ctxt)
 	GHOST_LOG_CONTEXT_ENTER();
 	GHOST_LOG(cpu, u64);
 
-	ghost_clear_call_data();
-	_Bool check_this_transition=false;
-	if (GHOST_EXEC_SPEC && READ_ONCE(pkvm_init_finalized)) {
-		// we have to own the pKVM vm_table table to clear the vms dict.
-		// technically it's safe to do it anyway, as this is just thread-local abstraction
-		// but we assert that it's held
-		ghost_lock_vms_table();
-		clear_abstraction_thread_local();
-		ghost_unlock_vms_table();
-
-		ghost_lock_maplets();
-		record_abstraction_hyp_memory(this_cpu_ptr(&gs_recorded_pre));
-		ghost_unlock_maplets();
-		record_abstraction_regs_pre(host_ctxt);
-		record_abstraction_constants_pre();
-		check_this_transition = true;
-	}
+	ghost_record_pre(host_ctxt);
 
 	if (ghost_control.dump_handle_trap) {
 		hyp_put_exception_heading();
@@ -1369,9 +1361,7 @@ void handle_trap(struct kvm_cpu_context *host_ctxt)
 	}
 
 #ifdef CONFIG_NVHE_GHOST_SPEC
-	if (check_this_transition) {
-		ghost_handle_trap_epilogue(host_ctxt, /*from_host*/true);
-	}
+	ghost_post(host_ctxt);
 	GHOST_LOG_CONTEXT_EXIT();
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 }

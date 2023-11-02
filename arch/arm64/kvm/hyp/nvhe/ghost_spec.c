@@ -15,6 +15,7 @@
 #include <nvhe/ghost_spec.h>
 #include <nvhe/ghost_compute_abstraction.h>
 #include <nvhe/ghost_kvm_pgtable.h>
+#include <nvhe/ghost_control.h>
 
 
 
@@ -832,40 +833,39 @@ void compute_new_abstract_state_handle_host_mem_abort(struct ghost_state *g1, st
 
 
 
-void compute_new_abstract_state_handle_trap(struct ghost_state *g1 /*new*/, struct ghost_state *g0 /*old*/, struct ghost_call_data *call, bool *new_state_computed)
-	// pointer or struct arguments and results?  For more obvious correspondence to math, struct - but that may be too terrible for executability, and distracting for those used to idiomatic C.  Doesn't matter too much.
+void compute_new_abstract_state_handle_host_trap(struct ghost_state *post, struct ghost_state *pre, struct ghost_call_data *call, bool *new_state_computed)
 {
 	GHOST_LOG_CONTEXT_ENTER();
 
-	// assumes *g1 has been cleared
-	GHOST_LOG(g1->pkvm.present, bool);
-	GHOST_LOG(g1->host.present, bool);
-	GHOST_LOG(this_cpu_ghost_register_state(g1)->present, bool);
-	ghost_assert(!g1->pkvm.present && !g1->host.present && !this_cpu_ghost_register_state(g1)->present);
+	// check *post was clear
+	GHOST_LOG(post->pkvm.present, bool);
+	GHOST_LOG(post->host.present, bool);
+	GHOST_LOG(this_cpu_ghost_register_state(post)->present, bool);
+	ghost_assert(!post->pkvm.present && !post->host.present && !this_cpu_ghost_register_state(post)->present);
 
 	// copy the g0 regs to g1; we'll update them to make the final g1
-	copy_abstraction_regs(g1, g0);
+	copy_abstraction_regs(post, pre);
 
 	// hyp_memory is supposed to be constant, so just copy the old one
-	copy_abstraction_hyp_memory(g1, g0);
+	copy_abstraction_hyp_memory(post, pre);
 
 	// the globals are supposed to be constant, so copy them over
-	copy_abstraction_constants(g1, g0);
+	copy_abstraction_constants(post, pre);
 
-	switch (ESR_ELx_EC(ghost_reg_el2(g0,GHOST_ESR_EL2))) {
+	switch (ESR_ELx_EC(ghost_reg_el2(pre,GHOST_ESR_EL2))) {
 	case ESR_ELx_EC_HVC64:
-		compute_new_abstract_state_handle_host_hcall(g1,g0,call,new_state_computed);
+		compute_new_abstract_state_handle_host_hcall(post,pre,call,new_state_computed);
 		break;
 	case ESR_ELx_EC_SMC64:
-		//TODO compute_new_abstract_state_handle_host_smc(g1,g0);
+		//TODO compute_new_abstract_state_handle_host_smc(post,pre);
 		break;
 	case ESR_ELx_EC_FP_ASIMD:
 	case ESR_ELx_EC_SVE:
-		//TODO compute_new_abstract_state_fpsimd_host_restore(g1,g0);
+		//TODO compute_new_abstract_state_fpsimd_host_restore(post,pre);
 		break;
 	case ESR_ELx_EC_IABT_LOW:
 	case ESR_ELx_EC_DABT_LOW:
-		compute_new_abstract_state_handle_host_mem_abort(g1,g0,call,new_state_computed);
+		compute_new_abstract_state_handle_host_mem_abort(post,pre,call,new_state_computed);
 		break;
 	default:
 		ghost_assert(false);
@@ -873,21 +873,66 @@ void compute_new_abstract_state_handle_trap(struct ghost_state *g1 /*new*/, stru
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
-void ghost_handle_trap_epilogue(struct kvm_cpu_context *host_ctxt, bool from_host)
+void compute_new_abstract_state_handle_guest_trap(struct ghost_state *post, struct ghost_state *pre, struct ghost_call_data *call, bool *new_state_computed)
 {
-	bool new_state_computed=false;
+	// TODO
+}
 
-	// record the remaining parts of the new impl abstract state
-	// (the pkvm, host, and vm components having been recorded at impl lock points)
-	ghost_lock_maplets();
-	record_abstraction_hyp_memory(this_cpu_ptr(&gs_recorded_post));
-	record_abstraction_regs_post(host_ctxt);
-	record_abstraction_constants_post();
-	// compute the new spec abstract state
-	this_cpu_ptr(&gs_call_data)->return_value = cpu_reg(host_ctxt, 1);
-	compute_new_abstract_state_handle_trap(this_cpu_ptr(&gs_computed_post), this_cpu_ptr(&gs_recorded_pre), this_cpu_ptr(&gs_call_data), &new_state_computed);
-	// and check the two are equal on relevant components
-	if (new_state_computed)
-		check_abstraction_equals_all(this_cpu_ptr(&gs_computed_post), this_cpu_ptr(&gs_recorded_post), this_cpu_ptr(&gs_recorded_pre));
-	ghost_unlock_maplets();
+void ghost_record_pre(struct kvm_cpu_context *ctxt)
+{
+	struct ghost_running_state *cpu_run_state = this_cpu_ptr(&ghost_cpu_run_state);
+	struct ghost_state *gr_pre = this_cpu_ptr(&gs_recorded_pre);
+	if (GHOST_EXEC_SPEC && READ_ONCE(pkvm_init_finalized)) {
+		// we have to own the pKVM vm_table table to clear the vms dict.
+		// technically it's safe to do it anyway, as this is just thread-local abstraction
+		// but we assert that it's held
+		ghost_lock_vms_table();
+		clear_abstraction_thread_local();
+		ghost_unlock_vms_table();
+
+		ghost_lock_maplets();
+		record_abstraction_hyp_memory(gr_pre);
+		ghost_unlock_maplets();
+
+		record_abstraction_regs_pre(ctxt);
+		record_abstraction_constants_pre();
+		ghost_cpu_running_state_copy(this_cpu_ghost_run_state(gr_pre), cpu_run_state);
+
+		ghost_clear_call_data();
+	}
+}
+
+void ghost_post(struct kvm_cpu_context *ctxt)
+{
+	struct ghost_running_state *cpu_run_state = this_cpu_ptr(&ghost_cpu_run_state);
+	bool new_state_computed = false;
+
+	struct ghost_state *gr_pre = this_cpu_ptr(&gs_recorded_pre);
+	struct ghost_state *gr_post = this_cpu_ptr(&gs_recorded_post);
+	struct ghost_state *gc_post = this_cpu_ptr(&gs_computed_post);
+	struct ghost_call_data *call = this_cpu_ptr(&gs_call_data);
+	struct ghost_running_state *gr_pre_cpu = this_cpu_ghost_run_state(gr_pre);
+
+
+	if (GHOST_EXEC_SPEC && READ_ONCE(pkvm_init_finalized)) {
+		// record the remaining parts of the new impl abstract state
+		// (the pkvm, host, and vm components having been recorded at impl lock points)
+		ghost_lock_maplets();
+		record_abstraction_hyp_memory(gr_post);
+		record_abstraction_regs_post(ctxt);
+		record_abstraction_constants_post();
+		ghost_cpu_running_state_copy(this_cpu_ghost_run_state(gr_post), cpu_run_state);
+		call->return_value = cpu_reg(ctxt, 1);
+
+		// compute the new spec abstract state
+		if (gr_pre_cpu->guest_running)
+			compute_new_abstract_state_handle_guest_trap(gc_post, gr_pre, call, &new_state_computed);
+		else
+			compute_new_abstract_state_handle_host_trap(gc_post, gr_pre, call, &new_state_computed);
+
+		// and check the two are equal on relevant components
+		if (new_state_computed)
+			check_abstraction_equals_all(gc_post, gr_post, gr_pre);
+		ghost_unlock_maplets();
+	}
 }

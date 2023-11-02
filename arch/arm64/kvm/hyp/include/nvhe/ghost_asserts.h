@@ -16,6 +16,20 @@
 	BUG_ON(!(c)); \
 }
 
+#define GHOST_SPEC_FAIL(msg) { \
+	GHOST_WARN(msg); \
+	ghost_spec_assert(false); \
+}
+
+#define GHOST_SPEC_ASSERT_VAR_EQ(var1, var2, ty) { \
+	GHOST_LOG(var1, ty); \
+	GHOST_LOG(var2, ty); \
+	if ((var1) != (var2)) { \
+		GHOST_WARN(#var1 " did not match " #var2); \
+		ghost_spec_assert(false); \
+	} \
+}
+
 
 /*
  * some spec assertion helpers

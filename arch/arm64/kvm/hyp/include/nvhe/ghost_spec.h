@@ -251,6 +251,22 @@ struct ghost_constant_globals {
 };
 
 /**
+ * struct ghost_running_state - Track who was running before entering pKVM
+ * @present: whether this part of the state is present
+ * @guest_running: if present, true implies exception was from guest, otherwise was from host.
+ * @vm_handle: if present and guest_running, the opaque pKVM handle of the VM that was running.
+ * @vcpu_index: if present and guest_running, the index of the vcpu in the VM with vm_handle which was running.
+ */
+struct ghost_running_state {
+	bool present;
+	bool guest_running;
+	pkvm_handle_t vm_handle;
+	u64 vcpu_index;
+};
+
+void ghost_cpu_running_state_copy(struct ghost_running_state *run_tgt, struct ghost_running_state *g_src);
+
+/**
  * struct ghost_state - Ghost copy of the whole EL2 state
  *
  * @hyp_memory: abstract mapping interpretation of the hyp_memory array.
@@ -260,6 +276,7 @@ struct ghost_constant_globals {
  * @vms: vm table, protected by the pKVM vm_table table lock, with each inner vm protected by that vm's own lock.
  * @globals: a copy of the set of hypervisor constant globals.
  * @loaded_hyp_vcpu: per-physical-cpu ghost copies of the state of the currently loaded vcpu.
+ * @cpu_state: the per-physical-cpu state of what was running on it.
  *
  * A ghost state may be partial, and only have some of the above fields present.
  * In that case, the ghost state is valid for those parts that are present,
@@ -273,6 +290,7 @@ struct ghost_state {
 	struct ghost_vms vms;
 	struct ghost_constant_globals globals;
 	struct ghost_loaded_vcpu loaded_hyp_vcpu[NR_CPUS];
+	struct ghost_running_state cpu_state[NR_CPUS];
 };
 
 /**
@@ -280,6 +298,7 @@ struct ghost_state {
  */
 struct ghost_loaded_vcpu *this_cpu_ghost_loaded_vcpu(struct ghost_state *g);
 struct ghost_register_state *this_cpu_ghost_register_state(struct ghost_state *g);
+struct ghost_running_state *this_cpu_ghost_run_state(struct ghost_state *g);
 
 //
 // struct args_host_hvc_pkvm_host_share_hyp {
@@ -342,6 +361,8 @@ DECLARE_PER_CPU(struct ghost_state, gs_recorded_pre);
 DECLARE_PER_CPU(struct ghost_state, gs_recorded_post);
 DECLARE_PER_CPU(struct ghost_state, gs_computed_post);
 
+DECLARE_PER_CPU(struct ghost_running_state, ghost_cpu_run_state);
+
 // __this_cpu_read(g_initial)
 // __this_cpu_ptr(&g_initial)
 
@@ -353,9 +374,17 @@ DECLARE_PER_CPU(struct ghost_state, gs_computed_post);
 #define ghost_reg_el2(g, reg_index) (this_cpu_ghost_register_state(g)->el2_sysregs[reg_index])
 //#define ghost_reg_ctxt(g,r)
 
+/**
+ * ghost_record_pre() - Record the state on entry to pKVM
+ * @ctxt: the context (saved registers) on entry to pKVM.
+ */
+void ghost_record_pre(struct kvm_cpu_context *ctxt);
 
-void compute_new_abstract_state_handle_trap(struct ghost_state *g1 /*new*/, struct ghost_state *g0 /*old*/, struct ghost_call_data *call, bool *new_state_computed);
-void ghost_handle_trap_epilogue(struct kvm_cpu_context *host_ctxt, bool from_host);
+/**
+ * ghost_post() - Record and check the state just prior to the exception return
+ * @ctxt: the context (saved registers) on exit from pKVM.
+ */
+void ghost_post(struct kvm_cpu_context *ctxt);
 
 #endif // _GHOST_SPEC_H
 
