@@ -15,7 +15,8 @@ void ghost_pfn_set_init(struct pfn_set *set, u64 pool_range_start, u64 pool_rang
 void ghost_pfn_set_insert(struct pfn_set *set, u64 pfn)
 {
 	u64 idx;
-	if (!(set->pool_range_start <= pfn && pfn < set->pool_range_end)) {
+	u64 phys_page_addr = pfn << PAGE_SHIFT;
+	if (!(set->pool_range_start <= phys_page_addr && phys_page_addr < set->pool_range_end)) {
 		idx = set->len++;
 		ghost_assert(idx < GHOST_MAX_PFN_SET_LEN);
 		set->external_pfns[idx] = pfn;
