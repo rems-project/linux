@@ -45,6 +45,7 @@ ghosts += ../ghost_alloc.o
 ghosts += ../ghost_control.o
 
 hyp-obj-$(CONFIG_NVHE_GHOST_SPEC) += $(ghosts)
+hyp-obj-$(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) += ghost_simplified_model.o
 
 ##
 ## Build rules for compiling nVHE hyp code

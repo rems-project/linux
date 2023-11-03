@@ -27,6 +27,10 @@
 #include <nvhe/ghost_pgtable.h>
 #include <nvhe/ghost_control.h>
 
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+#include <nvhe/ghost_simplified_model.h>
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
+
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 
 unsigned long hyp_nr_cpus;
@@ -443,6 +447,10 @@ void __noreturn __pkvm_init_finalise(void)
 #ifdef CONFIG_NVHE_GHOST_SPEC
 	init_abstraction_common();
 	record_abstraction_common();
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	GHOST_LOG(pkvm_pgtable.start_level, u32);
+	initialise_ghost_ptes_memory(ghost__pkvm_init_phys, ghost__pkvm_init_size);
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	WRITE_ONCE(pkvm_init_finalized, true);
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 

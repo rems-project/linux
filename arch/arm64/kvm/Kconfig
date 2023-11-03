@@ -92,6 +92,14 @@ config NVHE_GHOST_SPEC
 	help
 	  And it's watching you.
 
+config NVHE_GHOST_SIMPLIFIED_MODEL
+	bool "Runtime simplified model checking"
+	depends on NVHE_GHOST_SPEC
+	default n
+	select NVHE_EL2_DEBUG
+	select PROTECTED_NVHE_STACKTRACE
+	select KVM_ARM_HYP_DEBUG_UART
+
 config NVHE_GHOST_MEM_LOG2_MB
 	int "Ghost dynamic memory pool size (log_2)"
 	depends on NVHE_GHOST_SPEC

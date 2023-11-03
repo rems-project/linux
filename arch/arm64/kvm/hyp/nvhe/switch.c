@@ -35,6 +35,10 @@
 #include <nvhe/ghost_spec.h>
 #include <nvhe/ghost_compute_abstraction.h>
 
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+#include <nvhe/ghost_simplified_model.h>
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
+
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 
 /* Non-VHE specific context */
