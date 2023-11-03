@@ -147,6 +147,9 @@ void ghost_log_context_log(const char *s, enum ghost_log_level level)
 
 	if (frame_should_print_immediately() || level == GHOST_LOG_ERROR) {
 		ghost_print_begin();
+		if (level == GHOST_LOG_ERROR) {
+			hyp_putsp("! ");
+		}
 		hyp_putsp((char *)s);
 		hyp_putsp("\n");
 		ghost_print_end();
@@ -205,6 +208,11 @@ void ghost_log_context_traceback(void)
 			struct ghost_context_data *data = &frame->data[d];
 			indent(i*4);
 			hyp_putsp("| ");
+
+			if (data->level == GHOST_LOG_ERROR) {
+				hyp_putsp("! ");
+			}
+
 			hyp_putsp((char *)data->data_name);
 			if (data->has_data) {
 				u64 va;
