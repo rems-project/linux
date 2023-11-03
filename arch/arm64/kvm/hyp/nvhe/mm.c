@@ -201,6 +201,11 @@ int hyp_back_vmemmap(phys_addr_t back)
 			return ret;
 
 		memset(hyp_phys_to_virt(back), 0, size);
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+		for (u64 p = back; p < back+size; p += sizeof(u64)) {
+			ghost_simplified_model_step_write(WMO_plain, (phys_addr_t)p, 0);
+		}
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 		back += size;
 	}
 

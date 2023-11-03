@@ -26,6 +26,10 @@
 #include <nvhe/ghost_compute_abstraction.h>
 #include <nvhe/ghost_control.h>
 
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+#include <nvhe/ghost_simplified_model.h>
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
+
 //horrible hack for ghost code in nvhe/iommu/s2mpu.c
 // but in the default build # CONFIG_KVM_S2MPU is not set
 // and (looking in the Makefile) it seems that file isn't even linked in
@@ -239,6 +243,11 @@ static void *guest_s2_zalloc_page(void *mc)
 		return addr;
 
 	memset(addr, 0, PAGE_SIZE);
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	for (u64 p = (u64)addr; p < (u64)addr + PAGE_SIZE; p += sizeof(u64)) {
+		ghost_simplified_model_step_write(WMO_plain, hyp_virt_to_phys((u64 *)p), 0);
+	}
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	p = hyp_virt_to_page(addr);
 	memset(p, 0, sizeof(*p));
 	p->refcount = 1;
@@ -391,8 +400,17 @@ int __pkvm_prot_finalize(void)
 
 	/* Invalidate stale HCR bits that may be cached in TLBs */
 	__tlbi(vmalls12e1);
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	ghost_simplified_model_step_tlbi1(TLBI_vmalls12e1);
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	dsb(nsh);
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	ghost_simplified_model_step_dsb(DSB_nsh);
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	isb();
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	ghost_simplified_model_step_isb();
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 
 #ifdef CONFIG_NVHE_GHOST_SPEC
 	record_abstraction_loaded_vcpu_and_check_none();
@@ -1913,6 +1931,11 @@ static int hyp_zero_page(phys_addr_t phys)
 		return -EINVAL;
 
 	memset(addr, 0, PAGE_SIZE);
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	for (u64 p = (u64)addr; p < (u64)addr + PAGE_SIZE; p += sizeof(u64)) {
+		ghost_simplified_model_step_write(WMO_plain, hyp_virt_to_phys((u64 *)p), 0);
+	}
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 
 	/*
 	 * Prefer kvm_flush_dcache_to_poc() over __clean_dcache_guest_page()

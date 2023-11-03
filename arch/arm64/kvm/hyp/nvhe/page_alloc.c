@@ -7,6 +7,10 @@
 #include <asm/kvm_hyp.h>
 #include <nvhe/gfp.h>
 
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+#include <nvhe/ghost_simplified_model.h>
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
+
 u64 __hyp_vmemmap;
 
 /*
@@ -75,6 +79,11 @@ static inline void page_remove_from_list(struct hyp_page *p)
 
 	__list_del_entry(node);
 	memset(node, 0, sizeof(*node));
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	for (u64 *p = (u64*)node; p < (u64*)node + sizeof(*node)/sizeof(u64); p += 1) {
+		ghost_simplified_model_step_write(WMO_plain, hyp_virt_to_phys(p), 0);
+	}
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 }
 
 static inline void page_add_to_list(struct hyp_page *p, struct list_head *head)
@@ -98,6 +107,11 @@ static void __hyp_attach_page(struct hyp_pool *pool,
 	u8 order = p->order;
 
 	memset(hyp_page_to_virt(p), 0, PAGE_SIZE << p->order);
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	for (int i = 0; i < PAGE_SIZE << p->order; i += sizeof(u64)) {
+		ghost_simplified_model_step_write(WMO_plain, hyp_page_to_phys(p)+i, 0);
+	}
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 
 	/* Skip coalescing for 'external' pages being freed into the pool. */
 	if (phys < pool->range_start || phys >= pool->range_end)
