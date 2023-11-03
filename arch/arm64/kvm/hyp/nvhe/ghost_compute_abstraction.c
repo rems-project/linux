@@ -244,6 +244,15 @@ void check_abstraction_equals_reg(struct ghost_state *g1, struct ghost_state *g2
 			ghost_spec_assert(false);
 		}
 	}
+	for (i=0; i<NR_SYS_REGS; i++) {
+		if (ghost_reg_el1(g1,i) != ghost_reg_el1(g2,i)) {
+			GHOST_LOG(i, u64);
+			GHOST_LOG(ghost_reg_el1(g1,i), u64);
+			GHOST_LOG(ghost_reg_el1(g2,i), u64);
+			GHOST_WARN("EL1 sysreg register mismatch");
+			ghost_spec_assert(false);
+		}
+	}
 	for (i=0; i<sizeof(ghost_el2_regs)/sizeof(u64); i++) {
 		if (ghost_reg_el2(g1,ghost_el2_regs[i]) != ghost_reg_el2(g2,ghost_el2_regs[i])) {
 			GHOST_LOG(i, u64);
@@ -657,7 +666,7 @@ void copy_abstraction_regs(struct ghost_state *g_tgt, struct ghost_state *g_src)
 {
 	ghost_assert(this_cpu_ghost_register_state(g_src)->present);
 	ghost_assert(!this_cpu_ghost_register_state(g_tgt)->present);
-	memcpy((void*) &(g_tgt->regs), (void*) &(g_src->regs), sizeof(struct ghost_register_state));
+	memcpy((void*) &(g_tgt->regs[hyp_smp_processor_id()]), (void*) &(g_src->regs[hyp_smp_processor_id()]), sizeof(struct ghost_register_state));
 }
 
 void copy_abstraction_constants(struct ghost_state *g_tgt, struct ghost_state *g_src)

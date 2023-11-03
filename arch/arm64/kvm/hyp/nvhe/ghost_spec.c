@@ -818,6 +818,10 @@ u64 ghost_esr_ec_low_to_cur(u64 esr)
 	return esr;
 }
 
+// TODO: the spec is not great at the moment because it is just doing the same copies
+// of the registers as the pKVM implementation.
+// What we should instead do is (symbolically) run the ASL AArch64.DataAbort with the right arguments
+// and collect the set of register writes it does and use that as a kind of spec.
 void ghost_inject_abort(struct ghost_state *g1, struct ghost_state *g0)
 {
 	u64 spsr_el2 = ghost_reg_el2(g0, GHOST_SPSR_EL2);
@@ -881,7 +885,7 @@ void compute_new_abstract_state_handle_host_mem_abort(struct ghost_state *g1, st
 	if (!is_owned_exclusively_by(g0, GHOST_HOST, addr))
 		ghost_inject_abort(g0, g1);
 
-//	*new_state_computed = true;
+	*new_state_computed = true;
 	/* TODO: modelling of host_stage2_adjust_range()
 		1. ==> non-deterministic -EGAIN (when the pte for addr is valid)
 	*/
