@@ -47,6 +47,9 @@ ghosts += ../ghost_control.o
 hyp-obj-$(CONFIG_NVHE_GHOST_SPEC) += $(ghosts)
 hyp-obj-$(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) += ghost_simplified_model.o
 
+ghost-lib-objs := strcmp.o
+hyp-obj-$(CONFIG_NVHE_GHOST_SPEC) += $(addprefix ../../../lib/, $(ghost-lib-objs))
+
 ##
 ## Build rules for compiling nVHE hyp code
 ## Output of this folder is `kvm_nvhe.o`, a partially linked object

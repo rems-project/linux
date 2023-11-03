@@ -4,20 +4,6 @@
 
 #include <nvhe/ghost_control.h>
 
-static bool xstrcmp(const char *cs, const char *ct)
-{
-	unsigned char c1, c2;
-
-	while (1) {
-		c1 = *cs++;
-		c2 = *ct++;
-		if (c1 != c2)
-			return false;
-		if (!c1)
-			break;
-	}
-	return true;
-}
 struct ghost_control_item {
 	const char* context_name;
 	bool check;
@@ -39,7 +25,7 @@ struct ghost_control ghost_control;
 bool ghost_control_is_controlled(const char* context)
 {
 	for (int i = 0; i < ghost_control.len; i++) {
-		if (xstrcmp(context, ghost_control.items[i].context_name))
+		if (!strcmp(context, ghost_control.items[i].context_name))
 			return true;
 	}
 
@@ -49,7 +35,7 @@ bool ghost_control_is_controlled(const char* context)
 bool ghost_control_print_enabled(const char* context)
 {
 	for (int i = 0; i < ghost_control.len; i++) {
-		if (xstrcmp(context, ghost_control.items[i].context_name))
+		if (!strcmp(context, ghost_control.items[i].context_name))
 			return ghost_control.items[i].noisy;
 	}
 
@@ -59,7 +45,7 @@ bool ghost_control_print_enabled(const char* context)
 bool ghost_control_print_enabled_verbose(const char* context)
 {
 	for (int i = 0; i < ghost_control.len; i++) {
-		if (xstrcmp(context, ghost_control.items[i].context_name))
+		if (!strcmp(context, ghost_control.items[i].context_name))
 			return ghost_control.items[i].noisy && ghost_control.items[i].verbose;
 	}
 
@@ -69,7 +55,7 @@ bool ghost_control_print_enabled_verbose(const char* context)
 bool ghost_control_check_enabled(const char* context)
 {
 	for (int i = 0; i < ghost_control.len; i++) {
-		if (xstrcmp(context, ghost_control.items[i].context_name)) {
+		if (!strcmp(context, ghost_control.items[i].context_name)) {
 			return ghost_control.items[i].check;
 		}
 	}
