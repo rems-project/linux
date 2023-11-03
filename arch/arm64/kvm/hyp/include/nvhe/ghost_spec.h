@@ -395,6 +395,7 @@ DECLARE_PER_CPU(struct ghost_running_state, ghost_cpu_run_state);
 // functions to make ghost register accesses more uniform
 #define ghost_reg_gpr(g, reg_index) (this_cpu_ghost_register_state(g)->ctxt.regs.regs[reg_index])
 #define ghost_reg_el2(g, reg_index) (this_cpu_ghost_register_state(g)->el2_sysregs[reg_index])
+#define ghost_reg_el1(g, reg_index) (this_cpu_ghost_register_state(g)->ctxt.sys_regs[reg_index])
 //#define ghost_reg_ctxt(g,r)
 
 /**

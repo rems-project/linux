@@ -799,6 +799,57 @@ void compute_new_abstract_state_handle_host_hcall(struct ghost_state *g1, struct
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
+u64 ghost_esr_ec_low_to_cur(u64 esr)
+{
+	u64 ec = ESR_ELx_EC(esr);
+	switch (ec) {
+	case ESR_ELx_EC_DABT_LOW:
+		ec = ESR_ELx_EC_DABT_CUR;
+		break;
+	case ESR_ELx_EC_IABT_LOW:
+		ec = ESR_ELx_EC_IABT_CUR;
+		break;
+	default:
+		// the implementation should panic
+		ghost_assert(false);
+	}
+	esr &= ~ESR_ELx_EC_MASK;
+	esr |= ec << ESR_ELx_EC_SHIFT;
+	return esr;
+}
+
+void ghost_inject_abort(struct ghost_state *g1, struct ghost_state *g0)
+{
+	u64 spsr_el2 = ghost_reg_el2(g0, GHOST_SPSR_EL2);
+	u64 esr_el2 = ghost_reg_el2(g0, GHOST_ESR_EL2);
+
+	u64 esr_el1;
+
+	// if SPSR_EL2.M[3:0] <> PSR_EL0
+	if ((spsr_el2 & PSR_MODE_MASK) != PSR_MODE_EL0t)
+		// change the exception class to be a same-level fault
+		esr_el1 = ghost_esr_ec_low_to_cur(esr_el2);
+	else
+		esr_el1 = esr_el2;
+
+	// the implementation uses this RES0 bit (which is architecturally guaranteed
+	// to preserve software writes) to signal to the host that it is not dealing with a
+	// userspace fault
+	esr_el1 |= ESR_ELx_S1PTW;
+
+	ghost_reg_el1(g1, ESR_EL1) = esr_el1;
+	ghost_reg_el1(g1, SPSR_EL1) = spsr_el2;
+	ghost_reg_el1(g1, ELR_EL1) = ghost_reg_el2(g0, GHOST_ELR_EL2);
+	ghost_reg_el1(g1, FAR_EL1) = ghost_reg_el2(g0, GHOST_FAR_EL2);
+
+	ghost_reg_el2(g1, GHOST_ELR_EL2) =
+		ghost_reg_el1(g0, VBAR_EL1) + get_except64_offset(spsr_el2, PSR_MODE_EL1h, except_type_sync);
+
+	spsr_el2 = get_except64_cpsr(spsr_el2, false/*TODO: we hardcode that the cpus do not support MTE */,
+				     ghost_reg_el1(g0, SCTLR_EL1), PSR_MODE_EL1h);
+	ghost_reg_el2(g1, GHOST_SPSR_EL2) = spsr_el2;
+}
+
 
 // TODO: move this somewhere more sensible
 #define HPFAR_FIPA_SHIFT UL(4)
@@ -826,14 +877,13 @@ void compute_new_abstract_state_handle_host_mem_abort(struct ghost_state *g1, st
 	// (the mismatch of the upper bites offset is because the upper bits are FIPA are RES0)
 	addr = (hpfar >> HPFAR_FIPA_SHIFT) << PAGE_SHIFT;
 
+	// this is the third if in mem_protect.c::host_stage2_adjust_range()
+	if (!is_owned_exclusively_by(g0, GHOST_HOST, addr))
+		ghost_inject_abort(g0, g1);
+
+//	*new_state_computed = true;
 	/* TODO: modelling of host_stage2_adjust_range()
-
 		1. ==> non-deterministic -EGAIN (when the pte for addr is valid)
-
-		2. ==> return -EPERM pte == 0, which means:
-			* the page stage is PKVM_PAGE_OWNED (by host)
-
-		3. ==> calculation of some range (which is going to be passed to the idmap function)
 	*/
 }
 
