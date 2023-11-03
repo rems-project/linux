@@ -273,7 +273,7 @@ void *hyp_fixmap_map(phys_addr_t phys)
 	pte |= kvm_phys_to_pte(phys) | KVM_PTE_VALID;
 	WRITE_ONCE(*ptep, pte);
 #if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
-	ghost_simplified_model_step_write(WMO_plain, ptep, pte);
+	ghost_simplified_model_step_write(WMO_plain, hyp_virt_to_phys(ptep), pte);
 #endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 	dsb(ishst);
 #if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
@@ -291,7 +291,7 @@ static void fixmap_clear_slot(struct hyp_fixmap_slot *slot)
 #if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
 	u64 pte = *ptep & ~KVM_PTE_VALID;
 	WRITE_ONCE(*ptep, pte);
-	ghost_simplified_model_step_write(WMO_plain, ptep, pte);
+	ghost_simplified_model_step_write(WMO_plain, hyp_virt_to_phys(ptep), pte);
 #else /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 	WRITE_ONCE(*ptep, *ptep & ~KVM_PTE_VALID);
 #endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */

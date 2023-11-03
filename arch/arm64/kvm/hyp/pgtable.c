@@ -186,7 +186,7 @@ static void kvm_clear_pte(kvm_pte_t *ptep)
 {
 	WRITE_ONCE(*ptep, 0);
 #if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
-	ghost_simplified_model_step_write(WMO_plain, ptep, 0);
+	ghost_simplified_model_step_write(WMO_plain, hyp_virt_to_phys(ptep), 0);
 #endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 }
 
@@ -619,7 +619,7 @@ static bool hyp_map_walker_try_leaf(const struct kvm_pgtable_visit_ctx *ctx,
 
 	smp_store_release(ctx->ptep, new);
 #if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
-	ghost_simplified_model_step_write(WMO_release, ctx->ptep, new);
+	ghost_simplified_model_step_write(WMO_release, hyp_virt_to_phys(ctx->ptep), new);
 #endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 	return true;
 }
@@ -645,7 +645,7 @@ static int hyp_map_walker(const struct kvm_pgtable_visit_ctx *ctx,
 	mm_ops->get_page(ctx->ptep);
 	smp_store_release(ctx->ptep, new);
 #if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
-	ghost_simplified_model_step_write(WMO_release, ctx->ptep, new);
+	ghost_simplified_model_step_write(WMO_release, hyp_virt_to_phys(ctx->ptep), new);
 #endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 
 	return 0;
@@ -933,7 +933,7 @@ static bool stage2_try_set_pte(const struct kvm_pgtable_visit_ctx *ctx, kvm_pte_
 	if (!kvm_pgtable_walk_shared(ctx)) {
 		WRITE_ONCE(*ctx->ptep, new);
 #if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
-	ghost_simplified_model_step_write(WMO_plain, ctx->ptep, new);
+	ghost_simplified_model_step_write(WMO_plain, hyp_virt_to_phys(ctx->ptep), new);
 #endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 		return true;
 	}
@@ -1001,7 +1001,7 @@ static void stage2_make_pte(const struct kvm_pgtable_visit_ctx *ctx, kvm_pte_t n
 
 	smp_store_release(ctx->ptep, new);
 #if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
-	ghost_simplified_model_step_write(WMO_release, ctx->ptep, new);
+	ghost_simplified_model_step_write(WMO_release, hyp_virt_to_phys(ctx->ptep), new);
 #endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 }
 
@@ -1100,7 +1100,7 @@ static int stage2_map_walker_try_leaf(const struct kvm_pgtable_visit_ctx *ctx,
 	    !((ctx->old ^ new) & ~KVM_PTE_LEAF_ATTR_HI_SW)) {
 		WRITE_ONCE(*ctx->ptep, new);
 #if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
-	ghost_simplified_model_step_write(WMO_plain, ctx->ptep, new);
+	ghost_simplified_model_step_write(WMO_plain, hyp_virt_to_phys(ctx->ptep), new);
 #endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 		return 0;
 	}
