@@ -3,7 +3,7 @@
 
 #include <linux/types.h>
 
-#ifdef GHOST_COLOURS
+#ifdef CONFIG_NVHE_GHOST_SPEC_COLOURS
 #define GHOST_WHITE_ON_BLACK "\033[40;37;1m"
 #define GHOST_WHITE_ON_RED "\033[41;37;1m"
 #define GHOST_WHITE_ON_GREEN "\033[42;37;1m"

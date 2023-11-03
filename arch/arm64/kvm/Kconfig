@@ -92,6 +92,11 @@ config NVHE_GHOST_SPEC
 	help
 	  And it's watching you.
 
+config NVHE_GHOST_SPEC_COLOURS
+	bool "Colours in the output of nVHE ghost spec"
+	depends on NVHE_GHOST_SPEC
+	default n
+
 config NVHE_GHOST_SIMPLIFIED_MODEL
 	bool "Runtime simplified model checking"
 	depends on NVHE_GHOST_SPEC
