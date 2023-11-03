@@ -443,7 +443,7 @@ void __noreturn __pkvm_init_finalise(void)
 		goto out;
 
 	pkvm_hyp_vm_table_init(vm_table_base);
-			
+
 #ifdef CONFIG_NVHE_GHOST_SPEC
 	init_abstraction_common();
 	record_abstraction_common();

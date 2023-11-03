@@ -383,7 +383,7 @@ void check_abstraction_equals_vm(struct ghost_vm *vm1, struct ghost_vm *vm2)
 
 /// Check that `vm` is found in `vms` and that the two ghost vms are equal
 void check_abstraction_vm_in_vms_and_equal(pkvm_handle_t vm_handle, struct ghost_state *g, struct ghost_vms *vms) {
-	int i;	
+	int i;
 	GHOST_LOG_CONTEXT_ENTER();
 	GHOST_LOG(vm_handle, u32);
 
