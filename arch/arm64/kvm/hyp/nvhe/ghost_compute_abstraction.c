@@ -439,6 +439,8 @@ void check_abstraction_equals_run_state(struct ghost_running_state *spec, struct
 		GHOST_SPEC_ASSERT_VAR_EQ(spec->vm_handle, recorded->vm_handle, u32);
 		GHOST_SPEC_ASSERT_VAR_EQ(spec->vcpu_index, recorded->vcpu_index, u64);
 	}
+
+	GHOST_LOG_CONTEXT_EXIT();
 }
 
 void check_abstraction_refined_run_state(struct ghost_state *gc, struct ghost_state *gr_post, struct ghost_state *gr_pre)
