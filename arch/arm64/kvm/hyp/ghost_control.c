@@ -99,4 +99,6 @@ void init_ghost_control(void) {
 	ghost_control_create("___kvm_pgtable_walk", false, true, false);
 	ghost_control_create("__kvm_pgtable_walk", false, true, false);
 	ghost_control_create("_kvm_pgtable_stage2_map", false, true, false);
+
+	ghost_control_create("ghost_context", true, false, false);
 }

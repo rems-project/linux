@@ -50,6 +50,10 @@ static bool frame_should_print_immediately(void)
 {
 	struct ghost_context *ctx = this_cpu_ptr(&g_context);
 
+	if (ghost_control_is_controlled("ghost_context") && !ghost_control_print_enabled("ghost_context")) {
+		return false;
+	}
+
 	for (int i = 0; i < ctx->nr_frames; i++) {
 		const char *frame_name = ctx->frames[i].ctx_name;
 		if (ghost_control_is_controlled(frame_name) && !ghost_control_print_enabled(frame_name))
@@ -126,7 +130,7 @@ void ghost_log_context_log(const char *s, enum ghost_log_level level)
 	struct ghost_context_frame *frame;
 	struct ghost_context_data *ctx_data;
 	u64 framei, i;
-	
+
 	ctx = this_cpu_ptr(&g_context);
 
 	framei = ctx->nr_frames - 1;
@@ -141,7 +145,7 @@ void ghost_log_context_log(const char *s, enum ghost_log_level level)
 	ctx_data->level = level;
 	ctx_data->has_data = false;
 
-	if (frame_should_print_immediately()) {
+	if (frame_should_print_immediately() || level == GHOST_LOG_ERROR) {
 		ghost_print_begin();
 		hyp_putsp((char *)s);
 		hyp_putsp("\n");
