@@ -27,13 +27,18 @@ void ghost_log_context_log(
 	const char *s,
 	enum ghost_log_level level
 );
-void ghost_log_exit_context(void);
+void ghost_log_exit_context(
+	const char *s
+);
 void ghost_log_context_traceback(void);
 
 
+#define __INNER_NAME(name) "inner " name
 #define GHOST_LOG_CONTEXT_ENTER() ghost_log_enter_context(__func__)
-#define GHOST_LOG_CONTEXT_ENTER_INNER(name) ghost_log_enter_context("inner " name)
-#define GHOST_LOG_CONTEXT_EXIT() ghost_log_exit_context()
+#define GHOST_LOG_CONTEXT_ENTER_INNER(name) ghost_log_enter_context(__INNER_NAME(name))
+#define GHOST_LOG_CONTEXT_EXIT_INNER(name) ghost_log_exit_context(__INNER_NAME(name))
+#define GHOST_LOG_CONTEXT_EXIT() ghost_log_exit_context(__func__)
+#define GHOST_LOG_CONTEXT_EXIT_FORCE(s) ghost_log_exit_context(s)
 
 #define GHOST_LOG_P(var, printer) \
 	ghost_log_context_attach(#var, (void*)&(var), printer)

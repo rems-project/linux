@@ -461,9 +461,9 @@ out:
 
 	// because we tail called here with no intention of returning,
 	// pop the parents off as well.
-	GHOST_LOG_CONTEXT_EXIT(); // __pkvm_init
-	GHOST_LOG_CONTEXT_EXIT(); // handle_host_hcall
-	GHOST_LOG_CONTEXT_EXIT(); // handle_trap
+	GHOST_LOG_CONTEXT_EXIT_FORCE("__pkvm_init");
+	GHOST_LOG_CONTEXT_EXIT_FORCE("handle_host_hcall");
+	GHOST_LOG_CONTEXT_EXIT_FORCE("handle_trap");
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 
 	/*

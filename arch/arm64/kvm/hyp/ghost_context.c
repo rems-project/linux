@@ -156,7 +156,7 @@ void ghost_log_context_log(const char *s, enum ghost_log_level level)
 	}
 }
 
-void ghost_log_exit_context(void)
+void ghost_log_exit_context(const char *s)
 {
 	struct ghost_context *ctx;
 	struct ghost_context_frame *frame;
@@ -164,6 +164,13 @@ void ghost_log_exit_context(void)
 	ctx = this_cpu_ptr(&g_context);
 	ghost_assert(ctx->nr_frames > 0);
 	frame = &ctx->frames[ctx->nr_frames - 1];
+
+	if (s && strcmp(s, frame->ctx_name)) {
+		GHOST_WARN("Tried to pop shadow stack from wrong context");
+		GHOST_LOG(frame->ctx_name, str);
+		GHOST_LOG(s, str);
+		ghost_assert(false);
+	}
 
 	if (frame_should_print_immediately()) {
 		ghost_print_begin();

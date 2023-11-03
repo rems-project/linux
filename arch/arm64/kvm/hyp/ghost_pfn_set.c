@@ -71,7 +71,7 @@ void ghost_pfn_set_assert_equal(struct pfn_set *lhs, struct pfn_set *rhs)
 	ghost_pfn_set_assert_subseteq(lhs, rhs);
 	GHOST_LOG_CONTEXT_ENTER_INNER("subseteq flipped");
 	ghost_pfn_set_assert_subseteq(rhs, lhs);
-	GHOST_LOG_CONTEXT_EXIT();
+	GHOST_LOG_CONTEXT_EXIT_INNER("subseteq flipped");
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
