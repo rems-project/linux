@@ -68,7 +68,7 @@ void ghost_log_enter_context(const char *s)
 	u64 i;
 	struct ghost_context_frame *frame;
 	struct ghost_context *ctx;
-	
+
 	ctx = this_cpu_ptr(&g_context);
 	ghost_assert(ctx->nr_frames < GHOST_MAX_CONTEXT_FRAMES);
 
@@ -96,7 +96,7 @@ void ghost_log_context_attach(const char *s, void *data, ghost_printer_fn printe
 	struct ghost_context_frame *frame;
 	struct ghost_context_data *ctx_data;
 	u64 framei, i;
-	
+
 	ctx = this_cpu_ptr(&g_context);
 
 	framei = ctx->nr_frames - 1;
