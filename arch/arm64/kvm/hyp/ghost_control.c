@@ -86,5 +86,8 @@ void init_ghost_control(void) {
 	ghost_control_create("__kvm_pgtable_walk", false, true, false);
 	ghost_control_create("_kvm_pgtable_stage2_map", false, true, false);
 
-	ghost_control_create("ghost_context", true, false, false);
+	ghost_control_create("ghost_context", true, true, false);
+
+	ghost_control_create("ghost_record_pre", true, false, false);
+	ghost_control_create("ghost_post", true, false, false);
 }

@@ -943,6 +943,8 @@ void ghost_record_pre(struct kvm_cpu_context *ctxt)
 {
 	struct ghost_running_state *cpu_run_state = this_cpu_ptr(&ghost_cpu_run_state);
 	struct ghost_state *gr_pre = this_cpu_ptr(&gs_recorded_pre);
+
+	GHOST_LOG_CONTEXT_ENTER();
 	if (GHOST_EXEC_SPEC && READ_ONCE(pkvm_init_finalized)) {
 		clear_abstraction_thread_local();
 
@@ -956,6 +958,7 @@ void ghost_record_pre(struct kvm_cpu_context *ctxt)
 
 		ghost_clear_call_data();
 	}
+	GHOST_LOG_CONTEXT_EXIT();
 }
 
 void ghost_post(struct kvm_cpu_context *ctxt)
@@ -969,7 +972,7 @@ void ghost_post(struct kvm_cpu_context *ctxt)
 	struct ghost_call_data *call = this_cpu_ptr(&gs_call_data);
 	struct ghost_running_state *gr_pre_cpu = this_cpu_ghost_run_state(gr_pre);
 
-
+	GHOST_LOG_CONTEXT_ENTER();
 	if (GHOST_EXEC_SPEC && READ_ONCE(pkvm_init_finalized)) {
 		// record the remaining parts of the new impl abstract state
 		// (the pkvm, host, and vm components having been recorded at impl lock points)
@@ -993,4 +996,5 @@ void ghost_post(struct kvm_cpu_context *ctxt)
 		ghost_unlock_vms();
 		ghost_unlock_maplets();
 	}
+	GHOST_LOG_CONTEXT_EXIT();
 }
