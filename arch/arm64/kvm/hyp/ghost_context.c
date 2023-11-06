@@ -49,17 +49,18 @@ DEFINE_PER_CPU(struct ghost_context, g_context);
 static bool frame_should_print_immediately(void)
 {
 	struct ghost_context *ctx = this_cpu_ptr(&g_context);
+	bool should_print_immediately;
 
-	bool should_print_immediately = true;
+
+	if (ghost_control_is_controlled("ghost_context") && !ghost_control_print_enabled("ghost_context")) {
+		return false;
+	}
 
 	/*
 	 * go down the stack, and find the inner-most defined control
 	 * and return its print enabled
 	 */
-
-	if (ghost_control_is_controlled("ghost_context") && !ghost_control_print_enabled("ghost_context")) {
-		should_print_immediately = false;
-	}
+	should_print_immediately = true;
 
 	for (int i = 0; i < ctx->nr_frames; i++) {
 		const char *frame_name = ctx->frames[i].ctx_name;
