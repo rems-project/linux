@@ -6,18 +6,32 @@
 bool ghost_extra_debug_initialised = false;
 
 static DEFINE_HYP_SPINLOCK(g_print_lock);  // Internal.
+static DEFINE_PER_CPU(int, g_print_lock_locked);
 
-static DEFINE_HYP_SPINLOCK(g_public_print_lock); // Exported.
+void ghost_print_begin(void)
+{
+	int p = *this_cpu_ptr(&g_print_lock_locked);
 
-void ghost_print_begin(void) { hyp_spin_lock(&g_public_print_lock); }
-void ghost_print_end(void) { hyp_spin_unlock(&g_public_print_lock); }
+	if (!p)
+		hyp_spin_lock(&g_print_lock);
+
+	*this_cpu_ptr(&g_print_lock_locked) = p + 1;
+}
+
+void ghost_print_end(void)
+{
+	int p = *this_cpu_ptr(&g_print_lock_locked) - 1;
+	*this_cpu_ptr(&g_print_lock_locked) = p;
+	if (!p)
+		hyp_spin_unlock(&g_print_lock);
+}
 
 void hyp_putc(char c) { __hyp_putc(c); }
 
 void hyp_puts(char *s) {
-	hyp_spin_lock(&g_print_lock);
+	ghost_print_begin();
 	__hyp_puts(s);
-	hyp_spin_unlock(&g_print_lock);
+	ghost_print_end();
 }
 
 void hyp_putx32(unsigned int x) { __hyp_putx32(x); }
@@ -30,9 +44,9 @@ static inline void __hyp_puti(u64 i)
 }
 
 void hyp_puti(u64 i) {
-	hyp_spin_lock(&g_print_lock);
+	ghost_print_begin();
 	__hyp_puti(i);
-	hyp_spin_unlock(&g_print_lock);
+	ghost_print_end();
 }
 
 static inline void __hyp_putsp(char *s)
@@ -42,24 +56,24 @@ static inline void __hyp_putsp(char *s)
 
 void hyp_putsp(char *s)
 {
-	hyp_spin_lock(&g_print_lock);
+	ghost_print_begin();
 	__hyp_putsp(s);
-	hyp_spin_unlock(&g_print_lock);
+	ghost_print_end();
 }
 
 void hyp_putspi(char *s, u64 i)
 {
-	hyp_spin_lock(&g_print_lock);
+	ghost_print_begin();
 	__hyp_puti(i);
 	__hyp_putsp(s);
-	hyp_spin_unlock(&g_print_lock);
+	ghost_print_end();
 }
 
 void hyp_putbool(bool b)
 {
-	hyp_spin_lock(&g_print_lock);
+	ghost_print_begin();
 	__hyp_putsp(b ? "true" : "false");
-	hyp_spin_unlock(&g_print_lock);
+	ghost_print_end();
 }
 
 
@@ -81,31 +95,31 @@ static void __hyp_putx4np(unsigned long x, int n)
 
 void hyp_putsxn(char *s, unsigned long x, int n)
 {
-	hyp_spin_lock(&g_print_lock);
+	ghost_print_begin();
 	__hyp_putsp(s);
 	__hyp_putc(':');
 	__hyp_putx4np(x,n);
 	__hyp_putc(' ');
-	hyp_spin_unlock(&g_print_lock);
+	ghost_print_end();
 }
 
 void hyp_putsxnl(char *s, unsigned long x, int n)
 {
-	hyp_spin_lock(&g_print_lock);
+	ghost_print_begin();
 	__hyp_putsp(s);
 	__hyp_putc(':');
 	__hyp_putx4np(x, n);
 	__hyp_putc('\n');
-	hyp_spin_unlock(&g_print_lock);
+	ghost_print_end();
 }
 
 void check_assert_fail(char *s)
 {
-	hyp_spin_lock(&g_print_lock);
+	ghost_print_begin();
 	__hyp_putsp("check_assert_fail: ");
 	__hyp_putsp(s);
 	__hyp_putc('\n');
-	hyp_spin_unlock(&g_print_lock);
+	ghost_print_end();
 }
 
 DEFINE_HYP_PTR_PRINTER(c, char, hyp_putc);
