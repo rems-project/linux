@@ -50,17 +50,48 @@ static bool frame_should_print_immediately(void)
 {
 	struct ghost_context *ctx = this_cpu_ptr(&g_context);
 
+	bool should_print_immediately = true;
+
+	/*
+	 * go down the stack, and find the inner-most defined control
+	 * and return its print enabled
+	 */
+
 	if (ghost_control_is_controlled("ghost_context") && !ghost_control_print_enabled("ghost_context")) {
-		return false;
+		should_print_immediately = false;
 	}
 
 	for (int i = 0; i < ctx->nr_frames; i++) {
 		const char *frame_name = ctx->frames[i].ctx_name;
-		if (ghost_control_is_controlled(frame_name) && !ghost_control_print_enabled(frame_name))
-			return false;
+		if (ghost_control_is_controlled(frame_name)) {
+			should_print_immediately = ghost_control_print_enabled(frame_name);
+		}
 	}
 
-	return true;
+	return should_print_immediately;
+}
+
+static void colour_open(enum ghost_log_level level)
+{
+	switch (level) {
+	case GHOST_LOG_ERROR:
+		hyp_putsp("! ");
+		hyp_putsp(GHOST_WHITE_ON_RED);
+		break;
+	default:
+		;
+	}
+}
+
+static void colour_close(enum ghost_log_level level)
+{
+	switch (level) {
+	case GHOST_LOG_ERROR:
+		hyp_putsp(GHOST_NORMAL);
+		break;
+	default:
+		;
+	}
 }
 
 void ghost_log_enter_context(const char *s)
@@ -147,11 +178,10 @@ void ghost_log_context_log(const char *s, enum ghost_log_level level)
 
 	if (frame_should_print_immediately() || level == GHOST_LOG_ERROR) {
 		ghost_print_begin();
-		if (level == GHOST_LOG_ERROR) {
-			hyp_putsp("! ");
-		}
+		colour_open(level);
 		hyp_putsp((char *)s);
 		hyp_putsp("\n");
+		colour_close(level);
 		ghost_print_end();
 	}
 }
@@ -216,9 +246,7 @@ void ghost_log_context_traceback(void)
 			indent(i*4);
 			hyp_putsp("| ");
 
-			if (data->level == GHOST_LOG_ERROR) {
-				hyp_putsp("! ");
-			}
+			colour_open(data->level);
 
 			hyp_putsp((char *)data->data_name);
 			if (data->has_data) {
@@ -245,6 +273,7 @@ void ghost_log_context_traceback(void)
 					data->fn(data->data_ptr);
 				}
 			}
+			colour_close(data->level);
 			hyp_putsp("\n");
 		}
 	}
