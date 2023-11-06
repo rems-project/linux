@@ -449,7 +449,7 @@ void __noreturn __pkvm_init_finalise(void)
 	record_abstraction_common();
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
 	GHOST_LOG(pkvm_pgtable.start_level, u32);
-	initialise_ghost_ptes_memory(ghost__pkvm_init_phys, ghost__pkvm_init_size);
+	initialise_ghost_simplified_model(ghost__pkvm_init_phys, ghost__pkvm_init_size);
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	WRITE_ONCE(pkvm_init_finalized, true);
 #endif /* CONFIG_NVHE_GHOST_SPEC */
