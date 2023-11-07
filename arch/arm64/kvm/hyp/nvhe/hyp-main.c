@@ -1208,7 +1208,7 @@ static void handle_host_hcall(struct kvm_cpu_context *host_ctxt)
 
 
 	_Bool ghost_dump = ghost_control_print_enabled(__func__);
-	_Bool ghost_dump_verbose = ghost_control_print_enabled_verbose(__func__);
+	_Bool ghost_dump_verbose = ghost_control_print_enabled("handle_host_hcall_verbose");
 	u64 i=0; /* base indent */
 	if (ghost_dump) {
 		hyp_puti(i);

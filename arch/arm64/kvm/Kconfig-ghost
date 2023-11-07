@@ -37,22 +37,28 @@ config NVHE_GHOST_SPEC_NOISY
 	bool "Noisy ghost spec checking machinery"
 	depends on NVHE_GHOST_SPEC
 	default n
-	select NVHE_EL2_DEBUG
-	select PROTECTED_NVHE_STACKTRACE
-	select KVM_ARM_HYP_DEBUG_UART
+	help
+	  Enable some quite noisy prints from the ghost spec recording
+	  and checking machinery.
 
-config NVHE_GHOST_SPEC_NOISY_VERBOSE
+config NVHE_GHOST_SPEC_VERBOSE
 	bool "Very noisy ghost spec checking machinery"
 	depends on NVHE_GHOST_SPEC_NOISY
 	default n
-	select NVHE_EL2_DEBUG
-	select PROTECTED_NVHE_STACKTRACE
-	select KVM_ARM_HYP_DEBUG_UART
+	help
+	  Enable the full (very noisy) logs from the ghost spec recording
+	  and checking machinery.
 
 config NVHE_GHOST_SIMPLIFIED_MODEL_NOISY
 	bool "Noisy ghost simplified model output"
 	depends on NVHE_GHOST_SIMPLIFIED_MODEL
 	default n
-	select NVHE_EL2_DEBUG
-	select PROTECTED_NVHE_STACKTRACE
-	select KVM_ARM_HYP_DEBUG_UART
+	help
+	  Enable some noisy logs from the ghost simplified model.
+
+config NVHE_GHOST_SIMPLIFIED_MODEL_VERBOSE
+	bool "Very noisy ghost simplified model output"
+	depends on NVHE_GHOST_SIMPLIFIED_MODEL_NOISY
+	default n
+	help
+	  Enable the full (very noisy) logs from the ghost simplified model.

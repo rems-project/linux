@@ -6,7 +6,6 @@
 
 bool ghost_control_is_controlled(const char* context);
 bool ghost_control_print_enabled(const char* context);
-bool ghost_control_print_enabled_verbose(const char* context);
 bool ghost_control_check_enabled(const char* context);
 
 void init_ghost_control(void);

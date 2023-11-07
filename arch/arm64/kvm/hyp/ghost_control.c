@@ -7,8 +7,7 @@
 struct ghost_control_item {
 	const char* context_name;
 	bool check;
-	bool noisy;
-	bool verbose;
+	bool print;
 };
 
 
@@ -36,17 +35,7 @@ bool ghost_control_print_enabled(const char* context)
 {
 	for (int i = 0; i < ghost_control.len; i++) {
 		if (!strcmp(context, ghost_control.items[i].context_name))
-			return ghost_control.items[i].noisy;
-	}
-
-	return false;
-}
-
-bool ghost_control_print_enabled_verbose(const char* context)
-{
-	for (int i = 0; i < ghost_control.len; i++) {
-		if (!strcmp(context, ghost_control.items[i].context_name))
-			return ghost_control.items[i].noisy && ghost_control.items[i].verbose;
+			return ghost_control.items[i].print;
 	}
 
 	return false;
@@ -63,12 +52,12 @@ bool ghost_control_check_enabled(const char* context)
 	return false;
 }
 
-static void ghost_control_create(const char *context, bool check, bool noisy, bool verbose)
+static void ghost_control_create(const char *context, bool check, bool print_enabled)
 {
 	ghost_control.items[ghost_control.len++] = (struct ghost_control_item){
 		.context_name = context,
 		.check = check,
-		.noisy = noisy,
+		.print = print_enabled,
 	};
 }
 
@@ -79,7 +68,7 @@ static const bool noisy_spec = true;
 static const bool noisy_spec = false;
 #endif
 
-#ifdef CONFIG_NVHE_GHOST_SPEC_NOISY_VERBOSE
+#ifdef CONFIG_NVHE_GHOST_SPEC_VERBOSE
 static const bool verbose_spec = true;
 #else
 static const bool verbose_spec = false;
@@ -91,19 +80,29 @@ static const bool noisy_sm = true;
 static const bool noisy_sm = false;
 #endif
 
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL_VERBOSE
+static const bool verbose_sm = true;
+#else
+static const bool verbose_sm = false;
+#endif
+
 void init_ghost_control(void) {
 
-	ghost_control_create("ghost_context", true, noisy_spec, verbose_spec);
+	ghost_control_create("ghost_context", true, noisy_spec);
+	ghost_control_create("handle_trap", true, noisy_spec);
 
-	ghost_control_create("handle_trap", true, noisy_spec, verbose_spec);
+	ghost_control_create("___kvm_pgtable_walk", false, verbose_spec);
+	ghost_control_create("__kvm_pgtable_walk", false, verbose_spec);
+	ghost_control_create("_kvm_pgtable_stage2_map", false, verbose_spec);
 
-	ghost_control_create("___kvm_pgtable_walk", false, noisy_spec, verbose_spec);
-	ghost_control_create("__kvm_pgtable_walk", false, noisy_spec, verbose_spec);
-	ghost_control_create("_kvm_pgtable_stage2_map", false, noisy_spec, verbose_spec);
+	ghost_control_create("handle_host_hcall", true, noisy_spec);
+	ghost_control_create("handle_host_hcall_verbose", true, verbose_spec);
 
-	ghost_control_create("ghost_record_pre", true, noisy_spec, verbose_spec);
-	ghost_control_create("ghost_post", true, noisy_spec, verbose_spec);
+	ghost_control_create("ghost_record_pre", true, noisy_spec);
+	ghost_control_create("ghost_post", true, noisy_spec);
 
-	ghost_control_create("ghost_simplified_model_step", true, noisy_sm, false);
-	ghost_control_create("initialise_ghost_simplified_model", true, noisy_sm, false);
+	ghost_control_create("ghost_simplified_model_step", true, noisy_sm);
+	ghost_control_create("initialise_ghost_simplified_model", true, noisy_sm);
+
+	ghost_control_create("traverse_pgtable_from", true, verbose_sm);
 }
