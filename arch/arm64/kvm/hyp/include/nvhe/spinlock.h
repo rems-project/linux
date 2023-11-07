@@ -95,16 +95,14 @@ static inline void hyp_spin_lock(hyp_spinlock_t *lock)
 #ifdef CONFIG_NVHE_GHOST_SPEC
 	/* Set owner_bitmap */
 "	mov	%w2, #1\n"
-"	lsl 	%w2, %w2, %w6\n"
-"	str 	%w2, %4\n"
+"	lsl 	%w2, %w2, %w[tid]\n"
+"	str 	%w2, %[owner_bitmap]\n"
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 	: "=&r" (lockval), "=&r" (newval), "=&r" (tmp), "+Q" (*lock)
-#ifdef CONFIG_NVHE_GHOST_SPEC
-	, "=Q" (lock->owner_bitmap)
-#endif /* CONFIG_NVHE_GHOST_SPEC */
 	: "Q" (lock->owner)
 #ifdef CONFIG_NVHE_GHOST_SPEC
-	, "r" (ghost_hyp_smp_processor_id())
+	, [tid] "r" (ghost_hyp_smp_processor_id())
+	, [owner_bitmap] "Q" (lock->owner_bitmap)
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 	: "memory");
 }
@@ -116,7 +114,7 @@ static inline void hyp_spin_unlock(hyp_spinlock_t *lock)
 	asm volatile(
 #ifdef CONFIG_NVHE_GHOST_SPEC
 	/* Zero owner_bitmap */
-"	str 	wzr, %2\n"
+"	str 	wzr, %[owner_bitmap]\n"
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 	ARM64_LSE_ATOMIC_INSN(
 	/* LL/SC */
@@ -129,7 +127,7 @@ static inline void hyp_spin_unlock(hyp_spinlock_t *lock)
 	__nops(1))
 	: "=Q" (lock->owner), "=&r" (tmp)
 #ifdef CONFIG_NVHE_GHOST_SPEC
-	, "=Q" (lock->owner_bitmap)
+	, [owner_bitmap] "=Q" (lock->owner_bitmap)
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 	:
 	: "memory");
