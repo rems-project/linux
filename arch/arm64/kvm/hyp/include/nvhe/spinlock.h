@@ -142,7 +142,7 @@ static inline bool hyp_spin_is_locked(hyp_spinlock_t *lock)
 #ifdef CONFIG_NVHE_GHOST_SPEC
 	u64 cpu = ghost_hyp_smp_processor_id();
 
-	if (cpu > 32)
+	if (cpu >= 32)
 		// Best effort for debugging, so it doesn't really matter...
 		return true;
 	else
