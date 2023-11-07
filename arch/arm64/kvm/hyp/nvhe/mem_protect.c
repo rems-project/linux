@@ -85,20 +85,12 @@ static void host_unlock_component(void)
 	hyp_spin_unlock(&host_mmu.lock);
 }
 
-#ifdef CONFIG_NVHE_GHOST_SPEC
-/*
- * in various places we need to take the pkvm lock in the instrumentation
- * in order to read the pkvm pgd, but the lock is not reentrant
- * so keep track explicitly whether we own it or not per CPU.
- */
-DEFINE_PER_CPU(bool, pkvm_pgd_locked);
-#endif /* CONFIG_NVHE_GHOST_SPEC */
+
 
 static void hyp_lock_component(void)
 {
 	hyp_spin_lock(&pkvm_pgd_lock);
 #ifdef CONFIG_NVHE_GHOST_SPEC
-	*this_cpu_ptr(&pkvm_pgd_locked) = true;
 	if (GHOST_EXEC_SPEC)
 		record_and_check_abstraction_pkvm_pre();
 #endif /* CONFIG_NVHE_GHOST_SPEC */
@@ -109,7 +101,6 @@ static void hyp_unlock_component(void)
 #ifdef CONFIG_NVHE_GHOST_SPEC
 	if (GHOST_EXEC_SPEC)
 		record_and_copy_abstraction_pkvm_post();
-	*this_cpu_ptr(&pkvm_pgd_locked) = false;
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_spin_unlock(&pkvm_pgd_lock);
 }

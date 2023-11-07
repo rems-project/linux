@@ -224,7 +224,21 @@ static void indent(u64 width)
 
 // we want to use the pkvm pgtable walker to check validity of the VAs before trying to print them
 extern int kvm_nvhe_sym(__hyp_check_page_state_range)(u64 addr, u64 size, enum pkvm_page_state state);
+
+
+/*
+ * annoyingly, but understandably, we need to take the pkvm pgd lock
+ * in order to do the page state checks in the pKVM pagetable.
+ * But, this code may or may not be called from inside a pkvm pgd critical section
+ * so we have to conditionally take the lock if this thread isn't already holding it...
+ */
 extern hyp_spinlock_t kvm_nvhe_sym(pkvm_pgd_lock);
+
+static bool check_pkvm_locked(void)
+{
+	hyp_spinlock_t *pkvm_lock = &kvm_nvhe_sym(pkvm_pgd_lock);
+	return hyp_spin_is_locked(pkvm_lock);
+}
 
 void ghost_log_context_traceback(void)
 {
@@ -253,15 +267,25 @@ void ghost_log_context_traceback(void)
 			if (data->has_data) {
 				u64 va;
 				bool va_valid;
+				bool locked_pkvm;
 
 				hyp_putsp(":");
 
+				va = (u64)data->data_ptr;
+
+				// Note: lock-order imposes pkvm->printer order
+				// so, if we can avoid it, but the printer lock may already have been taken...
+				// so we just check, and if pKVM isn't locked already
+				locked_pkvm = check_pkvm_locked();
 				// don't just dereference it, check if it's accessible first
 				// ... by actually doing a pgtable walk!
-				hyp_spin_lock(&kvm_nvhe_sym(pkvm_pgd_lock));
-				va = (u64)data->data_ptr;
-				va_valid = !kvm_nvhe_sym(__hyp_check_page_state_range)(va, sizeof(void*), PKVM_PAGE_OWNED);
-				hyp_spin_unlock(&kvm_nvhe_sym(pkvm_pgd_lock));
+				if (locked_pkvm)
+					va_valid = !kvm_nvhe_sym(__hyp_check_page_state_range)(va, sizeof(void*), PKVM_PAGE_OWNED);
+				else
+					// called outside a pKVM lock context,
+					// so can't do the walk
+					// so give up.
+					va_valid = false;
 
 				// don't try to dereference NULL pointers
 				if (! data->data_ptr) {
@@ -278,5 +302,6 @@ void ghost_log_context_traceback(void)
 			hyp_putsp("\n");
 		}
 	}
+
 	ghost_print_end();
 }
