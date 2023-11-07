@@ -40,6 +40,8 @@ void hyp_putsxn(char *s, unsigned long x, int n);
 void hyp_putsxnl(char *s, unsigned long x, int n);
 void check_assert_fail(char *s);
 
+void hyp_putn(u64 n);
+
 /* This lock can be taken around a larger printing block to prevent
  * interleaving.
  */

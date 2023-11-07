@@ -38,6 +38,24 @@ void hyp_putx32(unsigned int x) { __hyp_putx32(x); }
 
 void hyp_putx64(unsigned long x) { __hyp_putx64(x); }
 
+void __hyp_putn(u64 n)
+{
+	char digits[20] = {0};
+	int i = 0;
+
+	do {
+		digits[i] = (n % 10) + '0';
+		n /= 10;
+		i++;
+	} while (n > 0);
+
+	i--;
+
+	do {
+		__hyp_putc(digits[i]);
+	} while (i--);
+}
+
 static inline void __hyp_puti(u64 i)
 {
 	while (i-- > 0) __hyp_putc(' ');
@@ -110,6 +128,13 @@ void hyp_putsxnl(char *s, unsigned long x, int n)
 	__hyp_putc(':');
 	__hyp_putx4np(x, n);
 	__hyp_putc('\n');
+	ghost_print_end();
+}
+
+void hyp_putn(u64 n)
+{
+	ghost_print_begin();
+	__hyp_putn(n);
 	ghost_print_end();
 }
 
