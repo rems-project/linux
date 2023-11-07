@@ -15,9 +15,16 @@
 DECLARE_PER_CPU(struct kvm_cpu_context, kvm_hyp_ctxt);
 DECLARE_PER_CPU(unsigned long, kvm_hyp_vector);
 DECLARE_PER_CPU(struct kvm_nvhe_init_params, kvm_init_params);
+#ifdef CONFIG_NVHE_GHOST_SPEC
+DECLARE_PER_CPU(int, kvm_nvhe_sym(hyp_cpu_number));
+#else /* CONFIG_NVHE_GHOST_SPEC */
 DECLARE_PER_CPU(int, hyp_cpu_number);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 
 #define hyp_smp_processor_id() (__this_cpu_read(hyp_cpu_number))
+#ifdef CONFIG_NVHE_GHOST_SPEC
+#define ghost_hyp_smp_processor_id() (__this_cpu_read(kvm_nvhe_sym(hyp_cpu_number)))
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 
 #define read_sysreg_elx(r,nvh,vh)					\
 	({								\

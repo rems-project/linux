@@ -17,13 +17,27 @@
 #include <asm/lse.h>
 #include <asm/rwonce.h>
 
+#ifdef CONFIG_NVHE_GHOST_SPEC
+#include <asm/kvm_hyp.h>
+#endif /* CONFIG_NVHE_GHOST_SPEC */
+
 typedef union hyp_spinlock {
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	u64	__val;
+#else /* CONFIG_NVHE_GHOST_SPEC */
 	u32	__val;
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	struct {
 #ifdef __AARCH64EB__
+#ifdef CONFIG_NVHE_GHOST_SPEC
+		u32 owner_bitmap;
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 		u16 next, owner;
 #else
 		u16 owner, next;
+#ifdef CONFIG_NVHE_GHOST_SPEC
+		u32 owner_bitmap;
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 #endif
 	};
 } hyp_spinlock_t;
@@ -43,7 +57,11 @@ do {									\
 
 static inline void hyp_spin_lock(hyp_spinlock_t *lock)
 {
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	u64 tmp;
+#else /* CONFIG_NVHE_GHOST_SPEC */
 	u32 tmp;
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_spinlock_t lockval, newval;
 
 	asm volatile(
@@ -74,8 +92,20 @@ static inline void hyp_spin_lock(hyp_spinlock_t *lock)
 "	cbnz	%w1, 2b\n"
 	/* We got the lock. Critical section starts here. */
 "3:"
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	/* Set owner_bitmap */
+"	mov	%w2, #1\n"
+"	lsl 	%w2, %w2, %w6\n"
+"	str 	%w2, %4\n"
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	: "=&r" (lockval), "=&r" (newval), "=&r" (tmp), "+Q" (*lock)
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	, "=Q" (lock->owner_bitmap)
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	: "Q" (lock->owner)
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	, "r" (ghost_hyp_smp_processor_id())
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	: "memory");
 }
 
@@ -84,6 +114,10 @@ static inline void hyp_spin_unlock(hyp_spinlock_t *lock)
 	u64 tmp;
 
 	asm volatile(
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	/* Zero owner_bitmap */
+"	str 	wzr, %2\n"
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	ARM64_LSE_ATOMIC_INSN(
 	/* LL/SC */
 	"	ldrh	%w1, %0\n"
@@ -94,6 +128,9 @@ static inline void hyp_spin_unlock(hyp_spinlock_t *lock)
 	"	staddlh	%w1, %0\n"
 	__nops(1))
 	: "=Q" (lock->owner), "=&r" (tmp)
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	, "=Q" (lock->owner_bitmap)
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	:
 	: "memory");
 }
@@ -102,7 +139,17 @@ static inline bool hyp_spin_is_locked(hyp_spinlock_t *lock)
 {
 	hyp_spinlock_t lockval = READ_ONCE(*lock);
 
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	u64 cpu = ghost_hyp_smp_processor_id();
+
+	if (cpu > 32)
+		// Best effort for debugging, so it doesn't really matter...
+		return true;
+	else
+		return BIT(cpu) == lockval.owner_bitmap;
+#else /* CONFIG_NVHE_GHOST_SPEC */
 	return lockval.owner != lockval.next;
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 }
 
 #ifdef CONFIG_NVHE_EL2_DEBUG
