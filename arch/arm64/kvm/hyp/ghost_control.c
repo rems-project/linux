@@ -73,24 +73,37 @@ static void ghost_control_create(const char *context, bool check, bool noisy, bo
 }
 
 
+#ifdef CONFIG_NVHE_GHOST_SPEC_NOISY
+static const bool noisy_spec = true;
+#else
+static const bool noisy_spec = false;
+#endif
+
+#ifdef CONFIG_NVHE_GHOST_SPEC_NOISY_VERBOSE
+static const bool verbose_spec = true;
+#else
+static const bool verbose_spec = false;
+#endif
+
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL_NOISY
+static const bool noisy_sm = true;
+#else
+static const bool noisy_sm = false;
+#endif
+
 void init_ghost_control(void) {
-	ghost_control_create("handle_trap", true, true, false);
 
-	ghost_control_create("handle_host_mem_abort", true, false, false);
-	ghost_control_create("handle_host_hcall", true, true, false);
+	ghost_control_create("ghost_context", true, noisy_spec, verbose_spec);
 
-	ghost_control_create("__pkvm_host_donate_guest", false, true, false);
+	ghost_control_create("handle_trap", true, noisy_spec, verbose_spec);
 
-	ghost_control_create("host_stage2_idmap", false, false, false);
-	ghost_control_create("___kvm_pgtable_walk", false, true, false);
-	ghost_control_create("__kvm_pgtable_walk", false, true, false);
-	ghost_control_create("_kvm_pgtable_stage2_map", false, true, false);
+	ghost_control_create("___kvm_pgtable_walk", false, noisy_spec, verbose_spec);
+	ghost_control_create("__kvm_pgtable_walk", false, noisy_spec, verbose_spec);
+	ghost_control_create("_kvm_pgtable_stage2_map", false, noisy_spec, verbose_spec);
 
-	ghost_control_create("ghost_context", true, true, false);
+	ghost_control_create("ghost_record_pre", true, noisy_spec, verbose_spec);
+	ghost_control_create("ghost_post", true, noisy_spec, verbose_spec);
 
-	ghost_control_create("ghost_record_pre", true, false, false);
-	ghost_control_create("ghost_post", true, false, false);
-
-	ghost_control_create("ghost_simplified_model_step", true, false, false);
-	ghost_control_create("initialise_ghost_simplified_model", true, false, false);
+	ghost_control_create("ghost_simplified_model_step", true, noisy_sm, false);
+	ghost_control_create("initialise_ghost_simplified_model", true, noisy_sm, false);
 }

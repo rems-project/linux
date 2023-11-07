@@ -1,0 +1,58 @@
+config NVHE_GHOST_SPEC
+	bool "A ghost haunts nVHE EL2"
+	depends on KVM
+	default n
+	select NVHE_EL2_DEBUG
+	select PROTECTED_NVHE_STACKTRACE
+	select KVM_ARM_HYP_DEBUG_UART
+	help
+	  And it's watching you.
+
+config NVHE_GHOST_SPEC_COLOURS
+	bool "Colours in the output of nVHE ghost spec"
+	depends on NVHE_GHOST_SPEC
+	default n
+
+config NVHE_GHOST_SIMPLIFIED_MODEL
+	bool "Runtime simplified model checking"
+	depends on NVHE_GHOST_SPEC
+	default n
+	select NVHE_EL2_DEBUG
+	select PROTECTED_NVHE_STACKTRACE
+	select KVM_ARM_HYP_DEBUG_UART
+
+config NVHE_GHOST_MEM_LOG2_MB
+	int "Ghost dynamic memory pool size (log_2)"
+	depends on NVHE_GHOST_SPEC
+	default 22
+	range 5 30
+	help
+	  Ghost will statically allocate its dynamic memory pool, mostly to
+	  contradict in terms.
+
+	  This number denotes log_2 of the memory pool size, in bytes. For instance,
+	  22 denotes 4 MB.
+
+config NVHE_GHOST_SPEC_NOISY
+	bool "Noisy ghost spec checking machinery"
+	depends on NVHE_GHOST_SPEC
+	default n
+	select NVHE_EL2_DEBUG
+	select PROTECTED_NVHE_STACKTRACE
+	select KVM_ARM_HYP_DEBUG_UART
+
+config NVHE_GHOST_SPEC_NOISY_VERBOSE
+	bool "Very noisy ghost spec checking machinery"
+	depends on NVHE_GHOST_SPEC_NOISY
+	default n
+	select NVHE_EL2_DEBUG
+	select PROTECTED_NVHE_STACKTRACE
+	select KVM_ARM_HYP_DEBUG_UART
+
+config NVHE_GHOST_SIMPLIFIED_MODEL_NOISY
+	bool "Noisy ghost simplified model output"
+	depends on NVHE_GHOST_SIMPLIFIED_MODEL
+	default n
+	select NVHE_EL2_DEBUG
+	select PROTECTED_NVHE_STACKTRACE
+	select KVM_ARM_HYP_DEBUG_UART
