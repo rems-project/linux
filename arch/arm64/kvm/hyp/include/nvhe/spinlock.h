@@ -30,13 +30,13 @@ typedef union hyp_spinlock {
 	struct {
 #ifdef __AARCH64EB__
 #ifdef CONFIG_NVHE_GHOST_SPEC
-		u32 owner_bitmap;
+		u32 owner_tid;
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 		u16 next, owner;
 #else
 		u16 owner, next;
 #ifdef CONFIG_NVHE_GHOST_SPEC
-		u32 owner_bitmap;
+		u32 owner_tid;
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 #endif
 	};
@@ -93,16 +93,14 @@ static inline void hyp_spin_lock(hyp_spinlock_t *lock)
 	/* We got the lock. Critical section starts here. */
 "3:"
 #ifdef CONFIG_NVHE_GHOST_SPEC
-	/* Set owner_bitmap */
-"	mov	%w2, #1\n"
-"	lsl 	%w2, %w2, %w[tid]\n"
-"	str 	%w2, %[owner_bitmap]\n"
+	/* Set owner_tid */
+"	str 	%w[tid], %[owner_tid]\n"
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 	: "=&r" (lockval), "=&r" (newval), "=&r" (tmp), "+Q" (*lock)
 	: "Q" (lock->owner)
 #ifdef CONFIG_NVHE_GHOST_SPEC
 	, [tid] "r" (ghost_hyp_smp_processor_id())
-	, [owner_bitmap] "Q" (lock->owner_bitmap)
+	, [owner_tid] "Q" (lock->owner_tid)
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 	: "memory");
 }
@@ -113,8 +111,8 @@ static inline void hyp_spin_unlock(hyp_spinlock_t *lock)
 
 	asm volatile(
 #ifdef CONFIG_NVHE_GHOST_SPEC
-	/* Zero owner_bitmap */
-"	str 	wzr, %[owner_bitmap]\n"
+	/* Zero owner_tid */
+"	str 	wzr, %[owner_tid]\n"
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 	ARM64_LSE_ATOMIC_INSN(
 	/* LL/SC */
@@ -127,7 +125,7 @@ static inline void hyp_spin_unlock(hyp_spinlock_t *lock)
 	__nops(1))
 	: "=Q" (lock->owner), "=&r" (tmp)
 #ifdef CONFIG_NVHE_GHOST_SPEC
-	, [owner_bitmap] "=Q" (lock->owner_bitmap)
+	, [owner_tid] "=Q" (lock->owner_tid)
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 	:
 	: "memory");
@@ -140,11 +138,8 @@ static inline bool hyp_spin_is_locked(hyp_spinlock_t *lock)
 #ifdef CONFIG_NVHE_GHOST_SPEC
 	u64 cpu = ghost_hyp_smp_processor_id();
 
-	if (cpu >= 32)
-		// Best effort for debugging, so it doesn't really matter...
-		return true;
-	else
-		return BIT(cpu) == lockval.owner_bitmap;
+	// lockval.owner_id == 0 might mean "locked by CPU 0" or not taken at all.
+	return (lockval.owner != lockval.next && cpu == lockval.owner_tid);
 #else /* CONFIG_NVHE_GHOST_SPEC */
 	return lockval.owner != lockval.next;
 #endif /* CONFIG_NVHE_GHOST_SPEC */
