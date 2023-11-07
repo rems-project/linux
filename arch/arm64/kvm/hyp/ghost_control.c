@@ -90,4 +90,7 @@ void init_ghost_control(void) {
 
 	ghost_control_create("ghost_record_pre", true, false, false);
 	ghost_control_create("ghost_post", true, false, false);
+
+	ghost_control_create("ghost_simplified_model_step", true, false, false);
+	ghost_control_create("initialise_ghost_simplified_model", true, false, false);
 }
