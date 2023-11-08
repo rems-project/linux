@@ -92,4 +92,61 @@ build:
 	$(MAKE) -C $(abspath ..) ARCH=arm64 CC=$(CC) CROSS_COMPILE=aarch64-linux-gnu- -j $$(nproc) Image
 .PHONY: build
 
+
+# For DataAbort spec, WIP: generate an isla trace
+# need isla installed and built.
+# assumes it's in a sibling directory to linux-pkvm-verif-2.
+
+ISLA_EXECUTE_FN = ../../isla/target/release/isla-execute-function
+ISLA_CONFIG = ./pkvm_isla_config.toml
+ISLA_SNAPSHOT = ../../isla-snapshots/armv9.ir
+SAIL_SNAPSHOT_SRC = ../../sail-arm/armv9.3-a/src/
+
+
+# Since ASL doesn't have tagged unions...
+SAIL_EXC_RECORD_GPCF_NONE = \
+	{ gpf = GPCF_None, \
+		level = 0 }
+
+SAIL_EXC_RECORD_ADDR = \
+	{ paspace = PAS_NonSecure, \
+		address = 0x0000000000000 }
+
+SAIL_EXC_RECORD_GPCF_FIELDS = \
+		gpcf = $(SAIL_EXC_RECORD_GPCF_NONE), \
+		gpcfs2walk = false
+
+# Construct a FaultRecord struct to pass
+SAIL_FAULT_RECORD = \
+	{	statuscode = Fault_Translation, \
+		acctype = AccType_NORMAL, \
+		ipaddress = $(SAIL_EXC_RECORD_ADDR), \
+		paddress = $(SAIL_EXC_RECORD_ADDR), \
+		$(SAIL_EXC_RECORD_GPCF_FIELDS), \
+		s2fs1walk = false, \
+		write = false, \
+		level = 0, \
+		extflag = 0b1, \
+		secondstage = false, \
+		domain = 0b0000, \
+		errortype = 0b00, \
+		debugmoe = 0b0000 \
+	}
+
+ISLA_FN = \
+		AArch64_DataAbort \
+		0x0000000000FF0000 \
+		'$(SAIL_FAULT_RECORD)'
+
+ISLA_EXECUTE_FN_EXTRA_ARGS =
+
+generate-DataAbort-trace:
+	$(ISLA_EXECUTE_FN) \
+		-A $(ISLA_SNAPSHOT) \
+		-S $(SAIL_SNAPSHOT_SRC) \
+		-C $(ISLA_CONFIG) \
+		-R "PSTATE.EL=0b01" \
+		$(ISLA_FN) --traces
+.PHONY: generate-DataAbort-trace
+
 deep-clean: clean-clang clean-pkvm clean-qemu
