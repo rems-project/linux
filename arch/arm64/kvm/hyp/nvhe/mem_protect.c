@@ -423,6 +423,11 @@ int __pkvm_prot_finalize(void)
 	record_abstraction_loaded_vcpu_and_check_none();
 	this_cpu_ptr(&ghost_cpu_run_state)->present = true;
 	this_cpu_ptr(&ghost_cpu_run_state)->guest_running = false;
+
+	if (GHOST_DUMP_CPU_STATE_ON_INIT) {
+		ghost_dump_sysregs();
+	}
+
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 	return 0;
 }
