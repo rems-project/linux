@@ -16,8 +16,38 @@
 #include <nvhe/ghost_asserts.h>
 #include <nvhe/ghost_pfn_set.h>
 #include <nvhe/ghost_call_data.h>
+#include <nvhe/ghost_control.h>
 
 // top-level spec types
+
+
+/*
+ * Initialisation:
+ *
+ * We track when __pkvm_init has succeeded with `ghost_pkvm_init_finalized`.
+ *
+ * However, up until all the cores have switched over to use the new pgtables,
+ * pKVM is not yet guaranteeing isolation.
+ *
+ * So we track up until all cores have finishes __pkvm_prot_finalize
+ * (with the per-CPU `ghost_prot_finalized_this_cpu`)
+ * and once they have, we trip the global switch
+ * (`ghost_prot_finalized_all`)
+ *
+ * It may be that a hypercall on another thread is midway execution during this,
+ * this hypercall does not guarantee isolation as it started before the last CPU's __pkvm_prot_finalize
+ * so we have a per-CPU hypercall check (`ghost_check_this_hypercall`) which is set a the start of a trap
+ * iff ghost_prot_finalized_all
+ */
+extern bool ghost_pkvm_init_finalized;
+DECLARE_PER_CPU(bool, ghost_prot_finalized_this_cpu);
+extern bool ghost_prot_finalized_all;
+DECLARE_PER_CPU(bool, ghost_check_this_hypercall);
+
+/**
+ * ghost_exec_enabled() - Whether executable checking is currently enabled on this CPU.
+ */
+bool ghost_exec_enabled(void);
 
 /**
  * struct ghost_loaded_vcpu - The identity of the currently loaded vcpu, if there is one.
@@ -369,12 +399,6 @@ struct ghost_transition {
 
 
 // top-level spec ghost state
-
-// whether __pkvm_init is finished.
-extern _Bool pkvm_init_finalized;
-
-// TODO: do we need more synchronisation for accesses to the last of those?
-
 
 // the "master" common ghost state, shared but with its parts protected by the associated impl locks
 extern struct ghost_state gs;

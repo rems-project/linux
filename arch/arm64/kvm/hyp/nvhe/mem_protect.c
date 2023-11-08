@@ -54,14 +54,16 @@ static void guest_lock_component(struct pkvm_hyp_vm *vm)
 	hyp_spin_lock(&vm->lock);
 	current_vm = vm;
 #ifdef CONFIG_NVHE_GHOST_SPEC
-	record_and_check_abstraction_vm_pre(vm);
+	if (ghost_exec_enabled())
+		record_and_check_abstraction_vm_pre(vm);
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 }
 
 static void guest_unlock_component(struct pkvm_hyp_vm *vm)
 {
 #ifdef CONFIG_NVHE_GHOST_SPEC
-	record_and_copy_abstraction_vm_post(vm);
+	if (ghost_exec_enabled())
+		record_and_copy_abstraction_vm_post(vm);
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 	current_vm = NULL;
 	hyp_spin_unlock(&vm->lock);
@@ -71,7 +73,7 @@ static void host_lock_component(void)
 {
 	hyp_spin_lock(&host_mmu.lock);
 #ifdef CONFIG_NVHE_GHOST_SPEC
-	if (GHOST_EXEC_SPEC)
+	if (ghost_exec_enabled())
 		record_and_check_abstraction_host_pre();
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 }
@@ -79,7 +81,7 @@ static void host_lock_component(void)
 static void host_unlock_component(void)
 {
 #ifdef CONFIG_NVHE_GHOST_SPEC
-	if (GHOST_EXEC_SPEC)
+	if (ghost_exec_enabled())
 		record_and_copy_abstraction_host_post();
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_spin_unlock(&host_mmu.lock);
@@ -91,7 +93,7 @@ static void hyp_lock_component(void)
 {
 	hyp_spin_lock(&pkvm_pgd_lock);
 #ifdef CONFIG_NVHE_GHOST_SPEC
-	if (GHOST_EXEC_SPEC)
+	if (ghost_exec_enabled())
 		record_and_check_abstraction_pkvm_pre();
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 }
@@ -99,7 +101,7 @@ static void hyp_lock_component(void)
 static void hyp_unlock_component(void)
 {
 #ifdef CONFIG_NVHE_GHOST_SPEC
-	if (GHOST_EXEC_SPEC)
+	if (ghost_exec_enabled())
 		record_and_copy_abstraction_pkvm_post();
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_spin_unlock(&pkvm_pgd_lock);

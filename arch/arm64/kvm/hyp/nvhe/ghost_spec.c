@@ -19,8 +19,20 @@
 
 
 
-_Bool pkvm_init_finalized=false;
+/*
+ * Init tracking
+ */
+bool ghost_pkvm_init_finalized;
 DEFINE_HYP_SPINLOCK(ghost_prot_finalized_lock);
+DEFINE_PER_CPU(bool, ghost_prot_finalized_this_cpu);
+bool ghost_prot_finalized_all;
+DEFINE_PER_CPU(bool, ghost_check_this_hypercall);
+
+
+bool ghost_exec_enabled(void)
+{
+	return GHOST_EXEC_SPEC && __this_cpu_read(ghost_check_this_hypercall);
+}
 
 
 struct ghost_state gs; // the "master" ghost state, shared but with its parts protected by the associated impl locks
@@ -664,8 +676,8 @@ void compute_new_abstract_state_handle___pkvm_init_vm(struct ghost_state *g1, st
 	// In the implementation, insert_vm_table_entry() may return -EINVAL,
 	// if during the init of pKVM vm_table could not allocated,
 	// so these ghost compute functions are only valid if properly initialised
-	ghost_assert(READ_ONCE(pkvm_init_finalized));
-	
+	ghost_assert(READ_ONCE(ghost_pkvm_init_finalized));
+
 	// if we've already allocated KVM_MAX_PVMS VMs, then fail with -ENOMEM
 	struct ghost_vm *vm1 = ghost_vms_alloc(&g1->vms, handle);
 	if (!vm1) {
@@ -945,7 +957,12 @@ void ghost_record_pre(struct kvm_cpu_context *ctxt)
 	struct ghost_state *gr_pre = this_cpu_ptr(&gs_recorded_pre);
 
 	GHOST_LOG_CONTEXT_ENTER();
-	if (GHOST_EXEC_SPEC && READ_ONCE(pkvm_init_finalized)) {
+	if (! GHOST_EXEC_SPEC)
+		goto exit_context;
+
+	__this_cpu_write(ghost_check_this_hypercall, READ_ONCE(ghost_prot_finalized_all));
+
+	if (__this_cpu_read(ghost_check_this_hypercall)) {
 		clear_abstraction_thread_local();
 
 		ghost_lock_maplets();
@@ -958,6 +975,8 @@ void ghost_record_pre(struct kvm_cpu_context *ctxt)
 
 		ghost_clear_call_data();
 	}
+
+exit_context:
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
@@ -973,7 +992,30 @@ void ghost_post(struct kvm_cpu_context *ctxt)
 	struct ghost_running_state *gr_pre_cpu = this_cpu_ghost_run_state(gr_pre);
 
 	GHOST_LOG_CONTEXT_ENTER();
-	if (GHOST_EXEC_SPEC && READ_ONCE(pkvm_init_finalized)) {
+	if ((   GHOST_EXEC_SPEC
+	     && ESR_ELx_EC(ghost_reg_el2(gr_pre, GHOST_ESR_EL2)) == ESR_ELx_EC_HVC64
+	     && cpu_reg(ctxt, 0) == SMCCC_RET_SUCCESS
+	     && cpu_reg(ctxt, 1) == 0
+	    )
+	) {
+		bool all_finalized = true;
+
+		hyp_spin_lock(&ghost_prot_finalized_lock);
+		__this_cpu_write(ghost_prot_finalized_this_cpu, true);
+
+		for (int i = 0; i < hyp_nr_cpus; i++) {
+			if (!*per_cpu_ptr(&ghost_prot_finalized_this_cpu, i)) {
+				all_finalized = false;
+			}
+		}
+
+		if (all_finalized)
+			WRITE_ONCE(ghost_prot_finalized_all, true);
+
+		hyp_spin_unlock(&ghost_prot_finalized_lock);
+	}
+
+	if (ghost_exec_enabled()) {
 		// record the remaining parts of the new impl abstract state
 		// (the pkvm, host, and vm components having been recorded at impl lock points)
 		ghost_lock_maplets();
