@@ -963,6 +963,56 @@ void compute_new_abstract_state_handle_guest_trap(struct ghost_state *post, stru
 	// TODO
 }
 
+#ifdef CONFIG_NVHE_GHOST_SPEC_NOISY
+static void tag_hcall_args(struct kvm_cpu_context *ctxt, u64 hcall_id)
+{
+	switch (hcall_id) {
+	case __KVM_HOST_SMCCC_FUNC___pkvm_host_share_hyp:
+		hyp_putsxnl("pfn", cpu_reg(ctxt, 1), 64);
+		break;
+
+	case __KVM_HOST_SMCCC_FUNC___pkvm_host_unshare_hyp:
+		hyp_putsxnl("pfn", cpu_reg(ctxt, 1), 64);
+		break;
+
+	case __KVM_HOST_SMCCC_FUNC___pkvm_host_reclaim_page:
+		hyp_putsxnl("pfn", cpu_reg(ctxt, 1), 64);
+		break;
+
+	case __KVM_HOST_SMCCC_FUNC___pkvm_host_map_guest:
+		hyp_putsxnl("pfn", cpu_reg(ctxt, 1), 64);
+		hyp_putsxnl("gfn", cpu_reg(ctxt, 2), 64);
+		break;
+
+	case __KVM_HOST_SMCCC_FUNC___pkvm_vcpu_load:
+		hyp_putsxnl("vm_handle", cpu_reg(ctxt, 1), 64);
+		hyp_putsxnl("vcpu_index", cpu_reg(ctxt, 2), 64);
+		hyp_putsxnl("hcr_el2", cpu_reg(ctxt, 3), 64);
+		break;
+
+	case __KVM_HOST_SMCCC_FUNC___pkvm_vcpu_put:
+		break;
+
+	case __KVM_HOST_SMCCC_FUNC___pkvm_init_vm:
+		hyp_putsxnl("host_kvm", cpu_reg(ctxt, 1), 64);
+		hyp_putsxnl("vm_hva", cpu_reg(ctxt, 2), 64);
+		hyp_putsxnl("pgd_hva", cpu_reg(ctxt, 3), 64);
+		hyp_putsxnl("last_ran_hva", cpu_reg(ctxt, 4), 64);
+		break;
+
+	case __KVM_HOST_SMCCC_FUNC___pkvm_init_vcpu:
+		hyp_putsxnl("handle", cpu_reg(ctxt, 1), 64);
+		hyp_putsxnl("host_vcpu", cpu_reg(ctxt, 2), 64);
+		hyp_putsxnl("vcpu_hva", cpu_reg(ctxt, 3), 64);
+		break;
+
+		// TODO: and their bodies, and all the other cases
+	default:
+		break;
+	}
+}
+#endif /* CONFIG_NVHE_GHOST_SPEC_NOISY */
+
 static void tag_exception_entry(struct kvm_cpu_context *ctxt)
 {
 	struct ghost_state *gr_pre = this_cpu_ptr(&gs_recorded_pre);
@@ -997,6 +1047,8 @@ static void tag_exception_entry(struct kvm_cpu_context *ctxt)
 		hyp_putsp(" ");
 		hyp_putsp(hcall_name);
 		hyp_putsp(GHOST_NORMAL "\n");
+
+		tag_hcall_args(ctxt, hcall_id);
 #endif /* CONFIG_NVHE_GHOST_SPEC_NOISY */
 		break;
 	case ESR_ELx_EC_SMC64:
