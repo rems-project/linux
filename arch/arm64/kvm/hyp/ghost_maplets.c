@@ -560,8 +560,8 @@ void check_interpret_equals(struct glist_head head1, struct glist_head head2, u6
 			      hyp_putsp(GHOST_WHITE_ON_RED);
 			      GHOST_LOG(m1->virt, u64);
 			      GHOST_LOG(m2->virt, u64);
-			      GHOST_LOG_P(m1, hyp_put_mapletptr);
-			      GHOST_LOG_P(m2, hyp_put_mapletptr);
+			      GHOST_LOG_P(__func__, m1, hyp_put_mapletptr);
+			      GHOST_LOG_P(__func__, m2, hyp_put_mapletptr);
 			      GHOST_WARN("interpret_equals mismatch at virt1");
 			      ghost_spec_assert(false);
 		      }

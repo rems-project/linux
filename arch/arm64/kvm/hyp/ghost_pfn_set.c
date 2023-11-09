@@ -85,8 +85,8 @@ void ghost_pfn_set_assert_subseteq(struct pfn_set *lhs, struct pfn_set *rhs)
 {
 	GHOST_LOG_CONTEXT_ENTER();
 
-	GHOST_LOG_P(lhs, print_set);
-	GHOST_LOG_P(rhs, print_set);
+	GHOST_LOG_P(__func__, lhs, print_set);
+	GHOST_LOG_P(__func__, rhs, print_set);
 
 	ghost_spec_assert(range_equal(lhs, rhs));
 	ghost_spec_assert(lhs->len == rhs->len);

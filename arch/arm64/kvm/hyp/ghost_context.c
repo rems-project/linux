@@ -122,7 +122,7 @@ void ghost_log_enter_context(const char *s)
 	}
 }
 
-void ghost_log_context_attach(const char *s, void *data, ghost_printer_fn printer)
+void ghost_log_context_attach(const char *current_frame_name, const char *s, void *data, ghost_printer_fn printer)
 {
 	struct ghost_context *ctx;
 	struct ghost_context_frame *frame;
@@ -133,6 +133,13 @@ void ghost_log_context_attach(const char *s, void *data, ghost_printer_fn printe
 
 	framei = ctx->nr_frames - 1;
 	frame = &ctx->frames[framei];
+
+	if (current_frame_name && strcmp(current_frame_name, frame->ctx_name)) {
+		GHOST_WARN("Tried to attach to shadow stack from wrong context");
+		GHOST_LOG_FORCE(NULL, frame->ctx_name, str);
+		GHOST_LOG_FORCE(NULL, current_frame_name, str);
+		ghost_assert(false);
+	}
 
 	ghost_assert(frame->nr_attached_data < GHOST_MAX_CONTEXT_DATA);
 

@@ -20,6 +20,7 @@ void ghost_log_enter_context(
 	const char *s
 );
 void ghost_log_context_attach(
+	const char *current_frame_name,
 	const char *s,
 	void *data,
 	ghost_printer_fn printer
@@ -41,8 +42,8 @@ void ghost_log_context_traceback(void);
 #define GHOST_LOG_CONTEXT_EXIT() ghost_log_exit_context(__func__)
 #define GHOST_LOG_CONTEXT_EXIT_FORCE(s) ghost_log_exit_context(s)
 
-#define GHOST_LOG_P(var, printer) \
-	ghost_log_context_attach(#var, (void*)&(var), printer)
+#define GHOST_LOG_P(context, var, printer) \
+	ghost_log_context_attach(context, #var, (void*)&(var), printer)
 
 #define GHOST_u64printer hyp_putx64ptr
 #define GHOST_u32printer hyp_putx32ptr
@@ -53,12 +54,21 @@ void ghost_log_context_traceback(void);
 	GHOST_##ty##printer
 
 #define GHOST_LOG(var, ty) \
-	GHOST_LOG_P(var, GHOST_PRINTER(ty))
+	GHOST_LOG_P((__func__), (var), GHOST_PRINTER(ty))
+
+#define GHOST_LOG_FORCE(context, var, ty) \
+	GHOST_LOG_P((context), (var), GHOST_PRINTER(ty))
+
+#define GHOST_LOG_INNER(name, var, ty) \
+	GHOST_LOG_P(__INNER_NAME(name), (var), GHOST_PRINTER(ty))
 
 #define GHOST_WARN(msg) \
 	ghost_log_context_log(msg, GHOST_LOG_ERROR)
 
 #define GHOST_INFO(msg) \
 	ghost_log_context_log(msg, GHOST_LOG_INFO)
+
+#define GHOST_TRACE(msg) \
+	ghost_log_context_log(msg, GHOST_LOG_TRACE)
 
 #endif /* GHOST_CONTEXT_H */

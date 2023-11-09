@@ -990,9 +990,12 @@ static void tag_exception_entry(struct kvm_cpu_context *ctxt)
 		hcall_id = cpu_reg(ctxt, 0);
 		hcall_id -= KVM_HOST_SMCCC_ID(0);
 
+		char *hcall_name = (char *)ghost_host_hcall_names[hcall_id];
+		GHOST_INFO(hcall_name);
+
 		hyp_putsp(GHOST_WHITE_ON_BLUE "handle_host_hcall");
 		hyp_putsp(" ");
-		hyp_putsp((char *)ghost_host_hcall_names[hcall_id]);
+		hyp_putsp(hcall_name);
 		hyp_putsp(GHOST_NORMAL "\n");
 #endif /* CONFIG_NVHE_GHOST_SPEC_NOISY */
 		break;

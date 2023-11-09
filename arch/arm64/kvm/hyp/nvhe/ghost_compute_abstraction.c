@@ -317,9 +317,9 @@ void check_abstraction_equals_loaded_vcpus(struct ghost_state *g1, struct ghost_
 	GHOST_LOG_CONTEXT_ENTER();
 	for (int i=0; i < g1->globals.hyp_nr_cpus; i++) {
 		GHOST_LOG_CONTEXT_ENTER_INNER("loop vcpus");
-		GHOST_LOG(i, u32);
-		GHOST_LOG(g1->loaded_hyp_vcpu[i].present, bool);
-		GHOST_LOG(g2->loaded_hyp_vcpu[i].present, bool);
+		GHOST_LOG_INNER("loop vcpus", i, u32);
+		GHOST_LOG_INNER("loop vcpus", g1->loaded_hyp_vcpu[i].present, bool);
+		GHOST_LOG_INNER("loop vcpus", g2->loaded_hyp_vcpu[i].present, bool);
 		if (g1->loaded_hyp_vcpu[i].present && g2->loaded_hyp_vcpu[i].present) {
 			check_abstraction_equals_loaded_vcpu(&g1->loaded_hyp_vcpu[i], &g2->loaded_hyp_vcpu[i]);
 		} else if (g1->loaded_hyp_vcpu[i].present && !g2->loaded_hyp_vcpu[i].present) {
@@ -385,7 +385,7 @@ void check_abstraction_equals_vm(struct ghost_vm *vm1, struct ghost_vm *vm2)
 
 	for (int i=0; i < vm1->nr_vcpus; i++) {
 		GHOST_LOG_CONTEXT_ENTER_INNER("loop vcpus");
-		GHOST_LOG(i, u32);
+		GHOST_LOG_INNER("loop vcpus", i, u32);
 		check_abstraction_equals_vcpu(vm1->vcpus[i], vm2->vcpus[i]);
 		GHOST_LOG_CONTEXT_EXIT_INNER("loop vcpus");
 	}
