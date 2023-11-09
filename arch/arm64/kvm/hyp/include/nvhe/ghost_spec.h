@@ -30,7 +30,7 @@
  * pKVM is not yet guaranteeing isolation.
  *
  * So we track up until all cores have finishes __pkvm_prot_finalize
- * (with the per-CPU `ghost_prot_finalized_this_cpu`)
+ * (with the `ghost_prot_finalized_count` counter, up to `hyp_nr_cpus`)
  * and once they have, we trip the global switch
  * (`ghost_prot_finalized_all`)
  *
@@ -40,7 +40,7 @@
  * iff ghost_prot_finalized_all
  */
 extern bool ghost_pkvm_init_finalized;
-DECLARE_PER_CPU(bool, ghost_prot_finalized_this_cpu);
+extern u64 ghost_prot_finalized_count;
 extern bool ghost_prot_finalized_all;
 DECLARE_PER_CPU(bool, ghost_check_this_hypercall);
 
@@ -48,6 +48,13 @@ DECLARE_PER_CPU(bool, ghost_check_this_hypercall);
  * ghost_exec_enabled() - Whether executable checking is currently enabled on this CPU.
  */
 bool ghost_exec_enabled(void);
+
+/**
+ * ghost_enable_this_cpu() - Enable ghost machinery on this CPU.
+ *
+ * NOTE: This doesn't immediately start ghost speccing, see the above 'Initialisation' comment.
+ */
+void ghost_enable_this_cpu(void);
 
 /**
  * struct ghost_loaded_vcpu - The identity of the currently loaded vcpu, if there is one.

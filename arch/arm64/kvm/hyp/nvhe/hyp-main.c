@@ -1039,6 +1039,10 @@ static void handle___pkvm_prot_finalize(struct kvm_cpu_context *host_ctxt)
 	hyp_putsxnl("    CPU", hyp_smp_processor_id(), 32);
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 	cpu_reg(host_ctxt, 1) = __pkvm_prot_finalize();
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	if (cpu_reg(host_ctxt, 1) == 0)
+		ghost_enable_this_cpu();
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 }
 
 static void handle___pkvm_init_vm(struct kvm_cpu_context *host_ctxt)

@@ -24,7 +24,7 @@
  */
 bool ghost_pkvm_init_finalized;
 DEFINE_HYP_SPINLOCK(ghost_prot_finalized_lock);
-DEFINE_PER_CPU(bool, ghost_prot_finalized_this_cpu);
+u64 ghost_prot_finalized_count;
 bool ghost_prot_finalized_all;
 DEFINE_PER_CPU(bool, ghost_check_this_hypercall);
 
@@ -33,6 +33,19 @@ bool ghost_exec_enabled(void)
 {
 	return GHOST_EXEC_SPEC && __this_cpu_read(ghost_check_this_hypercall);
 }
+
+void ghost_enable_this_cpu(void)
+{
+	bool all_finalized;
+
+	hyp_spin_lock(&ghost_prot_finalized_lock);
+	all_finalized = ++ghost_prot_finalized_count == hyp_nr_cpus;
+	hyp_spin_unlock(&ghost_prot_finalized_lock);
+
+	if (all_finalized)
+		WRITE_ONCE(ghost_prot_finalized_all, true);
+}
+
 
 
 struct ghost_state gs; // the "master" ghost state, shared but with its parts protected by the associated impl locks
@@ -992,29 +1005,6 @@ void ghost_post(struct kvm_cpu_context *ctxt)
 	struct ghost_running_state *gr_pre_cpu = this_cpu_ghost_run_state(gr_pre);
 
 	GHOST_LOG_CONTEXT_ENTER();
-	if ((   GHOST_EXEC_SPEC
-	     && ESR_ELx_EC(ghost_reg_el2(gr_pre, GHOST_ESR_EL2)) == ESR_ELx_EC_HVC64
-	     && cpu_reg(ctxt, 0) == SMCCC_RET_SUCCESS
-	     && cpu_reg(ctxt, 1) == 0
-	    )
-	) {
-		bool all_finalized = true;
-
-		hyp_spin_lock(&ghost_prot_finalized_lock);
-		__this_cpu_write(ghost_prot_finalized_this_cpu, true);
-
-		for (int i = 0; i < hyp_nr_cpus; i++) {
-			if (!*per_cpu_ptr(&ghost_prot_finalized_this_cpu, i)) {
-				all_finalized = false;
-			}
-		}
-
-		if (all_finalized)
-			WRITE_ONCE(ghost_prot_finalized_all, true);
-
-		hyp_spin_unlock(&ghost_prot_finalized_lock);
-	}
-
 	if (ghost_exec_enabled()) {
 		// record the remaining parts of the new impl abstract state
 		// (the pkvm, host, and vm components having been recorded at impl lock points)
