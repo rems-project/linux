@@ -266,6 +266,7 @@ void ghost_log_context_traceback(void)
 			hyp_putsp((char *)data->data_name);
 			if (data->has_data) {
 				u64 va;
+				bool va_walked;
 				bool va_valid;
 				bool locked_pkvm;
 
@@ -279,13 +280,16 @@ void ghost_log_context_traceback(void)
 				locked_pkvm = check_pkvm_locked();
 				// don't just dereference it, check if it's accessible first
 				// ... by actually doing a pgtable walk!
-				if (locked_pkvm)
+				if (locked_pkvm) {
 					va_valid = !kvm_nvhe_sym(__hyp_check_page_state_range)(va, sizeof(void*), PKVM_PAGE_OWNED);
-				else
+					va_walked = true;
+				} else {
 					// called outside a pKVM lock context,
 					// so can't do the walk
-					// so give up.
-					va_valid = false;
+					// but this was a best-effort safety check, so go ahead anyway
+					va_valid = true;
+					va_walked = false;
+				}
 
 				// don't try to dereference NULL pointers
 				if (! data->data_ptr) {
@@ -294,6 +298,13 @@ void ghost_log_context_traceback(void)
 				} else if (! va_valid) {
 					hyp_putsp("<inaccessible>@");
 					hyp_putx64(va);
+				// if we didn't do a walk, give a warning and try anyway
+				} else if (! va_walked) {
+					hyp_putsp("<nowalk>@");
+					hyp_putx64(va);
+					hyp_putsp(":");
+					data->fn(data->data_ptr);
+				// otherwise, was allowed to access and we checked, so just print away.
 				} else {
 					data->fn(data->data_ptr);
 				}
