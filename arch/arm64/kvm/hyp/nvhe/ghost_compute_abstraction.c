@@ -888,7 +888,7 @@ void record_abstraction_regs(struct ghost_state *g, struct kvm_cpu_context *ctxt
 	// save EL2 registers
 	ghost_get_sysregs(this_cpu_ghost_register_state(g)->el2_sysregs);
 	// save EL1 registers comprising pKVM's view of the context
-	// __sysreg_save_state_nvhe(ctxt);
+	__sysreg_save_state_nvhe(&this_cpu_ghost_register_state(g)->ctxt);
 }
 
 void record_abstraction_hyp_memory_pre(void)
