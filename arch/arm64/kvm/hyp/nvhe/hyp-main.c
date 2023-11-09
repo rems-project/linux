@@ -639,13 +639,6 @@ static void handle___pkvm_vcpu_load(struct kvm_cpu_context *host_ctxt)
 	int __percpu *last_vcpu_ran;
 	int *last_ran;
 
-#ifdef CONFIG_NVHE_GHOST_SPEC
-	/* attach hcall args to parent frame */
-	GHOST_LOG(handle, u32);
-	GHOST_LOG(vcpu_idx, u32);
-	GHOST_LOG(hcr_el2, u64);
-#endif /* CONFIG_NVHE_GHOST_SPEC */
-
 	if (!is_protected_kvm_enabled())
 		return;
 
@@ -806,12 +799,6 @@ static void handle___pkvm_host_map_guest(struct kvm_cpu_context *host_ctxt)
 	DECLARE_REG(u64, gfn, host_ctxt, 2);
 	struct pkvm_hyp_vcpu *hyp_vcpu;
 	int ret = -EINVAL;
-
-#ifdef CONFIG_NVHE_GHOST_SPEC
-	/* attach hcall args to parent frame */
-	GHOST_LOG(pfn, u64);
-	GHOST_LOG(gfn, u64);
-#endif /* CONFIG_NVHE_GHOST_SPEC */
 
 	if (!is_protected_kvm_enabled())
 		goto out;
@@ -998,10 +985,6 @@ static void handle___pkvm_cpu_set_vector(struct kvm_cpu_context *host_ctxt)
 static void handle___pkvm_host_share_hyp(struct kvm_cpu_context *host_ctxt)
 {
 	DECLARE_REG(u64, pfn, host_ctxt, 1);
-#ifdef CONFIG_NVHE_GHOST_SPEC
-	/* attach hcall args to parent frame */
-	GHOST_LOG(pfn, u64);
-#endif /* CONFIG_NVHE_GHOST_SPEC */
 
 	cpu_reg(host_ctxt, 1) = __pkvm_host_share_hyp(pfn);
 }
@@ -1009,10 +992,6 @@ static void handle___pkvm_host_share_hyp(struct kvm_cpu_context *host_ctxt)
 static void handle___pkvm_host_unshare_hyp(struct kvm_cpu_context *host_ctxt)
 {
 	DECLARE_REG(u64, pfn, host_ctxt, 1);
-#ifdef CONFIG_NVHE_GHOST_SPEC
-	/* attach hcall args to parent frame */
-	GHOST_LOG(pfn, u64);
-#endif /* CONFIG_NVHE_GHOST_SPEC */
 
 	cpu_reg(host_ctxt, 1) = __pkvm_host_unshare_hyp(pfn);
 }
@@ -1020,10 +999,6 @@ static void handle___pkvm_host_unshare_hyp(struct kvm_cpu_context *host_ctxt)
 static void handle___pkvm_host_reclaim_page(struct kvm_cpu_context *host_ctxt)
 {
 	DECLARE_REG(u64, pfn, host_ctxt, 1);
-#ifdef CONFIG_NVHE_GHOST_SPEC
-	/* attach hcall args to parent frame */
-	GHOST_LOG(pfn, u64);
-#endif /* CONFIG_NVHE_GHOST_SPEC */
 
 	cpu_reg(host_ctxt, 1) = __pkvm_host_reclaim_page(pfn);
 }
@@ -1076,13 +1051,6 @@ static void handle___pkvm_init_vm(struct kvm_cpu_context *host_ctxt)
 	DECLARE_REG(unsigned long, vm_hva, host_ctxt, 2);
 	DECLARE_REG(unsigned long, pgd_hva, host_ctxt, 3);
 	DECLARE_REG(unsigned long, last_ran_hva, host_ctxt, 4);
-#ifdef CONFIG_NVHE_GHOST_SPEC
-	/* attach hcall args to parent frame */
-	GHOST_LOG(host_kvm, u64);
-	GHOST_LOG(vm_hva, u64);
-	GHOST_LOG(pgd_hva, u64);
-	GHOST_LOG(last_ran_hva, u64);
-#endif /* CONFIG_NVHE_GHOST_SPEC */
 
 	host_kvm = kern_hyp_va(host_kvm);
 	cpu_reg(host_ctxt, 1) = __pkvm_init_vm(host_kvm, vm_hva, pgd_hva,
@@ -1094,12 +1062,6 @@ static void handle___pkvm_init_vcpu(struct kvm_cpu_context *host_ctxt)
 	DECLARE_REG(pkvm_handle_t, handle, host_ctxt, 1);
 	DECLARE_REG(struct kvm_vcpu *, host_vcpu, host_ctxt, 2);
 	DECLARE_REG(unsigned long, vcpu_hva, host_ctxt, 3);
-#ifdef CONFIG_NVHE_GHOST_SPEC
-	/* attach hcall args to parent frame */
-	GHOST_LOG(handle, u64);
-	GHOST_LOG(host_vcpu, u64);
-	GHOST_LOG(vcpu_hva, u64);
-#endif /* CONFIG_NVHE_GHOST_SPEC */
 
 	host_vcpu = kern_hyp_va(host_vcpu);
 	cpu_reg(host_ctxt, 1) = __pkvm_init_vcpu(handle, host_vcpu, vcpu_hva);
@@ -1108,10 +1070,6 @@ static void handle___pkvm_init_vcpu(struct kvm_cpu_context *host_ctxt)
 static void handle___pkvm_teardown_vm(struct kvm_cpu_context *host_ctxt)
 {
 	DECLARE_REG(pkvm_handle_t, handle, host_ctxt, 1);
-#ifdef CONFIG_NVHE_GHOST_SPEC
-	/* attach hcall args to parent frame */
-	GHOST_LOG(handle, u64);
-#endif /* CONFIG_NVHE_GHOST_SPEC */
 
 	cpu_reg(host_ctxt, 1) = __pkvm_teardown_vm(handle);
 }
