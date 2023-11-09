@@ -1059,10 +1059,10 @@ static void handle___pkvm_create_private_mapping(struct kvm_cpu_context *host_ct
 
 static void handle___pkvm_prot_finalize(struct kvm_cpu_context *host_ctxt)
 {
-#ifdef CONFIG_NVHE_GHOST_SPEC
+#ifdef CONFIG_NVHE_GHOST_SPEC_NOISY
 	hyp_puts("\n__pkvm_prot_finalize:\n");
 	hyp_putsxnl("    CPU", hyp_smp_processor_id(), 32);
-#endif /* CONFIG_NVHE_GHOST_SPEC */
+#endif /* CONFIG_NVHE_GHOST_SPEC_NOISY */
 	cpu_reg(host_ctxt, 1) = __pkvm_prot_finalize();
 #ifdef CONFIG_NVHE_GHOST_SPEC
 	if (cpu_reg(host_ctxt, 1) == 0)
@@ -1119,7 +1119,6 @@ static void handle___pkvm_teardown_vm(struct kvm_cpu_context *host_ctxt)
 typedef void (*hcall_t)(struct kvm_cpu_context *);
 
 #define HANDLE_FUNC(x)	[__KVM_HOST_SMCCC_FUNC_##x] = (hcall_t)handle_##x
-
 static const hcall_t host_hcall[] = {
 	/* ___kvm_hyp_init */
 	HANDLE_FUNC(__kvm_get_mdcr_el2),
@@ -1152,79 +1151,6 @@ static const hcall_t host_hcall[] = {
 	HANDLE_FUNC(__pkvm_vcpu_sync_state),
 };
 
-#ifdef CONFIG_NVHE_GHOST_SPEC
-
-#define HANDLE_FUNC_STRING(x)	[__KVM_HOST_SMCCC_FUNC_##x] = #x
-static const char * ghost_host_hcall_string[] = {
-	/* ___kvm_hyp_init */
-	HANDLE_FUNC_STRING(__kvm_get_mdcr_el2),
-	HANDLE_FUNC_STRING(__pkvm_init),
-	HANDLE_FUNC_STRING(__pkvm_create_private_mapping),
-	HANDLE_FUNC_STRING(__pkvm_cpu_set_vector),
-	HANDLE_FUNC_STRING(__kvm_enable_ssbs),
-	HANDLE_FUNC_STRING(__vgic_v3_init_lrs),
-	HANDLE_FUNC_STRING(__vgic_v3_get_gic_config),
-	HANDLE_FUNC_STRING(__kvm_flush_vm_context),
-	HANDLE_FUNC_STRING(__kvm_tlb_flush_vmid_ipa),
-	HANDLE_FUNC_STRING(__kvm_tlb_flush_vmid),
-	HANDLE_FUNC_STRING(__kvm_flush_cpu_context),
-	HANDLE_FUNC_STRING(__pkvm_prot_finalize),
-
-	HANDLE_FUNC_STRING(__pkvm_host_share_hyp),
-	HANDLE_FUNC_STRING(__pkvm_host_unshare_hyp),
-	HANDLE_FUNC_STRING(__pkvm_host_reclaim_page),
-	HANDLE_FUNC_STRING(__pkvm_host_map_guest),
-	HANDLE_FUNC_STRING(__kvm_adjust_pc),
-	HANDLE_FUNC_STRING(__kvm_vcpu_run),
-	HANDLE_FUNC_STRING(__kvm_timer_set_cntvoff),
-	HANDLE_FUNC_STRING(__vgic_v3_save_vmcr_aprs),
-	HANDLE_FUNC_STRING(__vgic_v3_restore_vmcr_aprs),
-	HANDLE_FUNC_STRING(__pkvm_init_vm),
-	HANDLE_FUNC_STRING(__pkvm_init_vcpu),
-	HANDLE_FUNC_STRING(__pkvm_teardown_vm),
-	HANDLE_FUNC_STRING(__pkvm_vcpu_load),
-	HANDLE_FUNC_STRING(__pkvm_vcpu_put),
-	HANDLE_FUNC_STRING(__pkvm_vcpu_sync_state),
-};
-
-/* the following is a horrible-hack copy of functions from mem_protect.c - really these should be pulled out into a common file, but then they also have to be unified with functions in iommu.c that I don't want to touch right now */
-// GHOST
-/*
-static void host_lock_component(void)
-{
-	hyp_spin_lock(&host_mmu.lock);
-	// GHOST
-	record_and_check_abstraction_host_pre();
-	// /GHOST
-}
-
-static void host_unlock_component(void)
-{
-	// GHOST
-	record_and_copy_abstraction_host_post();
-	// /GHOST
-	hyp_spin_unlock(&host_mmu.lock);
-}
-
-static void hyp_lock_component(void)
-{
-	hyp_spin_lock(&pkvm_pgd_lock);
-	// GHOST
-	record_and_check_abstraction_pkvm_pre();
-	// /GHOST
-}
-
-static void hyp_unlock_component(void)
-{
-	// GHOST
-	record_and_copy_abstraction_pkvm_post();
-	// /GHOST
-	hyp_spin_unlock(&pkvm_pgd_lock);
-}
-*/
-
-#endif /* CONFIG_NVHE_GHOST_SPEC */
-
 static void handle_host_hcall(struct kvm_cpu_context *host_ctxt)
 {
 	DECLARE_REG(unsigned long, id, host_ctxt, 0);
@@ -1247,23 +1173,13 @@ static void handle_host_hcall(struct kvm_cpu_context *host_ctxt)
 
 #ifdef CONFIG_NVHE_GHOST_SPEC
 
-	char *hcall_name = (char*)ghost_host_hcall_string[id];
+	char *hcall_name = (char*)ghost_host_hcall_names[id];
 	GHOST_LOG_CONTEXT_ENTER();
 	GHOST_LOG(id, u64);
 	GHOST_LOG(hcall_name, str);
 
-
-	_Bool ghost_dump = ghost_control_print_enabled(__func__);
 	_Bool ghost_dump_verbose = ghost_control_print_enabled("handle_host_hcall_verbose");
 	u64 i=0; /* base indent */
-	if (ghost_dump) {
-		hyp_puti(i);
-		hyp_putsp(GHOST_WHITE_ON_BLUE);
-		hyp_putsxn("handle_host_hcall id",id,64);
-		hyp_putsp(hcall_name);
-		hyp_putsp(GHOST_NORMAL);
-		hyp_putc('\n');
-	}
 	if (ghost_dump_verbose) {
 		hyp_puts("Common hcall information:\n");
 		ghost_dump_sysregs();
@@ -1333,20 +1249,6 @@ static void handle_host_smc(struct kvm_cpu_context *host_ctxt)
 }
 
 #ifdef CONFIG_NVHE_GHOST_SPEC
-
-void hyp_put_exception_heading(void)
-{
-	ghost_print_begin();
-	hyp_putsp("\n");
-	hyp_putsp(GHOST_WHITE_ON_BLUE);
-	hyp_putsp("******  handle_trap  ***************************************************************");
-	hyp_putsp(GHOST_NORMAL);
-	hyp_putsp("\n");
-	ghost_print_end();
-}
-#endif /* CONFIG_NVHE_GHOST_SPEC */
-
-#ifdef CONFIG_NVHE_GHOST_SPEC
 /*
  * keep track, per-cpu of what pKVM thinks is running on this cpu.
  * NOTE: this is part of the recording machinery, not the spec computing machinery.
@@ -1363,43 +1265,22 @@ void handle_trap(struct kvm_cpu_context *host_ctxt)
 	GHOST_LOG(cpu, u64);
 
 	ghost_record_pre(host_ctxt);
-
-	if (ghost_control_print_enabled(__func__)) {
-		hyp_put_exception_heading();
-		//ghost_dump_sysregs();
-	}
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 
 	u64 esr = read_sysreg_el2(SYS_ESR);
 	switch (ESR_ELx_EC(esr)) {
 	case ESR_ELx_EC_HVC64:
-#ifdef CONFIG_NVHE_GHOST_SPEC
-		GHOST_INFO("HVC64");
-#endif /* CONFIG_NVHE_GHOST_SPEC */
 		handle_host_hcall(host_ctxt);
 		break;
 	case ESR_ELx_EC_SMC64:
-#ifdef CONFIG_NVHE_GHOST_SPEC
-		if (ghost_control_print_enabled(__func__))
-			hyp_putsp(GHOST_WHITE_ON_BLUE "handle_host_smc" GHOST_NORMAL "\n");
-#endif /* CONFIG_NVHE_GHOST_SPEC */
 		handle_host_smc(host_ctxt);
 		break;
 	case ESR_ELx_EC_FP_ASIMD:
 	case ESR_ELx_EC_SVE:
-#ifdef CONFIG_NVHE_GHOST_SPEC
-		if (ghost_control_print_enabled(__func__))
-			hyp_putsp(GHOST_WHITE_ON_BLUE "fmsimd_host_restore" GHOST_NORMAL "\n");
-#endif /* CONFIG_NVHE_GHOST_SPEC */
 		fpsimd_host_restore();
 		break;
 	case ESR_ELx_EC_IABT_LOW:
 	case ESR_ELx_EC_DABT_LOW:
-#ifdef CONFIG_NVHE_GHOST_SPEC
-		GHOST_INFO("IABT/DABT");
-		if (ghost_control_print_enabled(__func__))
-			hyp_putsp(GHOST_WHITE_ON_BLUE "handle_host_mem_abort" GHOST_NORMAL "\n");
-#endif /* CONFIG_NVHE_GHOST_SPEC */
 		handle_host_mem_abort(host_ctxt);
 		break;
 	default:

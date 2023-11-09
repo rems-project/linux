@@ -963,16 +963,82 @@ void compute_new_abstract_state_handle_guest_trap(struct ghost_state *post, stru
 	// TODO
 }
 
+static void tag_exception_entry(struct kvm_cpu_context *ctxt)
+{
+	struct ghost_state *gr_pre = this_cpu_ptr(&gs_recorded_pre);
+	struct ghost_running_state *gr_pre_cpu = this_cpu_ghost_run_state(gr_pre);
+
+#ifdef CONFIG_NVHE_GHOST_SPEC_NOISY
+	ghost_print_begin();
+
+	hyp_putsp("\n");
+	hyp_putsp(GHOST_WHITE_ON_BLUE);
+	hyp_putsp("****** TRAP ***************************************************************");
+	hyp_putsp(GHOST_NORMAL);
+	hyp_putsp("\n");
+#endif /* CONFIG_NVHE_GHOST_SPEC_NOISY */
+
+	if (gr_pre_cpu->guest_running)
+		return;
+
+	u64 esr = read_sysreg_el2(SYS_ESR);
+	switch (ESR_ELx_EC(esr)) {
+	case ESR_ELx_EC_HVC64:
+		GHOST_INFO("HVC64");
+#ifdef CONFIG_NVHE_GHOST_SPEC_NOISY
+		u64 hcall_id;
+		hcall_id = cpu_reg(ctxt, 0);
+		hcall_id -= KVM_HOST_SMCCC_ID(0);
+
+		hyp_putsp(GHOST_WHITE_ON_BLUE "handle_host_hcall");
+		hyp_putsp(" ");
+		hyp_putsp((char *)ghost_host_hcall_names[hcall_id]);
+		hyp_putsp(GHOST_NORMAL "\n");
+#endif /* CONFIG_NVHE_GHOST_SPEC_NOISY */
+		break;
+	case ESR_ELx_EC_SMC64:
+		GHOST_INFO("SMC64");
+#ifdef CONFIG_NVHE_GHOST_SPEC_NOISY
+		hyp_putsp(GHOST_WHITE_ON_BLUE "handle_host_smc" GHOST_NORMAL "\n");
+#endif /* CONFIG_NVHE_GHOST_SPEC_NOISY */
+		break;
+	case ESR_ELx_EC_FP_ASIMD:
+	case ESR_ELx_EC_SVE:
+		GHOST_INFO("SVE");
+#ifdef CONFIG_NVHE_GHOST_SPEC_NOISY
+		hyp_putsp(GHOST_WHITE_ON_BLUE "fmsimd_host_restore" GHOST_NORMAL "\n");
+#endif /* CONFIG_NVHE_GHOST_SPEC_NOISY */
+		break;
+	case ESR_ELx_EC_IABT_LOW:
+	case ESR_ELx_EC_DABT_LOW:
+		GHOST_INFO("IABT/DABT");
+#ifdef CONFIG_NVHE_GHOST_SPEC_NOISY
+		hyp_putsp(GHOST_WHITE_ON_BLUE "handle_host_mem_abort" GHOST_NORMAL "\n");
+#endif /* CONFIG_NVHE_GHOST_SPEC_NOISY */
+		break;
+	default:
+		BUG();
+	}
+
+#ifdef CONFIG_NVHE_GHOST_SPEC_NOISY
+	if (! ghost_exec_enabled())
+		hyp_putsp(GHOST_WHITE_ON_YELLOW "skipping exec check" GHOST_NORMAL "\n");
+	ghost_print_end();
+#endif /* CONFIG_NVHE_GHOST_SPEC_NOISY */
+}
+
 void ghost_record_pre(struct kvm_cpu_context *ctxt)
 {
 	struct ghost_running_state *cpu_run_state = this_cpu_ptr(&ghost_cpu_run_state);
 	struct ghost_state *gr_pre = this_cpu_ptr(&gs_recorded_pre);
 
+	__this_cpu_write(ghost_check_this_hypercall, READ_ONCE(ghost_prot_finalized_all));
+
+	tag_exception_entry(ctxt);
+
 	GHOST_LOG_CONTEXT_ENTER();
 	if (! GHOST_EXEC_SPEC)
 		goto exit_context;
-
-	__this_cpu_write(ghost_check_this_hypercall, READ_ONCE(ghost_prot_finalized_all));
 
 	if (__this_cpu_read(ghost_check_this_hypercall)) {
 		clear_abstraction_thread_local();
@@ -1022,8 +1088,17 @@ void ghost_post(struct kvm_cpu_context *ctxt)
 			compute_new_abstract_state_handle_host_trap(gc_post, gr_pre, call, &new_state_computed);
 
 		// and check the two are equal on relevant components
-		if (new_state_computed)
+		if (new_state_computed) {
+#ifdef CONFIG_NVHE_GHOST_SPEC_NOISY
+			hyp_putsp(GHOST_WHITE_ON_BLUE "check abstraction" GHOST_NORMAL "\n");
+#endif /* CONFIG_NVHE_GHOST_SPEC_NOISY */
 			check_abstraction_equals_all(gc_post, gr_post, gr_pre);
+		} else {
+#ifdef CONFIG_NVHE_GHOST_SPEC_NOISY
+			hyp_putsp(GHOST_WHITE_ON_YELLOW "skipping spec check" GHOST_NORMAL "\n");
+#endif /* CONFIG_NVHE_GHOST_SPEC_NOISY */
+		}
+
 		ghost_unlock_vms();
 		ghost_unlock_maplets();
 	}

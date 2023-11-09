@@ -10,7 +10,8 @@
 typedef void (*ghost_printer_fn)(void *data);
 
 enum ghost_log_level {
-	GHOST_LOG_TRACE = 0,
+	GHOST_LOG_DEBUG = 0,
+	GHOST_LOG_TRACE,
 	GHOST_LOG_INFO,
 	GHOST_LOG_ERROR
 };

@@ -89,17 +89,17 @@ static const bool verbose_sm = false;
 void init_ghost_control(void) {
 
 	ghost_control_create("ghost_context", true, noisy_spec);
-	ghost_control_create("handle_trap", true, noisy_spec);
+	ghost_control_create("handle_trap", true, verbose_spec);
 
 	ghost_control_create("___kvm_pgtable_walk", false, verbose_spec);
 	ghost_control_create("__kvm_pgtable_walk", false, verbose_spec);
 	ghost_control_create("_kvm_pgtable_stage2_map", false, verbose_spec);
 
-	ghost_control_create("handle_host_hcall", true, noisy_spec);
+	ghost_control_create("handle_host_hcall", true, verbose_spec);
 	ghost_control_create("handle_host_hcall_verbose", true, verbose_spec);
 
-	ghost_control_create("ghost_record_pre", true, noisy_spec);
-	ghost_control_create("ghost_post", true, noisy_spec);
+	ghost_control_create("ghost_record_pre", true, verbose_spec);
+	ghost_control_create("ghost_post", true, verbose_spec);
 
 	ghost_control_create("ghost_simplified_model_step", true, noisy_sm);
 	ghost_control_create("initialise_ghost_simplified_model", true, noisy_sm);

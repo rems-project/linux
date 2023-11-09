@@ -441,6 +441,39 @@ void ghost_record_pre(struct kvm_cpu_context *ctxt);
  */
 void ghost_post(struct kvm_cpu_context *ctxt);
 
+#define HANDLE_FUNC_STRING(x)	[__KVM_HOST_SMCCC_FUNC_##x] = #x
+static const char *ghost_host_hcall_names[] = {
+	/* ___kvm_hyp_init */
+	HANDLE_FUNC_STRING(__kvm_get_mdcr_el2),
+	HANDLE_FUNC_STRING(__pkvm_init),
+	HANDLE_FUNC_STRING(__pkvm_create_private_mapping),
+	HANDLE_FUNC_STRING(__pkvm_cpu_set_vector),
+	HANDLE_FUNC_STRING(__kvm_enable_ssbs),
+	HANDLE_FUNC_STRING(__vgic_v3_init_lrs),
+	HANDLE_FUNC_STRING(__vgic_v3_get_gic_config),
+	HANDLE_FUNC_STRING(__kvm_flush_vm_context),
+	HANDLE_FUNC_STRING(__kvm_tlb_flush_vmid_ipa),
+	HANDLE_FUNC_STRING(__kvm_tlb_flush_vmid),
+	HANDLE_FUNC_STRING(__kvm_flush_cpu_context),
+	HANDLE_FUNC_STRING(__pkvm_prot_finalize),
+
+	HANDLE_FUNC_STRING(__pkvm_host_share_hyp),
+	HANDLE_FUNC_STRING(__pkvm_host_unshare_hyp),
+	HANDLE_FUNC_STRING(__pkvm_host_reclaim_page),
+	HANDLE_FUNC_STRING(__pkvm_host_map_guest),
+	HANDLE_FUNC_STRING(__kvm_adjust_pc),
+	HANDLE_FUNC_STRING(__kvm_vcpu_run),
+	HANDLE_FUNC_STRING(__kvm_timer_set_cntvoff),
+	HANDLE_FUNC_STRING(__vgic_v3_save_vmcr_aprs),
+	HANDLE_FUNC_STRING(__vgic_v3_restore_vmcr_aprs),
+	HANDLE_FUNC_STRING(__pkvm_init_vm),
+	HANDLE_FUNC_STRING(__pkvm_init_vcpu),
+	HANDLE_FUNC_STRING(__pkvm_teardown_vm),
+	HANDLE_FUNC_STRING(__pkvm_vcpu_load),
+	HANDLE_FUNC_STRING(__pkvm_vcpu_put),
+	HANDLE_FUNC_STRING(__pkvm_vcpu_sync_state),
+};
+
 #endif // _GHOST_SPEC_H
 
 
