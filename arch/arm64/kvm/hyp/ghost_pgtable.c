@@ -147,7 +147,6 @@ void dump_pgtable(struct kvm_pgtable pg)
         return;
 }
 
-
 void _interpret_pgtable(mapping *mapp, kvm_pte_t *pgd, struct pfn_set *pfns, u8 level, u64 va_partial, struct aal aal, bool noisy)
 {
         u64 idx;
@@ -157,7 +156,6 @@ void _interpret_pgtable(mapping *mapp, kvm_pte_t *pgd, struct pfn_set *pfns, u8 
         u64 next_level_phys_address, next_level_virt_address;
 	struct aal next_level_aal;
         u64 oa;
-	u64 fake_oa;
 	u64 attr;
 	u64 nr_pages;
 
@@ -168,10 +166,10 @@ void _interpret_pgtable(mapping *mapp, kvm_pte_t *pgd, struct pfn_set *pfns, u8 
         for (idx = 0; idx < 512; idx++) {
 		//if (noisy) { hyp_putsxn("idx", idx, 16); }
                 switch (level) {
-                case 0: va_partial_new = va_partial | (idx << 39); break;
-                case 1: va_partial_new = va_partial | (idx << 30); break;
-                case 2: va_partial_new = va_partial | (idx << 21); break;
-                case 3: va_partial_new = va_partial | (idx << 12); break;
+                case 0: va_partial_new = va_partial | (idx << 39); nr_pages = 0x0000001; break;
+                case 1: va_partial_new = va_partial | (idx << 30); nr_pages = 0x0000200; break;
+                case 2: va_partial_new = va_partial | (idx << 21); nr_pages = 0x0040000; break;
+                case 3: va_partial_new = va_partial | (idx << 12); nr_pages = 0x8000000; break;
                 default: check_assert_fail("unhandled level"); // cases are exhaustive
                 }
 
@@ -181,8 +179,6 @@ void _interpret_pgtable(mapping *mapp, kvm_pte_t *pgd, struct pfn_set *pfns, u8 
                 switch(ek) {
                 case EK_INVALID:
 			if (pte != 0) {
-				fake_oa = (pte >> 1) | GENMASK(63,63);
-				nr_pages = 1; // TODO
 				extend_mapping_coalesce(mapp, va_partial_new, nr_pages, maplet_target_annot(pte & GENMASK(61,1)));
 			}
 			break;
@@ -193,11 +189,9 @@ void _interpret_pgtable(mapping *mapp, kvm_pte_t *pgd, struct pfn_set *pfns, u8 
 			switch (level) {
 			case 1:
 				oa = pte & GENMASK(47,30);
-				nr_pages = /* 1GB/4K */ 0x40000;
 				break;
 			case 2:
 				oa = pte & GENMASK(47,21);
-				nr_pages = /* 2MB/4K */ 0x200;
 				break;
 			default:
 				check_assert_fail("_interpret_pgtable bad block level");
