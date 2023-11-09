@@ -246,7 +246,9 @@ void check_abstraction_equals_reg(struct ghost_state *g1, struct ghost_state *g2
 	}
 	for (i=0; i<NR_SYS_REGS; i++) {
 		if (ghost_reg_el1(g1,i) != ghost_reg_el1(g2,i)) {
+			const char *name = GHOST_VCPU_SYSREG_NAMES[i];
 			GHOST_LOG(i, u64);
+			GHOST_LOG(name, str);
 			GHOST_LOG(ghost_reg_el1(g1,i), u64);
 			GHOST_LOG(ghost_reg_el1(g2,i), u64);
 			GHOST_WARN("EL1 sysreg register mismatch");
@@ -255,7 +257,9 @@ void check_abstraction_equals_reg(struct ghost_state *g1, struct ghost_state *g2
 	}
 	for (i=0; i<sizeof(ghost_el2_regs)/sizeof(u64); i++) {
 		if (ghost_reg_el2(g1,ghost_el2_regs[i]) != ghost_reg_el2(g2,ghost_el2_regs[i])) {
+			const char *name = GHOST_EL2_REG_NAMES[i];
 			GHOST_LOG(i, u64);
+			GHOST_LOG(name, str);
 			GHOST_LOG(ghost_reg_el2(g1,i), u64);
 			GHOST_LOG(ghost_reg_el2(g2,i), u64);
 			GHOST_WARN("el2_sysreg register mismatch");
