@@ -780,37 +780,36 @@ void compute_new_abstract_state_handle_host_hcall(struct ghost_state *g1, struct
 	}
 
 	unsigned long id = ghost_reg_gpr(g0, 0) - KVM_HOST_SMCCC_ID(0);
-#pragma GCC diagnostic ignored "-Wunused-label" // not sure why the next lines trigger that
 	switch (id) {
-	__KVM_HOST_SMCCC_FUNC___pkvm_host_share_hyp:
+	case __KVM_HOST_SMCCC_FUNC___pkvm_host_share_hyp:
 		compute_new_abstract_state_handle___pkvm_host_share_hyp(g1, g0, call);
 		*new_state_computed = true;
 		break;
 
-	__KVM_HOST_SMCCC_FUNC___pkvm_host_unshare_hyp:
+	case __KVM_HOST_SMCCC_FUNC___pkvm_host_unshare_hyp:
 		compute_new_abstract_state_handle___pkvm_host_unshare_hyp(g1, g0, call);
 		*new_state_computed = true;
 		break;
 
-	__KVM_HOST_SMCCC_FUNC___pkvm_host_reclaim_page:
+	case __KVM_HOST_SMCCC_FUNC___pkvm_host_reclaim_page:
 		break;
 
-	__KVM_HOST_SMCCC_FUNC___pkvm_host_map_guest:
+	case __KVM_HOST_SMCCC_FUNC___pkvm_host_map_guest:
 		compute_new_abstract_state_handle___pkvm_host_map_guest(g1, g0, call);
 		*new_state_computed = true;
 		break;
 
-	__KVM_HOST_SMCCC_FUNC___pkvm_vcpu_load:
+	case __KVM_HOST_SMCCC_FUNC___pkvm_vcpu_load:
 		compute_new_abstract_state_handle___pkvm_vcpu_load(g1, g0, call);
 		*new_state_computed = true;
 		break;
 
-	__KVM_HOST_SMCCC_FUNC___pkvm_vcpu_put:
+	case __KVM_HOST_SMCCC_FUNC___pkvm_vcpu_put:
 		compute_new_abstract_state_handle___pkvm_vcpu_put(g1, g0, call);
 		*new_state_computed = true;
 		break;
 
-	__KVM_HOST_SMCCC_FUNC___pkvm_init_vm:
+	case __KVM_HOST_SMCCC_FUNC___pkvm_init_vm:
 		compute_new_abstract_state_handle___pkvm_init_vm(g1, g0, call);
 		*new_state_computed = true;
 		break;
