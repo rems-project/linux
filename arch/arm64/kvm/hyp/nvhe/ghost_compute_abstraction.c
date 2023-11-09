@@ -30,6 +30,9 @@
 #include <nvhe/ghost_asm.h>
 #include <nvhe/ghost_asm_ids.h>
 
+#include <nvhe/ghost_abstraction_diff.h>
+
+
 //horrible hack for ghost code in nvhe/iommu/s2mpu.c
 // but in the default build # CONFIG_KVM_S2MPU is not set
 // and (looking in the Makefile) it seems that file isn't even linked in
@@ -561,6 +564,25 @@ void check_abstraction_equals_globals(struct ghost_state *gc, struct ghost_state
 void check_abstraction_equals_all(struct ghost_state *gc, struct ghost_state *gr_post, struct ghost_state *gr_pre)
 {
 	GHOST_LOG_CONTEXT_ENTER();
+
+#if CONFIG_NVHE_GHOST_SPEC_NOISY
+	struct ghost_diff *diff;
+
+	hyp_puts("pre->post:\n");
+	diff = ghost_diff_state(gr_pre, gr_post);
+	if (diff) {
+		hyp_dump_diff(diff);
+		free_diff(diff);
+	}
+
+	hyp_puts("post->computed:\n");
+	diff = ghost_diff_state(gr_post, gc);
+	if (diff) {
+		hyp_dump_diff(diff);
+		free_diff(diff);
+	}
+#endif /* CONFIG_NVHE_GHOST_SPEC_NOISY */
+
 
 	// these things might not be present, in which case we check conditionally
 	check_abstraction_refined_pkvm(gc, gr_post, gr_pre);

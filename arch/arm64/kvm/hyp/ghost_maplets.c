@@ -56,7 +56,6 @@
 
 
 
-
 /* ****************** the global pool of maplets ****************** */
 
 struct maplets maplets_pool;

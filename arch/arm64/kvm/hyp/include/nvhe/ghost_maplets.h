@@ -113,6 +113,7 @@ struct maplet {
 	struct maplet_target target;
 };
 
+bool maplet_eq_nonattr(struct maplet *m1, struct maplet *m2);
 
 struct aal {
 	u64 attr_at_level[GHOST_ATTR_MAX_LEVEL];
