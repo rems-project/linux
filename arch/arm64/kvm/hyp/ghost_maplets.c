@@ -563,6 +563,7 @@ void check_interpret_equals(struct glist_head head1, struct glist_head head2, u6
 			      GHOST_LOG_P(m1, hyp_put_mapletptr);
 			      GHOST_LOG_P(m2, hyp_put_mapletptr);
 			      GHOST_WARN("interpret_equals mismatch at virt1");
+			      ghost_spec_assert(false);
 		      }
         }
 
@@ -570,6 +571,7 @@ void check_interpret_equals(struct glist_head head1, struct glist_head head2, u6
 		GHOST_LOG(pos1, u64);
 		GHOST_LOG(pos2, u64);
 		GHOST_WARN("interpret_equals mismatch different lengths");
+		ghost_spec_assert(false);
 	}
 
 out:
