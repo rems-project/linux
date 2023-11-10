@@ -484,7 +484,6 @@ int __pkvm_init(phys_addr_t phys, unsigned long size, unsigned long nr_cpus,
 	int ret;
 
 #ifdef CONFIG_NVHE_GHOST_SPEC
-	init_ghost_control();
 	GHOST_LOG_CONTEXT_ENTER();
 
 	hyp_puts("\n__pkvm_init:\n");
