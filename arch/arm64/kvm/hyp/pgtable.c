@@ -422,8 +422,8 @@ static kvm_pte_t kvm_init_table_pte(kvm_pte_t *childp, struct kvm_pgtable_mm_ops
    isn't pure, it operates on a pte in-place. */
 /*@ trusted @*/
 /*@ requires take Ops = MM_Ops(mm_ops) @*/
-/*@ requires take pte_old = Owned<u64>(ptep) @*/
-/*@ ensures take pte2 = Owned<u64>(ptep) @*/
+/*@ requires take pte_old = Owned<kvm_pte_t>(ptep) @*/
+/*@ ensures take pte2 = Owned<kvm_pte_t>(ptep) @*/
 /*@ ensures take Ops2 = MM_Ops(mm_ops) @*/
 /*@ ensures Ops2 == Ops @*/
 /*@ ensures is_table_entry(pte2) @*/
@@ -863,10 +863,10 @@ enum kvm_pgtable_prot kvm_pgtable_hyp_pte_prot(kvm_pte_t pte)
 
 /*@ requires valid_pgtable_level(level) @*/
 /*@ requires take D = Hyp_Map_Data(data) @*/
-/*@ requires take pte = Owned<u64>(ptep) @*/
+/*@ requires take pte = Owned<kvm_pte_t>(ptep) @*/
 /*@ requires not(is_table_entry(pte)) @*/
 /*@ ensures take D2 = Hyp_Map_Data(data) @*/
-/*@ ensures take pte2 = Owned<u64>(ptep) @*/
+/*@ ensures take pte2 = Owned<kvm_pte_t>(ptep) @*/
 /*@ ensures not(is_table_entry(pte2)) @*/
 /*@ ensures D2 == D @*/
 {
@@ -933,10 +933,10 @@ static int hyp_map_walker(const struct kvm_pgtable_visit_ctx *ctx,
 			  enum kvm_pgtable_walk_flags visit)
 /*@ requires valid_pgtable_level(level) @*/
 /*@ requires take D = Hyp_Map_Data(arg) @*/
-/*@ requires take pte = Owned<u64>(ptep) @*/
+/*@ requires take pte = Owned<kvm_pte_t>(ptep) @*/
 /*@ requires not(is_table_entry(pte)) @*/
 /*@ ensures take D2 = Hyp_Map_Data(arg) @*/
-/*@ ensures take pte2 = Owned<u64>(ptep) @*/
+/*@ ensures take pte2 = Owned<kvm_pte_t>(ptep) @*/
 /*@ ensures take IPT2 = Indirect_Page_Table_Entries(ptep, level + 1, pte2) @*/
 {
 	kvm_pte_t *childp, new;
