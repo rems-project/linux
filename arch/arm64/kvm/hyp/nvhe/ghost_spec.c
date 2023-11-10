@@ -1040,6 +1040,9 @@ static bool this_trap_check_controlled(struct kvm_cpu_context *ctxt)
 		BUG();
 	}
 
+	if (name == NULL)
+		return false;
+
 	return !ghost_control_is_controlled(name) || ghost_control_check_enabled(name);
 }
 
