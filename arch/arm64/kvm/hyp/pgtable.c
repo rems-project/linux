@@ -70,10 +70,10 @@ predicate {bool exists} Cond_Zero_Page (pointer p) {
     return {exists: false};
   }
   else {
-    take X = each (i32 i; 0 <= i && i < 4096i32)
-        {Owned<char>(p + (i * 1))};
-    assert (each (i32 i; 0 <= i && i < 4096i32)
-        {X[i] == 0});
+    take X = each (i32 i; 0i32 <= i && i < 4096i32)
+        {Owned<char>(p + (i * 1i32))};
+    assert (each (i32 i; 0i32 <= i && i < 4096i32)
+        {X[i] == 0u8});
     return {exists: true};
   }
 }
@@ -125,26 +125,26 @@ predicate (void) MM_Ops(pointer p) {
 
 /* constraints on level, see arch/arm64/include/asm/pgtable-hwdef.h */
 /*@
-function (bool) valid_pgtable_level (i32 level)
+function (bool) valid_pgtable_level (u32 level)
 {
-  0i32 <= level && level <= 3i32
+  0u32 <= level && level <= 3u32
 }
 @*/
 
 /* see struct kvm_pgtable defn in arch/arm64/include/asm/kvm_pgtable.h */
 /*@
 predicate (map <i32, u64>) PTE_Array (pointer p) {
-  assert (mod((u64)p, 4096) == 0);
+  assert (mod((u64)p, 4096u64) == 0u64);
   take ptes = each (i32 i; 0i32 <= i && i < 512i32)
     {Owned<kvm_pte_t>(p + (i * ((i32) (sizeof <kvm_pte_t>))))};
   return ptes;
 }
 
-predicate (void) Page_Table_Entries (pointer p, i32 level) {
+predicate (void) Page_Table_Entries (pointer p, u32 level) {
   assert (valid_pgtable_level(level));
   take ptes = PTE_Array (p);
   take children = each (i32 i; 0i32 <= i && i < 512i32)
-    {Indirect_Page_Table_Entries (p + (i * ((i32) (sizeof <kvm_pte_t>))), level + 1i32, ptes[i])};
+    {Indirect_Page_Table_Entries (p + (i * ((i32) (sizeof <kvm_pte_t>))), level + 1u32, ptes[i])};
   return;
 }
 
@@ -163,13 +163,13 @@ lemma table_entry_is_valid (u64 encoded)
   ensures
     is_table_entry(encoded) ? is_valid_pte_entry(encoded) : true
 
-predicate {bool x} Indirect_Page_Table_Entries (pointer p, i32 level, u64 encoded) {
+predicate {bool x} Indirect_Page_Table_Entries (pointer p, u32 level, u64 encoded) {
   assert (valid_pgtable_level(level) || not(is_table_entry (encoded)));
   take x = Indirect_Page_Table_Entries2(p, level, encoded);
   return x;
 }
 
-predicate {bool x} Indirect_Page_Table_Entries2 (pointer p, i32 level, u64 encoded) {
+predicate {bool x} Indirect_Page_Table_Entries2 (pointer p, u32 level, u64 encoded) {
   if (is_table_entry (encoded)) {
     assert (valid_pgtable_level(level));
     assert (good<kvm_pte_t *> (decode_table_entry_pointer (encoded)));
@@ -185,14 +185,14 @@ predicate {bool x} Indirect_Page_Table_Entries2 (pointer p, i32 level, u64 encod
    magic number 16 below. instead, this should be figured out from Data.start_level
    and everything else made parametric in that. for now, just assumed to be 16,
    the maximum. TODO */
-
+/* also FIXME, 12 * 4096 was allowed before, now it's 65536 */
 /*@
 predicate {pointer mm_ops} Pg_Table (pointer p, boolean with_entries) {
   take Data = Owned<struct kvm_pgtable>(p);
   take Ops = MM_Ops(Data.mm_ops);
 
-  assert ((0 < Data.ia_bits) && (Data.ia_bits < 64));
-  assert (mod((u64) Data.pgd, 16u64 * 4096u64) == 0u64);
+  assert ((0u32 < Data.ia_bits) && (Data.ia_bits < 64u32));
+  assert (mod((u64) Data.pgd, 65536u64) == 0u64);
 
   take Entries = Pg_Table_Toplevel (Data.pgd, with_entries);
 
@@ -202,7 +202,7 @@ predicate {pointer mm_ops} Pg_Table (pointer p, boolean with_entries) {
 predicate (void) Pg_Table_Toplevel (pointer p, boolean exists) {
   if (exists) {
     take Toplevel_Table = each (i32 i; 0i32 <= i && i < 16i32)
-      {Page_Table_Entries(p + (i * 4096i32), 0i32)};
+      {Page_Table_Entries(p + (i * 4096i32), 0u32)};
     return;
   }
   else {
@@ -210,13 +210,13 @@ predicate (void) Pg_Table_Toplevel (pointer p, boolean exists) {
   }
 }
 
-predicate {integer flags} KVM_PgTable_Walker (pointer p) {
+predicate {u32 flags} KVM_PgTable_Walker (pointer p) {
   take D = Owned<struct kvm_pgtable_walker>(p);
   take X = Hyp_Walker_Cases (D.cb, D.arg, D.flags);
   return {flags: D.flags};
 }
 
-predicate {pointer pgt, u64 addr, u64 end, i32 flags}
+predicate {pointer pgt, u64 addr, u64 end, u32 flags}
     KVM_PgTable_Walk_Data (pointer p) {
   take D = Owned<struct kvm_pgtable_walk_data>(p);
   take Walker = KVM_PgTable_Walker(D.walker);
@@ -238,15 +238,7 @@ struct kvm_pgtable_walk_data {
 /*@ requires valid_pgtable_level((i32) level) @*/
 /*@ ensures 0u64 <= return && return < 64u64 @*/
 /*@ ensures return == kvm_granule_shift(level) @*/
-/*@
-lemma pow_2_less_64 (integer i)
-  requires 0 <= i; i < 64
-  ensures 1 <= power_uf(2, i);
-    power_uf(2, i) < power(2, 64)
-@*/
-
 /*@ requires valid_pgtable_level(level) @*/
-	/*@ apply pow_2_less_64 (kvm_granule_shift(level)); @*/
 static bool kvm_phys_is_valid(u64 phys)
 {
 	return phys < BIT(id_aa64mmfr0_parange_to_phys_shift(ID_AA64MMFR0_EL1_PARANGE_MAX));
@@ -270,11 +262,11 @@ static bool kvm_block_mapping_supported(const struct kvm_pgtable_visit_ctx *ctx,
 }
 
 /*@
-lemma bw_and_le(integer x, integer y)
+lemma bw_and_le(u32 x, u32 y)
   requires
-    0 <= x; 0 <= y
+    0u32 <= x; 0u32 <= y
   ensures
-    0 <= bw_and_uf(x, y);
+    0u32 <= bw_and_uf(x, y);
     bw_and_uf(x, y) <= x;
     bw_and_uf(x, y) <= y
 @*/
@@ -329,33 +321,26 @@ static u32 kvm_pgd_pages(u32 ia_bits, u32 start_level)
 	return kvm_pgd_page_idx(&pgt, -1ULL) + 1;
 }
 /*@
-function (integer) kvm_pte_valid (integer pte)
+function (u8) kvm_pte_valid (kvm_pte_t pte)
 
-lemma kvm_pte_valid_is_valid (integer pte)
+lemma kvm_pte_valid_is_valid (kvm_pte_t pte)
   requires true
   ensures
-    is_valid_pte_entry(pte) == (kvm_pte_valid(pte) == 1)
+    is_valid_pte_entry(pte) == (kvm_pte_valid(pte) == 1u8)
 @*/
 
 /*@ cn_function kvm_pte_valid @*/
-/*@ ensures return == (is_valid_pte_entry(pte) ? 1 : 0) @*/
+/*@ ensures return == (is_valid_pte_entry(pte) ? 1u8 : 0u8) @*/
 	/*@ apply kvm_pte_valid_is_valid(pte); @*/
 
 /*@
-function (integer) kvm_pte_table (integer pte, integer level)
+function (u8) kvm_pte_table (kvm_pte_t pte, u32 level)
 
-lemma kvm_pte_table_is_table (integer pte, integer level)
+lemma kvm_pte_table_is_table (kvm_pte_t pte, u32 level)
   requires
-    valid_pgtable_level(level + 1)
+    valid_pgtable_level(level + 1u32)
   ensures
-    kvm_pte_table(pte, level) == (is_table_entry(pte) ? 1 : 0)
-@*/
-
-/*@
-lemma bw_ffs_uf_2()
-  requires true
-  ensures
-    bw_ffs_uf(2) >= 2 && bw_ffs_uf(2) <= 4
+    kvm_pte_table(pte, level) == (is_table_entry(pte) ? 1u8 : 0u8)
 @*/
 
 static bool kvm_pte_table(kvm_pte_t pte, u32 level)
@@ -373,13 +358,12 @@ static bool kvm_pte_table(kvm_pte_t pte, u32 level)
 		return false;
 	}
 
-	/*@ apply bw_ffs_uf_2(); @*/
 	return FIELD_GET(KVM_PTE_TYPE, pte) == KVM_PTE_TYPE_TABLE;
 }
 
-/*@ function (integer) kvm_pte_to_phys (integer x)
+/*@ function (u64) kvm_pte_to_phys (kvm_pte_t pte)
 
-lemma kvm_pte_to_phys_is_decode (integer pte)
+lemma kvm_pte_to_phys_is_decode (kvm_pte_t pte)
   requires
     true
   ensures
@@ -409,14 +393,6 @@ static void kvm_clear_pte(kvm_pte_t *ptep)
 	WRITE_ONCE(*ptep, 0);
 }
 
-/*@
-lemma power_2_ffs_2_min_1 ()
-  requires true
-  ensures
-    let n = power_uf(2, bw_ffs_uf(2) - 1);
-    1 <= n && n <= 10
-@*/
-
 static kvm_pte_t kvm_init_table_pte(kvm_pte_t *childp, struct kvm_pgtable_mm_ops *mm_ops)
 /* bogus trusted. the cn_function approach can't work here, this function
    isn't pure, it operates on a pte in-place. */
@@ -431,8 +407,6 @@ static kvm_pte_t kvm_init_table_pte(kvm_pte_t *childp, struct kvm_pgtable_mm_ops
 {
 	kvm_pte_t pte = kvm_phys_to_pte(mm_ops->virt_to_phys(childp));
 
-	/*@ apply bw_ffs_uf_2(); @*/
-	/*@ apply power_2_ffs_2_min_1(); @*/
 	pte |= FIELD_PREP(KVM_PTE_TYPE, KVM_PTE_TYPE_TABLE);
 	pte |= KVM_PTE_VALID;
 	return pte;
@@ -440,9 +414,9 @@ static kvm_pte_t kvm_init_table_pte(kvm_pte_t *childp, struct kvm_pgtable_mm_ops
 }
 
 /*@
-function (integer) kvm_init_valid_leaf_pte (integer pa, integer attr, integer level)
+function (kvm_pte_t) kvm_init_valid_leaf_pte (integer pa, integer attr, u32 level)
 
-lemma kvm_init_valid_leaf_pte_not_table (integer pa, integer attr, integer level)
+lemma kvm_init_valid_leaf_pte_not_table (integer pa, integer attr, u32 level)
   requires
     valid_pgtable_level(level)
   ensures
@@ -463,8 +437,6 @@ static kvm_pte_t kvm_init_valid_leaf_pte(u64 pa, kvm_pte_t attr, u32 level)
 	if (level == KVM_PGTABLE_MAX_LEVELS - 1)
 		;
 
-	/*@ apply bw_ffs_uf_2(); @*/
-	/*@ apply power_2_ffs_2_min_1(); @*/
 	pte |= attr & (KVM_PTE_LEAF_ATTR_LO | KVM_PTE_LEAF_ATTR_HI);
 	pte |= FIELD_PREP(KVM_PTE_TYPE, type);
 	pte |= KVM_PTE_VALID;
@@ -480,36 +452,20 @@ static kvm_pte_t kvm_init_invalid_leaf_owner(u8 owner_id)
 }
 
 /*@
-function (bool) flag_in_flags (integer flag, integer flags) {
+function (bool) flag_in_flags (i32 flag, i32 flags) {
   ((flag == KVM_PGTABLE_WALK_LEAF
         || flag == KVM_PGTABLE_WALK_TABLE_PRE
         || flag == KVM_PGTABLE_WALK_TABLE_POST)
     && (flag == KVM_PGTABLE_WALK_LEAF
-        ? bw_and_uf (flags, KVM_PGTABLE_WALK_LEAF) != 0
+        ? bw_and_uf (flags, KVM_PGTABLE_WALK_LEAF) != 0i32
         : true)
     && (flag == KVM_PGTABLE_WALK_TABLE_PRE
-        ? bw_and_uf (flags, KVM_PGTABLE_WALK_TABLE_PRE) != 0
+        ? bw_and_uf (flags, KVM_PGTABLE_WALK_TABLE_PRE) != 0i32
         : true)
     && (flag == KVM_PGTABLE_WALK_TABLE_POST
-        ? bw_and_uf (flags, KVM_PGTABLE_WALK_TABLE_POST) != 0
+        ? bw_and_uf (flags, KVM_PGTABLE_WALK_TABLE_POST) != 0i32
         : true))
 }
-@*/
-
-/*@
-lemma bw_and_facts()
-  requires true
-  ensures
-    bw_and_uf(1, 1) == 1;
-    bw_and_uf(2, 2) == 2;
-    bw_and_uf(4, 4) == 4;
-    bw_and_uf(1, 2) == 0;
-    bw_and_uf(2, 1) == 0;
-    bw_and_uf(4, 2) == 0;
-    bw_and_uf(2, 4) == 0;
-    bw_and_uf(4, 1) == 0;
-    bw_and_uf(1, 4) == 0
-
 @*/
 
 static int kvm_pgtable_visitor_cb(struct kvm_pgtable_walk_data *data,
@@ -534,8 +490,6 @@ static int kvm_pgtable_visitor_cb(struct kvm_pgtable_walk_data *data,
     ? pte2 == pte : true @*/
 {
 	struct kvm_pgtable_walker *walker = data->walker;
-	/*@ apply bw_and_facts(); @*/
-
 	/* Ensure the appropriate lock is held (e.g. RCU lock for stage-2 MMU) */
 	WARN_ON_ONCE(kvm_pgtable_walk_shared(ctx) && !kvm_pgtable_walk_lock_held());
 	return walker->cb(ctx, visit);
@@ -717,7 +671,6 @@ static int _kvm_pgtable_walk(struct kvm_pgtable *pgt, struct kvm_pgtable_walk_da
 	u32 idx;
 	int ret = 0;
 	int pgt_ia_bits = pgt->ia_bits;
-	/*@ apply pow_2_less_64(pgt_ia_bits); @*/
 	u64 limit = BIT(pgt->ia_bits);
 
 	if (data->addr > limit || data->end > limit)
@@ -852,7 +805,7 @@ static int hyp_set_prot_attr(enum kvm_pgtable_prot prot, kvm_pte_t *ptep)
 
 /*@
 predicate {pointer mm_ops} Hyp_Map_Data (pointer p) {
-  assert (mod((integer)p, 32) == 0);
+  assert (mod((u64)p, 32u64) == 0u64);
   take O = Owned<struct hyp_map_data>(p);
   take Ops = MM_Ops(O.mm_ops);
   return {mm_ops: O.mm_ops};
@@ -965,15 +918,15 @@ static int hyp_map_walker(const struct kvm_pgtable_visit_ctx *ctx,
 }
 
 /*@
-predicate (void) Hyp_Map_Walker_Case (pointer f, pointer x, integer flag) {
+predicate (void) Hyp_Map_Walker_Case (pointer f, pointer x, u32 flags) {
   assert (f == &hyp_map_walker);
-  assert (flag == KVM_PGTABLE_WALK_LEAF);
+  assert (flags == ((u32) KVM_PGTABLE_WALK_LEAF));
   take D = Hyp_Map_Data(x);
   return;
 }
 
-predicate (void) Hyp_Walker_Cases (pointer f, pointer x, integer flag) {
-  take X = Hyp_Map_Walker_Case (f, x, flag);
+predicate (void) Hyp_Walker_Cases (pointer f, pointer x, u32 flags) {
+  take X = Hyp_Map_Walker_Case (f, x, flags);
   return;
 }
 
