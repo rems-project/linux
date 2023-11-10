@@ -213,20 +213,67 @@ static enum kvm_pgtable_prot ghost_default_host_prot(bool is_memory)
 	return is_memory ? PKVM_HOST_MEM_PROT : PKVM_HOST_MMIO_PROT;
 }
 
-
-
-
 /* adapted from pgtable.c:stage2_set_prot_attr() */
 /* TODO: handle device prot */
-u64 arch_prot_of_prot(enum kvm_pgtable_prot prot)
+
+enum ghost_memory_type {
+	GHOST_MT_NORMAL_CACHABLE,
+	GHOST_MT_DEVICE_nGnRE
+};
+
+enum ghost_stage {
+	GHOST_STAGE1,
+	GHOST_STAGE2
+};
+
+u64 arch_attrs_of_pte_attrs(enum ghost_stage stage, enum kvm_pgtable_prot prot, enum ghost_memory_type mt)
 {
 	u64 attr=0;
-	if (!(prot & KVM_PGTABLE_PROT_X))
-		attr |= KVM_PTE_LEAF_ATTR_HI_S2_XN;
-	if (prot & KVM_PGTABLE_PROT_R)
-		attr |= KVM_PTE_LEAF_ATTR_LO_S2_S2AP_R;
-	if (prot & KVM_PGTABLE_PROT_W)
-		attr |= KVM_PTE_LEAF_ATTR_LO_S2_S2AP_W;
+	u64 mair_index = 0;
+	switch (stage) {
+	case GHOST_STAGE2:
+		if (!(prot & KVM_PGTABLE_PROT_X))
+			attr |= KVM_PTE_LEAF_ATTR_HI_S2_XN;
+		if (prot & KVM_PGTABLE_PROT_R)
+			attr |= KVM_PTE_LEAF_ATTR_LO_S2_S2AP_R;
+		if (prot & KVM_PGTABLE_PROT_W)
+			attr |= KVM_PTE_LEAF_ATTR_LO_S2_S2AP_W;
+		switch (mt) {
+		case GHOST_MT_NORMAL_CACHABLE:
+			attr |= GENMASK(5,2);
+			break;
+		case GHOST_MT_DEVICE_nGnRE:
+			attr |= 0x1 << 2;
+			break;
+		default:
+			ghost_assert(false);
+		}
+		break;
+	case GHOST_STAGE1:
+		if (!(prot & KVM_PGTABLE_PROT_X))
+			attr |= KVM_PTE_LEAF_ATTR_HI_S1_XN;
+		if (prot & KVM_PGTABLE_PROT_R) {
+			if (prot & KVM_PGTABLE_PROT_W)
+				attr |= KVM_PTE_LEAF_ATTR_LO_S1_AP_RW << 6;
+			else
+				attr |= KVM_PTE_LEAF_ATTR_LO_S1_AP_RO << 6;
+		}
+		switch (mt) {
+		case GHOST_MT_NORMAL_CACHABLE:
+			mair_index = 0;
+			attr |= mair_index << 2;
+			break;
+		case GHOST_MT_DEVICE_nGnRE:
+			mair_index = 4;
+			attr |= mair_index << 2;
+			break;
+		default:
+			ghost_assert(false);
+		}
+		break;
+	default:
+		ghost_assert(false);
+	}
 	return attr;
 }
 
@@ -282,8 +329,10 @@ void compute_new_abstract_state_handle___pkvm_host_share_hyp(struct ghost_state 
 		goto out;
 	}
 
-	u64 host_arch_prot = arch_prot_of_prot(ghost_default_host_prot(ghost_addr_is_memory(g0, phys)));
-	u64 hyp_arch_prot = host_arch_prot;
+	bool is_memory = ghost_addr_is_allowed_memory(g0, phys);
+	enum ghost_memory_type mt = is_memory ? GHOST_MT_NORMAL_CACHABLE : GHOST_MT_DEVICE_nGnRE;
+	u64 host_arch_prot = arch_attrs_of_pte_attrs(GHOST_STAGE2, ghost_default_host_prot(is_memory), mt);
+	u64 hyp_arch_prot = arch_attrs_of_pte_attrs(GHOST_STAGE1, KVM_PGTABLE_PROT_RW, mt);
 
 	/* the host annot mapping is unchanged (we have established that host_addr is NOT already in there)
 	 * but, there is a new host shared mapping, PKVM_PAGE_SHARED_OWNED */
@@ -427,7 +476,7 @@ void compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost_state 
 		phys_addr_t donated_phys = hyp_pfn_to_phys(pfn);
 		host_ipa_t host_page_ipa = host_ipa_of_phys(donated_phys);
 		hyp_va_t hyp_page_addr = (u64)ghost__hyp_va(g0, donated_phys);
-		u64 hyp_arch_prot = arch_prot_of_prot(ghost_default_host_prot(ghost_addr_is_memory(g0, donated_phys)));
+		u64 hyp_arch_prot = arch_attrs_of_pte_attrs(GHOST_STAGE1, ghost_default_host_prot(ghost_addr_is_memory(g0, donated_phys)), GHOST_MT_NORMAL_CACHABLE/*TODO: this is wrong*/);
 
 		// TODO: what if location was not shared with pKVM?
 		if (!(is_owned_and_shared_by(g0, GHOST_HOST, donated_phys) && is_borrowed_by(g0, GHOST_HYP, donated_phys)))
@@ -484,7 +533,7 @@ void compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost_state 
 	);
 
 	// Finally, add the mapping to the VM's pagetable.
-	u64 guest_arch_prot = arch_prot_of_prot(ghost_default_host_prot(ghost_addr_is_memory(g0, phys)));
+	u64 guest_arch_prot = arch_attrs_of_pte_attrs(GHOST_STAGE2, ghost_default_host_prot(ghost_addr_is_memory(g0, phys)), GHOST_MT_NORMAL_CACHABLE/*TODO: this is wrong*/);
 	mapping_move(
 		&g1_vm->vm_abstract_pgtable.mapping,
 		mapping_plus(g0_vm->vm_abstract_pgtable.mapping,
@@ -631,7 +680,7 @@ static void ghost_map_donated_memory_nocheck(struct ghost_state *g, host_ipa_t h
 			mapping_singleton(host_ipa, nr_pages, maplet_target_annot(PKVM_ID_HYP)))
 	);
 
-	u64 host_arch_prot = arch_prot_of_prot(ghost_default_host_prot(ghost_addr_is_memory(g, phys_addr)));
+	u64 host_arch_prot = arch_attrs_of_pte_attrs(GHOST_STAGE2, ghost_default_host_prot(ghost_addr_is_memory(g, phys_addr)), GHOST_MT_NORMAL_CACHABLE/*TODO: this is wrong*/);
 	u64 hyp_arch_prot = host_arch_prot;
 
 	mapping_move(
