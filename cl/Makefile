@@ -146,6 +146,7 @@ generate-DataAbort-trace:
 		-S $(SAIL_SNAPSHOT_SRC) \
 		-C $(ISLA_CONFIG) \
 		-R "PSTATE.EL=0b01" \
+		--simplify --simplify-registers --no-model-reg-init \
 		$(ISLA_FN) --traces
 .PHONY: generate-DataAbort-trace
 

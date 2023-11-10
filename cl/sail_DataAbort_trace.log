@@ -4,224 +4,85 @@ make: Entering directory '/home/vscode/rems/linux-pkvm-verif-2/cl'
 	-S ../../sail-arm/armv9.3-a/src/ \
 	-C ./pkvm_isla_config.toml \
 	-R "PSTATE.EL=0b01" \
+	--simplify --simplify-registers --no-model-reg-init \
 	AArch64_DataAbort 0x0000000000FF0000 '{	statuscode = Fault_Translation, acctype = AccType_NORMAL, ipaddress = { paspace = PAS_NonSecure, address = 0x0000000000000 }, paddress = { paspace = PAS_NonSecure, address = 0x0000000000000 }, gpcf = { gpf = GPCF_None, level = 0 }, gpcfs2walk = false, s2fs1walk = false, write = false, level = 0, extflag = 0b1, secondstage = false, domain = 0b0000, errortype = 0b00, debugmoe = 0b0000 }' --traces
 Result: (_ poison)
 (trace
   (write-reg |CNTCR| nil #x00000000)
-  (assume-reg |CNTCR| nil #x00000000)
   (write-reg |DBGEN| nil |LOW|)
-  (assume-reg |DBGEN| nil |LOW|)
   (write-reg |HCR_EL2| nil #x80080001)
-  (assume-reg |HCR_EL2| nil #x80080001)
   (write-reg |ID_AA64AFR0_EL1| nil #x0)
-  (assume-reg |ID_AA64AFR0_EL1| nil #x0)
   (write-reg |ID_AA64AFR1_EL1| nil #x0)
-  (assume-reg |ID_AA64AFR1_EL1| nil #x0)
   (write-reg |ID_AA64DFR0_EL1| nil #x10305106)
-  (assume-reg |ID_AA64DFR0_EL1| nil #x10305106)
   (write-reg |ID_AA64DFR1_EL1| nil #x0)
-  (assume-reg |ID_AA64DFR1_EL1| nil #x0)
   (write-reg |ID_AA64ISAR0_EL1| nil #x11120)
-  (assume-reg |ID_AA64ISAR0_EL1| nil #x11120)
   (write-reg |ID_AA64ISAR1_EL1| nil #x0)
-  (assume-reg |ID_AA64ISAR1_EL1| nil #x0)
   (write-reg |ID_AA64MMFR0_EL1| nil #x1124)
-  (assume-reg |ID_AA64MMFR0_EL1| nil #x1124)
   (write-reg |ID_AA64MMFR1_EL1| nil #x0)
-  (assume-reg |ID_AA64MMFR1_EL1| nil #x0)
   (write-reg |ID_AA64MMFR2_EL1| nil #x0)
-  (assume-reg |ID_AA64MMFR2_EL1| nil #x0)
   (write-reg |ID_AA64PFR0_EL1| nil #x1000222)
-  (assume-reg |ID_AA64PFR0_EL1| nil #x1000222)
   (write-reg |ID_AA64PFR1_EL1| nil #x0)
-  (assume-reg |ID_AA64PFR1_EL1| nil #x0)
   (write-reg |MAIR_EL2| nil #x40e44ffff)
-  (assume-reg |MAIR_EL2| nil #x40e44ffff)
   (write-reg |MDCCSR_EL0| nil #x0000000000000000)
   (assume-reg |MDCCSR_EL0| nil #x0000000000000000)
   (write-reg |MDCR_EL2| nil #x4)
-  (assume-reg |MDCR_EL2| nil #x4)
   (write-reg |OSECCR_EL1| nil #x0000000000000000)
-  (assume-reg |OSECCR_EL1| nil #x0000000000000000)
-  (declare-const v0 (_ BitVec 1)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v1 (_ BitVec 1)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v2 (_ BitVec 1)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v3 (_ BitVec 1)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v4 (_ BitVec 1)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
   (declare-const v5 (_ BitVec 1)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v6 (_ BitVec 1)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v7 (_ BitVec 2)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
   (declare-const v8 (_ BitVec 1)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v9 (_ BitVec 1)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v10 (_ BitVec 1)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v11 (_ BitVec 2)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v12 (_ BitVec 4)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v13 (_ BitVec 1)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v14 (_ BitVec 8)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v15 (_ BitVec 1)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v16 (_ BitVec 5)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
   (declare-const v17 (_ BitVec 1)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v18 (_ BitVec 1)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v19 (_ BitVec 1)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v20 (_ BitVec 1)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
   (declare-const v21 (_ BitVec 1)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v22 (_ BitVec 1)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v23 (_ BitVec 1)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v24 (_ BitVec 1)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v25 (_ BitVec 1)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
   (declare-const v26 (_ BitVec 1)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v27 (_ BitVec 1)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v28 (_ BitVec 1)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (write-reg |PSTATE| ((_ field |A|)) (_ struct (|E| v10) (|I| v3) (|Z| v5) (|ALLINT| v6) (|F| v2) (|SS| v21) (|V| v26) (|GE| v12) (|TCO| v24) (|C| v8) (|D| v1) (|M| v16) (|DIT| v9) (|ZA| v27) (|BTYPE| v7) (|UAO| v25) (|T| v23) (|J| v15) (|A| #b1) (|PAN| v18) (|SSBS| v22) (|IL| v13) (|EL| v11) (|SP| v4) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| v28) (|SM| v20)))
+  (write-reg |PSTATE| ((_ field |A|)) (_ struct (|A| #b1)))
   (assume-reg |PSTATE| ((_ field |A|)) #b1)
-  (write-reg |PSTATE| ((_ field |ALLINT|)) (_ struct (|E| v10) (|I| v3) (|Z| v5) (|ALLINT| #b0) (|F| v2) (|SS| v21) (|V| v26) (|GE| v12) (|TCO| v24) (|C| v8) (|D| v1) (|M| v16) (|DIT| v9) (|ZA| v27) (|BTYPE| v7) (|UAO| v25) (|T| v23) (|J| v15) (|A| #b1) (|PAN| v18) (|SSBS| v22) (|IL| v13) (|EL| v11) (|SP| v4) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| v28) (|SM| v20)))
+  (write-reg |PSTATE| ((_ field |ALLINT|)) (_ struct (|ALLINT| #b0)))
   (assume-reg |PSTATE| ((_ field |ALLINT|)) #b0)
-  (write-reg |PSTATE| ((_ field |BTYPE|)) (_ struct (|E| v10) (|I| v3) (|Z| v5) (|ALLINT| #b0) (|F| v2) (|SS| v21) (|V| v26) (|GE| v12) (|TCO| v24) (|C| v8) (|D| v1) (|M| v16) (|DIT| v9) (|ZA| v27) (|BTYPE| #b00) (|UAO| v25) (|T| v23) (|J| v15) (|A| #b1) (|PAN| v18) (|SSBS| v22) (|IL| v13) (|EL| v11) (|SP| v4) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| v28) (|SM| v20)))
+  (write-reg |PSTATE| ((_ field |BTYPE|)) (_ struct (|BTYPE| #b00)))
   (assume-reg |PSTATE| ((_ field |BTYPE|)) #b00)
-  (write-reg |PSTATE| ((_ field |D|)) (_ struct (|E| v10) (|I| v3) (|Z| v5) (|ALLINT| #b0) (|F| v2) (|SS| v21) (|V| v26) (|GE| v12) (|TCO| v24) (|C| v8) (|D| #b1) (|M| v16) (|DIT| v9) (|ZA| v27) (|BTYPE| #b00) (|UAO| v25) (|T| v23) (|J| v15) (|A| #b1) (|PAN| v18) (|SSBS| v22) (|IL| v13) (|EL| v11) (|SP| v4) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| v28) (|SM| v20)))
+  (write-reg |PSTATE| ((_ field |D|)) (_ struct (|D| #b1)))
   (assume-reg |PSTATE| ((_ field |D|)) #b1)
-  (write-reg |PSTATE| ((_ field |DIT|)) (_ struct (|E| v10) (|I| v3) (|Z| v5) (|ALLINT| #b0) (|F| v2) (|SS| v21) (|V| v26) (|GE| v12) (|TCO| v24) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| v25) (|T| v23) (|J| v15) (|A| #b1) (|PAN| v18) (|SSBS| v22) (|IL| v13) (|EL| v11) (|SP| v4) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| v28) (|SM| v20)))
+  (write-reg |PSTATE| ((_ field |DIT|)) (_ struct (|DIT| #b0)))
   (assume-reg |PSTATE| ((_ field |DIT|)) #b0)
-  (write-reg |PSTATE| ((_ field |EL|)) (_ struct (|E| v10) (|I| v3) (|Z| v5) (|ALLINT| #b0) (|F| v2) (|SS| v21) (|V| v26) (|GE| v12) (|TCO| v24) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| v25) (|T| v23) (|J| v15) (|A| #b1) (|PAN| v18) (|SSBS| v22) (|IL| v13) (|EL| #b10) (|SP| v4) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| v28) (|SM| v20)))
+  (write-reg |PSTATE| ((_ field |EL|)) (_ struct (|EL| #b10)))
   (assume-reg |PSTATE| ((_ field |EL|)) #b10)
-  (write-reg |PSTATE| ((_ field |F|)) (_ struct (|E| v10) (|I| v3) (|Z| v5) (|ALLINT| #b0) (|F| #b1) (|SS| v21) (|V| v26) (|GE| v12) (|TCO| v24) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| v25) (|T| v23) (|J| v15) (|A| #b1) (|PAN| v18) (|SSBS| v22) (|IL| v13) (|EL| #b10) (|SP| v4) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| v28) (|SM| v20)))
+  (write-reg |PSTATE| ((_ field |F|)) (_ struct (|F| #b1)))
   (assume-reg |PSTATE| ((_ field |F|)) #b1)
-  (write-reg |PSTATE| ((_ field |I|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b0) (|F| #b1) (|SS| v21) (|V| v26) (|GE| v12) (|TCO| v24) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| v25) (|T| v23) (|J| v15) (|A| #b1) (|PAN| v18) (|SSBS| v22) (|IL| v13) (|EL| #b10) (|SP| v4) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| v28) (|SM| v20)))
+  (write-reg |PSTATE| ((_ field |I|)) (_ struct (|I| #b1)))
   (assume-reg |PSTATE| ((_ field |I|)) #b1)
-  (write-reg |PSTATE| ((_ field |IL|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b0) (|F| #b1) (|SS| v21) (|V| v26) (|GE| v12) (|TCO| v24) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| v25) (|T| v23) (|J| v15) (|A| #b1) (|PAN| v18) (|SSBS| v22) (|IL| #b0) (|EL| #b10) (|SP| v4) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| v28) (|SM| v20)))
+  (write-reg |PSTATE| ((_ field |IL|)) (_ struct (|IL| #b0)))
   (assume-reg |PSTATE| ((_ field |IL|)) #b0)
-  (write-reg |PSTATE| ((_ field |PAN|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b0) (|F| #b1) (|SS| v21) (|V| v26) (|GE| v12) (|TCO| v24) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| v25) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b0) (|SSBS| v22) (|IL| #b0) (|EL| #b10) (|SP| v4) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| v28) (|SM| v20)))
+  (write-reg |PSTATE| ((_ field |PAN|)) (_ struct (|PAN| #b0)))
   (assume-reg |PSTATE| ((_ field |PAN|)) #b0)
-  (write-reg |PSTATE| ((_ field |SM|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b0) (|F| #b1) (|SS| v21) (|V| v26) (|GE| v12) (|TCO| v24) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| v25) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b0) (|SSBS| v22) (|IL| #b0) (|EL| #b10) (|SP| v4) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| v28) (|SM| #b0)))
-  (assume-reg |PSTATE| ((_ field |SM|)) #b0)
-  (write-reg |PSTATE| ((_ field |SP|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b0) (|F| #b1) (|SS| v21) (|V| v26) (|GE| v12) (|TCO| v24) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| v25) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b0) (|SSBS| v22) (|IL| #b0) (|EL| #b10) (|SP| #x1) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| v28) (|SM| #b0)))
+  (write-reg |PSTATE| ((_ field |SM|)) (_ struct (|SM| #b0)))
+  (write-reg |PSTATE| ((_ field |SP|)) (_ struct (|SP| #x1)))
   (assume-reg |PSTATE| ((_ field |SP|)) #x1)
-  (write-reg |PSTATE| ((_ field |SSBS|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b0) (|F| #b1) (|SS| v21) (|V| v26) (|GE| v12) (|TCO| v24) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| v25) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b0) (|SSBS| #b0) (|IL| #b0) (|EL| #b10) (|SP| #x1) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| v28) (|SM| #b0)))
+  (write-reg |PSTATE| ((_ field |SSBS|)) (_ struct (|SSBS| #b0)))
   (assume-reg |PSTATE| ((_ field |SSBS|)) #b0)
-  (write-reg |PSTATE| ((_ field |TCO|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b0) (|F| #b1) (|SS| v21) (|V| v26) (|GE| v12) (|TCO| #b0) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| v25) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b0) (|SSBS| #b0) (|IL| #b0) (|EL| #b10) (|SP| #x1) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| v28) (|SM| #b0)))
-  (assume-reg |PSTATE| ((_ field |TCO|)) #b0)
-  (write-reg |PSTATE| ((_ field |UAO|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b0) (|F| #b1) (|SS| v21) (|V| v26) (|GE| v12) (|TCO| #b0) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| #b0) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b0) (|SSBS| #b0) (|IL| #b0) (|EL| #b10) (|SP| #x1) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| v28) (|SM| #b0)))
+  (write-reg |PSTATE| ((_ field |TCO|)) (_ struct (|TCO| #b0)))
+  (write-reg |PSTATE| ((_ field |UAO|)) (_ struct (|UAO| #b0)))
   (assume-reg |PSTATE| ((_ field |UAO|)) #b0)
-  (write-reg |PSTATE| ((_ field |nRW|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b0) (|F| #b1) (|SS| v21) (|V| v26) (|GE| v12) (|TCO| #b0) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| #b0) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b0) (|SSBS| #b0) (|IL| #b0) (|EL| #b10) (|SP| #x1) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| #b0) (|SM| #b0)))
+  (write-reg |PSTATE| ((_ field |nRW|)) (_ struct (|nRW| #b0)))
   (assume-reg |PSTATE| ((_ field |nRW|)) #b0)
   (write-reg |SCR_EL3| nil #x0000000000000000)
   (assume-reg |SCR_EL3| nil #x0000000000000000)
   (write-reg |SCTLR_EL1| nil #x0000000004000000)
   (assume-reg |SCTLR_EL1| nil #x0000000004000000)
   (write-reg |SCTLR_EL2| nil #x30ed183d)
-  (assume-reg |SCTLR_EL2| nil #x30ed183d)
   (write-reg |SMCR_EL1| nil #x0000000000000000)
   (assume-reg |SMCR_EL1| nil #x0000000000000000)
   (write-reg |SMCR_EL3| nil #x0000000000000000)
   (assume-reg |SMCR_EL3| nil #x0000000000000000)
   (write-reg |SPIDEN| nil |LOW|)
-  (assume-reg |SPIDEN| nil |LOW|)
   (write-reg |TCR_EL1| nil #x0000000000000000)
   (assume-reg |TCR_EL1| nil #x0000000000000000)
   (write-reg |TCR_EL2| nil #x80843510)
-  (assume-reg |TCR_EL2| nil #x80843510)
-  (declare-const v29 (_ BitVec 1)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v30 (_ BitVec 1)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v31 (_ BitVec 1)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v32 (_ BitVec 256)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v33 (_ BitVec 64)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v34 (_ BitVec 64)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v35 (_ BitVec 1)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v36 (_ BitVec 64)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v37 (_ BitVec 256)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v38 (_ BitVec 256)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v39 (_ BitVec 256)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v40 (_ BitVec 256)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v41 (_ BitVec 256)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v42 (_ BitVec 256)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v43 (_ BitVec 256)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v44 (_ BitVec 256)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v45 (_ BitVec 256)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v46 (_ BitVec 256)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v47 (_ BitVec 256)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v48 (_ BitVec 256)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v49 (_ BitVec 256)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v50 (_ BitVec 256)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v51 (_ BitVec 256)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v52 (_ BitVec 256)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v53 (_ BitVec 128)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v54 (_ BitVec 64)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v55 (_ BitVec 64)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v56 (_ BitVec 64)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v57 (_ BitVec 64)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v58 (_ BitVec 64)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v59 (_ BitVec 64)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v60 (_ BitVec 64)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v61 (_ BitVec 64)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v62 (_ BitVec 64)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v63 (_ BitVec 64)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v64 (_ BitVec 64)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v65 (_ BitVec 64)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v66 (_ BitVec 64)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v67 (_ BitVec 64)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v68 (_ BitVec 64)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v69 (_ BitVec 64)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v70 (_ BitVec 64)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v71 (_ BitVec 64)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v72 (_ BitVec 64)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v73 (_ BitVec 64)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v74 (_ BitVec 64)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v75 (_ BitVec 64)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v76 (_ BitVec 64)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v77 (_ BitVec 64)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v78 (_ BitVec 64)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v79 (_ BitVec 64)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v80 (_ BitVec 64)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v81 (_ BitVec 64)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v82 (_ BitVec 64)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v83 (_ BitVec 64)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v84 (_ BitVec 64)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v85 (_ BitVec 64)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v86 (_ BitVec 2048)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v87 (_ BitVec 2048)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v88 (_ BitVec 2048)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v89 (_ BitVec 2048)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v90 (_ BitVec 2048)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v91 (_ BitVec 2048)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v92 (_ BitVec 2048)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v93 (_ BitVec 2048)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v94 (_ BitVec 2048)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v95 (_ BitVec 2048)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v96 (_ BitVec 2048)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v97 (_ BitVec 2048)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v98 (_ BitVec 2048)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v99 (_ BitVec 2048)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v100 (_ BitVec 2048)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v101 (_ BitVec 2048)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v102 (_ BitVec 2048)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v103 (_ BitVec 2048)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v104 (_ BitVec 2048)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v105 (_ BitVec 2048)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v106 (_ BitVec 2048)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v107 (_ BitVec 2048)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v108 (_ BitVec 2048)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v109 (_ BitVec 2048)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v110 (_ BitVec 2048)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v111 (_ BitVec 2048)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v112 (_ BitVec 2048)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v113 (_ BitVec 2048)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v114 (_ BitVec 2048)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v115 (_ BitVec 2048)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v116 (_ BitVec 2048)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v117 (_ BitVec 2048)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v118 (_ BitVec 128)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v119 (_ BitVec 64)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (declare-const v120 (_ BitVec 4)) ; SourceLoc { file: -1, line1: 0, char1: 0, line2: 0, char2: 0 }
-  (write-reg |TSTATE| ((_ field |depth|)) (_ struct (|D| v30) (|FPSR| v34) (|FFR| v32) (|nPC| v119) (|depth| (_ bv0 128)) (|ICC_PMR_EL1| v36) (|F| v31) (|I| v35) (|FPCR| v33) (|X| (_ vec v55 v56 v57 v58 v59 v60 v61 v62 v63 v64 v65 v66 v67 v68 v69 v70 v71 v72 v73 v74 v75 v76 v77 v78 v79 v80 v81 v82 v83 v84 v85)) (|A| v29) (|P| (_ vec v37 v38 v39 v40 v41 v42 v43 v44 v45 v46 v47 v48 v49 v50 v51 v52)) (|nzcv| v120) (|Z| (_ vec v86 v87 v88 v89 v90 v91 v92 v93 v94 v95 v96 v97 v98 v99 v100 v101 v102 v103 v104 v105 v106 v107 v108 v109 v110 v111 v112 v113 v114 v115 v116 v117)) (|SP| v54) (|Rt| v53)))
+  (write-reg |TSTATE| ((_ field |depth|)) (_ struct (|depth| (_ bv0 128))))
   (assume-reg |TSTATE| ((_ field |depth|)) (_ bv0 128))
   (write-reg |VBAR_EL1| nil #x1111222233334444)
   (assume-reg |VBAR_EL1| nil #x1111222233334444)
   (write-reg |VTCR_EL2| nil #x80243594)
-  (assume-reg |VTCR_EL2| nil #x80243594)
   (write-reg |ZCR_EL1| nil #x0000000000000000)
   (assume-reg |ZCR_EL1| nil #x0000000000000000)
   (write-reg |ZCR_EL2| nil #x0000000000000000)
-  (assume-reg |ZCR_EL2| nil #x0000000000000000)
   (write-reg |ZCR_EL3| nil #x0000000000000000)
   (assume-reg |ZCR_EL3| nil #x0000000000000000)
   (write-reg |_EDSCR_0_28| nil #x000000)
@@ -230,455 +91,89 @@ Result: (_ poison)
   (assume-reg |_EDSCR_31_31| nil #b0)
   (write-reg |__ThisInstrEnc| nil |__A64|)
   (assume-reg |__ThisInstrEnc| nil |__A64|)
-  (write-reg |PSTATE| ((_ field |EL|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b0) (|F| #b1) (|SS| v21) (|V| v26) (|GE| v12) (|TCO| #b0) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| #b0) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b0) (|SSBS| #b0) (|IL| #b0) (|EL| #b01) (|SP| #x1) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| #b0) (|SM| #b0)))
+  (write-reg |PSTATE| ((_ field |EL|)) (_ struct (|EL| #b01)))
   (assume-reg |PSTATE| ((_ field |EL|)) #b01)
   (read-reg |SCR_EL3| nil #x0000000000000000)
-  (declare-const v121 (_ BitVec 64)) ; SourceLoc { file: 9, line1: 231, char1: 19, line2: 231, char2: 28 }
   (read-reg |__highest_el_aarch32| nil false)
-  (read-reg |SCR_EL3| nil #x0000000000000000)
   (define-enum |ArchVersion| 13 (|ARMv8p0| |ARMv8p1| |ARMv8p2| |ARMv8p3| |ARMv8p4| |ARMv8p5| |ARMv8p6| |ARMv8p7| |ARMv8p8| |ARMv9p0| |ARMv9p1| |ARMv9p2| |ARMv9p3|))
-  (declare-const v136 (_ BitVec 64)) ; SourceLoc { file: 9, line1: 231, char1: 19, line2: 231, char2: 28 }
-  (read-reg |__highest_el_aarch32| nil false)
-  (read-reg |SCR_EL3| nil #x0000000000000000)
-  (declare-const v137 Bool) ; SourceLoc { file: 9, line1: 218, char1: 21, line2: 218, char2: 30 }
-  (declare-const v138 Bool) ; SourceLoc { file: 9, line1: 219, char1: 19, line2: 219, char2: 28 }
-  (read-reg |SCR_EL3| nil #x0000000000000000)
   (declare-const v139 (_ BitVec 64)) ; SourceLoc { file: 14, line1: 46, char1: 27, line2: 46, char2: 43 }
   (read-reg |_PC| nil v139)
   (define-const v140 v139)
-  (declare-const v141 (_ BitVec 128)) ; SourceLoc { file: 9, line1: 4791, char1: 24, line2: 4791, char2: 33 }
-  (declare-const v142 (_ BitVec 64)) ; SourceLoc { file: 9, line1: 231, char1: 19, line2: 231, char2: 28 }
-  (read-reg |__highest_el_aarch32| nil false)
-  (read-reg |SCR_EL3| nil #x0000000000000000)
-  (declare-const v143 Bool) ; SourceLoc { file: 9, line1: 218, char1: 21, line2: 218, char2: 30 }
-  (declare-const v144 Bool) ; SourceLoc { file: 9, line1: 219, char1: 19, line2: 219, char2: 28 }
-  (read-reg |PSTATE| ((_ field |EL|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b0) (|F| #b1) (|SS| v21) (|V| v26) (|GE| v12) (|TCO| #b0) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| #b0) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b0) (|SSBS| #b0) (|IL| #b0) (|EL| #b01) (|SP| #x1) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| #b0) (|SM| #b0)))
+  (read-reg |PSTATE| ((_ field |EL|)) (_ struct (|EL| #b01)))
   (define-enum |Exception| 39 (|Exception_Uncategorized| |Exception_WFxTrap| |Exception_CP15RTTrap| |Exception_CP15RRTTrap| |Exception_CP14RTTrap| |Exception_CP14DTTrap| |Exception_CP14RRTTrap| |Exception_AdvSIMDFPAccessTrap| |Exception_FPIDTrap| |Exception_LDST64BTrap| |Exception_PACTrap| |Exception_IllegalState| |Exception_SupervisorCall| |Exception_HypervisorCall| |Exception_MonitorCall| |Exception_SystemRegisterTrap| |Exception_ERetTrap| |Exception_InstructionAbort| |Exception_PCAlignment| |Exception_DataAbort| |Exception_NV2DataAbort| |Exception_PACFail| |Exception_SPAlignment| |Exception_FPTrappedException| |Exception_SError| |Exception_Breakpoint| |Exception_SoftwareStep| |Exception_Watchpoint| |Exception_NV2Watchpoint| |Exception_SoftwareBreakpoint| |Exception_VectorCatch| |Exception_IRQ| |Exception_SVEAccessTrap| |Exception_SMEAccessTrap| |Exception_TSTARTAccessTrap| |Exception_GPC| |Exception_BranchTarget| |Exception_MemCpyMemSet| |Exception_FIQ|))
-  (declare-const v185 Bool) ; SourceLoc { file: -1, line1: 923, char1: 0, line2: 0, char2: 0 }
-  (define-const v186 (ite v185 |Exception_CP15RTTrap| |Exception_WFxTrap|))
-  (declare-const v187 Bool) ; SourceLoc { file: -1, line1: 923, char1: 0, line2: 0, char2: 0 }
-  (define-const v188 (ite v187 |Exception_CP15RRTTrap| v186))
-  (declare-const v189 Bool) ; SourceLoc { file: -1, line1: 923, char1: 0, line2: 0, char2: 0 }
-  (define-const v190 (ite v189 |Exception_CP14RTTrap| v188))
-  (declare-const v191 Bool) ; SourceLoc { file: -1, line1: 923, char1: 0, line2: 0, char2: 0 }
-  (define-const v192 (ite v191 |Exception_CP14DTTrap| v190))
-  (declare-const v193 Bool) ; SourceLoc { file: -1, line1: 923, char1: 0, line2: 0, char2: 0 }
-  (define-const v194 (ite v193 |Exception_CP14RRTTrap| v192))
-  (declare-const v195 Bool) ; SourceLoc { file: -1, line1: 923, char1: 0, line2: 0, char2: 0 }
-  (define-const v196 (ite v195 |Exception_AdvSIMDFPAccessTrap| v194))
-  (declare-const v197 Bool) ; SourceLoc { file: -1, line1: 923, char1: 0, line2: 0, char2: 0 }
-  (define-const v198 (ite v197 |Exception_FPIDTrap| v196))
-  (declare-const v199 Bool) ; SourceLoc { file: -1, line1: 923, char1: 0, line2: 0, char2: 0 }
-  (define-const v200 (ite v199 |Exception_LDST64BTrap| v198))
-  (declare-const v201 Bool) ; SourceLoc { file: -1, line1: 923, char1: 0, line2: 0, char2: 0 }
-  (define-const v202 (ite v201 |Exception_PACTrap| v200))
-  (declare-const v203 Bool) ; SourceLoc { file: -1, line1: 923, char1: 0, line2: 0, char2: 0 }
-  (define-const v204 (ite v203 |Exception_IllegalState| v202))
-  (declare-const v205 Bool) ; SourceLoc { file: -1, line1: 923, char1: 0, line2: 0, char2: 0 }
-  (define-const v206 (ite v205 |Exception_SupervisorCall| v204))
-  (declare-const v207 Bool) ; SourceLoc { file: -1, line1: 923, char1: 0, line2: 0, char2: 0 }
-  (define-const v208 (ite v207 |Exception_HypervisorCall| v206))
-  (declare-const v209 Bool) ; SourceLoc { file: -1, line1: 923, char1: 0, line2: 0, char2: 0 }
-  (define-const v210 (ite v209 |Exception_MonitorCall| v208))
-  (declare-const v211 Bool) ; SourceLoc { file: -1, line1: 923, char1: 0, line2: 0, char2: 0 }
-  (define-const v212 (ite v211 |Exception_SystemRegisterTrap| v210))
-  (declare-const v213 Bool) ; SourceLoc { file: -1, line1: 923, char1: 0, line2: 0, char2: 0 }
-  (define-const v214 (ite v213 |Exception_ERetTrap| v212))
-  (declare-const v215 Bool) ; SourceLoc { file: -1, line1: 923, char1: 0, line2: 0, char2: 0 }
-  (define-const v216 (ite v215 |Exception_InstructionAbort| v214))
-  (declare-const v217 Bool) ; SourceLoc { file: -1, line1: 923, char1: 0, line2: 0, char2: 0 }
-  (define-const v218 (ite v217 |Exception_PCAlignment| v216))
-  (declare-const v219 Bool) ; SourceLoc { file: -1, line1: 923, char1: 0, line2: 0, char2: 0 }
-  (define-const v220 (ite v219 |Exception_DataAbort| v218))
-  (declare-const v221 Bool) ; SourceLoc { file: -1, line1: 923, char1: 0, line2: 0, char2: 0 }
-  (define-const v222 (ite v221 |Exception_NV2DataAbort| v220))
-  (declare-const v223 Bool) ; SourceLoc { file: -1, line1: 923, char1: 0, line2: 0, char2: 0 }
-  (define-const v224 (ite v223 |Exception_PACFail| v222))
-  (declare-const v225 Bool) ; SourceLoc { file: -1, line1: 923, char1: 0, line2: 0, char2: 0 }
-  (define-const v226 (ite v225 |Exception_SPAlignment| v224))
-  (declare-const v227 Bool) ; SourceLoc { file: -1, line1: 923, char1: 0, line2: 0, char2: 0 }
-  (define-const v228 (ite v227 |Exception_FPTrappedException| v226))
-  (declare-const v229 Bool) ; SourceLoc { file: -1, line1: 923, char1: 0, line2: 0, char2: 0 }
-  (define-const v230 (ite v229 |Exception_SError| v228))
-  (declare-const v231 Bool) ; SourceLoc { file: -1, line1: 923, char1: 0, line2: 0, char2: 0 }
-  (define-const v232 (ite v231 |Exception_Breakpoint| v230))
-  (declare-const v233 Bool) ; SourceLoc { file: -1, line1: 923, char1: 0, line2: 0, char2: 0 }
-  (define-const v234 (ite v233 |Exception_SoftwareStep| v232))
-  (declare-const v235 Bool) ; SourceLoc { file: -1, line1: 923, char1: 0, line2: 0, char2: 0 }
-  (define-const v236 (ite v235 |Exception_Watchpoint| v234))
-  (declare-const v237 Bool) ; SourceLoc { file: -1, line1: 923, char1: 0, line2: 0, char2: 0 }
-  (define-const v238 (ite v237 |Exception_NV2Watchpoint| v236))
-  (declare-const v239 Bool) ; SourceLoc { file: -1, line1: 923, char1: 0, line2: 0, char2: 0 }
-  (define-const v240 (ite v239 |Exception_SoftwareBreakpoint| v238))
-  (declare-const v241 Bool) ; SourceLoc { file: -1, line1: 923, char1: 0, line2: 0, char2: 0 }
-  (define-const v242 (ite v241 |Exception_VectorCatch| v240))
-  (declare-const v243 Bool) ; SourceLoc { file: -1, line1: 923, char1: 0, line2: 0, char2: 0 }
-  (define-const v244 (ite v243 |Exception_IRQ| v242))
-  (declare-const v245 Bool) ; SourceLoc { file: -1, line1: 923, char1: 0, line2: 0, char2: 0 }
-  (define-const v246 (ite v245 |Exception_SVEAccessTrap| v244))
-  (declare-const v247 Bool) ; SourceLoc { file: -1, line1: 923, char1: 0, line2: 0, char2: 0 }
-  (define-const v248 (ite v247 |Exception_SMEAccessTrap| v246))
-  (declare-const v249 Bool) ; SourceLoc { file: -1, line1: 923, char1: 0, line2: 0, char2: 0 }
-  (define-const v250 (ite v249 |Exception_TSTARTAccessTrap| v248))
-  (declare-const v251 Bool) ; SourceLoc { file: -1, line1: 923, char1: 0, line2: 0, char2: 0 }
-  (define-const v252 (ite v251 |Exception_GPC| v250))
-  (declare-const v253 Bool) ; SourceLoc { file: -1, line1: 923, char1: 0, line2: 0, char2: 0 }
-  (define-const v254 (ite v253 |Exception_BranchTarget| v252))
-  (declare-const v255 Bool) ; SourceLoc { file: -1, line1: 923, char1: 0, line2: 0, char2: 0 }
-  (define-const v256 (ite v255 |Exception_MemCpyMemSet| v254))
-  (declare-const v257 Bool) ; SourceLoc { file: -1, line1: 923, char1: 0, line2: 0, char2: 0 }
-  (define-const v258 (ite v257 |Exception_FIQ| v256))
-  (declare-const v259 Bool) ; SourceLoc { file: -1, line1: 923, char1: 0, line2: 0, char2: 0 }
-  (define-const v260 (ite v259 |Exception_Uncategorized| v258))
-  (declare-const v261 (_ BitVec 25)) ; SourceLoc { file: -1, line1: 930, char1: 0, line2: 0, char2: 0 }
-  (declare-const v262 (_ BitVec 5)) ; SourceLoc { file: -1, line1: 936, char1: 0, line2: 0, char2: 0 }
   (define-enum |PASpace| 4 (|PAS_NonSecure| |PAS_Secure| |PAS_Root| |PAS_Realm|))
-  (declare-const v268 Bool) ; SourceLoc { file: -1, line1: 136, char1: 0, line2: 0, char2: 0 }
-  (define-const v269 (ite v268 |PAS_Root| |PAS_Secure|))
-  (declare-const v270 Bool) ; SourceLoc { file: -1, line1: 136, char1: 0, line2: 0, char2: 0 }
-  (define-const v271 (ite v270 |PAS_Realm| v269))
-  (declare-const v272 Bool) ; SourceLoc { file: -1, line1: 136, char1: 0, line2: 0, char2: 0 }
-  (define-const v273 (ite v272 |PAS_NonSecure| v271))
-  (declare-const v274 (_ BitVec 52)) ; SourceLoc { file: -1, line1: 143, char1: 0, line2: 0, char2: 0 }
-  (declare-const v275 (_ BitVec 64)) ; SourceLoc { file: -1, line1: 944, char1: 0, line2: 0, char2: 0 }
-  (declare-const v276 Bool) ; SourceLoc { file: -1, line1: 947, char1: 0, line2: 0, char2: 0 }
-  (declare-const v277 (_ BitVec 1)) ; SourceLoc { file: -1, line1: 952, char1: 0, line2: 0, char2: 0 }
-  (declare-const v278 (_ BitVec 52)) ; SourceLoc { file: -1, line1: 958, char1: 0, line2: 0, char2: 0 }
-  (declare-const v279 Bool) ; SourceLoc { file: -1, line1: 961, char1: 0, line2: 0, char2: 0 }
   (define-enum |AccType| 29 (|AccType_NORMAL| |AccType_STREAM| |AccType_VEC| |AccType_VECSTREAM| |AccType_SVE| |AccType_SVESTREAM| |AccType_SME| |AccType_SMESTREAM| |AccType_UNPRIVSTREAM| |AccType_A32LSMD| |AccType_ATOMIC| |AccType_ATOMICRW| |AccType_ORDERED| |AccType_ORDEREDRW| |AccType_ORDEREDATOMIC| |AccType_ORDEREDATOMICRW| |AccType_ATOMICLS64| |AccType_LIMITEDORDERED| |AccType_UNPRIV| |AccType_IFETCH| |AccType_TTW| |AccType_NONFAULT| |AccType_CNOTFIRST| |AccType_NV2REGISTER| |AccType_DC| |AccType_IC| |AccType_DCZVA| |AccType_ATPAN| |AccType_AT|))
-  (declare-const v310 Bool) ; SourceLoc { file: -1, line1: 923, char1: 0, line2: 0, char2: 0 }
-  (define-const v311 (ite v310 |Exception_CP15RTTrap| |Exception_WFxTrap|))
-  (declare-const v312 Bool) ; SourceLoc { file: -1, line1: 923, char1: 0, line2: 0, char2: 0 }
-  (define-const v313 (ite v312 |Exception_CP15RRTTrap| v311))
-  (declare-const v314 Bool) ; SourceLoc { file: -1, line1: 923, char1: 0, line2: 0, char2: 0 }
-  (define-const v315 (ite v314 |Exception_CP14RTTrap| v313))
-  (declare-const v316 Bool) ; SourceLoc { file: -1, line1: 923, char1: 0, line2: 0, char2: 0 }
-  (define-const v317 (ite v316 |Exception_CP14DTTrap| v315))
-  (declare-const v318 Bool) ; SourceLoc { file: -1, line1: 923, char1: 0, line2: 0, char2: 0 }
-  (define-const v319 (ite v318 |Exception_CP14RRTTrap| v317))
-  (declare-const v320 Bool) ; SourceLoc { file: -1, line1: 923, char1: 0, line2: 0, char2: 0 }
-  (define-const v321 (ite v320 |Exception_AdvSIMDFPAccessTrap| v319))
-  (declare-const v322 Bool) ; SourceLoc { file: -1, line1: 923, char1: 0, line2: 0, char2: 0 }
-  (define-const v323 (ite v322 |Exception_FPIDTrap| v321))
-  (declare-const v324 Bool) ; SourceLoc { file: -1, line1: 923, char1: 0, line2: 0, char2: 0 }
-  (define-const v325 (ite v324 |Exception_LDST64BTrap| v323))
-  (declare-const v326 Bool) ; SourceLoc { file: -1, line1: 923, char1: 0, line2: 0, char2: 0 }
-  (define-const v327 (ite v326 |Exception_PACTrap| v325))
-  (declare-const v328 Bool) ; SourceLoc { file: -1, line1: 923, char1: 0, line2: 0, char2: 0 }
-  (define-const v329 (ite v328 |Exception_IllegalState| v327))
-  (declare-const v330 Bool) ; SourceLoc { file: -1, line1: 923, char1: 0, line2: 0, char2: 0 }
-  (define-const v331 (ite v330 |Exception_SupervisorCall| v329))
-  (declare-const v332 Bool) ; SourceLoc { file: -1, line1: 923, char1: 0, line2: 0, char2: 0 }
-  (define-const v333 (ite v332 |Exception_HypervisorCall| v331))
-  (declare-const v334 Bool) ; SourceLoc { file: -1, line1: 923, char1: 0, line2: 0, char2: 0 }
-  (define-const v335 (ite v334 |Exception_MonitorCall| v333))
-  (declare-const v336 Bool) ; SourceLoc { file: -1, line1: 923, char1: 0, line2: 0, char2: 0 }
-  (define-const v337 (ite v336 |Exception_SystemRegisterTrap| v335))
-  (declare-const v338 Bool) ; SourceLoc { file: -1, line1: 923, char1: 0, line2: 0, char2: 0 }
-  (define-const v339 (ite v338 |Exception_ERetTrap| v337))
-  (declare-const v340 Bool) ; SourceLoc { file: -1, line1: 923, char1: 0, line2: 0, char2: 0 }
-  (define-const v341 (ite v340 |Exception_InstructionAbort| v339))
-  (declare-const v342 Bool) ; SourceLoc { file: -1, line1: 923, char1: 0, line2: 0, char2: 0 }
-  (define-const v343 (ite v342 |Exception_PCAlignment| v341))
-  (declare-const v344 Bool) ; SourceLoc { file: -1, line1: 923, char1: 0, line2: 0, char2: 0 }
-  (define-const v345 (ite v344 |Exception_DataAbort| v343))
-  (declare-const v346 Bool) ; SourceLoc { file: -1, line1: 923, char1: 0, line2: 0, char2: 0 }
-  (define-const v347 (ite v346 |Exception_NV2DataAbort| v345))
-  (declare-const v348 Bool) ; SourceLoc { file: -1, line1: 923, char1: 0, line2: 0, char2: 0 }
-  (define-const v349 (ite v348 |Exception_PACFail| v347))
-  (declare-const v350 Bool) ; SourceLoc { file: -1, line1: 923, char1: 0, line2: 0, char2: 0 }
-  (define-const v351 (ite v350 |Exception_SPAlignment| v349))
-  (declare-const v352 Bool) ; SourceLoc { file: -1, line1: 923, char1: 0, line2: 0, char2: 0 }
-  (define-const v353 (ite v352 |Exception_FPTrappedException| v351))
-  (declare-const v354 Bool) ; SourceLoc { file: -1, line1: 923, char1: 0, line2: 0, char2: 0 }
-  (define-const v355 (ite v354 |Exception_SError| v353))
-  (declare-const v356 Bool) ; SourceLoc { file: -1, line1: 923, char1: 0, line2: 0, char2: 0 }
-  (define-const v357 (ite v356 |Exception_Breakpoint| v355))
-  (declare-const v358 Bool) ; SourceLoc { file: -1, line1: 923, char1: 0, line2: 0, char2: 0 }
-  (define-const v359 (ite v358 |Exception_SoftwareStep| v357))
-  (declare-const v360 Bool) ; SourceLoc { file: -1, line1: 923, char1: 0, line2: 0, char2: 0 }
-  (define-const v361 (ite v360 |Exception_Watchpoint| v359))
-  (declare-const v362 Bool) ; SourceLoc { file: -1, line1: 923, char1: 0, line2: 0, char2: 0 }
-  (define-const v363 (ite v362 |Exception_NV2Watchpoint| v361))
-  (declare-const v364 Bool) ; SourceLoc { file: -1, line1: 923, char1: 0, line2: 0, char2: 0 }
-  (define-const v365 (ite v364 |Exception_SoftwareBreakpoint| v363))
-  (declare-const v366 Bool) ; SourceLoc { file: -1, line1: 923, char1: 0, line2: 0, char2: 0 }
-  (define-const v367 (ite v366 |Exception_VectorCatch| v365))
-  (declare-const v368 Bool) ; SourceLoc { file: -1, line1: 923, char1: 0, line2: 0, char2: 0 }
-  (define-const v369 (ite v368 |Exception_IRQ| v367))
-  (declare-const v370 Bool) ; SourceLoc { file: -1, line1: 923, char1: 0, line2: 0, char2: 0 }
-  (define-const v371 (ite v370 |Exception_SVEAccessTrap| v369))
-  (declare-const v372 Bool) ; SourceLoc { file: -1, line1: 923, char1: 0, line2: 0, char2: 0 }
-  (define-const v373 (ite v372 |Exception_SMEAccessTrap| v371))
-  (declare-const v374 Bool) ; SourceLoc { file: -1, line1: 923, char1: 0, line2: 0, char2: 0 }
-  (define-const v375 (ite v374 |Exception_TSTARTAccessTrap| v373))
-  (declare-const v376 Bool) ; SourceLoc { file: -1, line1: 923, char1: 0, line2: 0, char2: 0 }
-  (define-const v377 (ite v376 |Exception_GPC| v375))
-  (declare-const v378 Bool) ; SourceLoc { file: -1, line1: 923, char1: 0, line2: 0, char2: 0 }
-  (define-const v379 (ite v378 |Exception_BranchTarget| v377))
-  (declare-const v380 Bool) ; SourceLoc { file: -1, line1: 923, char1: 0, line2: 0, char2: 0 }
-  (define-const v381 (ite v380 |Exception_MemCpyMemSet| v379))
-  (declare-const v382 Bool) ; SourceLoc { file: -1, line1: 923, char1: 0, line2: 0, char2: 0 }
-  (define-const v383 (ite v382 |Exception_FIQ| v381))
-  (declare-const v384 Bool) ; SourceLoc { file: -1, line1: 923, char1: 0, line2: 0, char2: 0 }
-  (define-const v385 (ite v384 |Exception_Uncategorized| v383))
-  (declare-const v386 (_ BitVec 25)) ; SourceLoc { file: -1, line1: 930, char1: 0, line2: 0, char2: 0 }
-  (declare-const v387 (_ BitVec 5)) ; SourceLoc { file: -1, line1: 936, char1: 0, line2: 0, char2: 0 }
-  (declare-const v388 Bool) ; SourceLoc { file: -1, line1: 136, char1: 0, line2: 0, char2: 0 }
-  (define-const v389 (ite v388 |PAS_Root| |PAS_Secure|))
-  (declare-const v390 Bool) ; SourceLoc { file: -1, line1: 136, char1: 0, line2: 0, char2: 0 }
-  (define-const v391 (ite v390 |PAS_Realm| v389))
-  (declare-const v392 Bool) ; SourceLoc { file: -1, line1: 136, char1: 0, line2: 0, char2: 0 }
-  (define-const v393 (ite v392 |PAS_NonSecure| v391))
-  (declare-const v394 (_ BitVec 52)) ; SourceLoc { file: -1, line1: 143, char1: 0, line2: 0, char2: 0 }
-  (declare-const v395 (_ BitVec 64)) ; SourceLoc { file: -1, line1: 944, char1: 0, line2: 0, char2: 0 }
-  (declare-const v396 Bool) ; SourceLoc { file: -1, line1: 947, char1: 0, line2: 0, char2: 0 }
-  (declare-const v397 (_ BitVec 1)) ; SourceLoc { file: -1, line1: 952, char1: 0, line2: 0, char2: 0 }
-  (declare-const v398 (_ BitVec 52)) ; SourceLoc { file: -1, line1: 958, char1: 0, line2: 0, char2: 0 }
-  (declare-const v399 Bool) ; SourceLoc { file: -1, line1: 961, char1: 0, line2: 0, char2: 0 }
-  (declare-const v400 Bool) ; SourceLoc { file: -1, line1: 136, char1: 0, line2: 0, char2: 0 }
-  (define-const v401 (ite v400 |PAS_Root| |PAS_Secure|))
-  (declare-const v402 Bool) ; SourceLoc { file: -1, line1: 136, char1: 0, line2: 0, char2: 0 }
-  (define-const v403 (ite v402 |PAS_Realm| v401))
-  (declare-const v404 Bool) ; SourceLoc { file: -1, line1: 136, char1: 0, line2: 0, char2: 0 }
-  (define-const v405 (ite v404 |PAS_NonSecure| v403))
-  (declare-const v406 (_ BitVec 52)) ; SourceLoc { file: 5, line1: 334, char1: 29, line2: 334, char2: 38 }
   (define-enum |Fault| 23 (|Fault_None| |Fault_AccessFlag| |Fault_Alignment| |Fault_Background| |Fault_Domain| |Fault_Permission| |Fault_Translation| |Fault_AddressSize| |Fault_SyncExternal| |Fault_SyncExternalOnWalk| |Fault_SyncParity| |Fault_SyncParityOnWalk| |Fault_GPCFOnWalk| |Fault_GPCFOnOutput| |Fault_AsyncParity| |Fault_AsyncExternal| |Fault_Debug| |Fault_TLBConflict| |Fault_BranchTarget| |Fault_HWUpdateAccessFlag| |Fault_Lockdown| |Fault_Exclusive| |Fault_ICacheMaint|))
   (define-enum |GPCF| 5 (|GPCF_None| |GPCF_AddressSize| |GPCF_Walk| |GPCF_EABT| |GPCF_Fail|))
-  (declare-const v437 (_ BitVec 6)) ; SourceLoc { file: 9, line1: 4545, char1: 23, line2: 4545, char2: 32 }
-  (read-reg |PSTATE| ((_ field |EL|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b0) (|F| #b1) (|SS| v21) (|V| v26) (|GE| v12) (|TCO| #b0) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| #b0) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b0) (|SSBS| #b0) (|IL| #b0) (|EL| #b01) (|SP| #x1) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| #b0) (|SM| #b0)))
-  (read-reg |PSTATE| ((_ field |EL|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b0) (|F| #b1) (|SS| v21) (|V| v26) (|GE| v12) (|TCO| #b0) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| #b0) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b0) (|SSBS| #b0) (|IL| #b0) (|EL| #b01) (|SP| #x1) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| #b0) (|SM| #b0)))
-  (abstract-primop |sail_take_exception| (_ unit) (|Some| (_ struct (|level| (_ bv0 128)) (|extflag| #b1) (|debugmoe| #x0) (|write| false) (|ipaddress| (_ struct (|paspace| |PAS_NonSecure|) (|address| #x0000000000000))) (|gpcf| (_ struct (|gpf| |GPCF_None|) (|level| (_ bv0 128)))) (|secondstage| false) (|s2fs1walk| false) (|domain| #x0) (|paddress| (_ struct (|address| #x0000000000000) (|paspace| |PAS_NonSecure|))) (|statuscode| |Fault_Translation|) (|errortype| #b00) (|acctype| |AccType_NORMAL|) (|gpcfs2walk| false))))
-  (declare-const v438 Bool) ; SourceLoc { file: 9, line1: 4176, char1: 22, line2: 4176, char2: 31 }
-  (declare-const v439 (_ BitVec 64)) ; SourceLoc { file: 9, line1: 231, char1: 19, line2: 231, char2: 28 }
-  (read-reg |__highest_el_aarch32| nil false)
-  (read-reg |SCR_EL3| nil #x0000000000000000)
-  (declare-const v440 Bool) ; SourceLoc { file: 9, line1: 218, char1: 21, line2: 218, char2: 30 }
-  (declare-const v441 Bool) ; SourceLoc { file: 9, line1: 219, char1: 19, line2: 219, char2: 28 }
-  (read-reg |PSTATE| ((_ field |EL|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b0) (|F| #b1) (|SS| v21) (|V| v26) (|GE| v12) (|TCO| #b0) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| #b0) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b0) (|SSBS| #b0) (|IL| #b0) (|EL| #b01) (|SP| #x1) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| #b0) (|SM| #b0)))
-  (declare-const v442 Bool) ; SourceLoc { file: 9, line1: 4179, char1: 25, line2: 4179, char2: 34 }
-  (declare-const v443 (_ BitVec 64)) ; SourceLoc { file: 9, line1: 4005, char1: 19, line2: 4005, char2: 28 }
+  (abstract-primop |sail_take_exception| (_ unit) (|Some| (_ struct (|acctype| |AccType_NORMAL|) (|errortype| #b00) (|debugmoe| #x0) (|write| false) (|s2fs1walk| false) (|paddress| (_ struct (|paspace| |PAS_NonSecure|) (|address| #x0000000000000))) (|extflag| #b1) (|level| (_ bv0 128)) (|ipaddress| (_ struct (|address| #x0000000000000) (|paspace| |PAS_NonSecure|))) (|gpcf| (_ struct (|level| (_ bv0 128)) (|gpf| |GPCF_None|))) (|secondstage| false) (|gpcfs2walk| false) (|domain| #x0) (|statuscode| |Fault_Translation|))))
   (read-reg |SCTLR_EL1| nil #x0000000004000000)
-  (declare-const v444 (_ BitVec 64)) ; SourceLoc { file: 9, line1: 231, char1: 19, line2: 231, char2: 28 }
-  (read-reg |__highest_el_aarch32| nil false)
-  (read-reg |SCR_EL3| nil #x0000000000000000)
-  (declare-const v445 Bool) ; SourceLoc { file: 9, line1: 218, char1: 21, line2: 218, char2: 30 }
-  (declare-const v446 Bool) ; SourceLoc { file: 9, line1: 219, char1: 19, line2: 219, char2: 28 }
-  (read-reg |SCR_EL3| nil #x0000000000000000)
-  (read-reg |SCR_EL3| nil #x0000000000000000)
-  (read-reg |TSTATE| ((_ field |depth|)) (_ struct (|D| v30) (|FPSR| v34) (|FFR| v32) (|nPC| v119) (|depth| (_ bv0 128)) (|ICC_PMR_EL1| v36) (|F| v31) (|I| v35) (|FPCR| v33) (|X| (_ vec v55 v56 v57 v58 v59 v60 v61 v62 v63 v64 v65 v66 v67 v68 v69 v70 v71 v72 v73 v74 v75 v76 v77 v78 v79 v80 v81 v82 v83 v84 v85)) (|A| v29) (|P| (_ vec v37 v38 v39 v40 v41 v42 v43 v44 v45 v46 v47 v48 v49 v50 v51 v52)) (|nzcv| v120) (|Z| (_ vec v86 v87 v88 v89 v90 v91 v92 v93 v94 v95 v96 v97 v98 v99 v100 v101 v102 v103 v104 v105 v106 v107 v108 v109 v110 v111 v112 v113 v114 v115 v116 v117)) (|SP| v54) (|Rt| v53)))
-  (read-reg |PSTATE| ((_ field |nRW|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b0) (|F| #b1) (|SS| v21) (|V| v26) (|GE| v12) (|TCO| #b0) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| #b0) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b0) (|SSBS| #b0) (|IL| #b0) (|EL| #b01) (|SP| #x1) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| #b0) (|SM| #b0)))
-  (read-reg |__highest_el_aarch32| nil false)
-  (declare-const v447 (_ BitVec 128)) ; SourceLoc { file: 9, line1: 3264, char1: 15, line2: 3264, char2: 24 }
-  (read-reg |PSTATE| ((_ field |EL|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b0) (|F| #b1) (|SS| v21) (|V| v26) (|GE| v12) (|TCO| #b0) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| #b0) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b0) (|SSBS| #b0) (|IL| #b0) (|EL| #b01) (|SP| #x1) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| #b0) (|SM| #b0)))
+  (read-reg |TSTATE| ((_ field |depth|)) (_ struct (|depth| (_ bv0 128))))
+  (read-reg |PSTATE| ((_ field |nRW|)) (_ struct (|nRW| #b0)))
   (read-reg |SMCR_EL1| nil #x0000000000000000)
-  (read-reg |PSTATE| ((_ field |EL|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b0) (|F| #b1) (|SS| v21) (|V| v26) (|GE| v12) (|TCO| #b0) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| #b0) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b0) (|SSBS| #b0) (|IL| #b0) (|EL| #b01) (|SP| #x1) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| #b0) (|SM| #b0)))
-  (read-reg |PSTATE| ((_ field |EL|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b0) (|F| #b1) (|SS| v21) (|V| v26) (|GE| v12) (|TCO| #b0) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| #b0) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b0) (|SSBS| #b0) (|IL| #b0) (|EL| #b01) (|SP| #x1) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| #b0) (|SM| #b0)))
-  (read-reg |PSTATE| ((_ field |EL|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b0) (|F| #b1) (|SS| v21) (|V| v26) (|GE| v12) (|TCO| #b0) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| #b0) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b0) (|SSBS| #b0) (|IL| #b0) (|EL| #b01) (|SP| #x1) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| #b0) (|SM| #b0)))
-  (read-reg |PSTATE| ((_ field |EL|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b0) (|F| #b1) (|SS| v21) (|V| v26) (|GE| v12) (|TCO| #b0) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| #b0) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b0) (|SSBS| #b0) (|IL| #b0) (|EL| #b01) (|SP| #x1) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| #b0) (|SM| #b0)))
-  (declare-const v448 (_ BitVec 64)) ; SourceLoc { file: 9, line1: 231, char1: 19, line2: 231, char2: 28 }
-  (read-reg |__highest_el_aarch32| nil false)
-  (read-reg |SCR_EL3| nil #x0000000000000000)
-  (declare-const v449 (_ BitVec 64)) ; SourceLoc { file: 9, line1: 231, char1: 19, line2: 231, char2: 28 }
-  (read-reg |__highest_el_aarch32| nil false)
-  (read-reg |SCR_EL3| nil #x0000000000000000)
-  (declare-const v450 Bool) ; SourceLoc { file: 9, line1: 218, char1: 21, line2: 218, char2: 30 }
-  (declare-const v451 Bool) ; SourceLoc { file: 9, line1: 219, char1: 19, line2: 219, char2: 28 }
-  (read-reg |SCR_EL3| nil #x0000000000000000)
-  (read-reg |PSTATE| ((_ field |EL|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b0) (|F| #b1) (|SS| v21) (|V| v26) (|GE| v12) (|TCO| #b0) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| #b0) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b0) (|SSBS| #b0) (|IL| #b0) (|EL| #b01) (|SP| #x1) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| #b0) (|SM| #b0)))
   (read-reg |SMCR_EL3| nil #x0000000000000000)
   (read-reg |__max_implemented_smeveclen| nil (_ bv512 128))
   (read-reg |__has_sme| nil false)
-  (declare-const v452 (_ BitVec 128)) ; SourceLoc { file: 9, line1: 3208, char1: 15, line2: 3208, char2: 24 }
-  (read-reg |PSTATE| ((_ field |EL|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b0) (|F| #b1) (|SS| v21) (|V| v26) (|GE| v12) (|TCO| #b0) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| #b0) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b0) (|SSBS| #b0) (|IL| #b0) (|EL| #b01) (|SP| #x1) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| #b0) (|SM| #b0)))
   (read-reg |ZCR_EL1| nil #x0000000000000000)
-  (read-reg |PSTATE| ((_ field |EL|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b0) (|F| #b1) (|SS| v21) (|V| v26) (|GE| v12) (|TCO| #b0) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| #b0) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b0) (|SSBS| #b0) (|IL| #b0) (|EL| #b01) (|SP| #x1) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| #b0) (|SM| #b0)))
-  (read-reg |PSTATE| ((_ field |EL|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b0) (|F| #b1) (|SS| v21) (|V| v26) (|GE| v12) (|TCO| #b0) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| #b0) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b0) (|SSBS| #b0) (|IL| #b0) (|EL| #b01) (|SP| #x1) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| #b0) (|SM| #b0)))
-  (read-reg |PSTATE| ((_ field |EL|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b0) (|F| #b1) (|SS| v21) (|V| v26) (|GE| v12) (|TCO| #b0) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| #b0) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b0) (|SSBS| #b0) (|IL| #b0) (|EL| #b01) (|SP| #x1) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| #b0) (|SM| #b0)))
-  (read-reg |PSTATE| ((_ field |EL|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b0) (|F| #b1) (|SS| v21) (|V| v26) (|GE| v12) (|TCO| #b0) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| #b0) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b0) (|SSBS| #b0) (|IL| #b0) (|EL| #b01) (|SP| #x1) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| #b0) (|SM| #b0)))
-  (declare-const v453 (_ BitVec 64)) ; SourceLoc { file: 9, line1: 231, char1: 19, line2: 231, char2: 28 }
-  (read-reg |__highest_el_aarch32| nil false)
-  (read-reg |SCR_EL3| nil #x0000000000000000)
-  (declare-const v454 (_ BitVec 64)) ; SourceLoc { file: 9, line1: 231, char1: 19, line2: 231, char2: 28 }
-  (read-reg |__highest_el_aarch32| nil false)
-  (read-reg |SCR_EL3| nil #x0000000000000000)
-  (declare-const v455 Bool) ; SourceLoc { file: 9, line1: 218, char1: 21, line2: 218, char2: 30 }
-  (declare-const v456 Bool) ; SourceLoc { file: 9, line1: 219, char1: 19, line2: 219, char2: 28 }
-  (read-reg |SCR_EL3| nil #x0000000000000000)
-  (read-reg |PSTATE| ((_ field |EL|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b0) (|F| #b1) (|SS| v21) (|V| v26) (|GE| v12) (|TCO| #b0) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| #b0) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b0) (|SSBS| #b0) (|IL| #b0) (|EL| #b01) (|SP| #x1) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| #b0) (|SM| #b0)))
   (read-reg |ZCR_EL3| nil #x0000000000000000)
-  (declare-const v457 Bool) ; SourceLoc { file: 9, line1: 3894, char1: 27, line2: 3894, char2: 36 }
-  (read-reg |PSTATE| ((_ field |EL|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b0) (|F| #b1) (|SS| v21) (|V| v26) (|GE| v12) (|TCO| #b0) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| #b0) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b0) (|SSBS| #b0) (|IL| #b0) (|EL| #b01) (|SP| #x1) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| #b0) (|SM| #b0)))
-  (read-reg |PSTATE| ((_ field |EL|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b0) (|F| #b1) (|SS| v21) (|V| v26) (|GE| v12) (|TCO| #b0) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| #b0) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b0) (|SSBS| #b0) (|IL| #b0) (|EL| #b01) (|SP| #x1) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| #b0) (|SM| #b0)))
-  (read-reg |PSTATE| ((_ field |SP|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b0) (|F| #b1) (|SS| v21) (|V| v26) (|GE| v12) (|TCO| #b0) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| #b0) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b0) (|SSBS| #b0) (|IL| #b0) (|EL| #b01) (|SP| #x1) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| #b0) (|SM| #b0)))
+  (read-reg |PSTATE| ((_ field |SP|)) (_ struct (|SP| #x1)))
   (define-enum |ExceptionalOccurrenceTargetState| 3 (|AArch32_NonDebugState| |AArch64_NonDebugState| |DebugState|))
-  (read-reg |PSTATE| ((_ field |nRW|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b0) (|F| #b1) (|SS| v21) (|V| v26) (|GE| v12) (|TCO| #b0) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| #b0) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b0) (|SSBS| #b0) (|IL| #b0) (|EL| #b01) (|SP| #x1) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| #b0) (|SM| #b0)))
-  (read-reg |__highest_el_aarch32| nil false)
-  (read-reg |PSTATE| ((_ field |N|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b0) (|F| #b1) (|SS| v21) (|V| v26) (|GE| v12) (|TCO| #b0) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| #b0) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b0) (|SSBS| #b0) (|IL| #b0) (|EL| #b01) (|SP| #x1) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| #b0) (|SM| #b0)))
-  (read-reg |PSTATE| ((_ field |Z|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b0) (|F| #b1) (|SS| v21) (|V| v26) (|GE| v12) (|TCO| #b0) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| #b0) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b0) (|SSBS| #b0) (|IL| #b0) (|EL| #b01) (|SP| #x1) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| #b0) (|SM| #b0)))
-  (read-reg |PSTATE| ((_ field |C|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b0) (|F| #b1) (|SS| v21) (|V| v26) (|GE| v12) (|TCO| #b0) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| #b0) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b0) (|SSBS| #b0) (|IL| #b0) (|EL| #b01) (|SP| #x1) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| #b0) (|SM| #b0)))
-  (read-reg |PSTATE| ((_ field |V|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b0) (|F| #b1) (|SS| v21) (|V| v26) (|GE| v12) (|TCO| #b0) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| #b0) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b0) (|SSBS| #b0) (|IL| #b0) (|EL| #b01) (|SP| #x1) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| #b0) (|SM| #b0)))
-  (define-const v462 (concat v8 v26))
-  (define-const v463 (concat v5 v462))
-  (define-const v464 (concat v17 v463))
-  (define-const v465 (bvor (bvand #x0000000000000000 (bvnot (bvshl #x000000000000000f ((_ extract 63 0) #x0000000000000000000000000000001c)))) (bvshl ((_ zero_extend 60) v464) ((_ extract 63 0) #x0000000000000000000000000000001c))))
-  (read-reg |PSTATE| ((_ field |PAN|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b0) (|F| #b1) (|SS| v21) (|V| v26) (|GE| v12) (|TCO| #b0) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| #b0) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b0) (|SSBS| #b0) (|IL| #b0) (|EL| #b01) (|SP| #x1) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| #b0) (|SM| #b0)))
-  (define-const v466 (bvor (bvand v465 (bvnot (bvshl #x0000000000000001 ((_ extract 63 0) #x00000000000000000000000000000016)))) (bvshl ((_ zero_extend 63) #b0) ((_ extract 63 0) #x00000000000000000000000000000016))))
-  (read-reg |PSTATE| ((_ field |IL|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b0) (|F| #b1) (|SS| v21) (|V| v26) (|GE| v12) (|TCO| #b0) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| #b0) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b0) (|SSBS| #b0) (|IL| #b0) (|EL| #b01) (|SP| #x1) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| #b0) (|SM| #b0)))
-  (define-const v467 (bvor (bvand v466 (bvnot (bvshl #x0000000000000001 ((_ extract 63 0) #x00000000000000000000000000000014)))) (bvshl ((_ zero_extend 63) #b0) ((_ extract 63 0) #x00000000000000000000000000000014))))
-  (read-reg |PSTATE| ((_ field |nRW|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b0) (|F| #b1) (|SS| v21) (|V| v26) (|GE| v12) (|TCO| #b0) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| #b0) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b0) (|SSBS| #b0) (|IL| #b0) (|EL| #b01) (|SP| #x1) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| #b0) (|SM| #b0)))
+  (read-reg |PSTATE| ((_ field |N|)) (_ struct (|N| v17)))
+  (read-reg |PSTATE| ((_ field |Z|)) (_ struct (|Z| v5)))
+  (read-reg |PSTATE| ((_ field |C|)) (_ struct (|C| v8)))
+  (read-reg |PSTATE| ((_ field |V|)) (_ struct (|V| v26)))
+  (read-reg |PSTATE| ((_ field |PAN|)) (_ struct (|PAN| #b0)))
+  (read-reg |PSTATE| ((_ field |IL|)) (_ struct (|IL| #b0)))
   (read-reg |__mte_implemented| nil #x0)
-  (read-reg |__mte_implemented| nil #x0)
-  (read-reg |PSTATE| ((_ field |DIT|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b0) (|F| #b1) (|SS| v21) (|V| v26) (|GE| v12) (|TCO| #b0) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| #b0) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b0) (|SSBS| #b0) (|IL| #b0) (|EL| #b01) (|SP| #x1) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| #b0) (|SM| #b0)))
-  (define-const v468 (bvor (bvand v467 (bvnot (bvshl #x0000000000000001 ((_ extract 63 0) #x00000000000000000000000000000018)))) (bvshl ((_ zero_extend 63) #b0) ((_ extract 63 0) #x00000000000000000000000000000018))))
-  (read-reg |PSTATE| ((_ field |UAO|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b0) (|F| #b1) (|SS| v21) (|V| v26) (|GE| v12) (|TCO| #b0) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| #b0) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b0) (|SSBS| #b0) (|IL| #b0) (|EL| #b01) (|SP| #x1) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| #b0) (|SM| #b0)))
-  (define-const v469 (bvor (bvand v468 (bvnot (bvshl #x0000000000000001 ((_ extract 63 0) #x00000000000000000000000000000017)))) (bvshl ((_ zero_extend 63) #b0) ((_ extract 63 0) #x00000000000000000000000000000017))))
-  (read-reg |PSTATE| ((_ field |SS|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b0) (|F| #b1) (|SS| v21) (|V| v26) (|GE| v12) (|TCO| #b0) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| #b0) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b0) (|SSBS| #b0) (|IL| #b0) (|EL| #b01) (|SP| #x1) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| #b0) (|SM| #b0)))
-  (define-const v470 ((_ extract 0 0) (bvlshr v21 ((_ extract 0 0) #x00000000000000000000000000000000))))
-  (define-const v471 (bvor (bvand v469 (bvnot (bvshl #x0000000000000001 ((_ extract 63 0) #x00000000000000000000000000000015)))) (bvshl ((_ zero_extend 63) v470) ((_ extract 63 0) #x00000000000000000000000000000015))))
-  (read-reg |PSTATE| ((_ field |ALLINT|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b0) (|F| #b1) (|SS| v21) (|V| v26) (|GE| v12) (|TCO| #b0) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| #b0) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b0) (|SSBS| #b0) (|IL| #b0) (|EL| #b01) (|SP| #x1) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| #b0) (|SM| #b0)))
-  (define-const v472 (bvor (bvand v471 (bvnot (bvshl #x0000000000000001 ((_ extract 63 0) #x0000000000000000000000000000000d)))) (bvshl ((_ zero_extend 63) #b0) ((_ extract 63 0) #x0000000000000000000000000000000d))))
-  (read-reg |PSTATE| ((_ field |SSBS|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b0) (|F| #b1) (|SS| v21) (|V| v26) (|GE| v12) (|TCO| #b0) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| #b0) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b0) (|SSBS| #b0) (|IL| #b0) (|EL| #b01) (|SP| #x1) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| #b0) (|SM| #b0)))
-  (define-const v473 (bvor (bvand v472 (bvnot (bvshl #x0000000000000001 ((_ extract 63 0) #x0000000000000000000000000000000c)))) (bvshl ((_ zero_extend 63) #b0) ((_ extract 63 0) #x0000000000000000000000000000000c))))
-  (read-reg |PSTATE| ((_ field |BTYPE|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b0) (|F| #b1) (|SS| v21) (|V| v26) (|GE| v12) (|TCO| #b0) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| #b0) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b0) (|SSBS| #b0) (|IL| #b0) (|EL| #b01) (|SP| #x1) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| #b0) (|SM| #b0)))
-  (define-const v474 (bvor (bvand v473 (bvnot (bvshl #x0000000000000003 ((_ extract 63 0) #x0000000000000000000000000000000a)))) (bvshl ((_ zero_extend 62) #b00) ((_ extract 63 0) #x0000000000000000000000000000000a))))
-  (read-reg |PSTATE| ((_ field |D|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b0) (|F| #b1) (|SS| v21) (|V| v26) (|GE| v12) (|TCO| #b0) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| #b0) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b0) (|SSBS| #b0) (|IL| #b0) (|EL| #b01) (|SP| #x1) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| #b0) (|SM| #b0)))
-  (read-reg |PSTATE| ((_ field |A|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b0) (|F| #b1) (|SS| v21) (|V| v26) (|GE| v12) (|TCO| #b0) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| #b0) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b0) (|SSBS| #b0) (|IL| #b0) (|EL| #b01) (|SP| #x1) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| #b0) (|SM| #b0)))
-  (read-reg |PSTATE| ((_ field |I|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b0) (|F| #b1) (|SS| v21) (|V| v26) (|GE| v12) (|TCO| #b0) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| #b0) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b0) (|SSBS| #b0) (|IL| #b0) (|EL| #b01) (|SP| #x1) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| #b0) (|SM| #b0)))
-  (read-reg |PSTATE| ((_ field |F|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b0) (|F| #b1) (|SS| v21) (|V| v26) (|GE| v12) (|TCO| #b0) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| #b0) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b0) (|SSBS| #b0) (|IL| #b0) (|EL| #b01) (|SP| #x1) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| #b0) (|SM| #b0)))
-  (define-const v475 (bvor (bvand v474 (bvnot (bvshl #x000000000000000f ((_ extract 63 0) #x00000000000000000000000000000006)))) (bvshl ((_ zero_extend 60) #xf) ((_ extract 63 0) #x00000000000000000000000000000006))))
-  (read-reg |PSTATE| ((_ field |nRW|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b0) (|F| #b1) (|SS| v21) (|V| v26) (|GE| v12) (|TCO| #b0) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| #b0) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b0) (|SSBS| #b0) (|IL| #b0) (|EL| #b01) (|SP| #x1) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| #b0) (|SM| #b0)))
-  (define-const v476 (bvor (bvand v475 (bvnot (bvshl #x0000000000000001 ((_ extract 63 0) #x00000000000000000000000000000004)))) (bvshl ((_ zero_extend 63) #b0) ((_ extract 63 0) #x00000000000000000000000000000004))))
-  (read-reg |PSTATE| ((_ field |EL|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b0) (|F| #b1) (|SS| v21) (|V| v26) (|GE| v12) (|TCO| #b0) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| #b0) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b0) (|SSBS| #b0) (|IL| #b0) (|EL| #b01) (|SP| #x1) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| #b0) (|SM| #b0)))
-  (define-const v477 (bvor (bvand v476 (bvnot (bvshl #x0000000000000003 ((_ extract 63 0) #x00000000000000000000000000000002)))) (bvshl ((_ zero_extend 62) #b01) ((_ extract 63 0) #x00000000000000000000000000000002))))
-  (read-reg |PSTATE| ((_ field |SP|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b0) (|F| #b1) (|SS| v21) (|V| v26) (|GE| v12) (|TCO| #b0) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| #b0) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b0) (|SSBS| #b0) (|IL| #b0) (|EL| #b01) (|SP| #x1) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| #b0) (|SM| #b0)))
-  (define-const v478 (bvor (bvand v477 (bvnot #x0000000000000001)) ((_ zero_extend 63) #b1)))
-  (read-reg |PSTATE| ((_ field |EL|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b0) (|F| #b1) (|SS| v21) (|V| v26) (|GE| v12) (|TCO| #b0) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| #b0) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b0) (|SSBS| #b0) (|IL| #b0) (|EL| #b01) (|SP| #x1) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| #b0) (|SM| #b0)))
-  (declare-const v479 (_ BitVec 64)) ; SourceLoc { file: 9, line1: 231, char1: 19, line2: 231, char2: 28 }
-  (read-reg |__highest_el_aarch32| nil false)
-  (read-reg |SCR_EL3| nil #x0000000000000000)
-  (declare-const v480 (_ BitVec 64)) ; SourceLoc { file: 9, line1: 231, char1: 19, line2: 231, char2: 28 }
-  (read-reg |__highest_el_aarch32| nil false)
-  (read-reg |SCR_EL3| nil #x0000000000000000)
-  (declare-const v481 Bool) ; SourceLoc { file: 9, line1: 218, char1: 21, line2: 218, char2: 30 }
-  (declare-const v482 Bool) ; SourceLoc { file: 9, line1: 219, char1: 19, line2: 219, char2: 28 }
-  (read-reg |SCR_EL3| nil #x0000000000000000)
-  (read-reg |PSTATE| ((_ field |nRW|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b0) (|F| #b1) (|SS| v21) (|V| v26) (|GE| v12) (|TCO| #b0) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| #b0) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b0) (|SSBS| #b0) (|IL| #b0) (|EL| #b01) (|SP| #x1) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| #b0) (|SM| #b0)))
-  (read-reg |__highest_el_aarch32| nil false)
-  (declare-const v483 Bool) ; SourceLoc { file: 9, line1: 4259, char1: 28, line2: 4259, char2: 37 }
+  (read-reg |PSTATE| ((_ field |DIT|)) (_ struct (|DIT| #b0)))
+  (read-reg |PSTATE| ((_ field |UAO|)) (_ struct (|UAO| #b0)))
+  (read-reg |PSTATE| ((_ field |SS|)) (_ struct (|SS| v21)))
+  (read-reg |PSTATE| ((_ field |ALLINT|)) (_ struct (|ALLINT| #b0)))
+  (read-reg |PSTATE| ((_ field |SSBS|)) (_ struct (|SSBS| #b0)))
+  (read-reg |PSTATE| ((_ field |BTYPE|)) (_ struct (|BTYPE| #b00)))
+  (read-reg |PSTATE| ((_ field |D|)) (_ struct (|D| #b1)))
+  (read-reg |PSTATE| ((_ field |A|)) (_ struct (|A| #b1)))
+  (read-reg |PSTATE| ((_ field |I|)) (_ struct (|I| #b1)))
+  (read-reg |PSTATE| ((_ field |F|)) (_ struct (|F| #b1)))
   (define-enum |Unpredictable| 68 (|Unpredictable_VMSR| |Unpredictable_WBOVERLAPLD| |Unpredictable_WBOVERLAPST| |Unpredictable_LDPOVERLAP| |Unpredictable_BASEOVERLAP| |Unpredictable_DATAOVERLAP| |Unpredictable_DEVPAGE2| |Unpredictable_INSTRDEVICE| |Unpredictable_RESCPACR| |Unpredictable_RESMAIR| |Unpredictable_S1CTAGGED| |Unpredictable_S2RESMEMATTR| |Unpredictable_RESTEXCB| |Unpredictable_RESPRRR| |Unpredictable_RESDACR| |Unpredictable_RESVTCRS| |Unpredictable_RESTnSZ| |Unpredictable_RESTCF| |Unpredictable_DEVICETAGSTORE| |Unpredictable_OORTnSZ| |Unpredictable_LARGEIPA| |Unpredictable_ESRCONDPASS| |Unpredictable_ILZEROIT| |Unpredictable_ILZEROT| |Unpredictable_BPVECTORCATCHPRI| |Unpredictable_VCMATCHHALF| |Unpredictable_VCMATCHDAPA| |Unpredictable_WPMASKANDBAS| |Unpredictable_WPBASCONTIGUOUS| |Unpredictable_RESWPMASK| |Unpredictable_WPMASKEDBITS| |Unpredictable_RESBPWPCTRL| |Unpredictable_BPNOTIMPL| |Unpredictable_RESBPTYPE| |Unpredictable_BPNOTCTXCMP| |Unpredictable_BPMATCHHALF| |Unpredictable_BPMISMATCHHALF| |Unpredictable_RESTARTALIGNPC| |Unpredictable_RESTARTZEROUPPERPC| |Unpredictable_ZEROUPPER| |Unpredictable_ERETZEROUPPERPC| |Unpredictable_A32FORCEALIGNPC| |Unpredictable_SMD| |Unpredictable_NONFAULT| |Unpredictable_SVEZEROUPPER| |Unpredictable_SVELDNFDATA| |Unpredictable_SVELDNFZERO| |Unpredictable_CHECKSPNONEACTIVE| |Unpredictable_SMEZEROUPPER| |Unpredictable_NVNV1| |Unpredictable_Shareability| |Unpredictable_AFUPDATE| |Unpredictable_IESBinDebug| |Unpredictable_BADPMSFCR| |Unpredictable_ZEROBTYPE| |Unpredictable_EL2TIMESTAMP| |Unpredictable_EL1TIMESTAMP| |Unpredictable_RESERVEDNSxB| |Unpredictable_WFxTDEBUG| |Unpredictable_LS64UNSUPPORTED| |Unpredictable_MISALIGNEDATOMIC| |Unpredictable_CLEARERRITEZERO| |Unpredictable_ALUEXCEPTIONRETURN| |Unpredictable_IGNORETRAPINDEBUG| |Unpredictable_DBGxVR_RESS| |Unpredictable_PMUEVENTCOUNTER| |Unpredictable_PMSCR_PCT| |Unpredictable_BRBFILTRATE|))
   (define-enum |Constraint| 26 (|Constraint_NONE| |Constraint_UNKNOWN| |Constraint_UNDEF| |Constraint_UNDEFEL0| |Constraint_NOP| |Constraint_TRUE| |Constraint_FALSE| |Constraint_DISABLED| |Constraint_UNCOND| |Constraint_COND| |Constraint_ADDITIONAL_DECODE| |Constraint_WBSUPPRESS| |Constraint_FAULT| |Constraint_LIMITED_ATOMICITY| |Constraint_NVNV1_00| |Constraint_NVNV1_01| |Constraint_NVNV1_11| |Constraint_OSH| |Constraint_ISH| |Constraint_NSH| |Constraint_NC| |Constraint_WT| |Constraint_WB| |Constraint_FORCE| |Constraint_FORCENOSLCHECK| |Constraint_PMSCR_PCT_VIRT|))
-  (define-const v580 (bvor (bvand v478 (bvnot (bvshl #x0000000000000003 ((_ extract 63 0) #x0000000000000000000000000000000a)))) (bvshl ((_ zero_extend 62) #b00) ((_ extract 63 0) #x0000000000000000000000000000000a))))
-  (declare-const v581 (_ BitVec 128)) ; SourceLoc { file: 9, line1: 1627, char1: 15, line2: 1627, char2: 24 }
-  (declare-const v582 (_ BitVec 1)) ; SourceLoc { file: 9, line1: 1628, char1: 19, line2: 1628, char2: 28 }
-  (read-reg |PSTATE| ((_ field |nRW|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b0) (|F| #b1) (|SS| v21) (|V| v26) (|GE| v12) (|TCO| #b0) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| #b0) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b0) (|SSBS| #b0) (|IL| #b0) (|EL| #b01) (|SP| #x1) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| #b0) (|SM| #b0)))
-  (read-reg |__highest_el_aarch32| nil false)
-  (declare-const v583 (_ BitVec 128)) ; SourceLoc { file: 9, line1: 1349, char1: 15, line2: 1349, char2: 24 }
-  (read-reg |PSTATE| ((_ field |EL|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b0) (|F| #b1) (|SS| v21) (|V| v26) (|GE| v12) (|TCO| #b0) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| #b0) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b0) (|SSBS| #b0) (|IL| #b0) (|EL| #b01) (|SP| #x1) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| #b0) (|SM| #b0)))
-  (declare-const v584 (_ BitVec 1)) ; SourceLoc { file: 9, line1: 1496, char1: 19, line2: 1496, char2: 28 }
   (define-enum |__InstrEnc| 4 (|__A64| |__A32| |__T16| |__T32|))
   (read-reg |__ThisInstrEnc| nil |__A64|)
   (write-reg |ESR_EL1| nil #x0000000096000004)
   (write-reg |FAR_EL1| nil #x0000000000ff0000)
   (read-reg |__brbe_implemented| nil false)
-  (write-reg |PSTATE| ((_ field |EL|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b0) (|F| #b1) (|SS| v21) (|V| v26) (|GE| v12) (|TCO| #b0) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| #b0) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b0) (|SSBS| #b0) (|IL| #b0) (|EL| #b01) (|SP| #x1) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| #b0) (|SM| #b0)))
-  (write-reg |PSTATE| ((_ field |nRW|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b0) (|F| #b1) (|SS| v21) (|V| v26) (|GE| v12) (|TCO| #b0) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| #b0) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b0) (|SSBS| #b0) (|IL| #b0) (|EL| #b01) (|SP| #x1) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| #b0) (|SM| #b0)))
-  (write-reg |PSTATE| ((_ field |SP|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b0) (|F| #b1) (|SS| v21) (|V| v26) (|GE| v12) (|TCO| #b0) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| #b0) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b0) (|SSBS| #b0) (|IL| #b0) (|EL| #b01) (|SP| #b1) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| #b0) (|SM| #b0)))
-  (read-reg |PSTATE| ((_ field |nRW|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b0) (|F| #b1) (|SS| v21) (|V| v26) (|GE| v12) (|TCO| #b0) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| #b0) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b0) (|SSBS| #b0) (|IL| #b0) (|EL| #b01) (|SP| #b1) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| #b0) (|SM| #b0)))
-  (read-reg |__highest_el_aarch32| nil false)
-  (read-reg |PSTATE| ((_ field |EL|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b0) (|F| #b1) (|SS| v21) (|V| v26) (|GE| v12) (|TCO| #b0) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| #b0) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b0) (|SSBS| #b0) (|IL| #b0) (|EL| #b01) (|SP| #b1) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| #b0) (|SM| #b0)))
-  (define-const v590 ((_ zero_extend 0) v580))
+  (write-reg |PSTATE| ((_ field |EL|)) (_ struct (|EL| #b01)))
+  (write-reg |PSTATE| ((_ field |nRW|)) (_ struct (|nRW| #b0)))
+  (write-reg |PSTATE| ((_ field |SP|)) (_ struct (|SP| #b1)))
+  (read-reg |PSTATE| ((_ field |nRW|)) (_ struct (|nRW| #b0)))
+  (read-reg |PSTATE| ((_ field |EL|)) (_ struct (|EL| #b01)))
+  (define-const v590 ((_ zero_extend 0) (bvor (bvand (bvor (bvand (bvor (bvand (bvor (bvand (bvor (bvand (bvor (bvand (bvor (bvand (bvor (bvand (bvor (bvand (bvor (bvand (bvor (bvand (bvor (bvand (bvor (bvand (bvor #x0000000000000000 (bvshl ((_ zero_extend 60) (concat v17 (concat v5 (concat v8 v26)))) #x000000000000001c)) #xffffffffffbfffff) #x0000000000000000) #xffffffffffefffff) #x0000000000000000) #xfffffffffeffffff) #x0000000000000000) #xffffffffff7fffff) #x0000000000000000) #xffffffffffdfffff) (bvshl ((_ zero_extend 63) ((_ extract 0 0) (bvlshr v21 #b0))) #x0000000000000015)) #xffffffffffffdfff) #x0000000000000000) #xffffffffffffefff) #x0000000000000000) #xfffffffffffff3ff) #x0000000000000000) #xfffffffffffffc3f) #x00000000000003c0) #xffffffffffffffef) #x0000000000000000) #xfffffffffffffff3) #x0000000000000004) #xfffffffffffffffe) #x0000000000000001) #xfffffffffffff3ff) #x0000000000000000)))
   (write-reg |SPSR_EL1| nil v590)
-  (read-reg |PSTATE| ((_ field |EL|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b0) (|F| #b1) (|SS| v21) (|V| v26) (|GE| v12) (|TCO| #b0) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| #b0) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b0) (|SSBS| #b0) (|IL| #b0) (|EL| #b01) (|SP| #b1) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| #b0) (|SM| #b0)))
-  (read-reg |PSTATE| ((_ field |EL|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b0) (|F| #b1) (|SS| v21) (|V| v26) (|GE| v12) (|TCO| #b0) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| #b0) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b0) (|SSBS| #b0) (|IL| #b0) (|EL| #b01) (|SP| #b1) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| #b0) (|SM| #b0)))
   (write-reg |ELR_EL1| nil v140)
-  (write-reg |PSTATE| ((_ field |SS|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b0) (|F| #b1) (|SS| #b0) (|V| v26) (|GE| v12) (|TCO| #b0) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| #b0) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b0) (|SSBS| #b0) (|IL| #b0) (|EL| #b01) (|SP| #b1) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| #b0) (|SM| #b0)))
-  (declare-const v591 (_ BitVec 64)) ; SourceLoc { file: 9, line1: 231, char1: 19, line2: 231, char2: 28 }
-  (read-reg |__highest_el_aarch32| nil false)
-  (read-reg |SCR_EL3| nil #x0000000000000000)
-  (declare-const v592 Bool) ; SourceLoc { file: 9, line1: 218, char1: 21, line2: 218, char2: 30 }
-  (declare-const v593 Bool) ; SourceLoc { file: 9, line1: 219, char1: 19, line2: 219, char2: 28 }
-  (read-reg |PSTATE| ((_ field |EL|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b0) (|F| #b1) (|SS| #b0) (|V| v26) (|GE| v12) (|TCO| #b0) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| #b0) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b0) (|SSBS| #b0) (|IL| #b0) (|EL| #b01) (|SP| #b1) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| #b0) (|SM| #b0)))
-  (declare-const v594 (_ BitVec 64)) ; SourceLoc { file: 9, line1: 4005, char1: 19, line2: 4005, char2: 28 }
-  (read-reg |SCTLR_EL1| nil #x0000000004000000)
-  (write-reg |PSTATE| ((_ field |ALLINT|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b1) (|F| #b1) (|SS| #b0) (|V| v26) (|GE| v12) (|TCO| #b0) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| #b0) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b0) (|SSBS| #b0) (|IL| #b0) (|EL| #b01) (|SP| #b1) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| #b0) (|SM| #b0)))
-  (write-reg |PSTATE| ((_ field |D|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b1) (|F| #b1) (|SS| #b0) (|V| v26) (|GE| v12) (|TCO| #b0) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| #b0) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b0) (|SSBS| #b0) (|IL| #b0) (|EL| #b01) (|SP| #b1) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| #b0) (|SM| #b0)))
-  (write-reg |PSTATE| ((_ field |A|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b1) (|F| #b1) (|SS| #b0) (|V| v26) (|GE| v12) (|TCO| #b0) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| #b0) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b0) (|SSBS| #b0) (|IL| #b0) (|EL| #b01) (|SP| #b1) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| #b0) (|SM| #b0)))
-  (write-reg |PSTATE| ((_ field |I|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b1) (|F| #b1) (|SS| #b0) (|V| v26) (|GE| v12) (|TCO| #b0) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| #b0) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b0) (|SSBS| #b0) (|IL| #b0) (|EL| #b01) (|SP| #b1) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| #b0) (|SM| #b0)))
-  (write-reg |PSTATE| ((_ field |F|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b1) (|F| #b1) (|SS| #b0) (|V| v26) (|GE| v12) (|TCO| #b0) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| #b0) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b0) (|SSBS| #b0) (|IL| #b0) (|EL| #b01) (|SP| #b1) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| #b0) (|SM| #b0)))
-  (write-reg |PSTATE| ((_ field |IL|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b1) (|F| #b1) (|SS| #b0) (|V| v26) (|GE| v12) (|TCO| #b0) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| #b0) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b0) (|SSBS| #b0) (|IL| #b0) (|EL| #b01) (|SP| #b1) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| #b0) (|SM| #b0)))
-  (read-reg |PSTATE| ((_ field |EL|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b1) (|F| #b1) (|SS| #b0) (|V| v26) (|GE| v12) (|TCO| #b0) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| #b0) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b0) (|SSBS| #b0) (|IL| #b0) (|EL| #b01) (|SP| #b1) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| #b0) (|SM| #b0)))
-  (read-reg |PSTATE| ((_ field |EL|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b1) (|F| #b1) (|SS| #b0) (|V| v26) (|GE| v12) (|TCO| #b0) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| #b0) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b0) (|SSBS| #b0) (|IL| #b0) (|EL| #b01) (|SP| #b1) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| #b0) (|SM| #b0)))
-  (declare-const v595 (_ BitVec 64)) ; SourceLoc { file: 9, line1: 4005, char1: 19, line2: 4005, char2: 28 }
-  (read-reg |SCTLR_EL1| nil #x0000000004000000)
-  (write-reg |PSTATE| ((_ field |PAN|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b1) (|F| #b1) (|SS| #b0) (|V| v26) (|GE| v12) (|TCO| #b0) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| #b0) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b1) (|SSBS| #b0) (|IL| #b0) (|EL| #b01) (|SP| #b1) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| #b0) (|SM| #b0)))
-  (write-reg |PSTATE| ((_ field |UAO|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b1) (|F| #b1) (|SS| #b0) (|V| v26) (|GE| v12) (|TCO| #b0) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| #b0) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b1) (|SSBS| #b0) (|IL| #b0) (|EL| #b01) (|SP| #b1) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| #b0) (|SM| #b0)))
-  (write-reg |PSTATE| ((_ field |BTYPE|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b1) (|F| #b1) (|SS| #b0) (|V| v26) (|GE| v12) (|TCO| #b0) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| #b0) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b1) (|SSBS| #b0) (|IL| #b0) (|EL| #b01) (|SP| #b1) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| #b0) (|SM| #b0)))
-  (read-reg |PSTATE| ((_ field |EL|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b1) (|F| #b1) (|SS| #b0) (|V| v26) (|GE| v12) (|TCO| #b0) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| #b0) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b1) (|SSBS| #b0) (|IL| #b0) (|EL| #b01) (|SP| #b1) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| #b0) (|SM| #b0)))
-  (declare-const v596 (_ BitVec 64)) ; SourceLoc { file: 9, line1: 4005, char1: 19, line2: 4005, char2: 28 }
-  (read-reg |SCTLR_EL1| nil #x0000000004000000)
-  (write-reg |PSTATE| ((_ field |SSBS|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b1) (|F| #b1) (|SS| #b0) (|V| v26) (|GE| v12) (|TCO| #b0) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| #b0) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b1) (|SSBS| #b0) (|IL| #b0) (|EL| #b01) (|SP| #b1) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| #b0) (|SM| #b0)))
-  (read-reg |__mte_implemented| nil #x0)
-  (read-reg |__mte_implemented| nil #x0)
-  (read-reg |PSTATE| ((_ field |EL|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b1) (|F| #b1) (|SS| #b0) (|V| v26) (|GE| v12) (|TCO| #b0) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| #b0) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b1) (|SSBS| #b0) (|IL| #b0) (|EL| #b01) (|SP| #b1) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| #b0) (|SM| #b0)))
-  (declare-const v597 (_ BitVec 64)) ; SourceLoc { file: 9, line1: 4150, char1: 19, line2: 4150, char2: 28 }
+  (write-reg |PSTATE| ((_ field |SS|)) (_ struct (|SS| #b0)))
+  (write-reg |PSTATE| ((_ field |ALLINT|)) (_ struct (|ALLINT| #b1)))
+  (write-reg |PSTATE| ((_ field |D|)) (_ struct (|D| #b1)))
+  (write-reg |PSTATE| ((_ field |A|)) (_ struct (|A| #b1)))
+  (write-reg |PSTATE| ((_ field |I|)) (_ struct (|I| #b1)))
+  (write-reg |PSTATE| ((_ field |F|)) (_ struct (|F| #b1)))
+  (write-reg |PSTATE| ((_ field |IL|)) (_ struct (|IL| #b0)))
+  (write-reg |PSTATE| ((_ field |PAN|)) (_ struct (|PAN| #b1)))
+  (write-reg |PSTATE| ((_ field |UAO|)) (_ struct (|UAO| #b0)))
+  (write-reg |PSTATE| ((_ field |BTYPE|)) (_ struct (|BTYPE| #b00)))
+  (write-reg |PSTATE| ((_ field |SSBS|)) (_ struct (|SSBS| #b0)))
   (read-reg |VBAR_EL1| nil #x1111222233334444)
   (define-enum |BranchType| 11 (|BranchType_DIRCALL| |BranchType_INDCALL| |BranchType_ERET| |BranchType_DBGEXIT| |BranchType_RET| |BranchType_DIR| |BranchType_INDIR| |BranchType_EXCEPTION| |BranchType_TMFAIL| |BranchType_RESET| |BranchType_UNKNOWN|))
-  (read-reg |PSTATE| ((_ field |nRW|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b1) (|F| #b1) (|SS| #b0) (|V| v26) (|GE| v12) (|TCO| #b0) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| #b0) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b1) (|SSBS| #b0) (|IL| #b0) (|EL| #b01) (|SP| #b1) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| #b0) (|SM| #b0)))
-  (read-reg |__highest_el_aarch32| nil false)
-  (read-reg |PSTATE| ((_ field |nRW|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b1) (|F| #b1) (|SS| #b0) (|V| v26) (|GE| v12) (|TCO| #b0) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| #b0) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b1) (|SSBS| #b0) (|IL| #b0) (|EL| #b01) (|SP| #b1) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| #b0) (|SM| #b0)))
-  (read-reg |__highest_el_aarch32| nil false)
-  (read-reg |PSTATE| ((_ field |EL|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b1) (|F| #b1) (|SS| #b0) (|V| v26) (|GE| v12) (|TCO| #b0) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| #b0) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b1) (|SSBS| #b0) (|IL| #b0) (|EL| #b01) (|SP| #b1) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| #b0) (|SM| #b0)))
-  (declare-const v610 (_ BitVec 64)) ; SourceLoc { file: 9, line1: 231, char1: 19, line2: 231, char2: 28 }
-  (read-reg |__highest_el_aarch32| nil false)
-  (read-reg |SCR_EL3| nil #x0000000000000000)
-  (declare-const v611 Bool) ; SourceLoc { file: 9, line1: 218, char1: 21, line2: 218, char2: 30 }
-  (declare-const v612 Bool) ; SourceLoc { file: 9, line1: 219, char1: 19, line2: 219, char2: 28 }
-  (declare-const v613 (_ BitVec 1)) ; SourceLoc { file: 9, line1: 2129, char1: 20, line2: 2129, char2: 29 }
-  (declare-const v614 (_ BitVec 1)) ; SourceLoc { file: 9, line1: 2130, char1: 21, line2: 2130, char2: 30 }
-  (declare-const v615 (_ BitVec 64)) ; SourceLoc { file: 9, line1: 231, char1: 19, line2: 231, char2: 28 }
-  (read-reg |__highest_el_aarch32| nil false)
-  (read-reg |SCR_EL3| nil #x0000000000000000)
-  (declare-const v616 Bool) ; SourceLoc { file: 9, line1: 218, char1: 21, line2: 218, char2: 30 }
-  (declare-const v617 Bool) ; SourceLoc { file: 9, line1: 219, char1: 19, line2: 219, char2: 28 }
   (read-reg |TCR_EL1| nil #x0000000000000000)
-  (read-reg |TCR_EL1| nil #x0000000000000000)
-  (read-reg |__brbe_implemented| nil false)
   (branch-address #x1111222233334000)
   (write-reg |_PC| nil #x1111222233334000)
   (write-reg |__BranchTaken| nil true)
-  (declare-const v618 (_ BitVec 2)) ; SourceLoc { file: 9, line1: 3030, char1: 21, line2: 3030, char2: 30 }
-  (declare-const v619 Bool) ; SourceLoc { file: 9, line1: 3031, char1: 28, line2: 3031, char2: 37 }
-  (declare-const v620 (_ BitVec 128)) ; SourceLoc { file: 9, line1: 3032, char1: 27, line2: 3032, char2: 36 }
-  (read-reg |PSTATE| ((_ field |EL|)) (_ struct (|E| v10) (|I| #b1) (|Z| v5) (|ALLINT| #b1) (|F| #b1) (|SS| #b0) (|V| v26) (|GE| v12) (|TCO| #b0) (|C| v8) (|D| #b1) (|M| v16) (|DIT| #b0) (|ZA| v27) (|BTYPE| #b00) (|UAO| #b0) (|T| v23) (|J| v15) (|A| #b1) (|PAN| #b1) (|SSBS| #b0) (|IL| #b0) (|EL| #b01) (|SP| #b1) (|Q| v19) (|IT| v14) (|N| v17) (|nRW| #b0) (|SM| #b0)))
   (read-reg |__rme_implemented| nil false)
-  (declare-const v621 (_ BitVec 64)) ; SourceLoc { file: 9, line1: 231, char1: 19, line2: 231, char2: 28 }
-  (read-reg |__highest_el_aarch32| nil false)
-  (read-reg |SCR_EL3| nil #x0000000000000000)
-  (declare-const v622 Bool) ; SourceLoc { file: 9, line1: 218, char1: 21, line2: 218, char2: 30 }
-  (declare-const v623 Bool) ; SourceLoc { file: 9, line1: 219, char1: 19, line2: 219, char2: 28 }
-  (read-reg |SCR_EL3| nil #x0000000000000000)
   (define-enum |SecurityState| 4 (|SS_NonSecure| |SS_Root| |SS_Realm| |SS_Secure|))
   (declare-const v629 (_ BitVec 32)) ; SourceLoc { file: 9, line1: 2592, char1: 19, line2: 2592, char2: 28 }
   (read-reg |MDCCSR_EL0| nil #x0000000000000000)
-  (define-const v630 (bvor (bvand v629 (bvnot (bvshl #x00000003 ((_ extract 31 0) #x0000000000000000000000000000001d)))) (bvshl ((_ zero_extend 30) #b00) ((_ extract 31 0) #x0000000000000000000000000000001d))))
   (read-reg |_EDSCR_0_28| nil #x000000)
-  (define-const v631 (bvor (bvand v630 (bvnot #x00ffffff)) ((_ zero_extend 8) #x000000)))
   (read-reg |_EDSCR_31_31| nil #b0)
-  (define-const v632 (bvor (bvand v631 (bvnot (bvshl #x00000001 ((_ extract 31 0) #x0000000000000000000000000000001f)))) (bvshl ((_ zero_extend 31) #b0) ((_ extract 31 0) #x0000000000000000000000000000001f))))
-  (define-const v633 ((_ extract 5 0) v632))
-  (define-const v634 (= v633 #b000001))
-  (assert (not v634))
+  (assert (not (= (bvor ((_ extract 5 0) (bvand (bvor (bvand (bvor (bvand v629 #x9fffffff) #x00000000) #xff000000) #x00000000) #x7fffffff)) #b000000) #b000001)))
   (declare-const v635 (_ BitVec 32)) ; SourceLoc { file: 9, line1: 2592, char1: 19, line2: 2592, char2: 28 }
-  (read-reg |MDCCSR_EL0| nil #x0000000000000000)
-  (define-const v636 (bvor (bvand v635 (bvnot (bvshl #x00000003 ((_ extract 31 0) #x0000000000000000000000000000001d)))) (bvshl ((_ zero_extend 30) #b00) ((_ extract 31 0) #x0000000000000000000000000000001d))))
-  (read-reg |_EDSCR_0_28| nil #x000000)
-  (define-const v637 (bvor (bvand v636 (bvnot #x00ffffff)) ((_ zero_extend 8) #x000000)))
-  (read-reg |_EDSCR_31_31| nil #b0)
-  (define-const v638 (bvor (bvand v637 (bvnot (bvshl #x00000001 ((_ extract 31 0) #x0000000000000000000000000000001f)))) (bvshl ((_ zero_extend 31) #b0) ((_ extract 31 0) #x0000000000000000000000000000001f))))
-  (define-const v639 ((_ extract 5 0) v638))
-  (define-const v640 (= v639 #b000010))
-  (define-const v641 (not v640))
-  (assert v641)
+  (assert (not (= (bvor ((_ extract 5 0) (bvand (bvor (bvand (bvor (bvand v635 #x9fffffff) #x00000000) #xff000000) #x00000000) #x7fffffff)) #b000000) #b000010)))
   (write-reg |Final result| nil (_ poison)))
 make: Leaving directory '/home/vscode/rems/linux-pkvm-verif-2/cl'
