@@ -783,13 +783,6 @@ void handle_host_mem_abort(struct kvm_cpu_context *host_ctxt)
 
 #ifdef CONFIG_NVHE_GHOST_SPEC
 	GHOST_LOG_CONTEXT_ENTER();
-	bool ghost_check = ghost_control_print_enabled(__func__);
-	if (ghost_check) {
-		hyp_putsp(GHOST_WHITE_ON_BLUE);
-		hyp_putsp("handle_host_mem_abort");
-		hyp_putsp(GHOST_NORMAL);
-		hyp_putsp("\n");
-	}
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 
 	esr = read_sysreg_el2(SYS_ESR);
