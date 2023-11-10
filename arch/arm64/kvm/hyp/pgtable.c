@@ -70,9 +70,9 @@ predicate {bool exists} Cond_Zero_Page (pointer p) {
     return {exists: false};
   }
   else {
-    take X = each (integer i; 0 <= i && i < 4096)
+    take X = each (i32 i; 0 <= i && i < 4096i32)
         {Owned<char>(p + (i * 1))};
-    assert (each (integer i; 0 <= i && i < 4096)
+    assert (each (i32 i; 0 <= i && i < 4096i32)
         {X[i] == 0});
     return {exists: true};
   }
@@ -80,28 +80,30 @@ predicate {bool exists} Cond_Zero_Page (pointer p) {
 @*/
 
 /* FIXME: this spec is a lie, and omits entirely the pool ownership */
+/* FIXME: the bit about phys_virt_offset is probably a lie, and asserts that
+   it is a true constant, rather than just constant after initialisation */
 /*@
 spec hyp_zalloc_hyp_page (pointer arg)
   requires true
   ensures
     take P = Cond_Zero_Page (return);
-    (mod(((integer) return), 4096) == 0)
+    (mod(((u64) return), 4096) == 0)
 
-function (integer) phys_virt_offset ()
+function (u64) phys_virt_offset ()
 
-function (pointer) hyp_phys_to_virt (integer phys)
+function (pointer) hyp_phys_to_virt (u64 phys)
 {
   ((pointer) (phys - phys_virt_offset ()))
 }
 
-spec hyp_phys_to_virt (integer phys)
+spec hyp_phys_to_virt (u64 phys)
   requires true
   ensures
     return == hyp_phys_to_virt (phys)
 
-function (integer) hyp_virt_to_phys (pointer virt)
+function (u64) hyp_virt_to_phys (pointer virt)
 {
-  ((integer) virt) + phys_virt_offset ()
+  ((u64) virt) + phys_virt_offset ()
 }
 
 spec hyp_virt_to_phys (pointer virt)
@@ -123,50 +125,51 @@ predicate (void) MM_Ops(pointer p) {
 
 /* constraints on level, see arch/arm64/include/asm/pgtable-hwdef.h */
 /*@
-function (bool) valid_pgtable_level (integer level)
+function (bool) valid_pgtable_level (i32 level)
 {
-  0 <= level && level <= 3
+  0i32 <= level && level <= 3i32
 }
 @*/
 
 /* see struct kvm_pgtable defn in arch/arm64/include/asm/kvm_pgtable.h */
 /*@
-predicate (map <integer, integer>) PTE_Array (pointer p) {
-  assert (mod((integer)p, 4096) == 0);
-  take ptes = each (integer i; 0 <= i && i < 512)
-    {Owned<kvm_pte_t>(p + (i * (sizeof <kvm_pte_t>)))};
+predicate (map <i32, u64>) PTE_Array (pointer p) {
+  assert (mod((u64)p, 4096) == 0);
+  take ptes = each (i32 i; 0i32 <= i && i < 512i32)
+    {Owned<kvm_pte_t>(p + (i * ((i32) (sizeof <kvm_pte_t>))))};
   return ptes;
 }
 
-predicate (void) Page_Table_Entries (pointer p, integer level) {
+predicate (void) Page_Table_Entries (pointer p, i32 level) {
   assert (valid_pgtable_level(level));
   take ptes = PTE_Array (p);
-  take children = each (integer i; 0 <= i && i < 512)
-    {Indirect_Page_Table_Entries (p + (i * (sizeof <kvm_pte_t>)), level + 1, ptes[i])};
+  take children = each (i32 i; 0i32 <= i && i < 512i32)
+    {Indirect_Page_Table_Entries (p + (i * ((i32) (sizeof <kvm_pte_t>))), level + 1i32, ptes[i])};
   return;
 }
 
-function (boolean) is_valid_pte_entry (integer encoded)
-function (boolean) is_table_entry (integer encoded)
-function (integer) decode_table_entry_phys (integer encoded)
+function (boolean) is_valid_pte_entry (u64 encoded)
+function (boolean) is_table_entry (u64 encoded)
+function (u64) decode_table_entry_phys (u64 encoded)
 
-function (pointer) decode_table_entry_pointer (integer encoded)
+function (pointer) decode_table_entry_pointer (u64 encoded)
 {
   hyp_phys_to_virt (decode_table_entry_phys (encoded))
 }
 
-lemma table_entry_is_valid (integer encoded)
-  requires true
+lemma table_entry_is_valid (u64 encoded)
+  requires
+    good<kvm_pte_t>(encoded)
   ensures
     is_table_entry(encoded) ? is_valid_pte_entry(encoded) : true
 
-predicate {bool x} Indirect_Page_Table_Entries (pointer p, integer level, integer encoded) {
+predicate {bool x} Indirect_Page_Table_Entries (pointer p, i32 level, u64 encoded) {
   assert (valid_pgtable_level(level) || not(is_table_entry (encoded)));
   take x = Indirect_Page_Table_Entries2(p, level, encoded);
   return x;
 }
 
-predicate {bool x} Indirect_Page_Table_Entries2 (pointer p, integer level, integer encoded) {
+predicate {bool x} Indirect_Page_Table_Entries2 (pointer p, i32 level, u64 encoded) {
   if (is_table_entry (encoded)) {
     assert (valid_pgtable_level(level));
     assert (good<kvm_pte_t *> (decode_table_entry_pointer (encoded)));
@@ -189,7 +192,7 @@ predicate {pointer mm_ops} Pg_Table (pointer p, boolean with_entries) {
   take Ops = MM_Ops(Data.mm_ops);
 
   assert ((0 < Data.ia_bits) && (Data.ia_bits < 64));
-  assert (mod((integer) Data.pgd, 16 * 4096) == 0);
+  assert (mod((u64) Data.pgd, 16u64 * 4096u64) == 0u64);
 
   take Entries = Pg_Table_Toplevel (Data.pgd, with_entries);
 
@@ -198,8 +201,8 @@ predicate {pointer mm_ops} Pg_Table (pointer p, boolean with_entries) {
 
 predicate (void) Pg_Table_Toplevel (pointer p, boolean exists) {
   if (exists) {
-    take Toplevel_Table = each (integer i; 0 <= i && i < 16)
-      {Page_Table_Entries(p + (i * 4096), 0)};
+    take Toplevel_Table = each (i32 i; 0i32 <= i && i < 16i32)
+      {Page_Table_Entries(p + (i * 4096i32), 0i32)};
     return;
   }
   else {
@@ -213,7 +216,7 @@ predicate {integer flags} KVM_PgTable_Walker (pointer p) {
   return {flags: D.flags};
 }
 
-predicate {pointer pgt, integer addr, integer end, integer flags}
+predicate {pointer pgt, u64 addr, u64 end, i32 flags}
     KVM_PgTable_Walk_Data (pointer p) {
   take D = Owned<struct kvm_pgtable_walk_data>(p);
   take Walker = KVM_PgTable_Walker(D.walker);
@@ -229,11 +232,11 @@ struct kvm_pgtable_walk_data {
 	const u64			end;
 };
 
-/*@ function (integer) kvm_granule_shift (integer level) @*/
+/*@ function (u64) kvm_granule_shift (u32 level) @*/
 
 /*@ cn_function kvm_granule_shift @*/
-/*@ requires valid_pgtable_level(level) @*/
-/*@ ensures 0 <= return && return < 64 @*/
+/*@ requires valid_pgtable_level((i32) level) @*/
+/*@ ensures 0u64 <= return && return < 64u64 @*/
 /*@ ensures return == kvm_granule_shift(level) @*/
 /*@
 lemma pow_2_less_64 (integer i)
@@ -331,7 +334,7 @@ function (integer) kvm_pte_valid (integer pte)
 lemma kvm_pte_valid_is_valid (integer pte)
   requires true
   ensures
-    kvm_pte_valid(pte) == (is_valid_pte_entry(pte) ? 1 : 0)
+    is_valid_pte_entry(pte) == (kvm_pte_valid(pte) == 1)
 @*/
 
 /*@ cn_function kvm_pte_valid @*/
@@ -374,10 +377,22 @@ static bool kvm_pte_table(kvm_pte_t pte, u32 level)
 	return FIELD_GET(KVM_PTE_TYPE, pte) == KVM_PTE_TYPE_TABLE;
 }
 
-/* bogus trusted, it would be better to export this whole puzzle to Coq */
-/*@ trusted @*/
-/*@ requires is_table_entry (pte) @*/
+/*@ function (integer) kvm_pte_to_phys (integer x)
+
+lemma kvm_pte_to_phys_is_decode (integer pte)
+  requires
+    true
+  ensures
+    kvm_pte_to_phys(pte) == decode_table_entry_phys(pte)
+@*/
+
+/*@ cn_function kvm_pte_to_phys @*/
 /*@ ensures return == decode_table_entry_phys (pte) @*/
+	/*@ apply kvm_pte_to_phys_is_decode(pte); @*/
+/*@ function (integer) kvm_phys_to_pte(integer pa) @*/
+
+/*@ cn_function kvm_phys_to_pte @*/
+/*@ ensures return == kvm_phys_to_pte(pa) @*/
 static kvm_pte_t *kvm_pte_follow(kvm_pte_t pte, struct kvm_pgtable_mm_ops *mm_ops)
 /*@ requires is_table_entry (pte) @*/
 /*@ requires good<kvm_pte_t *>(decode_table_entry_pointer (pte)) @*/
@@ -394,11 +409,20 @@ static void kvm_clear_pte(kvm_pte_t *ptep)
 	WRITE_ONCE(*ptep, 0);
 }
 
+/*@
+lemma power_2_ffs_2_min_1 ()
+  requires true
+  ensures
+    let n = power_uf(2, bw_ffs_uf(2) - 1);
+    1 <= n && n <= 10
+@*/
+
 static kvm_pte_t kvm_init_table_pte(kvm_pte_t *childp, struct kvm_pgtable_mm_ops *mm_ops)
-/* bogus trusted, issues with builtin ffs/ctz etc */
+/* bogus trusted. the cn_function approach can't work here, this function
+   isn't pure, it operates on a pte in-place. */
 /*@ trusted @*/
 /*@ requires take Ops = MM_Ops(mm_ops) @*/
-/*@ requires take pte = Owned<u64>(ptep) @*/
+/*@ requires take pte_old = Owned<u64>(ptep) @*/
 /*@ ensures take pte2 = Owned<u64>(ptep) @*/
 /*@ ensures take Ops2 = MM_Ops(mm_ops) @*/
 /*@ ensures Ops2 == Ops @*/
@@ -407,14 +431,27 @@ static kvm_pte_t kvm_init_table_pte(kvm_pte_t *childp, struct kvm_pgtable_mm_ops
 {
 	kvm_pte_t pte = kvm_phys_to_pte(mm_ops->virt_to_phys(childp));
 
+	/*@ apply bw_ffs_uf_2(); @*/
+	/*@ apply power_2_ffs_2_min_1(); @*/
 	pte |= FIELD_PREP(KVM_PTE_TYPE, KVM_PTE_TYPE_TABLE);
 	pte |= KVM_PTE_VALID;
 	return pte;
+	/*@ assert (decode_table_entry_pointer(pte) == childp); @*/
 }
 
+/*@
+function (integer) kvm_init_valid_leaf_pte (integer pa, integer attr, integer level)
+
+lemma kvm_init_valid_leaf_pte_not_table (integer pa, integer attr, integer level)
+  requires
+    valid_pgtable_level(level)
+  ensures
+    not (is_table_entry (kvm_init_valid_leaf_pte(pa, attr, level)))
+@*/
+
+
 static kvm_pte_t kvm_init_valid_leaf_pte(u64 pa, kvm_pte_t attr, u32 level)
-/* bogus trusted, issues with builtin ffs/ctz etc */
-/*@ trusted @*/
+/*@ cn_function kvm_init_valid_leaf_pte @*/
 /*@ requires valid_pgtable_level(level) @*/
 /*@ ensures not (is_table_entry (return)) @*/
 {
@@ -422,10 +459,18 @@ static kvm_pte_t kvm_init_valid_leaf_pte(u64 pa, kvm_pte_t attr, u32 level)
 	u64 type = (level == KVM_PGTABLE_MAX_LEVELS - 1) ? KVM_PTE_TYPE_PAGE :
 							   KVM_PTE_TYPE_BLOCK;
 
+	/* FIXME: we need a better way to do this, but otherwise the if-then-else above hurts */
+	if (level == KVM_PGTABLE_MAX_LEVELS - 1)
+		;
+
+	/*@ apply bw_ffs_uf_2(); @*/
+	/*@ apply power_2_ffs_2_min_1(); @*/
 	pte |= attr & (KVM_PTE_LEAF_ATTR_LO | KVM_PTE_LEAF_ATTR_HI);
 	pte |= FIELD_PREP(KVM_PTE_TYPE, type);
 	pte |= KVM_PTE_VALID;
 
+	/*@ assert (pte == kvm_init_valid_leaf_pte(pa, attr, level)); @*/
+	/*@ apply kvm_init_valid_leaf_pte_not_table(pa, attr, level); @*/
 	return pte;
 }
 
@@ -434,44 +479,19 @@ static kvm_pte_t kvm_init_invalid_leaf_owner(u8 owner_id)
 	return FIELD_PREP(KVM_INVALID_PTE_OWNER_MASK, owner_id);
 }
 
-/* set up CN names for these enum consts */
-/*@
-function (integer) get_walk_leaf_flag ()
-function (integer) get_walk_pre_flag ()
-function (integer) get_walk_post_flag ()
-@*/
-
-static int get_table_leaf_flag_for_cn (void)
-/*@ cn_function get_walk_leaf_flag @*/
-{
-	return KVM_PGTABLE_WALK_LEAF;
-}
-
-static int get_table_pre_flag_for_cn (void)
-/*@ cn_function get_walk_pre_flag @*/
-{
-	return KVM_PGTABLE_WALK_TABLE_PRE;
-}
-
-static int get_table_post_flag_for_cn (void)
-/*@ cn_function get_walk_post_flag @*/
-{
-	return KVM_PGTABLE_WALK_TABLE_POST;
-}
-
 /*@
 function (bool) flag_in_flags (integer flag, integer flags) {
-  ((flag == get_walk_leaf_flag ()
-        || flag == get_walk_pre_flag ()
-        || flag == get_walk_post_flag ())
-    && (flag == get_walk_leaf_flag ()
-        ? bw_and_uf (flags, get_walk_leaf_flag ()) != 0
+  ((flag == KVM_PGTABLE_WALK_LEAF
+        || flag == KVM_PGTABLE_WALK_TABLE_PRE
+        || flag == KVM_PGTABLE_WALK_TABLE_POST)
+    && (flag == KVM_PGTABLE_WALK_LEAF
+        ? bw_and_uf (flags, KVM_PGTABLE_WALK_LEAF) != 0
         : true)
-    && (flag == get_walk_pre_flag ()
-        ? bw_and_uf (flags, get_walk_pre_flag ()) != 0
+    && (flag == KVM_PGTABLE_WALK_TABLE_PRE
+        ? bw_and_uf (flags, KVM_PGTABLE_WALK_TABLE_PRE) != 0
         : true)
-    && (flag == get_walk_post_flag ()
-        ? bw_and_uf (flags, get_walk_post_flag ()) != 0
+    && (flag == KVM_PGTABLE_WALK_TABLE_POST
+        ? bw_and_uf (flags, KVM_PGTABLE_WALK_TABLE_POST) != 0
         : true))
 }
 @*/
@@ -501,7 +521,7 @@ static int kvm_pgtable_visitor_cb(struct kvm_pgtable_walk_data *data,
 /*@ requires take IPT = Indirect_Page_Table_Entries (ptep, level + 1, pte) @*/
 /*@ requires take PgTableStruct = Owned<struct kvm_pgtable>(Data.pgt) @*/
 /*@ requires flag_in_flags (flag, Data.flags) @*/
-/*@ requires (flag == get_walk_leaf_flag ()) ==
+/*@ requires (flag == KVM_PGTABLE_WALK_LEAF) ==
     (not(is_table_entry(pte))) @*/
 /*@ ensures take Data2 = KVM_PgTable_Walk_Data (data) @*/
 /*@ ensures Data2.end == Data.end @*/
@@ -510,7 +530,7 @@ static int kvm_pgtable_visitor_cb(struct kvm_pgtable_walk_data *data,
 /*@ ensures take IPT2 = Indirect_Page_Table_Entries (ptep, level + 1, pte2) @*/
 /*@ ensures take PgTableStruct2 = Owned<struct kvm_pgtable>(Data.pgt) @*/
 /*@ ensures PgTableStruct2.mm_ops == PgTableStruct.mm_ops @*/
-/*@ ensures flag == get_walk_pre_flag ()
+/*@ ensures flag == KVM_PGTABLE_WALK_TABLE_PRE
     ? pte2 == pte : true @*/
 {
 	struct kvm_pgtable_walker *walker = data->walker;
@@ -947,7 +967,7 @@ static int hyp_map_walker(const struct kvm_pgtable_visit_ctx *ctx,
 /*@
 predicate (void) Hyp_Map_Walker_Case (pointer f, pointer x, integer flag) {
   assert (f == &hyp_map_walker);
-  assert (flag == get_walk_leaf_flag ());
+  assert (flag == KVM_PGTABLE_WALK_LEAF);
   take D = Hyp_Map_Data(x);
   return;
 }
@@ -1846,9 +1866,6 @@ static int verification_deps (void) {
   (void) hyp_zalloc_hyp_page;
   (void) hyp_phys_to_virt;
   (void) hyp_virt_to_phys;
-  (void) get_table_leaf_flag_for_cn;
-  (void) get_table_pre_flag_for_cn;
-  (void) get_table_post_flag_for_cn;
   return 9;
 }
 
