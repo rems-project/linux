@@ -547,6 +547,7 @@ static void post_dump_diff(struct ghost_state *gc, struct ghost_state *gr_post, 
 {
 	struct ghost_diff *diff;
 
+#ifdef CONFIG_NVHE_GHOST_SPEC_VERBOSE
 	if (gr_pre->host.present && gr_post->host.present) {
 		hyp_puts("pre->post host concrete pgtable: ");
 		diff = ghost_diff_pgtable(&gr_pre->host.host_concrete_pgtable, &gr_post->host.host_concrete_pgtable);
@@ -558,6 +559,7 @@ static void post_dump_diff(struct ghost_state *gc, struct ghost_state *gr_post, 
 			hyp_puts("<identical>\n");
 		}
 	}
+#endif /* CONFIG_NVHE_GHOST_SPEC_VERBOSE */
 
 
 	hyp_puts("ghost pre->post: ");
