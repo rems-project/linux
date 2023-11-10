@@ -336,8 +336,9 @@ struct ghost_diff *ghost_diff_registers(struct ghost_register_state *r1, struct 
 			ghost_diff_field(el1_sysregs, (char *)name, diff_pair(TU64(r1->ctxt.sys_regs[i]), TU64(r2->ctxt.sys_regs[i])));
 		}
 		for (i=0; i<sizeof(ghost_el2_regs)/sizeof(u64); i++) {
-			const char *name = GHOST_EL2_REG_NAMES[i];
-			ghost_diff_field(el1_sysregs, (char *)name, diff_pair(TU64(r1->el2_sysregs[i]), TU64(r2->el2_sysregs[i])));
+			u64 r = ghost_el2_regs[i];
+			const char *name = GHOST_EL2_REG_NAMES[r];
+			ghost_diff_field(el1_sysregs, (char *)name, diff_pair(TU64(r1->el2_sysregs[r]), TU64(r2->el2_sysregs[r])));
 		}
 		ghost_diff_field(node, "gprs", normalise(gprs));
 		ghost_diff_field(node, "el1_sysregs", normalise(el1_sysregs));

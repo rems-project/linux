@@ -259,12 +259,13 @@ void check_abstraction_equals_reg(struct ghost_state *g1, struct ghost_state *g2
 		}
 	}
 	for (i=0; i<sizeof(ghost_el2_regs)/sizeof(u64); i++) {
-		if (ghost_reg_el2(g1,ghost_el2_regs[i]) != ghost_reg_el2(g2,ghost_el2_regs[i])) {
-			const char *name = GHOST_EL2_REG_NAMES[i];
-			GHOST_LOG(i, u64);
+		u64 r = ghost_el2_regs[i];
+		if (ghost_reg_el2(g1, r) != ghost_reg_el2(g2,r)) {
+			const char *name = GHOST_EL2_REG_NAMES[r];
+			GHOST_LOG(r, u64);
 			GHOST_LOG(name, str);
-			GHOST_LOG(ghost_reg_el2(g1,i), u64);
-			GHOST_LOG(ghost_reg_el2(g2,i), u64);
+			GHOST_LOG(ghost_reg_el2(g1,r), u64);
+			GHOST_LOG(ghost_reg_el2(g2,r), u64);
 			GHOST_WARN("el2_sysreg register mismatch");
 			ghost_spec_assert(false);
 		}
