@@ -447,8 +447,6 @@ void check_abstraction_equals_vms(struct ghost_vms *gc, struct ghost_vms *gr_pos
 void check_abstraction_equals_run_state(struct ghost_running_state *spec, struct ghost_running_state *recorded)
 {
 	GHOST_LOG_CONTEXT_ENTER();
-	ghost_assert(spec->present);
-	ghost_assert(recorded->present);
 
 	GHOST_SPEC_ASSERT_VAR_EQ(spec->guest_running, recorded->guest_running, bool);
 
@@ -465,20 +463,8 @@ void check_abstraction_refined_run_state(struct ghost_state *gc, struct ghost_st
 	GHOST_LOG_CONTEXT_ENTER();
 	struct ghost_running_state *gc_run = this_cpu_ghost_run_state(gc);
 	struct ghost_running_state *gr_post_run = this_cpu_ghost_run_state(gr_post);
-	struct ghost_running_state *gr_pre_run = this_cpu_ghost_run_state(gr_pre);
-	GHOST_LOG(gc_run->present, bool);
-	GHOST_LOG(gr_post_run->present, bool);
 
-
-	if (gc_run->present && gr_post_run->present) {
-		check_abstraction_equals_run_state(gc_run, gr_post_run);
-	} else if (gc_run->present && !gr_post_run->present) {
-		GHOST_SPEC_FAIL("recorded post has no cpu_run_state");
-	} else if (!gc_run->present && gr_post_run->present) {
-		check_abstraction_equals_run_state(gr_post_run, gr_pre_run);
-	} else {
-		ghost_spec_assert(true);
-	}
+	check_abstraction_equals_run_state(gc_run, gr_post_run);
 
 	GHOST_LOG_CONTEXT_EXIT();
 }
@@ -946,7 +932,6 @@ void record_abstraction_regs_post(struct kvm_cpu_context *ctxt)
 
 void ghost_cpu_running_state_copy(struct ghost_running_state *run_tgt, struct ghost_running_state *g_src)
 {
-	run_tgt->present = g_src->present;
 	run_tgt->guest_running = g_src->guest_running;
 	run_tgt->vm_handle = g_src->vm_handle;
 	run_tgt->vcpu_index = g_src->vcpu_index;

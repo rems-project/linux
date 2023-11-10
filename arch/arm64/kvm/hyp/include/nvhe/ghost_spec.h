@@ -312,13 +312,11 @@ struct ghost_constant_globals {
 
 /**
  * struct ghost_running_state - Track who was running before entering pKVM
- * @present: whether this part of the state is present
- * @guest_running: if present, true implies exception was from guest, otherwise was from host.
- * @vm_handle: if present and guest_running, the opaque pKVM handle of the VM that was running.
- * @vcpu_index: if present and guest_running, the index of the vcpu in the VM with vm_handle which was running.
+ * @guest_running: whether the current exception was from a guest, otherwise was from host.
+ * @vm_handle: if guest_running, the opaque pKVM handle of the VM that was running.
+ * @vcpu_index: if guest_running, the index of the vcpu in the VM with vm_handle which was running.
  */
 struct ghost_running_state {
-	bool present;
 	bool guest_running;
 	pkvm_handle_t vm_handle;
 	u64 vcpu_index;

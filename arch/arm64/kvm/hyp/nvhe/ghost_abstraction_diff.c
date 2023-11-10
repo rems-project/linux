@@ -453,13 +453,10 @@ struct ghost_diff *ghost_diff_loaded_vcpu(struct ghost_loaded_vcpu *vcpu1, struc
 struct ghost_diff *ghost_diff_running_state(struct ghost_running_state *r1, struct ghost_running_state *r2)
 {
 	struct ghost_diff *node = container();
-	ghost_diff_field(node, "present", diff_pair(TBOOL(r1->present), TBOOL(r2->present)));
-	if (r1->present && r2->present) {
-		ghost_diff_field(node, "guest_running", diff_pair(TBOOL(r1->guest_running), TU64(r2->guest_running)));
-		if (r1->guest_running && r2->guest_running) {
-			ghost_diff_field(node, "vm_handle", diff_pair(TU64(r1->vm_handle), TU64(r2->vm_handle)));
-			ghost_diff_field(node, "vcpu_index", diff_pair(TU64(r1->vcpu_index), TU64(r2->vcpu_index)));
-		}
+	ghost_diff_field(node, "guest_running", diff_pair(TBOOL(r1->guest_running), TU64(r2->guest_running)));
+	if (r1->guest_running && r2->guest_running) {
+		ghost_diff_field(node, "vm_handle", diff_pair(TU64(r1->vm_handle), TU64(r2->vm_handle)));
+		ghost_diff_field(node, "vcpu_index", diff_pair(TU64(r1->vcpu_index), TU64(r2->vcpu_index)));
 	}
 	return normalise(node);
 }
