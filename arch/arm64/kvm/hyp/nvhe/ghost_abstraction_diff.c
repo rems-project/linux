@@ -263,7 +263,7 @@ struct ghost_diff *ghost_diff_mappings(mapping *mp1, mapping *mp2)
 	 	} else if (pos2 == NULL) {
 			ghost_diff_attach(node, diff_pm(false, TMAPLET(m1)));
 			pos1 = pos1->next;
-		} else if ( !(maplet_eq_nonattr(m1, m2)) ) {
+		} else if ( !(maplet_eq(m1, m2)) ) {
 			if (m1->virt < m2->virt) {
 				ghost_diff_attach(node, diff_pm(false, TMAPLET(m1)));
 				pos1=pos1->next;
