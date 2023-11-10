@@ -34,19 +34,25 @@ bool ghost_pfn_set_contains(struct pfn_set *set, u64 pfn)
 	return false;
 }
 
-void ghost_pfn_set_dump(struct pfn_set *set)
+void ghost_pfn_set_dump(struct pfn_set *set, u64 indent)
 {
 	ghost_assert(set->len < GHOST_MAX_PFN_SET_LEN);
-	hyp_putsp("BEGIN PFNS[pool_range: ");
+	hyp_puti(indent);
+	hyp_putsp("range: (");
 	hyp_putx64(set->pool_range_start);
-	hyp_putsp(" ... ");
+	hyp_putsp("...");
 	hyp_putx64(set->pool_range_end);
-	hyp_putsp("]\n");
+	hyp_putsp(")\n");
+
+	hyp_puti(indent);
+	hyp_putsp("external_pfns: [");
 	for (int idx=0; idx < set->len; idx++) {
-		hyp_putsxn("  pfs", set->external_pfns[idx], 64);
+		hyp_puti(indent+1);
+		hyp_putx64(set->external_pfns[idx]);
 		hyp_putsp("\n");
 	}
-	hyp_putsp("END PFNS\n");
+	hyp_puti(indent);
+	hyp_puts("]\n");
 }
 
 void ghost_pfn_set_copy(struct pfn_set *dst, struct pfn_set *src)
@@ -78,7 +84,7 @@ void ghost_pfn_set_assert_equal(struct pfn_set *lhs, struct pfn_set *rhs)
 static void print_set(void *set)
 {
 	struct pfn_set *s = *(struct pfn_set**)set;
-	ghost_pfn_set_dump(s);
+	ghost_pfn_set_dump(s, 0);
 }
 
 void ghost_pfn_set_assert_subseteq(struct pfn_set *lhs, struct pfn_set *rhs)

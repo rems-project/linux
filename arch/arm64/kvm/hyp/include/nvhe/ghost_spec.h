@@ -353,6 +353,8 @@ struct ghost_state {
 	struct ghost_running_state cpu_state[NR_CPUS];
 };
 
+void ghost_dump_state(struct ghost_state *g);
+
 /**
  * this_cpu_read_ghost_loaded_vcpu() - Get the loaded_hyp_vcpu for this CPU
  */

@@ -392,3 +392,13 @@ void abstract_pgtable_copy(abstract_pgtable *dst, abstract_pgtable *src)
 	ghost_pfn_set_copy(&dst->table_pfns, &src->table_pfns);
 	dst->mapping = mapping_copy(src->mapping);
 }
+
+
+void hyp_put_abstract_pgtable(abstract_pgtable *ap, u64 indent)
+{
+	hyp_put_mapping(ap->mapping, indent);
+
+	hyp_puti(indent);
+	hyp_puts("pfns: ");
+	ghost_pfn_set_dump(&ap->table_pfns, indent+2);
+}

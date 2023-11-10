@@ -28,7 +28,7 @@ void ghost_pfn_set_init(struct pfn_set *set, u64 pool_range_start, u64 pool_rang
 void ghost_pfn_set_clear(struct pfn_set *set);
 void ghost_pfn_set_insert(struct pfn_set *set, u64 pfn);
 bool ghost_pfn_set_contains(struct pfn_set *set, u64 pfn);
-void ghost_pfn_set_dump(struct pfn_set *set);
+void ghost_pfn_set_dump(struct pfn_set *set, u64 indent);
 void ghost_pfn_set_copy(struct pfn_set *dst, struct pfn_set *src);
 
 void ghost_pfn_set_assert_equal(struct pfn_set *lhs, struct pfn_set *rhs);

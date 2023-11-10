@@ -50,6 +50,7 @@ typedef struct abstract_pgtable_struct abstract_pgtable; // let's be more pure-f
 enum entry_kind entry_kind(unsigned long long pte, unsigned char level);
 void hyp_put_ek(enum entry_kind ek);
 void hyp_put_entry(kvm_pte_t pte, u8 level);
+void hyp_put_abstract_pgtable(abstract_pgtable *ap, u64 indent);
 void dump_pgtable(struct kvm_pgtable pg);
 void ghost_dump_pgtable(struct kvm_pgtable *pg, char *doc, u64 i);
 void ghost_dump_pgtable_locked(struct kvm_pgtable *pg, char *doc, u64 i);

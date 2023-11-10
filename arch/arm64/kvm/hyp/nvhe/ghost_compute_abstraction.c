@@ -560,12 +560,9 @@ void check_abstraction_equals_globals(struct ghost_state *gc, struct ghost_state
 
 // do we want these for an arbitrary g or for the global gs ?
 
-
-void check_abstraction_equals_all(struct ghost_state *gc, struct ghost_state *gr_post, struct ghost_state *gr_pre)
-{
-	GHOST_LOG_CONTEXT_ENTER();
-
 #if CONFIG_NVHE_GHOST_SPEC_NOISY
+static void post_dump_diff(struct ghost_state *gc, struct ghost_state *gr_post, struct ghost_state *gr_pre)
+{
 	struct ghost_diff *diff;
 
 	hyp_puts("pre->post:\n");
@@ -573,6 +570,8 @@ void check_abstraction_equals_all(struct ghost_state *gc, struct ghost_state *gr
 	if (diff) {
 		hyp_dump_diff(diff);
 		free_diff(diff);
+	} else {
+		hyp_puts("<identical>\n");
 	}
 
 	hyp_puts("post->computed:\n");
@@ -580,7 +579,18 @@ void check_abstraction_equals_all(struct ghost_state *gc, struct ghost_state *gr
 	if (diff) {
 		hyp_dump_diff(diff);
 		free_diff(diff);
+	} else {
+		hyp_puts("<identical>\n");
 	}
+}
+#endif /* CONFIG_NVHE_GHOST_SPEC_NOISY */
+
+void check_abstraction_equals_all(struct ghost_state *gc, struct ghost_state *gr_post, struct ghost_state *gr_pre)
+{
+	GHOST_LOG_CONTEXT_ENTER();
+
+#if CONFIG_NVHE_GHOST_SPEC_NOISY
+	post_dump_diff(gc, gr_post, gr_pre);
 #endif /* CONFIG_NVHE_GHOST_SPEC_NOISY */
 
 
@@ -1244,4 +1254,136 @@ struct ghost_register_state *this_cpu_ghost_register_state(struct ghost_state *g
 struct ghost_running_state *this_cpu_ghost_run_state(struct ghost_state *g)
 {
 	return &g->cpu_state[hyp_smp_processor_id()];
+}
+
+/*****************************************/
+// Dumper
+
+static void ghost_dump_pkvm(struct ghost_pkvm *pkvm)
+{
+	hyp_puts("pkvm:");
+
+	if (!pkvm->present) {
+		hyp_puts("<missing>\n");
+		return;
+	}
+	hyp_puts("\n");
+	hyp_put_abstract_pgtable(&pkvm->pkvm_abstract_pgtable, 2);
+}
+
+static void ghost_dump_host(struct ghost_host *host)
+{
+	hyp_puts("host:");
+
+	if (!host->present) {
+		hyp_puts("<missing>\n");
+		return;
+	}
+
+	hyp_puts("\n");
+
+	hyp_puti(2);
+	hyp_puts("annot:");
+	hyp_put_mapping(host->host_abstract_pgtable_annot, 4);
+
+	hyp_puti(2);
+	hyp_puts("shared:");
+	hyp_put_mapping(host->host_abstract_pgtable_shared, 4);
+
+	hyp_puti(2);
+	hyp_puts("pfns:");
+	ghost_pfn_set_dump(&host->host_pgtable_pages, 4);
+}
+
+static void ghost_dump_vm(struct ghost_vm *vm)
+{
+	if (!vm)
+		return;
+
+	hyp_puti(2);
+	hyp_puts("vm:\n");
+
+	hyp_puti(4);
+	hyp_putsxnl("handle", vm->pkvm_handle, 32);
+	hyp_puti(4);
+	hyp_putsxnl("nr_vcpus", vm->nr_vcpus, 64);
+	hyp_puti(4);
+	hyp_putsxnl("nr_initialised_vcpus", vm->nr_initialised_vcpus, 64);
+
+	hyp_puti(4);
+	hyp_put_abstract_pgtable(&vm->vm_abstract_pgtable, 4);
+}
+
+static void ghost_dump_vms(struct ghost_vms *vms)
+{
+	if (vms->present) {
+		hyp_puts("vms:<missing>\n");
+		return;
+	}
+
+	for (int i = 0; i < KVM_MAX_PVMS; i++) {
+		struct ghost_vm_slot *slot = &vms->table[i];
+		if (slot->exists) {
+			ghost_dump_vm(slot->vm);
+		}
+	}
+}
+
+static void ghost_dump_globals(struct ghost_constant_globals *globals)
+{
+	hyp_puts("globals:\n");
+	hyp_puti(2); hyp_putsxnl("hyp_nr_cpus", globals->hyp_nr_cpus, 64);
+	hyp_puti(2); hyp_putsxnl("hyp_physvirt_offset", globals->hyp_physvirt_offset, 64);
+	hyp_puti(2); hyp_putsxnl("tag_lsb", globals->tag_lsb, 64);
+	hyp_puti(2); hyp_putsxnl("tag_val", globals->tag_val, 64);
+}
+
+static void ghost_dump_regs(struct ghost_register_state *regs)
+{
+	hyp_puts("<regs>\n");
+}
+
+static void ghost_dump_loaded_vcpu(struct ghost_loaded_vcpu *vcpu)
+{
+	hyp_puts("loaded_vcpu[cpu]: ");
+	if (!vcpu->present) {
+		hyp_puts("<missing>\n");
+		return;
+	}
+
+	if (!vcpu->loaded) {
+		hyp_puts("<unloaded>\n");
+		return;
+	}
+
+	hyp_puts("\n");
+
+	hyp_puti(2); hyp_putsxnl("vm_handle", vcpu->vm_handle, 64);
+	hyp_puti(2); hyp_putsxnl("vcpu_index", vcpu->vcpu_index, 64);
+}
+
+static void ghost_dump_running_state(struct ghost_running_state *run)
+{
+	hyp_puts("run_state[cpu]: ");
+
+	if (!run->guest_running) {
+		hyp_puts("<host running>\n");
+		return;
+	}
+
+	hyp_puts("\n");
+
+	hyp_puti(2); hyp_putsxnl("vm_handle", run->vm_handle, 64);
+	hyp_puti(2); hyp_putsxnl("vcpu_index", run->vcpu_index, 64);
+}
+
+void ghost_dump_state(struct ghost_state *g)
+{
+	ghost_dump_pkvm(&g->pkvm);
+	ghost_dump_host(&g->host);
+	ghost_dump_regs(this_cpu_ghost_register_state(g));
+	ghost_dump_vms(&g->vms);
+	ghost_dump_globals(&g->globals);
+	ghost_dump_loaded_vcpu(this_cpu_ghost_loaded_vcpu(g));
+	ghost_dump_running_state(this_cpu_ghost_run_state(g));
 }
