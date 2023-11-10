@@ -511,6 +511,8 @@ static void __hyp_dump_diff(struct ghost_diff *diff, u64 indent)
 		hyp_puts("\n");
 		for (int i = 0; i < diff->container.nr_children; i++) {
 			__hyp_dump_diff(diff->container.children[i], indent + 2);
+			if (i < diff->container.nr_children - 1)
+				hyp_puts("\n");
 		};
 		break;
 	case GHOST_DIFF_PM:
@@ -519,20 +521,20 @@ static void __hyp_dump_diff(struct ghost_diff *diff, u64 indent)
 		else
 			hyp_puts(GHOST_WHITE_ON_RED "-");
 
-		__put_val(diff->pm.val, indent+2);
+		__put_val(diff->pm.val, 0);
 
 		hyp_puts(GHOST_NORMAL);
 		break;
 	case GHOST_DIFF_PAIR:
 		hyp_puts("\n");
 		hyp_puts(GHOST_WHITE_ON_RED "-");
-		__put_val(diff->pair.lhs, indent + 2);
+		__put_val(diff->pair.lhs, 0);
 		hyp_puts(GHOST_NORMAL);
 
 		hyp_puts("\n");
 
 		hyp_puts(GHOST_WHITE_ON_GREEN "+");
-		__put_val(diff->pair.rhs, indent + 2);
+		__put_val(diff->pair.rhs, 0);
 		hyp_puts(GHOST_NORMAL);
 		break;
 	}
