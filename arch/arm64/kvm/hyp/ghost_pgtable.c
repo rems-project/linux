@@ -166,10 +166,10 @@ void _interpret_pgtable(mapping *mapp, kvm_pte_t *pgd, struct pfn_set *pfns, u8 
         for (idx = 0; idx < 512; idx++) {
 		//if (noisy) { hyp_putsxn("idx", idx, 16); }
                 switch (level) {
-                case 0: va_partial_new = va_partial | (idx << 39); nr_pages = 0x0000001; break;
-                case 1: va_partial_new = va_partial | (idx << 30); nr_pages = 0x0000200; break;
-                case 2: va_partial_new = va_partial | (idx << 21); nr_pages = 0x0040000; break;
-                case 3: va_partial_new = va_partial | (idx << 12); nr_pages = 0x8000000; break;
+                case 0: va_partial_new = va_partial | (idx << 39); nr_pages = 0x8000000; break;
+                case 1: va_partial_new = va_partial | (idx << 30); nr_pages = 0x0040000; break;
+                case 2: va_partial_new = va_partial | (idx << 21); nr_pages = 0x0000200; break;
+                case 3: va_partial_new = va_partial | (idx << 12); nr_pages = 0x0000001; break;
                 default: check_assert_fail("unhandled level"); // cases are exhaustive
                 }
 
