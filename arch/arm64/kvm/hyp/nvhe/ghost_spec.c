@@ -907,7 +907,7 @@ void compute_new_abstract_state_handle_host_mem_abort(struct ghost_state *g1, st
 
 	// this is the third if in mem_protect.c::host_stage2_adjust_range()
 	if (!is_owned_exclusively_by(g0, GHOST_HOST, addr))
-		ghost_inject_abort(g0, g1);
+		ghost_inject_abort(g1, g0);
 
 	*new_state_computed = true;
 	/* TODO: modelling of host_stage2_adjust_range()
