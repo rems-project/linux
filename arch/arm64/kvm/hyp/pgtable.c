@@ -490,7 +490,6 @@ static int kvm_pgtable_visitor_cb(struct kvm_pgtable_walk_data *data,
     ? pte2 == pte : true @*/
 {
 	struct kvm_pgtable_walker *walker = data->walker;
-	/* Ensure the appropriate lock is held (e.g. RCU lock for stage-2 MMU) */
 	WARN_ON_ONCE(kvm_pgtable_walk_shared(ctx) && !kvm_pgtable_walk_lock_held());
 	return walker->cb(ctx, visit);
 }
@@ -670,7 +669,6 @@ static int _kvm_pgtable_walk(struct kvm_pgtable *pgt, struct kvm_pgtable_walk_da
 {
 	u32 idx;
 	int ret = 0;
-	int pgt_ia_bits = pgt->ia_bits;
 	u64 limit = BIT(pgt->ia_bits);
 
 	if (data->addr > limit || data->end > limit)
