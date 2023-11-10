@@ -552,19 +552,21 @@ static void post_dump_diff(struct ghost_state *gc, struct ghost_state *gr_post, 
 {
 	struct ghost_diff *diff;
 
-	hyp_puts("pre->post:\n");
+	hyp_puts("ghost pre->post: ");
 	diff = ghost_diff_state(gr_pre, gr_post);
 	if (diff) {
 		hyp_dump_diff(diff);
+		hyp_puts("\n");
 		free_diff(diff);
 	} else {
 		hyp_puts("<identical>\n");
 	}
 
-	hyp_puts("post->computed:\n");
+	hyp_puts("ghost post->computed: ");
 	diff = ghost_diff_state(gr_post, gc);
 	if (diff) {
 		hyp_dump_diff(diff);
+		hyp_puts("\n");
 		free_diff(diff);
 	} else {
 		hyp_puts("<identical>\n");

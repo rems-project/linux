@@ -88,6 +88,7 @@ void free_container(struct ghost_diff *node)
 
 void free_diff(struct ghost_diff *node)
 {
+	ghost_assert(node);
 	switch (node->kind) {
 	case GHOST_DIFF_CONTAINER:
 		free_container(node);
@@ -499,11 +500,15 @@ static void __put_val(struct diff_val val, u64 indent)
 
 static void __hyp_dump_diff(struct ghost_diff *diff, u64 indent)
 {
-	hyp_puti(indent);
-	__put_val(diff->key, indent);
-	hyp_putsp(":\n");
+	if (! (diff->key.kind == Tstr && diff->key.s == NULL)) {
+		hyp_puti(indent);
+		__put_val(diff->key, indent);
+		hyp_puts(": ");
+	}
+
 	switch (diff->kind) {
 	case GHOST_DIFF_CONTAINER:
+		hyp_puts("\n");
 		for (int i = 0; i < diff->container.nr_children; i++) {
 			__hyp_dump_diff(diff->container.children[i], indent + 2);
 		};
@@ -516,22 +521,27 @@ static void __hyp_dump_diff(struct ghost_diff *diff, u64 indent)
 
 		__put_val(diff->pm.val, indent+2);
 
-		hyp_puts(GHOST_NORMAL "\n");
+		hyp_puts(GHOST_NORMAL);
 		break;
 	case GHOST_DIFF_PAIR:
+		hyp_puts("\n");
 		hyp_puts(GHOST_WHITE_ON_RED "-");
 		__put_val(diff->pair.lhs, indent + 2);
-		hyp_puts(GHOST_NORMAL "\n");
+		hyp_puts(GHOST_NORMAL);
+
+		hyp_puts("\n");
 
 		hyp_puts(GHOST_WHITE_ON_GREEN "+");
 		__put_val(diff->pair.rhs, indent + 2);
-		hyp_puts(GHOST_NORMAL "\n");
-		hyp_puts("\n");
+		hyp_puts(GHOST_NORMAL);
 		break;
 	}
 }
 
 void hyp_dump_diff(struct ghost_diff *diff)
 {
-	__hyp_dump_diff(diff, 0);
+	if (!diff)
+		hyp_puts("<identical>");
+	else
+		__hyp_dump_diff(diff, 0);
 }
