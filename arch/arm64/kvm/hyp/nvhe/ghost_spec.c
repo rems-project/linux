@@ -1013,6 +1013,36 @@ static void tag_hcall_args(struct kvm_cpu_context *ctxt, u64 hcall_id)
 }
 #endif /* CONFIG_NVHE_GHOST_SPEC_NOISY */
 
+static bool this_trap_check_controlled(struct kvm_cpu_context *ctxt)
+{
+	u64 esr = read_sysreg_el2(SYS_ESR);
+	u64 ec = ESR_ELx_EC(esr);
+	u64 hcall_id;
+	char *name;
+	switch (ec) {
+	case ESR_ELx_EC_HVC64:
+		hcall_id = cpu_reg(ctxt, 0);
+		hcall_id -= KVM_HOST_SMCCC_ID(0);
+		name = (char *)ghost_host_hcall_names[hcall_id];
+		break;
+	case ESR_ELx_EC_SMC64:
+		name = NULL;
+		break;
+	case ESR_ELx_EC_FP_ASIMD:
+	case ESR_ELx_EC_SVE:
+		name = NULL;
+		break;
+	case ESR_ELx_EC_IABT_LOW:
+	case ESR_ELx_EC_DABT_LOW:
+		name = "handle_host_mem_abort";
+		break;
+	default:
+		BUG();
+	}
+
+	return !ghost_control_is_controlled(name) || ghost_control_check_enabled(name);
+}
+
 static void tag_exception_entry(struct kvm_cpu_context *ctxt)
 {
 	struct ghost_state *gr_pre = this_cpu_ptr(&gs_recorded_pre);
@@ -1087,7 +1117,7 @@ void ghost_record_pre(struct kvm_cpu_context *ctxt)
 	struct ghost_running_state *cpu_run_state = this_cpu_ptr(&ghost_cpu_run_state);
 	struct ghost_state *gr_pre = this_cpu_ptr(&gs_recorded_pre);
 
-	__this_cpu_write(ghost_check_this_hypercall, READ_ONCE(ghost_prot_finalized_all));
+	__this_cpu_write(ghost_check_this_hypercall, READ_ONCE(ghost_prot_finalized_all) && this_trap_check_controlled(ctxt));
 
 	tag_exception_entry(ctxt);
 
