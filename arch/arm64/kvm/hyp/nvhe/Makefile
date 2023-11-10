@@ -40,13 +40,13 @@ ghosts += ../ghost_control.o
 ghosts += ../ghost_pfn_set.o
 ghosts += ../ghost_context.o
 ghosts += ghost_compute_abstraction.o
-ghosts += ghost_abstraction_diff.o
 ghosts += ghost_spec.o
 ghosts += ../ghost_alloc.o
 ghosts += ../ghost_control.o
 
 hyp-obj-$(CONFIG_NVHE_GHOST_SPEC) += $(ghosts)
 hyp-obj-$(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) += ghost_simplified_model.o
+hyp-obj-$(CONFIG_NVHE_GHOST_DIFF) += ghost_abstraction_diff.o
 
 ghost-lib-objs := strcmp.o
 hyp-obj-$(CONFIG_NVHE_GHOST_SPEC) += $(addprefix ../../../lib/, $(ghost-lib-objs))

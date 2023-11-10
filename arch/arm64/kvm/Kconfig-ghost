@@ -62,3 +62,10 @@ config NVHE_GHOST_SIMPLIFIED_MODEL_VERBOSE
 	default n
 	help
 	  Enable the full (very noisy) logs from the ghost simplified model.
+
+config NVHE_GHOST_DIFF
+	bool "Show diffs between ghost states on traps"
+	depends on NVHE_GHOST_SPEC_NOISY
+	default n
+	help
+	  Prints diffs on each trap of the actual v expected ghost states.

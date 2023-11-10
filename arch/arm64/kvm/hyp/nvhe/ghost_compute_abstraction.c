@@ -30,7 +30,9 @@
 #include <nvhe/ghost_asm.h>
 #include <nvhe/ghost_asm_ids.h>
 
+#ifdef CONFIG_NVHE_GHOST_DIFF
 #include <nvhe/ghost_abstraction_diff.h>
+#endif /* CONFIG_NVHE_GHOST_DIFF */
 
 
 //horrible hack for ghost code in nvhe/iommu/s2mpu.c
@@ -542,7 +544,7 @@ void check_abstraction_equals_globals(struct ghost_state *gc, struct ghost_state
 
 // do we want these for an arbitrary g or for the global gs ?
 
-#if CONFIG_NVHE_GHOST_SPEC_NOISY
+#ifdef CONFIG_NVHE_GHOST_DIFF
 static void post_dump_diff(struct ghost_state *gc, struct ghost_state *gr_post, struct ghost_state *gr_pre)
 {
 	struct ghost_diff *diff;
@@ -582,15 +584,15 @@ static void post_dump_diff(struct ghost_state *gc, struct ghost_state *gr_post, 
 		hyp_puts("<identical>\n");
 	}
 }
-#endif /* CONFIG_NVHE_GHOST_SPEC_NOISY */
+#endif /* CONFIG_NVHE_GHOST_SPEC_DIFF */
 
 void check_abstraction_equals_all(struct ghost_state *gc, struct ghost_state *gr_post, struct ghost_state *gr_pre)
 {
 	GHOST_LOG_CONTEXT_ENTER();
 
-#if CONFIG_NVHE_GHOST_SPEC_NOISY
+#ifdef CONFIG_NVHE_GHOST_DIFF
 	post_dump_diff(gc, gr_post, gr_pre);
-#endif /* CONFIG_NVHE_GHOST_SPEC_NOISY */
+#endif /* CONFIG_NVHE_GHOST_DIFF */
 
 
 	// these things might not be present, in which case we check conditionally
