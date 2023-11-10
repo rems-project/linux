@@ -50,10 +50,10 @@ struct diff_val {
 		struct maplet *m;
 	};
 };
-#define TBOOL(value) (struct diff_val){.kind=Tbool, .b=((value))}
-#define TU64(value) (struct diff_val){.kind=Tu64, .n=((value))}
-#define TSTR(value) (struct diff_val){.kind=Tstr, .s=((value))}
-#define TMAPLET(value) (struct diff_val){.kind=Tmaplet, .m=((value))}
+#define TBOOL(value) (struct diff_val){.kind=Tbool, .b=(value)}
+#define TU64(value) (struct diff_val){.kind=Tu64, .n=(value)}
+#define TSTR(value) (struct diff_val){.kind=Tstr, .s=(value)}
+#define TMAPLET(value) (struct diff_val){.kind=Tmaplet, .m=(value)}
 
 struct ghost_diff {
 	/**
