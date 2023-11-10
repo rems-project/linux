@@ -150,6 +150,15 @@ struct ghost_host {
 	mapping host_abstract_pgtable_annot;
 	mapping host_abstract_pgtable_shared;
 	struct pfn_set host_pgtable_pages;
+
+	/**
+	 * this isn't part of the ghost state, but part of the instrumentation
+	 * the previous elements (annot/shared/pages) are derived from this,
+	 * but there needs to be somewhere to store the original
+	 *
+	 * Also, we sometimes want to print it out.
+	 */
+	abstract_pgtable host_concrete_pgtable;
 };
 
 /**

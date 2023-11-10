@@ -99,7 +99,8 @@ void ghost_diff_attach(struct ghost_diff *container, struct ghost_diff *child);
 struct ghost_diff *diff_pair(struct diff_val lhs, struct diff_val rhs);
 struct ghost_diff *diff_pm(bool add, struct diff_val val);
 
-struct ghost_diff *ghost_diff_running_state(struct ghost_running_state *r1, struct ghost_running_state *r2);
+struct ghost_diff *ghost_diff_pgtable(abstract_pgtable *ap1, abstract_pgtable *ap2);
+
 struct ghost_diff *ghost_diff_state(struct ghost_state *s1, struct ghost_state *s2);
 
 /* Printing */

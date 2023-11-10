@@ -90,19 +90,14 @@ void compute_abstraction_pkvm(struct ghost_pkvm *dest)
 
 void compute_abstraction_host(struct ghost_host *dest)
 {
-	// this is for storing the 'exact' host page table, which is used to compute the subcomponent
-	// the actually store in the ghost state.
-	// making this static to avoid wasting stack space
-	static abstract_pgtable tmp_ap;
 	u64 i=0; /* base indent */ /* though we'll mostly want this to be quiet, later */
 	u64 pool_range_start = (u64)hyp_virt_to_phys(host_s2_pgt_base);
 	u64 pool_range_end = pool_range_start + ghost_host_s2_pgt_size * PAGE_SIZE;
-	ghost_record_pgtable_ap(&tmp_ap, &host_mmu.pgt, pool_range_start, pool_range_end, "host_mmu.pgt", i);
-	ghost_pfn_set_copy(&dest->host_pgtable_pages, &tmp_ap.table_pfns);
-	dest->host_abstract_pgtable_annot = mapping_annot(tmp_ap.mapping);
-	dest->host_abstract_pgtable_shared = mapping_shared(tmp_ap.mapping);
+	ghost_record_pgtable_ap(&dest->host_concrete_pgtable, &host_mmu.pgt, pool_range_start, pool_range_end, "host_mmu.pgt", i);
+	ghost_pfn_set_copy(&dest->host_pgtable_pages, &dest->host_concrete_pgtable.table_pfns);
+	dest->host_abstract_pgtable_annot = mapping_annot(dest->host_concrete_pgtable.mapping);
+	dest->host_abstract_pgtable_shared = mapping_shared(dest->host_concrete_pgtable.mapping);
 	dest->present = true;
-	free_mapping(tmp_ap.mapping);
 }
 
 
@@ -552,6 +547,19 @@ static void post_dump_diff(struct ghost_state *gc, struct ghost_state *gr_post, 
 {
 	struct ghost_diff *diff;
 
+	if (gr_pre->host.present && gr_post->host.present) {
+		hyp_puts("pre->post host concrete pgtable: ");
+		diff = ghost_diff_pgtable(&gr_pre->host.host_concrete_pgtable, &gr_post->host.host_concrete_pgtable);
+		if (diff) {
+			hyp_dump_diff(diff);
+			hyp_puts("\n");
+			free_diff(diff);
+		} else {
+			hyp_puts("<identical>\n");
+		}
+	}
+
+
 	hyp_puts("ghost pre->post: ");
 	diff = ghost_diff_state(gr_pre, gr_post);
 	if (diff) {
@@ -642,6 +650,7 @@ void clear_abstraction_host(struct ghost_state *g)
 		ghost_pfn_set_clear(&g->host.host_pgtable_pages);
 		free_mapping(g->host.host_abstract_pgtable_annot);
 		free_mapping(g->host.host_abstract_pgtable_shared);
+		clear_abstract_pgtable(&g->host.host_concrete_pgtable);
 		g->host.present = false;
 	}
 }
@@ -727,6 +736,8 @@ void copy_abstraction_host(struct ghost_state *g_tgt, struct ghost_state *g_src)
 	g_tgt->host.host_abstract_pgtable_annot = mapping_copy(g_src->host.host_abstract_pgtable_annot);
 	g_tgt->host.host_abstract_pgtable_shared = mapping_copy(g_src->host.host_abstract_pgtable_shared);
 	ghost_pfn_set_copy(&g_tgt->host.host_pgtable_pages, &g_src->host.host_pgtable_pages);
+
+	g_tgt->host.host_concrete_pgtable.mapping = mapping_copy(g_src->host.host_concrete_pgtable.mapping);
 
 	g_tgt->host.present = g_src->host.present;
 }
