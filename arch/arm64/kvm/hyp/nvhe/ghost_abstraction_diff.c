@@ -230,7 +230,7 @@ struct ghost_diff *ghost_diff_mappings(mapping *mp1, mapping *mp2)
 {
 	struct ghost_diff *node = container();
 	struct glist_head head1 = *(struct glist_head*)mp1;
-	struct glist_head head2 = *(struct glist_head*)mp1;
+	struct glist_head head2 = *(struct glist_head*)mp2;
 	struct glist_node *pos1, *pos2;
 	struct maplet *m1, *m2;
 
