@@ -543,6 +543,7 @@ static int kvm_pgtable_visitor_cb(struct kvm_pgtable_walk_data *data, u64 addr,
     ? pte2 == pte : true @*/
 {
 	struct kvm_pgtable_walker *walker = data->walker;
+	return walker->cb(addr, data->end, level, ptep, flag, walker->arg);
 }
 
 static int __kvm_pgtable_walk(struct kvm_pgtable_walk_data *data,
@@ -678,7 +679,6 @@ static int _kvm_pgtable_walk(struct kvm_pgtable_walk_data *data)
 	u32 idx;
 	int ret = 0;
 	struct kvm_pgtable *pgt = data->pgt;
-	int pgt_ia_bits = pgt->ia_bits;
 	u64 limit = BIT(pgt->ia_bits);
 
 	if (data->addr > limit || data->end > limit)
