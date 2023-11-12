@@ -8,6 +8,7 @@
 #include <hyp/ghost_extra_debug-pl011.h>
 #include <nvhe/ghost_pgtable.h>
 #include <nvhe/memory.h>   // for hyp_phys_to_virt
+#include <nvhe/mem_protect.h>   // for PKVM_PAGE_SHARED_OWNED etc
 
 #include <nvhe/ghost_pfn_set.h>
 #include <nvhe/ghost_asserts.h>
@@ -15,99 +16,106 @@
 
 #pragma GCC diagnostic ignored "-Wdeclaration-after-statement"
 
+static ghost_mair_t pkvm_mair(void)
+{
+	// TODO: make part of ghost state and verify it's stable.
+	return read_mair(read_sysreg(mair_el2));
+}
+
 /* page table entry kind: classify kind of entry */
 enum entry_kind entry_kind(unsigned long long pte, unsigned char level)
 {
-  switch(level) {
-  case 0:
-  case 1:
-  case 2:
-    {
-      switch (pte & GENMASK(1,0)) {
-      case ENTRY_INVALID_0:
-      case ENTRY_INVALID_2:
-	return EK_INVALID;
-      case ENTRY_BLOCK:
-	switch (level) {
+	switch(level) {
 	case 0:
-	  return EK_BLOCK_NOT_PERMITTED;
 	case 1:
-        case 2:
-	  return EK_BLOCK;
+	case 2: {
+		switch (pte & GENMASK(1,0)) {
+		case PTE_FIELD_INVALID_00:
+		case PTE_FIELD_INVALID_10:
+			return EK_INVALID;
+		case PTE_FIELD_LVL012_BLOCK:
+			return EK_BLOCK;
+		case PTE_FIELD_LVL012_TABLE:
+			return EK_TABLE;
+		default:
+			unreachable();
+		};
+		break;
 	}
-      case ENTRY_TABLE:
-	return EK_TABLE;
-      default:
-	// just to tell the compiler that the cases are exhaustive
-	return EK_DUMMY;
-      }
-    }
-  case 3:
-    switch (pte & GENMASK(1,0)) {
-    case ENTRY_INVALID_0:
-    case ENTRY_INVALID_2:
-      return EK_INVALID;
-    case ENTRY_RESERVED:
-      return EK_RESERVED;
-    case ENTRY_PAGE_DESCRIPTOR:
-      return EK_PAGE_DESCRIPTOR;
-    }
-
-  default:
-    // just to tell the compiler that the cases are exhaustive
-    return EK_DUMMY;
-  }
-
-  return EK_DUMMY;
+	case 3:
+		switch (pte & GENMASK(1,0)) {
+		case PTE_FIELD_INVALID_00:
+		case PTE_FIELD_INVALID_10:
+			return EK_INVALID;
+		case PTE_FIELD_LVL3_RESERVED:
+			return EK_RESERVED;
+		case PTE_FIELD_LVL3_PAGE:
+			return EK_PAGE_DESCRIPTOR;
+		default:
+			unreachable();
+		}
+		break;
+	default:
+		return EK_DUMMY;
+	}
 }
 
 
 /* page-table entry kind: print entry kind */
 void hyp_put_ek(enum entry_kind ek)
 {
-        switch(ek) {
-        case EK_INVALID:                hyp_putsp("EK_INVALID");                break;
-        case EK_BLOCK:                  hyp_putsp("EK_BLOCK");                  break;
-        case EK_TABLE:                  hyp_putsp("EK_TABLE");                  break;
-        case EK_PAGE_DESCRIPTOR:        hyp_putsp("EK_PAGE_DESCRIPTOR");        break;
-        case EK_BLOCK_NOT_PERMITTED:    hyp_putsp("EK_BLOCK_NOT_PERMITTED");    break;
-        case EK_RESERVED:               hyp_putsp("EK_RESERVED");               break;
-        case EK_DUMMY:                  hyp_putsp("EK_DUMMY");                  break;
-        }
+	switch(ek) {
+	case EK_INVALID:                hyp_putsp("EK_INVALID");                break;
+	case EK_BLOCK:                  hyp_putsp("EK_BLOCK");                  break;
+	case EK_TABLE:                  hyp_putsp("EK_TABLE");                  break;
+	case EK_PAGE_DESCRIPTOR:        hyp_putsp("EK_PAGE_DESCRIPTOR");        break;
+	case EK_BLOCK_NOT_PERMITTED:    hyp_putsp("EK_BLOCK_NOT_PERMITTED");    break;
+	case EK_RESERVED:               hyp_putsp("EK_RESERVED");               break;
+	case EK_DUMMY:                  hyp_putsp("EK_DUMMY");                  break;
+	}
 }
 
 /* page-table entry: print entry */
 void hyp_put_entry(kvm_pte_t pte, u8 level)
 {
-        enum entry_kind ek;
-        u64 oa;
-        ek = entry_kind(pte, level);
-        hyp_put_ek(ek); hyp_putsp(" ");
-        switch(ek) {
-        case EK_INVALID:                break;
-        case EK_BLOCK:                  break;
-        case EK_TABLE:                  break;
-        case EK_PAGE_DESCRIPTOR:
-                oa = pte & GENMASK(47,12);
-                hyp_putsxn("oa", oa, 64);
-                break;
-        case EK_BLOCK_NOT_PERMITTED:    break;
-        case EK_RESERVED:               break;
-        case EK_DUMMY:                  break;
-        }
+	u64 oa;
+	enum entry_kind ek = entry_kind(pte, level);
+
+	hyp_put_ek(ek);
+	hyp_puts(" ");
+
+	switch(ek) {
+	case EK_INVALID:
+	case EK_BLOCK:
+	case EK_TABLE:
+		break;
+
+	case EK_PAGE_DESCRIPTOR:
+		oa = pte & GENMASK(47,12);
+		hyp_putsxn("oa", oa, 64);
+		break;
+
+	case EK_BLOCK_NOT_PERMITTED:
+	case EK_RESERVED:
+	case EK_DUMMY:
+		break;
+
+	default:
+		unreachable();
+	}
 
 }
 
 /* page-table: print table */
 void _dump_pgtable(u64 *pgd, u8 level)
 {
-        u32 idx;
-        if (pgd) {
-                // dump this page
-                hyp_putsxn("level",level,8);
-                hyp_putsxn("table at virt", (u64)pgd, 64); hyp_puts("\n");
-                for (idx = 0; idx < 512; idx++) {
-                        kvm_pte_t pte = pgd[idx];
+	u32 idx;
+	if (pgd) {
+		// dump this page
+		hyp_putsxn("level",level,8);
+		hyp_putsxn("table at virt", (u64)pgd, 64); hyp_puts("\n");
+		for (idx = 0; idx < 512; idx++) {
+			kvm_pte_t pte = pgd[idx];
 			if (pte!=0) {
 				hyp_putsxn("level",level,8);
 				hyp_putsxn("entry at virt",(u64)(pgd+idx),64);
@@ -115,157 +123,339 @@ void _dump_pgtable(u64 *pgd, u8 level)
 				hyp_put_entry(pte, level);
 				hyp_puts("\n");
 			}
-                }
-                // dump any sub-pages
-                for (idx = 0; idx < 512; idx++) {
-                        kvm_pte_t pte = pgd[idx];
-                        if (entry_kind(pte, level) == EK_TABLE) {
-                                u64 next_level_phys_address, next_level_virt_address;
-                                next_level_phys_address = pte & GENMASK(47,12);
-                                next_level_virt_address = (u64)hyp_phys_to_virt((phys_addr_t)next_level_phys_address);
-                                hyp_putsxn("table phys", next_level_phys_address, 64);
-                                hyp_putsxn("table virt", next_level_virt_address, 64);
+		}
+		// dump any sub-pages
+		for (idx = 0; idx < 512; idx++) {
+			kvm_pte_t pte = pgd[idx];
+			if (entry_kind(pte, level) == EK_TABLE) {
+				u64 next_level_phys_address, next_level_virt_address;
+				next_level_phys_address = pte & GENMASK(47,12);
+				next_level_virt_address = (u64)hyp_phys_to_virt((phys_addr_t)next_level_phys_address);
+				hyp_putsxn("table phys", next_level_phys_address, 64);
+				hyp_putsxn("table virt", next_level_virt_address, 64);
 				hyp_puts("\n");
-                                _dump_pgtable((kvm_pte_t *)next_level_virt_address, level+1);
-                                hyp_puts("\n");
-                        }
-                }
-        }
-        else {
-                hyp_puts("table address null");
-        }
+				_dump_pgtable((kvm_pte_t *)next_level_virt_address, level+1);
+				hyp_puts("\n");
+			}
+		}
+	}
+	else {
+		hyp_puts("table address null");
+	}
 }
 
 
 void dump_pgtable(struct kvm_pgtable pg)
 {
-        hyp_putsxn("ia_bits", pg.ia_bits, 32);
-        hyp_putsxn("ia_start_level", pg.start_level, 32);
-        hyp_puts("");
-        _dump_pgtable(pg.pgd, pg.start_level);
+	hyp_putsxn("ia_bits", pg.ia_bits, 32);
+	hyp_putsxn("ia_start_level", pg.start_level, 32);
+	hyp_puts("");
+	_dump_pgtable(pg.pgd, pg.start_level);
 
-        return;
+	return;
 }
 
-void _interpret_pgtable(mapping *mapp, kvm_pte_t *pgd, struct pfn_set *pfns, u8 level, u64 va_partial, struct aal aal, bool noisy)
+enum maplet_owner_annotation __parse_annot(u64 pte)
 {
-        u64 idx;
-        u64 va_partial_new;
-        kvm_pte_t pte;
-        enum entry_kind ek;
-        u64 next_level_phys_address, next_level_virt_address;
-	struct aal next_level_aal;
-        u64 oa;
-	u64 attr;
-	u64 nr_pages;
+	switch (pte & GENMASK(63, 1)) {
+	case PTE_FIELD_PKVM_OWNER_ID_HOST:
+		return MAPLET_OWNER_ANNOT_OWNED_HOST;
+	case PTE_FIELD_PKVM_OWNER_ID_HYP:
+		return MAPLET_OWNER_ANNOT_OWNED_HYP;
+	case PTE_FIELD_PKVM_OWNER_ID_GUEST:
+		return MAPLET_OWNER_ANNOT_OWNED_GUEST;
+	default:
+		return MAPLET_OWNER_ANNOT_UNKNOWN;
+	}
+}
 
+struct maplet_target_annot parse_annot(u64 desc)
+{
+	struct maplet_target_annot t;
+	t.owner = __parse_annot(desc);
+	t.raw_arch_annot = desc;
+	return t;
+}
+
+struct maplet_attributes parse_attrs(ghost_stage_t stage, ghost_mair_t mair, u64 desc, u8 level, struct aal next_level_aal)
+{
+	// first fill in the permissions
+	enum maplet_permissions perms;
+	switch (stage) {
+	case GHOST_STAGE1: {
+		bool ro = __s1_is_ro(desc);
+		bool xn = __s1_is_xn(desc);
+
+		/* Stage1 always has R permission. */
+		perms = MAPLET_PERM_R;
+
+		/* If not read-only, also has W */
+		if (!ro)
+			perms |= MAPLET_PERM_W;
+
+		/* If not e(x)-(n)ever, also has X */
+		if (!xn)
+			perms |= MAPLET_PERM_X;
+
+		break;
+	}
+	case GHOST_STAGE2: {
+		bool r = __s2_is_r(desc);
+		bool w = __s2_is_w(desc);
+		bool xn = __s2_is_xn(desc);
+
+		perms = 0;
+
+		if (r)
+			perms |= MAPLET_PERM_R;
+
+		if (w)
+			perms |= MAPLET_PERM_W;
+
+		if (!xn)
+			perms |= MAPLET_PERM_X;
+
+		/* check for bad encoding, and overrule anything we did if we find one */
+		if (__s2_is_x(desc))
+		 	perms = MAPLET_PERM_UNKNOWN;
+
+		break;
+	}
+	case GHOST_STAGE_NONE:
+		// can't parse attrs for a not-a-pagetable pte
+		BUG();
+	default:
+		BUG();
+	}
+
+	// TODO: fill in hierarchical permissions from `next_level_aal`
+	// rather than just giving up with UNKNOWN
+	for (int i = 0; i < level; i++) {
+		if (next_level_aal.attr_at_level[i]) {
+			perms = MAPLET_PERM_UNKNOWN;
+		}
+	}
+
+	// now extract the page state
+	enum maplet_page_state page_state;
+	// grab the software-defined bits from the upper attributes
+	switch (desc & PTE_FIELD_UPPER_ATTRS_SW_MASK) {
+	/* these PKVM_PAGE_x are defined to be equal to the _architectural_ bits */
+	case PKVM_PAGE_OWNED:
+		page_state = MAPLET_PAGE_STATE_PRIVATE_OWNED;
+		break;
+	case PKVM_PAGE_SHARED_OWNED:
+		page_state = MAPLET_PAGE_STATE_SHARED_OWNED;
+		break;
+	case PKVM_PAGE_SHARED_BORROWED:
+		page_state = MAPLET_PAGE_STATE_SHARED_BORROWED;
+		break;
+	default:
+		page_state = MAPLET_PAGE_STATE_UNKNOWN;
+	}
+
+	// finally, read out the mem_attr
+	enum maplet_memtype_attr memtype_attr;
+	switch (stage) {
+	case GHOST_STAGE1: {
+		// hard case: pte contains AttrIndx, which indirects through MAIR_ELx
+		u64 attr_idx = PTE_EXTRACT(PTE_FIELD_S1_ATTRINDX, desc);
+		// mair must be read_mair(...) not no_mair() if asking for Stage 2
+		ghost_assert(mair.present);
+		switch(mair.attrs[attr_idx]) {
+		case MEMATTR_FIELD_DEVICE_nGnRE:
+			memtype_attr = MAPLET_MEMTYPE_DEVICE;
+			break;
+		case MEMATTR_FIELD_NORMAL_OUTER_INNER_WRITE_BACK_CACHEABLE:
+			memtype_attr = MAPLET_MEMTYPE_NORMAL_CACHEABLE;
+			break;
+		default:
+			memtype_attr = MAPLET_MEMTYPE_UNKNOWN;
+			break;
+		}
+		break;
+	}
+	case GHOST_STAGE2:
+		// easy case, MemAttr encoded directly into the pte.
+		switch (PTE_EXTRACT(PTE_FIELD_S2_MEMATTR, desc)) {
+		case PTE_FIELD_S2_MEMATTR_DEVICE_nGnRE:
+			memtype_attr = MAPLET_MEMTYPE_DEVICE;
+			break;
+		case PTE_FIELD_S2_MEMATTR_NORMAL_OUTER_INNER_WRITE_BACK_CACHEABLE:
+			memtype_attr = MAPLET_MEMTYPE_NORMAL_CACHEABLE;
+			break;
+		default:
+			memtype_attr = MAPLET_MEMTYPE_UNKNOWN;
+			break;
+		}
+		break;
+	default:
+		// already checked
+		unreachable();
+	}
+
+	return (struct maplet_attributes){
+		.prot = perms,
+		.provenance = page_state,
+		.memtype = memtype_attr,
+		.raw_arch_attrs = desc & PTE_FIELD_ATTRS_MASK,
+	};
+}
+
+struct maplet_target_mapped parse_mapped(ghost_stage_t stage, ghost_mair_t mair, u8 level, u64 oa, u64 nr_pages, u64 desc, struct aal next_level_aal)
+{
+	struct maplet_attributes attrs = parse_attrs(stage, mair, desc, level, next_level_aal);
+
+	struct maplet_target_mapped m = {
+		.oa_range_start = oa,
+		.oa_range_nr_pages = nr_pages,
+		.attrs = attrs,
+	};
+
+	return m;
+}
+
+/**
+ * The number of pages a block/page mapping at level[n] covers.
+ */
+static u64 MAP_BLOCK_NR_PAGES[4] = {
+	[0] = 0x8000000,
+	[1] = 0x0040000,
+	[2] = 0x0000200,
+	[3] = 0x0000001,
+};
+
+void _interpret_pgtable(mapping *mapp, kvm_pte_t *pgd, struct pfn_set *pfns, ghost_stage_t stage, ghost_mair_t mair, u8 level, u64 va_partial, struct aal aal, bool noisy)
+{
 	if (noisy) { hyp_putsp("_interpret_pgtable "); hyp_putsxn("level", (u64)level, 8); hyp_putsxn("pgd", (u64)pgd, 64); }
 
-	next_level_aal = aal;
+	struct aal next_level_aal = aal;
+	u64 nr_pages = MAP_BLOCK_NR_PAGES[level];
 
-        for (idx = 0; idx < 512; idx++) {
-		//if (noisy) { hyp_putsxn("idx", idx, 16); }
-                switch (level) {
-                case 0: va_partial_new = va_partial | (idx << 39); nr_pages = 0x8000000; break;
-                case 1: va_partial_new = va_partial | (idx << 30); nr_pages = 0x0040000; break;
-                case 2: va_partial_new = va_partial | (idx << 21); nr_pages = 0x0000200; break;
-                case 3: va_partial_new = va_partial | (idx << 12); nr_pages = 0x0000001; break;
-                default: check_assert_fail("unhandled level"); // cases are exhaustive
-                }
+	for (u64 idx = 0; idx < 512; idx++) {
+		u64 va_offset_in_region = idx * nr_pages * PAGE_SIZE;
+		u64 va_partial_new = va_partial | va_offset_in_region;
 
-                pte = pgd[idx];
+		u64 pte = pgd[idx];
+		enum entry_kind ek = entry_kind(pte, level);
 
-                ek = entry_kind(pte, level);
-                switch(ek) {
-                case EK_INVALID:
-			if (pte != 0) {
-				extend_mapping_coalesce(mapp, va_partial_new, nr_pages, maplet_target_annot(pte & GENMASK(61,1)));
-			}
+		switch(ek) {
+		case EK_INVALID:
+			if (pte != 0)
+				extend_mapping_coalesce(mapp, stage, va_partial_new, nr_pages, maplet_target_annot(parse_annot(pte)));
 			break;
-                case EK_BLOCK:
-// G.b p2742 4KB translation granule has a case split on whether "the Effective value of TCR_ELx.DS or VTCR_EL2.DS is 1". DS is for 52-bit output addressing with FEAT_LPA2, and is zero in the register values we see; I'll hard-code that for now.  Thus, G.b says:
-// - For a level 1 Block descriptor, bits[47:30] are bits[47:30] of the output address. This output address specifies a 1GB block of memory.
-// - For a level 2 Block descriptor, bits[47:21] are bits[47:21] of the output address.This output address specifies a 2MB block of memory.
-			switch (level) {
-			case 1:
-				oa = pte & GENMASK(47,30);
-				break;
-			case 2:
-				oa = pte & GENMASK(47,21);
-				break;
-			default:
-				check_assert_fail("_interpret_pgtable bad block level");
-				break;
-			}
-                        if (noisy) { hyp_putsp("_interpret_pgtable block"); hyp_putsxn("va", va_partial_new, 64); hyp_putsxn("oa", oa, 64); hyp_putsxn("nr_pages", nr_pages, 64); }
-			/* These attribute bitmasks follow DDI 0478H.a D5-4840 for 4k granule 48-bit OA.  D5-4846 confusingly shows nT at [16] and OA (RES0 if FEAT_LPA not implemented) at [15:12]; not sure what's going on there.  */
-			attr = pte & (GENMASK(63,50) | GENMASK(11,2)); // punting on hierarchical aspects of attributes
-                        extend_mapping_coalesce(mapp, va_partial_new, nr_pages, maplet_target_mapped(oa, attr, next_level_aal));
-                        break;
-		case EK_TABLE:
-                        next_level_phys_address = pte & GENMASK(47,12);
-                        next_level_virt_address = (u64)hyp_phys_to_virt((phys_addr_t)next_level_phys_address);
-                        //hyp_putsxn("table phys", next_level_phys_address, 64);
-                        //hyp_putsxn("table virt", next_level_virt_address, 64);
-			next_level_aal.attr_at_level[level] = pte & (GENMASK(63,59) | GENMASK(58,51) | GENMASK(11,2)); // the first are actual attributes, the second and third are Ignored bits
-			if(pfns)
+		case EK_BLOCK: {
+			u64 oa = pte & PTE_FIELD_OA_MASK[level];
+			u64 attr = pte & PTE_FIELD_ATTRS_MASK;
+			if (noisy) { hyp_putsp("_interpret_pgtable block"); hyp_putsxn("va", va_partial_new, 64); hyp_putsxn("oa", oa, 64); hyp_putsxn("nr_pages", nr_pages, 64); }
+			struct maplet_target_mapped t = parse_mapped(stage, mair, level, oa, nr_pages, attr, next_level_aal);
+			extend_mapping_coalesce(mapp, stage, va_partial_new, nr_pages, maplet_target_mapped(va_partial_new, nr_pages, t));
+			break;
+		}
+		case EK_TABLE: {
+			u64 next_level_phys_address = pte & PTE_FIELD_TABLE_NEXT_LEVEL_ADDR_MASK;
+			u64 next_level_virt_address = (u64)hyp_phys_to_virt((phys_addr_t)next_level_phys_address);
+			next_level_aal.attr_at_level[level] = pte & (PTE_FIELD_UPPER_ATTRS_MASK | PTE_FIELD_TABLE_IGNORED_MASK);
+			if (pfns)
 				ghost_pfn_set_insert(pfns, hyp_virt_to_pfn(next_level_virt_address));
-                        _interpret_pgtable(mapp, (kvm_pte_t *)next_level_virt_address, pfns, level+1, va_partial_new, next_level_aal, noisy); break;
-                case EK_PAGE_DESCRIPTOR:
-                        oa = pte & GENMASK(47,12);
-                        // hyp_putsxn("oa", oa, 64);
-                        // now add (va_partial, oa) to the mappings
-                        if (noisy) { hyp_putsp("_interpret_pgtable desc "); hyp_putsxn("va", va_partial_new, 64); hyp_putsxn("oa", oa, 64); }
-			attr = pte & (GENMASK(63,50) | GENMASK(11,2)); // punting on hierarchical aspects of attributes
-                        extend_mapping_coalesce(mapp, va_partial_new, 1, maplet_target_mapped(oa, attr, next_level_aal));
-                        break;
-                case EK_BLOCK_NOT_PERMITTED:
-                        check_assert_fail("unhandled EK_BLOCK_NOT_PERMITTED"); break;
-                case EK_RESERVED:
-                        check_assert_fail("unhandled EK_RESERVED"); break;
-                case EK_DUMMY:
-                        check_assert_fail("unhandled EK_DUMMY"); break;
-                default:
-                        check_assert_fail("unhandled default");  break;
-                }
-        }
+			_interpret_pgtable(mapp, (kvm_pte_t *)next_level_virt_address, pfns, stage, mair, level+1, va_partial_new, next_level_aal, noisy);
+			break;
+		}
+		case EK_PAGE_DESCRIPTOR: {
+			u64 oa = pte & PTE_FIELD_LVL3_OA_MASK;
+			u64 attr = pte & PTE_FIELD_ATTRS_MASK;
+			if (noisy) { hyp_putsp("_interpret_pgtable desc "); hyp_putsxn("va", va_partial_new, 64); hyp_putsxn("oa", oa, 64); }
+			struct maplet_target_mapped t = parse_mapped(stage, mair, level, oa, nr_pages, attr, next_level_aal);
+			extend_mapping_coalesce(mapp, stage, va_partial_new, 1, maplet_target_mapped(va_partial_new, nr_pages, t));
+			break;
+		}
+		case EK_BLOCK_NOT_PERMITTED:
+			check_assert_fail("unhandled EK_BLOCK_NOT_PERMITTED"); break;
+		case EK_RESERVED:
+			check_assert_fail("unhandled EK_RESERVED"); break;
+		case EK_DUMMY:
+			check_assert_fail("unhandled EK_DUMMY"); break;
+		default:
+			check_assert_fail("unhandled default");  break;
+		}
+	}
 }
 
-
-// a caller is allowed to set @pfns to NULL if they don't care about the pfn set
-mapping interpret_pgtable(kvm_pte_t *pgd, struct pfn_set *pfns, bool noisy)
+void ghost_record_pgtable_into(mapping *out, struct kvm_pgtable *pg, struct pfn_set *out_pfns, ghost_stage_t stage, ghost_mair_t mair, u64 i)
 {
 	//hyp_puts("interpret_pgtable");
-	mapping map = mapping_empty_();
+	*out = mapping_empty_();
 	struct aal aal;
 	int j;
-	for (j=0; j<GHOST_ATTR_MAX_LEVEL; j++)
-		aal.attr_at_level[j]=1;
-	if (pgd==0)
-		//hyp_puts("empty");
-		return map;
-	else
-	{
-		if(pfns)
-			ghost_pfn_set_insert(pfns, hyp_virt_to_pfn(pgd));
-		_interpret_pgtable(&map, pgd, pfns, 0, 0, aal, noisy);
-		//hyp_put_mapping(map,2);
-		return map;
+
+	for (j=0; j < GHOST_ATTR_MAX_LEVEL + 1; j++) {
+		aal.attr_at_level[j] = 1;
 	}
+
+	if (pg)
+		_interpret_pgtable(out, pg->pgd, out_pfns, stage, mair, 0, 0, aal, false);
 }
 
+mapping ghost_record_pgtable(struct kvm_pgtable *pgt, char *doc, u64 i)
+{
+	mapping map;
+	bool is_s2 = pgt->mmu != NULL;
+	ghost_stage_t stage = is_s2 ? GHOST_STAGE2 : GHOST_STAGE1;
+	ghost_mair_t mair = is_s2 ? no_mair() : pkvm_mair();
 
-void interpret_pgtable_ap(abstract_pgtable *ap_out, kvm_pte_t *pgd, u64 pool_range_start, u64 pool_range_end, bool noisy)
+	if (pgt->pgd == 0)
+		map = mapping_empty_();
+	else
+		ghost_record_pgtable_into(&map, pgt, NULL, stage, mair, i);
+
+	return map;
+}
+
+void ghost_record_pgtable_ap(abstract_pgtable *ap_out, struct kvm_pgtable *pgt, u64 pool_range_start, u64 pool_range_end, char *doc, u64 i)
 {
 	ghost_pfn_set_init(&ap_out->table_pfns, pool_range_start, pool_range_end);
-	if (pgd==0) {
-		ap_out->mapping=mapping_empty_();
-	}
-	else {
-		ap_out->mapping=interpret_pgtable(pgd, &ap_out->table_pfns, noisy);
-	}
+	ap_out->mapping = ghost_record_pgtable(pgt, doc, i);
 }
 
+mapping ghost_record_pgtable_and_check(mapping map_old, struct kvm_pgtable *pgt, bool dump, char *doc, u64 i)
+{
+	//hyp_puts("pgtable diff ");
+	//hyp_puts(doc);
+	//hyp_putc('\n');
+	mapping map = ghost_record_pgtable(pgt, NULL, i);
+	if (dump) {
+		hyp_putspi(doc,i+2);
+		hyp_put_mapping(map, i+4);
+	}
+	mapping_equal(map_old, map, "check equal", "old", doc, i+2);
+	//	hyp_put_mapping(&maplets_a);
+	return map;
+}
+
+mapping ghost_record_pgtable_partial(kvm_pte_t *pgtable, ghost_stage_t stage, ghost_mair_t mair, u8 level, u64 va_partial, struct aal aal_partial, char *doc, u64 i)
+{
+	mapping map = mapping_empty_();
+	hyp_putspi(doc, i);
+	hyp_putsp(" ");
+	hyp_putsp("ghost_record_pgtable_2 ");
+	hyp_putc('\n');
+	if (pgtable==NULL) {
+		hyp_putspi("pgtable==NULL\n", i);
+		goto out;
+	}
+	_interpret_pgtable(&map, pgtable, NULL, stage, mair, level, va_partial, aal_partial, false /*noisy*/);
+	hyp_put_mapping(map, i+2);
+out:
+	return map;
+}
+
+void abstract_pgtable_copy(abstract_pgtable *dst, abstract_pgtable *src)
+{
+	ghost_pfn_set_copy(&dst->table_pfns, &src->table_pfns);
+	dst->mapping = mapping_copy(src->mapping);
+}
+
+/// Dumping and diffing and stuff... TODO: CLEANUP
 
 void ghost_dump_pgtable_locked(struct kvm_pgtable *pg, char *doc, u64 i)
 {
@@ -276,7 +466,7 @@ void ghost_dump_pgtable_locked(struct kvm_pgtable *pg, char *doc, u64 i)
 		hyp_puts("empty");
 		return;
 	}
-	mapping map = interpret_pgtable(pg->pgd, NULL, false /*noisy*/);
+	mapping map = ghost_record_pgtable(pg, NULL, 0);
 	//hyp_puts("ghost_dump_pgtable post interpret_pgtable()\n");
 	hyp_put_mapping(map, i+2);
 	// dump_pgtable(*pg); // to look at the raw pgtable - verbosely!
@@ -290,109 +480,6 @@ void ghost_dump_pgtable(struct kvm_pgtable *pg, char *doc, u64 i)
 	ghost_dump_pgtable_locked(pg,doc,i);
 	ghost_unlock_maplets();
 }
-
-mapping ghost_record_pgtable(struct kvm_pgtable *pg, char *doc, u64 i)
-{
-	//hyp_puts("ghost_record_pgtable() ");
-	//hyp_puts(doc);
-	//hyp_putc('\n');
-	mapping map = interpret_pgtable(pg->pgd, NULL, false /*noisy*/);
-	//	hyp_put_mapping(map, i+2)
-	return map;
-}
-
-
-void ghost_record_pgtable_ap(abstract_pgtable *ap_out, struct kvm_pgtable *pg, u64 pool_range_start, u64 pool_range_end, char *doc, u64 i)
-{
-	//hyp_puts("ghost_record_pgtable() ");
-	//hyp_puts(doc);
-	//hyp_putc('\n');
-	interpret_pgtable_ap(ap_out, pg->pgd, pool_range_start, pool_range_end, false /*noisy*/);
-	//	hyp_put_mapping(map, i+2)
-}
-
-
-mapping ghost_record_pgtable_and_check(mapping map_old, struct kvm_pgtable *pg, bool dump, char *doc, u64 i)
-{
-	//hyp_puts("pgtable diff ");
-	//hyp_puts(doc);
-	//hyp_putc('\n');
-	mapping map = interpret_pgtable(pg->pgd, NULL, false /*noisy*/);
-	if (dump) {
-		hyp_putspi(doc,i+2);
-		hyp_put_mapping(map, i+4);
-	}
-	mapping_equal(map_old, map, "check equal", "old", doc, i+2);
-	//	hyp_put_mapping(&maplets_a);
-	return map;
-}
-
-void ghost_record_pgtable_and_check_ap(abstract_pgtable *ap_new, abstract_pgtable *ap_old, struct kvm_pgtable *pg, bool dump, u64 pool_range_start, u64 pool_range_end, char *doc, u64 i)
-{
-	//hyp_puts("pgtable diff ");
-	//hyp_puts(doc);
-	//hyp_putc('\n');
-	interpret_pgtable_ap(ap_new, pg->pgd, pool_range_start, pool_range_end, false /*noisy*/);
-	if (dump) {
-		hyp_putspi(doc,i+2);
-		hyp_put_mapping(ap_new->mapping, i+4);
-	}
-	mapping_equal(ap_old->mapping, ap_new->mapping, "check equal", "old", doc, i+2);
-	//	hyp_put_mapping(&maplets_a);
-}
-
-
-
-mapping ghost_record_pgtable_partial(kvm_pte_t *pgtable, u64 level, u64 va_partial, struct aal aal_partial,  char *doc, u64 i)
-{
-	mapping map = mapping_empty_();
-	hyp_putspi(doc, i);
-	hyp_putsp(" ");
-	hyp_putsp("ghost_record_pgtable_2 ");
-	hyp_putc('\n');
-	if (pgtable==NULL) {
-		hyp_putspi("pgtable==NULL\n", i);
-		goto out;
-	}
-	_interpret_pgtable(&map, pgtable, NULL, level, va_partial, aal_partial, false /*noisy*/);
-	hyp_put_mapping(map, i+2);
-out:
-	return map;
-}
-
-
-
-void ghost_dump_pgtable_diff(mapping map_old, struct kvm_pgtable *pg, char *doc, u64 i)
-{
-	ghost_lock_maplets();
-	hyp_putspi(doc, i);
-	hyp_putsp(" ");
-	hyp_puts("ghost_dump_pgtable_diff\n");
-	mapping map = interpret_pgtable(pg->pgd, NULL, false /*noisy*/);
-	diff_mappings(map_old, map, i+2);
-	//	hyp_put_mapping(&maplets_a);
-	free_mapping(map);
-	hyp_putspi("end ghost_dump_pgtable_diff\n", i);
-	ghost_unlock_maplets();
-}
-
-
-void ghost_dump_pgtable_diff_ap(abstract_pgtable *ap_old, struct kvm_pgtable *pg, char *doc, u64 i)
-{
-	mapping map_old = ap_old->mapping;
-	ghost_dump_pgtable_diff(map_old, pg, doc, i);
-}
-
-
-void ghost_test(void) {
-}
-
-void abstract_pgtable_copy(abstract_pgtable *dst, abstract_pgtable *src)
-{
-	ghost_pfn_set_copy(&dst->table_pfns, &src->table_pfns);
-	dst->mapping = mapping_copy(src->mapping);
-}
-
 
 void hyp_put_abstract_pgtable(abstract_pgtable *ap, u64 indent)
 {

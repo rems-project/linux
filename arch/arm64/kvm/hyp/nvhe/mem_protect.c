@@ -684,8 +684,11 @@ static int host_stage2_idmap(u64 addr)
 
 		// we think the hyp_memory is constant, while the annotations will change; they should be ghost state for the spec, but here we'll compute them from the host tables on entry
 		mapping_hyp_memory = mapping_empty_();
-		for (cur=0; cur<hyp_memblock_nr; cur++)
-			extend_mapping_coalesce(&mapping_hyp_memory, hyp_memory[cur].base, hyp_memory[cur].size / PAGE_SIZE, maplet_target_mapped(hyp_memory[cur].base, DUMMY_ATTR, dummy_aal()));
+		for (cur=0; cur<hyp_memblock_nr; cur++) {
+			u64 phys = hyp_memory[cur].base;
+			u64 nr_pages = hyp_memory[cur].size / PAGE_SIZE;
+			extend_mapping_coalesce(&mapping_hyp_memory, GHOST_STAGE2, phys, nr_pages, maplet_target_mapped_ext(phys, nr_pages, DUMMY_ATTR, DUMMY_ATTR, DUMMY_ATTR));
+		}
 		mapping_pre_annot = mapping_annot(mapping_pre);
 
 		// NB this addr might have been "guessed" - so the following is (at least) awkward to talk about in the top-level spec - it's not necessarily the fault address.  We tend to think a pure safety spec is what we should go for, without any progress result, and so we should omit this here.  The underlying `pgtable.c:kvm_pgtable_stage2_map` will have a stronger spec that we'll weaken for its usag

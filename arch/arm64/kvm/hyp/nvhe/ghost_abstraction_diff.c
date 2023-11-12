@@ -308,10 +308,10 @@ struct ghost_diff *ghost_diff_mappings(mapping *mp1, mapping *mp2)
 			ghost_diff_attach(node, diff_pm(false, TMAPLET(m1)));
 			pos1 = pos1->next;
 		} else if ( !(maplet_eq(m1, m2)) ) {
-			if (m1->virt < m2->virt) {
+			if (m1->ia_range_start < m2->ia_range_start) {
 				ghost_diff_attach(node, diff_pm(false, TMAPLET(m1)));
 				pos1=pos1->next;
-			} else if (m1->virt > m2->virt) {
+			} else if (m1->ia_range_start > m2->ia_range_start) {
 				ghost_diff_attach(node, diff_pm(true, TMAPLET(m2)));
 				pos2=pos2->next;
 			} else {
@@ -541,7 +541,6 @@ static void __put_val(struct diff_val val, u64 indent)
 	}
 }
 
-
 static void __hyp_dump_diff(struct ghost_diff *diff, u64 indent)
 {
 	if (! (diff->key.kind == Tstr && diff->key.s == NULL)) {
@@ -571,6 +570,7 @@ static void __hyp_dump_diff(struct ghost_diff *diff, u64 indent)
 		break;
 	case GHOST_DIFF_PAIR:
 		hyp_puts("\n");
+
 		hyp_puts(GHOST_WHITE_ON_RED "-");
 		__put_val(diff->pair.lhs, 0);
 		hyp_puts(GHOST_NORMAL);
@@ -580,6 +580,7 @@ static void __hyp_dump_diff(struct ghost_diff *diff, u64 indent)
 		hyp_puts(GHOST_WHITE_ON_GREEN "+");
 		__put_val(diff->pair.rhs, 0);
 		hyp_puts(GHOST_NORMAL);
+
 		break;
 	}
 }

@@ -118,7 +118,7 @@ bool ghost_addr_is_memory(struct ghost_state *g, phys_addr_t phys)
 	if ( !mapping_lookup(phys, g->hyp_memory, &t) ) {
 		return false;
 	}
-	ghost_assert(t.k == MEMBLOCK);
+	ghost_assert(t.kind == MAPLET_MEMBLOCK);
 	return true;
 }
 
@@ -129,8 +129,8 @@ bool ghost_addr_is_allowed_memory(struct ghost_state *g, phys_addr_t phys)
 	struct maplet_target t;
 	if (!mapping_lookup(phys, g->hyp_memory, &t))
 		return false;
-	ghost_assert(t.k == MEMBLOCK);
-	return !(t.u.b.flags & MEMBLOCK_NOMAP);
+	ghost_assert(t.kind == MAPLET_MEMBLOCK);
+	return !(t.memblock & MEMBLOCK_NOMAP);
 }
 
 
@@ -180,8 +180,8 @@ static bool is_owned_and_shared_by(const struct ghost_state *g, enum ghost_host_
 		ghost_assert(false);
 		unreachable();
 	}
-	ghost_assert(t.k == MAPPED);
-	return t.u.m.page_state == PKVM_PAGE_SHARED_OWNED;
+	ghost_assert(t.kind == MAPLET_MAPPED);
+	return t.map.attrs.provenance == MAPLET_PAGE_STATE_SHARED_OWNED;
 }
 
 // if id == GHOST_HOST, addr should be a host_ipa
@@ -202,79 +202,38 @@ static bool is_borrowed_by(const struct ghost_state *g, enum ghost_host_or_hyp i
 		ghost_assert(false);
 		unreachable();
 	}
-	ghost_assert(t.k == MAPPED);
-	return t.u.m.page_state == PKVM_PAGE_SHARED_BORROWED;
+	ghost_assert(t.kind == MAPLET_MAPPED);
+	return t.map.attrs.provenance == MAPLET_PAGE_STATE_SHARED_BORROWED;
 }
 
-
-// horrible hack: copied unchanged from mem_protect.c, just to get in scope
-static enum kvm_pgtable_prot ghost_default_host_prot(bool is_memory)
+static struct maplet_attributes ghost_memory_attributes(enum maplet_page_state page_state, enum maplet_permissions perms, enum maplet_memtype_attr memtype)
 {
-	return is_memory ? PKVM_HOST_MEM_PROT : PKVM_HOST_MMIO_PROT;
+	struct maplet_attributes attrs;
+	attrs.provenance = page_state;
+	attrs.prot = perms;
+	attrs.memtype = memtype;
+	return attrs;
 }
 
-/* adapted from pgtable.c:stage2_set_prot_attr() */
-/* TODO: handle device prot */
-
-enum ghost_memory_type {
-	GHOST_MT_NORMAL_CACHABLE,
-	GHOST_MT_DEVICE_nGnRE
-};
-
-enum ghost_stage {
-	GHOST_STAGE1,
-	GHOST_STAGE2
-};
-
-u64 arch_attrs_of_pte_attrs(enum ghost_stage stage, enum kvm_pgtable_prot prot, enum ghost_memory_type mt)
+static struct maplet_attributes ghost_default_host_memory_attributes(bool is_memory, enum maplet_page_state page_state)
 {
-	u64 attr=0;
-	u64 mair_index = 0;
-	switch (stage) {
-	case GHOST_STAGE2:
-		if (!(prot & KVM_PGTABLE_PROT_X))
-			attr |= KVM_PTE_LEAF_ATTR_HI_S2_XN;
-		if (prot & KVM_PGTABLE_PROT_R)
-			attr |= KVM_PTE_LEAF_ATTR_LO_S2_S2AP_R;
-		if (prot & KVM_PGTABLE_PROT_W)
-			attr |= KVM_PTE_LEAF_ATTR_LO_S2_S2AP_W;
-		switch (mt) {
-		case GHOST_MT_NORMAL_CACHABLE:
-			attr |= GENMASK(5,2);
-			break;
-		case GHOST_MT_DEVICE_nGnRE:
-			attr |= 0x1 << 2;
-			break;
-		default:
-			ghost_assert(false);
-		}
-		break;
-	case GHOST_STAGE1:
-		if (!(prot & KVM_PGTABLE_PROT_X))
-			attr |= KVM_PTE_LEAF_ATTR_HI_S1_XN;
-		if (prot & KVM_PGTABLE_PROT_R) {
-			if (prot & KVM_PGTABLE_PROT_W)
-				attr |= KVM_PTE_LEAF_ATTR_LO_S1_AP_RW << 6;
-			else
-				attr |= KVM_PTE_LEAF_ATTR_LO_S1_AP_RO << 6;
-		}
-		switch (mt) {
-		case GHOST_MT_NORMAL_CACHABLE:
-			mair_index = 0;
-			attr |= mair_index << 2;
-			break;
-		case GHOST_MT_DEVICE_nGnRE:
-			mair_index = 4;
-			attr |= mair_index << 2;
-			break;
-		default:
-			ghost_assert(false);
-		}
-		break;
-	default:
-		ghost_assert(false);
-	}
-	return attr;
+	enum maplet_permissions default_host_prot = is_memory ? MAPLET_PERM_RWX : MAPLET_PERM_RW;
+	enum maplet_memtype_attr default_host_memtype = is_memory ? MAPLET_MEMTYPE_NORMAL_CACHEABLE : MAPLET_MEMTYPE_DEVICE;
+	return ghost_memory_attributes(page_state, default_host_prot, default_host_memtype);
+}
+
+static struct maplet_attributes ghost_default_hyp_memory_attributes(bool is_memory, enum maplet_page_state page_state)
+{
+	enum maplet_permissions default_hyp_prot = MAPLET_PERM_RW;
+	enum maplet_memtype_attr default_hyp_memtype = is_memory ? MAPLET_MEMTYPE_NORMAL_CACHEABLE : MAPLET_MEMTYPE_DEVICE;
+	return ghost_memory_attributes(page_state, default_hyp_prot, default_hyp_memtype);
+}
+
+static struct maplet_attributes ghost_default_vm_memory_attributes(bool is_memory, enum maplet_page_state page_state)
+{
+	enum maplet_permissions default_vm_prot = is_memory ? MAPLET_PERM_RWX : MAPLET_PERM_RW;
+	enum maplet_memtype_attr default_vm_memtype = is_memory ? MAPLET_MEMTYPE_NORMAL_CACHEABLE : MAPLET_MEMTYPE_DEVICE;
+	return ghost_memory_attributes(page_state, default_vm_prot, default_vm_memtype);
 }
 
 void compute_new_abstract_state_handle___pkvm_host_share_hyp(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call)
@@ -330,9 +289,8 @@ void compute_new_abstract_state_handle___pkvm_host_share_hyp(struct ghost_state 
 	}
 
 	bool is_memory = ghost_addr_is_allowed_memory(g0, phys);
-	enum ghost_memory_type mt = is_memory ? GHOST_MT_NORMAL_CACHABLE : GHOST_MT_DEVICE_nGnRE;
-	u64 host_arch_prot = arch_attrs_of_pte_attrs(GHOST_STAGE2, ghost_default_host_prot(is_memory), mt);
-	u64 hyp_arch_prot = arch_attrs_of_pte_attrs(GHOST_STAGE1, KVM_PGTABLE_PROT_RW, mt);
+	struct maplet_attributes host_attrs = ghost_default_host_memory_attributes(is_memory, MAPLET_PAGE_STATE_SHARED_OWNED);
+	struct maplet_attributes hyp_attrs = ghost_default_hyp_memory_attributes(is_memory, MAPLET_PAGE_STATE_SHARED_BORROWED);
 
 	/* the host annot mapping is unchanged (we have established that host_addr is NOT already in there)
 	 * but, there is a new host shared mapping, PKVM_PAGE_SHARED_OWNED */
@@ -340,16 +298,17 @@ void compute_new_abstract_state_handle___pkvm_host_share_hyp(struct ghost_state 
 		&g1->host.host_abstract_pgtable_shared,
 		mapping_plus(
 			g0->host.host_abstract_pgtable_shared,
-			mapping_singleton(host_addr, 1, maplet_target_mapped_ext(phys, PKVM_PAGE_SHARED_OWNED, host_arch_prot)))
+			mapping_singleton(GHOST_STAGE2, host_addr, 1, maplet_target_mapped_attrs(phys, 1, host_attrs)))
 	);
-	
+
 	/* add a new hyp mapping, PKVM_PAGE_SHARED_BORROWED */
 	mapping_move(
 		&g1->pkvm.pkvm_abstract_pgtable.mapping,
 		mapping_plus(
 			g0->pkvm.pkvm_abstract_pgtable.mapping,
-			mapping_singleton(hyp_addr, 1, maplet_target_mapped_ext(phys, PKVM_PAGE_SHARED_BORROWED, hyp_arch_prot)))
+			mapping_singleton(GHOST_STAGE1, hyp_addr, 1, maplet_target_mapped_attrs(phys, 1, hyp_attrs)))
 	);
+
 out:
 	ghost_reg_gpr(g1, 1) = ret;
 }
@@ -476,7 +435,9 @@ void compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost_state 
 		phys_addr_t donated_phys = hyp_pfn_to_phys(pfn);
 		host_ipa_t host_page_ipa = host_ipa_of_phys(donated_phys);
 		hyp_va_t hyp_page_addr = (u64)ghost__hyp_va(g0, donated_phys);
-		u64 hyp_arch_prot = arch_attrs_of_pte_attrs(GHOST_STAGE1, ghost_default_host_prot(ghost_addr_is_memory(g0, donated_phys)), GHOST_MT_NORMAL_CACHABLE/*TODO: this is wrong*/);
+
+		bool is_memory = ghost_addr_is_allowed_memory(g0, donated_phys);
+		struct maplet_attributes hyp_attrs = ghost_default_hyp_memory_attributes(is_memory, MAPLET_PAGE_STATE_PRIVATE_OWNED);
 
 		// TODO: what if location was not shared with pKVM?
 		if (!(is_owned_and_shared_by(g0, GHOST_HOST, donated_phys) && is_borrowed_by(g0, GHOST_HYP, donated_phys)))
@@ -489,7 +450,7 @@ void compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost_state 
 			&g1->pkvm.pkvm_abstract_pgtable.mapping,
 			mapping_plus(
 				mapping_minus(g1->pkvm.pkvm_abstract_pgtable.mapping, hyp_page_addr, 1),
-				mapping_singleton(hyp_page_addr, 1, maplet_target_mapped_ext(donated_phys, PKVM_PAGE_OWNED, hyp_arch_prot))
+				mapping_singleton(GHOST_STAGE1, hyp_page_addr, 1, maplet_target_mapped_attrs(donated_phys, 1, hyp_attrs))
 			)
 		);
 
@@ -502,7 +463,7 @@ void compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost_state 
 			&g1->host.host_abstract_pgtable_annot,
 			mapping_plus(
 				g1->host.host_abstract_pgtable_annot,
-				mapping_singleton(host_page_ipa, 1, maplet_target_annot_ext(PKVM_ID_HYP))
+				mapping_singleton(GHOST_STAGE2, host_page_ipa, 1, maplet_target_annot_ext(MAPLET_OWNER_ANNOT_OWNED_HYP))
 			)
 		);
 
@@ -529,15 +490,16 @@ void compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost_state 
 	mapping_move(
 		&g1->host.host_abstract_pgtable_annot,
 		mapping_plus(g1->host.host_abstract_pgtable_annot,
-		             mapping_singleton(host_ipa, 1, maplet_target_annot(PKVM_ID_GUEST)))
+		             mapping_singleton(GHOST_STAGE2, host_ipa, 1, maplet_target_annot_ext(MAPLET_OWNER_ANNOT_OWNED_GUEST)))
 	);
 
 	// Finally, add the mapping to the VM's pagetable.
-	u64 guest_arch_prot = arch_attrs_of_pte_attrs(GHOST_STAGE2, ghost_default_host_prot(ghost_addr_is_memory(g0, phys)), GHOST_MT_NORMAL_CACHABLE/*TODO: this is wrong*/);
+	bool is_memory = ghost_addr_is_allowed_memory(g0, phys);
+	struct maplet_attributes vm_attrs = ghost_default_vm_memory_attributes(is_memory, MAPLET_PAGE_STATE_PRIVATE_OWNED);
 	mapping_move(
 		&g1_vm->vm_abstract_pgtable.mapping,
 		mapping_plus(g0_vm->vm_abstract_pgtable.mapping,
-			     mapping_singleton(guest_ipa, 1, maplet_target_mapped_ext(phys, PKVM_PAGE_OWNED, guest_arch_prot)))
+			     mapping_singleton(GHOST_STAGE2, guest_ipa, 1, maplet_target_mapped_attrs(phys, 1, vm_attrs)))
 	);
 
 	// success.
@@ -643,7 +605,7 @@ bool ghost_hyp_check_host_shared_mem(struct ghost_state *g, host_va_t from, host
 	for (host_va_t addr=start; addr < size * PAGE_SIZE; addr += PAGE_SIZE) {
 		if (!is_owned_and_shared_by(g, GHOST_HOST, phys_of_host_va(addr)))
 			return false;
-		if (!is_borrowed_by(g, GHOST_HYP, phys_of_host_va(addr))) 
+		if (!is_borrowed_by(g, GHOST_HYP, phys_of_host_va(addr)))
 			return false;
 	}
 	return true;
@@ -677,17 +639,17 @@ static void ghost_map_donated_memory_nocheck(struct ghost_state *g, host_ipa_t h
 	mapping_move(
 		&g->host.host_abstract_pgtable_annot,
 		mapping_plus(g->host.host_abstract_pgtable_annot,
-			mapping_singleton(host_ipa, nr_pages, maplet_target_annot(PKVM_ID_HYP)))
+			mapping_singleton(GHOST_STAGE2, host_ipa, nr_pages, maplet_target_annot_ext(MAPLET_OWNER_ANNOT_OWNED_HYP)))
 	);
 
-	u64 host_arch_prot = arch_attrs_of_pte_attrs(GHOST_STAGE2, ghost_default_host_prot(ghost_addr_is_memory(g, phys_addr)), GHOST_MT_NORMAL_CACHABLE/*TODO: this is wrong*/);
-	u64 hyp_arch_prot = host_arch_prot;
+	bool is_memory = ghost_addr_is_allowed_memory(g, phys_addr);
+	struct maplet_attributes hyp_attrs = ghost_default_hyp_memory_attributes(is_memory, MAPLET_PAGE_STATE_PRIVATE_OWNED);
 
 	mapping_move(
 		&g->pkvm.pkvm_abstract_pgtable.mapping,
 		mapping_plus(g->pkvm.pkvm_abstract_pgtable.mapping,
-			mapping_singleton(hyp_virt, nr_pages,
-				maplet_target_mapped_ext(phys_addr, PKVM_PAGE_OWNED, hyp_arch_prot)))
+			mapping_singleton(GHOST_STAGE1, hyp_virt, nr_pages,
+				maplet_target_mapped_attrs(phys_addr, nr_pages, hyp_attrs)))
 	);
 }
 

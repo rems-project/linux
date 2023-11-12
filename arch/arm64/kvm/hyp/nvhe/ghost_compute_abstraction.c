@@ -66,15 +66,16 @@ mapping compute_abstraction_hyp_memory(void);
 
 void clear_abstract_pgtable(abstract_pgtable *ap);
 
+
 // should these return abstract-state structs or update a ghost_state struct?  We really need the latter, but (looking towards the functional spec) nicer to factor via the former?
 
 mapping compute_abstraction_hyp_memory(void)
 {
 	mapping m;
 	int cur;
-        m = mapping_empty_();
+	m = mapping_empty_();
 	for (cur=0; cur<hyp_memblock_nr; cur++)
-		extend_mapping_coalesce(&m, hyp_memory[cur].base, hyp_memory[cur].size / PAGE_SIZE, maplet_target_memblock(hyp_memory[cur].flags));
+		extend_mapping_coalesce(&m, GHOST_STAGE_NONE, hyp_memory[cur].base, hyp_memory[cur].size / PAGE_SIZE, maplet_target_memblock(hyp_memory[cur].flags));
 	return m;
 }
 

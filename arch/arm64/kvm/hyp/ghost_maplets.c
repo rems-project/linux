@@ -70,67 +70,108 @@ inline void ghost_assert_maplets_locked(void) {
 
 /* ****************** maplet target constructors ****************** */
 
-struct aal dummy_aal(void)
+struct maplet_target maplet_target_mapped(u64 oa_start,  u64 nr_pages, struct maplet_target_mapped m)
 {
-	struct aal ret;
-	int i;
-	for (i=0; i<GHOST_ATTR_MAX_LEVEL; i++)
-		ret.attr_at_level[i]=1;
-	return ret;
-}
-
-
-//u64 normalise_arch_prot_wxn(u64 arch_prot) {
-	
-
-struct maplet_target maplet_target_mapped_ext(phys_addr_t phys, u64 page_state, u64 arch_prot)
-{
-	int i;
-	u64 attr = page_state | arch_prot;
-	struct aal aal = dummy_aal();
-	struct maplet_target t = (struct maplet_target){ .k=MAPPED, .u={.m={
-				.phys = phys,
-				.page_state = page_state,
-				.arch_prot = arch_prot,
-				.attr = attr}}};
-	for (i=0; i<GHOST_ATTR_MAX_LEVEL; i++)
-		t.u.m.attr_at_level[i]=aal.attr_at_level[i];
+	struct maplet_target t = {
+		.kind = MAPLET_MAPPED,
+		.map = m,
+	};
 	return t;
 }
 
-struct maplet_target maplet_target_mapped(phys_addr_t phys, u64 attr, struct aal aal)
+struct maplet_target maplet_target_mapped_attrs(u64 oa_start, u64 nr_pages, struct maplet_attributes attrs)
 {
-	int i;
-	struct maplet_target t = (struct maplet_target){ .k=MAPPED, .u={.m={
-				.phys = phys,
-				.page_state = attr & (KVM_PGTABLE_PROT_SW0 | KVM_PGTABLE_PROT_SW1),
-				.arch_prot = attr & (KVM_PTE_LEAF_ATTR_LO_S2_S2AP_R /*bit 6*/ | KVM_PTE_LEAF_ATTR_LO_S2_S2AP_W /*bit 7*/ | KVM_PTE_LEAF_ATTR_HI_S2_XN /*bit 54*/),
-				.attr = attr}}};
-	for (i=0; i<GHOST_ATTR_MAX_LEVEL; i++)
-		t.u.m.attr_at_level[i]=aal.attr_at_level[i];
+	struct maplet_target t = {
+		.kind = MAPLET_MAPPED,
+		.map = (struct maplet_target_mapped){
+			.oa_range_start = oa_start,
+			.oa_range_nr_pages = nr_pages,
+			.attrs = attrs,
+		},
+	};
 	return t;
 }
-// horrible hack: duplication of the following from the middle of mem_protect.c
-#define KVM_INVALID_PTE_OWNER_MASK	GENMASK(9, 2)
-struct maplet_target maplet_target_annot_ext(u64 owner_id) {
-	u64 owner = FIELD_PREP(KVM_INVALID_PTE_OWNER_MASK /*GENMASK(9,2)*/, owner_id);
-	return (struct maplet_target){ .k=ANNOT, .u={.a={
-				.owner_id = owner_id,
-				.owner = owner}}};
+
+struct maplet_target maplet_target_mapped_ext(u64 oa_start, u64 nr_pages, enum maplet_permissions prot, enum maplet_page_state page_state, enum maplet_memtype_attr memtype)
+{
+	struct maplet_target t = {
+		.kind = MAPLET_MAPPED,
+		.map = (struct maplet_target_mapped){
+			.oa_range_start = oa_start,
+			.oa_range_nr_pages = nr_pages,
+			.attrs = (struct maplet_attributes){
+				.prot = prot,
+				.provenance = page_state,
+				.memtype = memtype,
+				.raw_arch_attrs = 0,
+			},
+		},
+	};
+	return t;
 }
 
-struct maplet_target maplet_target_annot(u64 owner) {
-	return (struct maplet_target){ .k=ANNOT, .u={.a={
-				.owner_id = FIELD_GET(KVM_INVALID_PTE_OWNER_MASK /*GENMASK(9,2)*/, owner),
-				.owner = owner}}};
+struct maplet_target maplet_target_annot(struct maplet_target_annot annot)
+{
+	struct maplet_target t = {
+		.kind = MAPLET_UNMAPPED,
+		.annot = annot,
+	};
+	return t;
 }
 
-struct maplet_target maplet_target_memblock(enum memblock_flags flags) {
-	return (struct maplet_target){ .k=MEMBLOCK, .u={.b={.flags=flags}}};
+struct maplet_target maplet_target_annot_ext(enum maplet_owner_annotation owner)
+{
+	struct maplet_target t;
+	t.kind = MAPLET_UNMAPPED;
+	t.annot.owner = owner;
+	t.annot.raw_arch_annot = 0;
+	return t;
 }
 
-struct maplet_target maplet_target_absent(void) {
-	return (struct maplet_target){ .k=ABSENT /*, .u=uninit */ };
+struct maplet_target maplet_target_memblock(enum memblock_flags flags)
+{
+	struct maplet_target t = {
+		.kind = MAPLET_MEMBLOCK,
+		.memblock = flags,
+	};
+	return t;
+}
+
+struct maplet_target maplet_target_absent(void)
+{
+	struct maplet_target t = {
+		.kind = MAPLET_ABSENT,
+	};
+	return t;
+}
+
+static u64 ia_range_end(struct maplet m)
+{
+	return m.ia_range_start + m.ia_range_nr_pages*PAGE_SIZE;
+}
+
+static u64 oa_range_end(struct maplet_target_mapped m)
+{
+	return m.oa_range_start + m.oa_range_nr_pages*PAGE_SIZE;
+}
+
+static bool is_oa_marked_shared(struct maplet_target t)
+{
+	switch (t.kind) {
+	case MAPLET_MAPPED:
+		switch (t.map.attrs.provenance) {
+		case MAPLET_PAGE_STATE_PRIVATE_OWNED:
+			return false;
+		case MAPLET_PAGE_STATE_SHARED_BORROWED:
+		case MAPLET_PAGE_STATE_SHARED_OWNED:
+			return true;
+		default:
+			BUG();
+		}
+		unreachable();
+	default:
+		return false;
+	};
 }
 
 /* ****************** maplet init, alloc, free ****************** */
@@ -179,79 +220,85 @@ void free_mapping(struct glist_head maplets_list)
 /* ******************  maplets locking and auto-init *************** */
 void ghost_lock_maplets(void)
 {
-	//hyp_puts("ghost_lock_maplets");
 	hyp_spin_lock(&ghost_maplets_lock);
 	if (!maplets_init) {
 		init_maplets();
 		maplets_init = true;
 	}
-	//hyp_puts("ghost_lock_maplets succeed");
 }
+
 void ghost_unlock_maplets(void)
 {
-	//hyp_puts("ghost_unlock_maplets");
 	hyp_spin_unlock(&ghost_maplets_lock);
 }
 
-
 /* ******************  maplets extend  *************** */
 
-// extend maplets with one new maplet, coalescing it into the existing tail of the list if both are mapped and contiguous in va and pa, and with the same attr, or if both are annot and contiguous in va, and otherwise adding as a newly allocated maplet taken from the pool
-
-
-bool attr_at_level_equal(u64 attr_at_level1[GHOST_ATTR_MAX_LEVEL], u64 attr_at_level2[GHOST_ATTR_MAX_LEVEL])
+bool maplet_target_can_extend(struct maplet *lhs, u64 ia, u64 nr_pages, struct maplet_target *rhs)
 {
-	bool ret = true;
-	int i;
-	for (i=0; i<GHOST_ATTR_MAX_LEVEL; i++)
-		ret = ret && (attr_at_level1[i] == attr_at_level2[i]);
-	return ret;
+	if (lhs->target.kind != rhs->kind)
+		return false;
+
+	// ia range must be contiguous
+	if (ia_range_end(*lhs) != ia)
+		return false;
+
+	switch (lhs->target.kind) {
+	case MAPLET_MAPPED:
+		// if mapping, oa range must also match
+		if (oa_range_end(lhs->target.map) != rhs->map.oa_range_start)
+			return false;
+
+		// and both have the same attributes
+		if (   (lhs->target.map.attrs.prot != rhs->map.attrs.prot)
+		    || (lhs->target.map.attrs.provenance != rhs->map.attrs.provenance)
+		    || (lhs->target.map.attrs.memtype != rhs->map.attrs.memtype))
+			return false;
+
+		return true;
+	case MAPLET_UNMAPPED:
+		return (lhs->target.annot.owner == rhs->annot.owner);
+	case MAPLET_MEMBLOCK:
+		return (lhs->target.memblock == rhs->memblock);
+	case MAPLET_ABSENT:
+		return false;
+	}
 }
-void extend_mapping_coalesce(struct glist_head *maplets_list, u64 virt, u64 nr_pages, struct maplet_target t)
+
+/**
+ * extend_mapping_coalesce() - Extend maplets with one new maplet.
+ *
+ * Coalesces it into the existing tail of the list if
+ * both are mapped and contiguous in va and pa, and with the same attr,
+ * or if both are annot and contiguous in va;
+ * otherwise, adding as a newly allocated maplet taken from the pool.
+ */
+void extend_mapping_coalesce(struct glist_head *maplets_list, ghost_stage_t stage, u64 ia, u64 nr_pages, struct maplet_target t)
 {
 	struct maplet *tail;
 	struct maplet *m_new;
 
 	ghost_assert_maplets_locked();
 
-	//hyp_putsp("extend_mapping_coalesce ");
-
 	tail = glist_last_entry_or_null(maplets_list, struct maplet, list);
 
-        if (tail != NULL && virt <= tail->virt) {  hyp_putsxn("virt",virt,64); check_assert_fail("extend maplets_coalesce given non-increasing virt"); }
-	if (tail != NULL &&
-		virt == tail->virt + tail->size*PAGE_SIZE &&
-		t.k == tail->target.k &&
-		((t.k == MAPPED) ?
-			/* mapped */
-			((t.u.m.phys == tail->target.u.m.phys + tail->size*PAGE_SIZE) &&
-				(t.u.m.page_state == tail->target.u.m.page_state) &&
-				(t.u.m.arch_prot == tail->target.u.m.arch_prot) &&
-				(t.u.m.attr == tail->target.u.m.attr) &&
-				(attr_at_level_equal(t.u.m.attr_at_level, tail->target.u.m.attr_at_level))) : ((t.k == ANNOT) ?
-			/* annot */
-			((t.u.a.owner_id == tail->target.u.a.owner_id) &&
-				(t.u.a.owner == tail->target.u.a.owner))
-			/* memblock */
-			: (t.u.b.flags == tail->target.u.b.flags))
-			)
-		) {
-		tail->size += nr_pages;
-		//hyp_putsp("tail ");
-		//hyp_put_maplet(tail,0);
-		//hyp_putsp("\n");
+	if (tail != NULL && ia <= tail->ia_range_start) {
+		// should never try extend a mapping with non-monotonically-increasing input addresses.
+		ghost_assert(false);
+	}
+
+	if (tail != NULL && maplet_target_can_extend(tail, ia, nr_pages, &t)) {
+		tail->ia_range_nr_pages += nr_pages;
+		
+		if (tail->target.kind == MAPLET_MAPPED)
+			tail->target.map.oa_range_nr_pages += nr_pages;
 	} else {
 		m_new = get_maplet(maplets_list);
-		m_new->virt=virt;
-		m_new->size=nr_pages;
-		m_new->target=t;
-		//hyp_putsp("m_new ");
-		//hyp_put_maplet(m_new,0);
-		//hyp_putsp("\n");
-
+		m_new->stage = stage;
+		m_new->ia_range_start = ia;
+		m_new->ia_range_nr_pages = nr_pages;
+		m_new->target = t;
 	}
-	//hyp_put_mapping(*maplets_list,4);
-	//hyp_putsp("\n");
 }
 
 // create mapping with no maplets
@@ -263,104 +310,194 @@ mapping mapping_empty_(void) {
 }
 
 // create mapping with a single maplet
-mapping mapping_singleton(u64 virt, u64 nr_pages, struct maplet_target t) {
+mapping mapping_singleton(ghost_stage_t stage, u64 virt, u64 nr_pages, struct maplet_target t) {
 	struct glist_head head;
 	ghost_assert_maplets_locked();
 	INIT_GLIST_HEAD(&head);
-	extend_mapping_coalesce(&head, virt, nr_pages, t);
+	extend_mapping_coalesce(&head, stage, virt, nr_pages, t);
 	return head;
 }
 
-
-
-
 /* ****************** maplets printing ****************** */
+
+void hyp_put_maplet_target(ghost_stage_t stage, struct maplet_target *target, u64 i)
+{
+	// for hypervisor-controlled pgtables, the targets are always physical addresses
+	// also pad the names to length 5 for consistency
+	char *oa_name_kind = "phys ";
+	char *oa_post_name_kind = "phys'";
+
+	// put indent
+	hyp_puti(i);
+
+	// we make each branch here output a string of length 2*25=50 chars.
+	switch (target->kind) {
+	case MAPLET_MAPPED: {
+		struct maplet_target_mapped m = target->map;
+		u64 oa = m.oa_range_start;
+		u64 oa_end = oa_range_end(m);
+
+		// these are also each 25 chars.
+		hyp_putsxn(oa_name_kind, oa, 64);
+		hyp_putsxn(oa_post_name_kind, oa_end, 64);
+		break;
+	};
+	case MAPLET_UNMAPPED:
+		// this fills 11 chars
+		hyp_puts("owner ");
+		switch (target->annot.owner) {
+		case MAPLET_OWNER_ANNOT_OWNED_HOST:
+			hyp_puts(" HOST");
+			break;
+		case MAPLET_OWNER_ANNOT_OWNED_GUEST:
+			hyp_puts("GUEST");
+			break;
+		case MAPLET_OWNER_ANNOT_OWNED_HYP:
+			hyp_puts("  HYP");
+			break;
+		case MAPLET_OWNER_ANNOT_UNKNOWN:
+			hyp_puts("  ???");
+			break;
+		default:
+			BUG();
+		};
+		// so pad up to 50
+		hyp_puti(50-11);
+		break;
+	case MAPLET_MEMBLOCK:
+		// this is length 9
+		hyp_puts("memblock ");
+		// and this length 2+8
+		hyp_putx32((u32)target->memblock);
+		// pad to 50
+		hyp_puti(50-9-(2+8));
+		break;
+	default:
+		BUG();
+	}
+
+	// each case writes 45 chars.
+	switch (target->kind) {
+	case MAPLET_MAPPED: {
+		struct maplet_attributes attrs = target->map.attrs;
+
+		// in total this case split writes  2 + 1 + 3 + 1 + 1 + 1 +                36                  chars = 45
+		//				    SB     RWX      D       ( raw_arch_prot:0x1122334455667788 )
+
+		switch (attrs.provenance) {
+		case MAPLET_PAGE_STATE_PRIVATE_OWNED:
+			hyp_puts("-- ");
+			break;
+		case MAPLET_PAGE_STATE_SHARED_OWNED:
+			hyp_puts("SO ");
+			break;
+		case MAPLET_PAGE_STATE_SHARED_BORROWED:
+			hyp_puts("SB ");
+			break;
+		case MAPLET_PAGE_STATE_UNKNOWN:
+			hyp_puts("?? ");
+			break;
+		}
+
+		if (attrs.prot & MAPLET_PERM_R)
+			hyp_puts("R");
+		else
+			hyp_puts("-");
+
+		if (attrs.prot & MAPLET_PERM_W)
+			hyp_puts("W");
+		else
+			hyp_puts("-");
+
+		if (attrs.prot & MAPLET_PERM_X)
+			hyp_puts("X");
+		else
+			hyp_puts("-");
+
+		hyp_puts(" ");
+
+		switch (attrs.memtype) {
+		case MAPLET_MEMTYPE_DEVICE:
+			hyp_puts("D ");
+			break;
+		case MAPLET_MEMTYPE_NORMAL_CACHEABLE:
+			hyp_puts("M ");
+			break;
+		case MAPLET_MEMTYPE_UNKNOWN:
+			hyp_puts("? ");
+			break;
+		default:
+			BUG();
+		}
+
+		hyp_puts("(");
+		hyp_putsxn("raw_arch_prot ", attrs.raw_arch_attrs, 64);
+		hyp_puts(")");
+		break;
+	}
+	case MAPLET_UNMAPPED:
+		// do padding first, so that the raw_* aligns.
+		hyp_puti(45-36);
+
+		// the following print is 36 chars
+		hyp_puts("(");
+		hyp_putsxn("raw_arch_annot", target->annot.raw_arch_annot, 64);
+		hyp_puts(")");
+		break;
+	default:
+		hyp_puti(45);
+		break;
+	};
+}
 
 void hyp_put_maplet(struct maplet *maplet, u64 i)
 {
-	int j;
-	bool allzero;
+	char *ia_name_kind;
+	char *ia_post_name_kind;
+
+	u64 ia;
+	u64 ia_end;
 
 	ghost_assert_maplets_locked();
 
+	// write the indent
 	hyp_puti(i);
-	//hyp_putsxn("node",(u64)maplet,64);
-	//hyp_putsxn("next",(u64)(maplet->list.next),64);
-	hyp_putsxn("virt",maplet->virt,64);
-	hyp_putsxn("virt'",maplet->virt+maplet->size*PAGE_SIZE,64);
-	switch (maplet->target.k) {
-	case MAPPED:
-		hyp_putsxn("phys",maplet->target.u.m.phys,64);
-		hyp_putsxn("phys'",maplet->target.u.m.phys+maplet->size*PAGE_SIZE,64);
-		break;
-	case ANNOT:
-		hyp_putsxn("owner ",maplet->target.u.a.owner,64);
-		hyp_putsp("                       ");
-		break;
-	case MEMBLOCK:
-		hyp_putsxn("flags ",(u64)maplet->target.u.b.flags,64);
-		hyp_putsp(" ");
-		if (maplet->target.u.b.flags & MEMBLOCK_HOTPLUG) hyp_putsp("HOTPLUG "); else hyp_putsp("        ");
-		if (maplet->target.u.b.flags & MEMBLOCK_MIRROR)  hyp_putsp("MIRROR "); else hyp_putsp("       ");
-		if (maplet->target.u.b.flags & MEMBLOCK_NOMAP)   hyp_putsp("NOMAP"); else hyp_putsp("     ");
-		hyp_putsp("  ");
-		break;
-	case ABSENT:
-		hyp_putsp("ABSENT                        ");
-		break;
-	}
-	hyp_putsxn("size(p,b)",(u32)maplet->size,32);
-	hyp_putsxn("",maplet->size*PAGE_SIZE,64);
-	switch (maplet->target.k) {
-	case MAPPED:
-		hyp_putsxn("raw page_state ",maplet->target.u.m.page_state, 64);
-		hyp_putsxn("raw arch_prot ",maplet->target.u.m.arch_prot, 64);
-		// bits 56,55: two of the SW bits
-		switch (maplet->target.u.m.page_state /*maplet->target.u.m.attr & PKVM_PAGE_STATE_PROT_MASK*/) {
-		case PKVM_PAGE_OWNED: hyp_putsp("OW"); break;
-		case PKVM_PAGE_SHARED_OWNED: hyp_putsp("SO"); break;
-		case PKVM_PAGE_SHARED_BORROWED: hyp_putsp("SB"); break;
-		case __PKVM_PAGE_RESERVED: hyp_putsp("RE"); break;
-		}
-		hyp_putsp(" ");
-		// bits 7,6: S2AP[1:0]    (for Stage 2)
-		// for "a stage 1 translation that supports one Exception level" (which I guess is pKVM's own mapping), 7 is AP[2], controlling W, and 6 is RES1, so this will still work
-		switch (maplet->target.u.m.arch_prot /*maplet->target.u.m.attr */& KVM_PTE_LEAF_ATTR_LO_S2_S2AP_R) {
-		case (KVM_PTE_LEAF_ATTR_LO_S2_S2AP_R): hyp_putsp("R"); break;
-		case (0): hyp_putsp("-"); break;
-		}
-		switch (maplet->target.u.m.arch_prot /*maplet->target.u.m.attr */ & KVM_PTE_LEAF_ATTR_LO_S2_S2AP_W) {
-		case (KVM_PTE_LEAF_ATTR_LO_S2_S2AP_W): hyp_putsp("-"); break;
-		case (0): hyp_putsp("W"); break;
-		}
-		switch (maplet->target.u.m.arch_prot /*maplet->target.u.m.attr */ & KVM_PTE_LEAF_ATTR_HI_S1_XN) {  // TODO: refine for SCTLR_EL2.WXN==1 case, variously for stage 1 and stage 2
-		case (KVM_PTE_LEAF_ATTR_HI_S1_XN): hyp_putsp("-"); break;
-		case (0): hyp_putsp("X"); break;
-		}
-		hyp_putsp(" ");
-		// the rest of the attributes
-		allzero=true;
-		for (j=0; j<GHOST_ATTR_MAX_LEVEL; j++) {
-			if ((maplet->target.u.m.attr_at_level[j] & 1) == 0) {
-				allzero = allzero && (maplet->target.u.m.attr_at_level[j] == 0);
-			}
-		}
-		hyp_putsxn(" attr'",maplet->target.u.m.attr & ( ~(PKVM_PAGE_STATE_PROT_MASK|KVM_PTE_LEAF_ATTR_LO_S2_S2AP_R|KVM_PTE_LEAF_ATTR_LO_S2_S2AP_W|KVM_PTE_LEAF_ATTR_HI_S1_XN)),64);
-		if (!allzero) {
-			for (j=0; j<GHOST_ATTR_MAX_LEVEL; j++) {
-				if ((maplet->target.u.m.attr_at_level[j] & 1) == 0) {
-					hyp_putsxn("",maplet->target.u.m.attr_at_level[j],64);
-				}
-			}
-		}
-		break;
-	case ANNOT:
-		break;
-	case MEMBLOCK:
-		break;
-	case ABSENT:
-		break;
-	}
+
+	// the names are always of length 5
+	switch (maplet->stage) {
+		case GHOST_STAGE2:
+			ia_name_kind = "ipa..";
+			ia_post_name_kind = "ipa'.";
+			hyp_puts("S2");
+			break;
+		case GHOST_STAGE1:
+			/* Stage 1 in a single stage translation regime goes virt->phys directly. */
+			ia_name_kind = "virt.";
+			ia_post_name_kind = "virt'";
+			hyp_puts("S1");
+			break;
+		case GHOST_STAGE_NONE:
+			/* Must be memblock, which are just phys */
+			ia_name_kind = "phys.";
+			ia_post_name_kind = "phys'";
+			hyp_puts("--");
+			break;
+		default:
+			BUG();
+	};
+
+	hyp_puts(" ");
+
+	// these are of length 5    +   1  +  2   +   16      + 1     = 25 chars.
+	//                    (name) (colon) (0x) (01AB23EF) (space)
+	ia = maplet->ia_range_start;
+	ia_end = ia_range_end(*maplet);
+	hyp_putsxn(ia_name_kind, ia, 64);
+	hyp_putsxn(ia_post_name_kind, ia_end, 64);
+
+	hyp_putsxn("nr_pages",(u32)maplet->ia_range_nr_pages,32);
+
+	hyp_put_maplet_target(maplet->stage, &maplet->target, 0);
 }
 
 void hyp_put_mapletptr(void *d)
@@ -371,8 +508,8 @@ void hyp_put_mapletptr(void *d)
 
 void hyp_put_mapping(struct glist_head head, u64 i)
 {
-        struct glist_node *pos = NULL;
-        struct maplet *m;
+	struct glist_node *pos = NULL;
+	struct maplet *m;
 	bool first;
 	u64 phys_first;
 	u64 size_first;
@@ -389,95 +526,88 @@ void hyp_put_mapping(struct glist_head head, u64 i)
 		hyp_puti(i);
 		//hyp_putsxn("hyp_put_maplets pos",(u64)pos,64);
 		m = glist_entry(pos, struct maplet, list);
-		if (!first && m->target.k == MAPPED && m->target.u.m.phys == phys_first + size_first*PAGE_SIZE)
+		if (!first && m->target.kind == MAPLET_MAPPED && m->target.map.oa_range_start == phys_first + size_first*PAGE_SIZE)
 			hyp_putc('-');
 		else
 			hyp_putc(' ');
-		if (first && m->target.k == MAPPED) {
-			phys_first = m->target.u.m.phys;
-			size_first = m->size;
+
+		if (first && m->target.kind == MAPLET_MAPPED) {
+			phys_first = m->target.map.oa_range_start;
+			size_first = m->target.map.oa_range_nr_pages;
 			first = false;
 		}
-                hyp_put_maplet(m, 0);
-                hyp_putc('\n');
-        }
+		hyp_put_maplet(m, 0);
+		hyp_putc('\n');
+	}
 }
 
 
 
-/* ****************** maplets sorting ****************** */
+/* ****************** maplets equality check ****************** */
 
-bool maplet_target_eq(struct maplet_target t1, struct maplet_target t2) {
-	return t1.k == t2.k && (t1.k == MAPPED)?(t1.u.m.phys == t2.u.m.phys && t1.u.m.page_state == t2.u.m.page_state && t1.u.m.arch_prot == t2.u.m.arch_prot && t1.u.m.attr == t2.u.m.attr && attr_at_level_equal(t1.u.m.attr_at_level, t2.u.m.attr_at_level)):((t1.k == ANNOT)?(t1.u.a.owner_id == t2.u.a.owner_id && t1.u.a.owner == t2.u.a.owner):(t1.u.b.flags == t2.u.b.flags));
+bool __maplet_target_eq(struct maplet_target t1, struct maplet_target t2, bool check_oa_range_start, bool check_oa_range_size, bool check_attrs) {
+	if (t1.kind != t2.kind)
+		return false;
+
+	switch (t1.kind) {
+	case MAPLET_MAPPED:
+		if (check_oa_range_start && (t1.map.oa_range_start != t2.map.oa_range_start))
+			return false;
+		if (check_oa_range_size && (t1.map.oa_range_nr_pages != t2.map.oa_range_nr_pages))
+			return false;
+		if (check_attrs && (t1.map.attrs.prot != t2.map.attrs.prot))
+			return false;
+		if (check_attrs && (t1.map.attrs.provenance != t2.map.attrs.provenance))
+			return false;
+		if (check_attrs && (t1.map.attrs.memtype != t2.map.attrs.memtype))
+			return false;
+		return true;
+	case MAPLET_UNMAPPED:
+		return (t1.annot.owner == t2.annot.owner);
+	case MAPLET_MEMBLOCK:
+		return (t1.memblock == t2.memblock);
+	default:
+		BUG();
+	}
+}
+
+bool maplet_target_eq(struct maplet_target t1, struct maplet_target t2)
+{
+	return __maplet_target_eq(t1, t2, true, true, true);
+}
+
+bool maplet_target_eq_nonattr(struct maplet_target t1, struct maplet_target t2)
+{
+	return __maplet_target_eq(t1, t2, true, true, false);
+}
+
+bool maplet_target_eq_nonend(struct maplet_target t1, struct maplet_target t2)
+{
+	return __maplet_target_eq(t1, t2, true, false, true);
 }
 
 bool maplet_eq(struct maplet *m1, struct maplet *m2)
 {
-	return m1->virt == m2->virt && m1->size == m2->size && maplet_target_eq(m1->target, m2->target);
-}
-
-
-bool maplet_target_eq_nonattr(struct maplet_target t1, struct maplet_target t2) {
-	return t1.k == t2.k
-		&&
-		(t1.k == MAPPED) ?
-		(t1.u.m.phys == t2.u.m.phys &&
-		 t1.u.m.page_state == t2.u.m.page_state &&
-		 (t1.u.m.arch_prot & (KVM_PTE_LEAF_ATTR_LO_S2_S2AP_R /*bit 6*/ | KVM_PTE_LEAF_ATTR_LO_S2_S2AP_W /*bit 7*/ | KVM_PTE_LEAF_ATTR_HI_S2_XN /*bit 54*/)) == (t2.u.m.arch_prot & (KVM_PTE_LEAF_ATTR_LO_S2_S2AP_R /*bit 6*/ | KVM_PTE_LEAF_ATTR_LO_S2_S2AP_W /*bit 7*/ | KVM_PTE_LEAF_ATTR_HI_S2_XN /*bit 54*/)))
-		:
-		((t1.k == ANNOT)?
-		 (t1.u.a.owner_id == t2.u.a.owner_id &&
-		  t1.u.a.owner == t2.u.a.owner
-		  )
-		 :
-		 (t1.u.b.flags == t2.u.b.flags));
+	return (
+		   (m1->stage == m2->stage) /* sanity check */
+		&& (m1->ia_range_start == m2->ia_range_start)
+		&& (m1->ia_range_nr_pages == m2->ia_range_nr_pages)
+		&& maplet_target_eq(m1->target, m2->target)
+	);
 }
 
 bool maplet_eq_nonattr(struct maplet *m1, struct maplet *m2)
 {
-	return m1->virt == m2->virt && m1->size == m2->size && maplet_target_eq_nonattr(m1->target, m2->target);
+	return (
+		   (m1->stage == m2->stage) /* sanity check */
+		&& (m1->ia_range_start == m2->ia_range_start)
+		&& (m1->ia_range_nr_pages == m2->ia_range_nr_pages)
+		&& maplet_target_eq_nonattr(m1->target, m2->target)
+	);
 }
 
-/*
-static int maplet_compare_virt(const void *lhs, const void *rhs)
-{
-        if (((const struct maplet *)lhs)->virt < ((const struct maplet *)rhs)->virt) return -1;
-        if (((const struct maplet *)lhs)->virt > ((const struct maplet *)rhs)->virt) return 1;
-        return 0;
-}
+/* ****************** mapping equality ****************** */
 
-static int maplet_compare_phys(const void *lhs, const void *rhs)
-{
-        if (((const struct maplet *)lhs)->phys < ((const struct maplet *)rhs)->phys) return -1;
-        if (((const struct maplet *)lhs)->phys > ((const struct maplet *)rhs)->phys) return 1;
-        return 0;
-}
-
-static int maplet_compare_virt_list(void *_priv, const struct list_head *lhs, const struct list_head *rhs)
-{
-	return maplet_compare_virt(list_entry(lhs,struct maplet, list), list_entry(rhs,struct maplet, list));
-}
-
-static int maplet_compare_phys_list(void *_priv, const struct list_head *lhs, const struct list_head *rhs)
-{
-	return maplet_compare_phys(list_entry(lhs,struct maplet, list), list_entry(rhs,struct maplet, list));
-}
-*/
-
-/*
-void sort_maplets_virt(struct list_head *ms)
-{
-        list_sort(NULL, ms, maplet_compare_virt_list);
-}
-
-void sort_maplets_phys(struct list_head *ms)
-{
-        list_sort(NULL, ms, maplet_compare_phys_list);
-}
-*/
-
-
-/* ****************** maplets equality check ****************** */
 /* TODO: this checks the maplets are identical (NEW: no longer ignoring attr), but assumes the mappings are normalised.   OLD: (which with distinct attr they may not be) . Probably we should do a submapping check (which is more sophisticated) both ways? */
 bool interpret_equals(struct glist_head head1, struct glist_head head2, u64 i)
 {
@@ -508,8 +638,8 @@ hyp_putsp(GHOST_NORMAL);
 		      if ( !(maplet_eq_nonattr(m1, m2)) ) {
 			      hyp_puti(i);
 			      hyp_putsp(GHOST_WHITE_ON_RED);
-			      hyp_putsxn("interpret_equals mismatch at virt1", m1->virt, 64);
-			      hyp_putsxn("virt2", m2->virt, 64);
+			      hyp_putsxn("interpret_equals mismatch at ia1", m1->ia_range_start, 64);
+			      hyp_putsxn("ia2", m2->ia_range_start, 64);
 			      hyp_putc('\n');
 			      hyp_put_maplet(m1,2);
 			      hyp_putc('\n');
@@ -557,8 +687,6 @@ void check_interpret_equals(struct glist_head head1, struct glist_head head2, u6
 		      if ( !(maplet_eq_nonattr(m1, m2)) ) {
 			      hyp_puti(i);
 			      hyp_putsp(GHOST_WHITE_ON_RED);
-			      GHOST_LOG(m1->virt, u64);
-			      GHOST_LOG(m2->virt, u64);
 			      GHOST_LOG_P(__func__, m1, hyp_put_mapletptr);
 			      GHOST_LOG_P(__func__, m2, hyp_put_mapletptr);
 			      GHOST_WARN("interpret_equals mismatch at virt1");
@@ -624,13 +752,6 @@ bool mapping_equal(struct glist_head head1, struct glist_head head2, char *s, ch
 	GHOST_LOG_CONTEXT_ENTER();
 	ghost_assert_maplets_locked();
 
-	// hyp_putspi(s, i);
-	// hyp_putsp(" ");
-	// hyp_putsp("mapping_equal ");
-	// hyp_putsp(s1);
-	// hyp_putsp(" ");
-	// hyp_putsp(s2);
-	// hyp_putsp(" ");
 	equal = interpret_equals(head1, head2, i+2);
 	if (!equal) {
 		GHOST_LOG(s, str);
@@ -638,15 +759,7 @@ bool mapping_equal(struct glist_head head1, struct glist_head head2, char *s, ch
 		GHOST_LOG(s2, str);
 		GHOST_WARN("mappings not equal");
 	}
-	// if (equal) {
-	// 	hyp_puts("true\n");
-	// }
-	// else {
-	// 	hyp_putsp(GHOST_WHITE_ON_RED);
-	// 	hyp_putsp("false");
-	// 	hyp_putsp(GHOST_NORMAL);
-	// 	hyp_putsp("\n");
-	// }
+
 	GHOST_LOG_CONTEXT_EXIT();
 	return equal;
 }
@@ -656,18 +769,31 @@ void check_mapping_equal(mapping map1, mapping map2)
 	check_interpret_equals((struct glist_head)map1, (struct glist_head)map2, 0);
 }
 
+void maplet_shift(struct maplet *m1, u64 shift)
+{
+	m1->ia_range_start += shift;
+	m1->ia_range_nr_pages -= shift / PAGE_SIZE;
+	if (m1->target.kind == MAPLET_MAPPED) {
+		m1->target.map.oa_range_start += shift;
+		m1->target.map.oa_range_nr_pages -= shift / PAGE_SIZE;
+	}
+}
+
+void maplet_target_reduce(struct maplet_target *t, u64 shift)
+{
+	switch (t->kind) {
+	case MAPLET_MAPPED:
+		t->map.oa_range_nr_pages -= shift / PAGE_SIZE;
+		break;
+	default:
+		;
+	}
+}
+
 // check that head1 is a sub-finite-map of head2, i.e.
 // forall virt. [[head1]](virt) defined => [[head2]](virt) defined and equal to [[head1]](virt)
 // assumes both are ordered by virt and are "normalised", with no contiguous (+identical attr) maplets
 // as an exercise, try something reasonably efficient, with a single traversal of the two lists - which ended up pretty far on the imperative side, not close to something one would auto-generate from a more mathematical version
-void maplet_shift(struct maplet *m1, u64 shift) {
-	m1->virt += shift;
-	m1->size -= shift / PAGE_SIZE;
-	if (m1->target.k == MAPPED ) {
-		m1->target.u.m.phys += shift;
-	}
-}
-
 bool mapping_submapping(struct glist_head head1, struct glist_head head2, char *s, char *s1, char *s2, u64 i)
 {
 	struct glist_node *pos1, *pos2;
@@ -687,7 +813,7 @@ bool mapping_submapping(struct glist_head head1, struct glist_head head2, char *
 		m1 = glist_entry(pos1, struct maplet, list);
 		mc1 = *m1;
 
-		if (mc1.size == 0) // nothing left of the current m1 to check; move to next m1
+		if (mc1.ia_range_nr_pages == 0) // nothing left of the current m1 to check; move to next m1
 			continue;
 
 		if (m2_init)
@@ -702,37 +828,38 @@ new_m2:
 		m2_init = true;
 
 foo:
-		if (mc2.size == 0) { // this m2 will be useless; move to next m2
+		if (mc2.ia_range_nr_pages == 0) { // this m2 will be useless; move to next m2
 			pos2 = pos2->next;
 			goto new_m2;
 		}
 
-		if (mc1.virt >= mc2.virt + mc2.size * PAGE_SIZE) { // remaining m1 start is beyond current m2 end; move to next m2
+		if (mc1.ia_range_start >= ia_range_end(mc2)) { // remaining m1 start is beyond current m2 end; move to next m2
 			pos2 = pos2->next;
 			goto new_m2;
 		}
 
-                if (mc1.virt < mc2.virt) { // remaining m1 start is strictly before current m2 start; fail
+		if (mc1.ia_range_start < mc2.ia_range_start) { // remaining m1 start is strictly before current m2 start; fail
 			goto not_found;
 		}
 
-		if (mc1.virt > mc2.virt) { // remaining m1 start is strictly after current m2 start (but before its end); discard that prefix of current m2
-			maplet_shift(&mc2, mc1.virt - mc2.virt);  // (discarding explicitly to keep the cases simple)
+		if (mc1.ia_range_start > mc2.ia_range_start) { // remaining m1 start is strictly after current m2 start (but before its end); discard that prefix of current m2
+			maplet_shift(&mc2, mc1.ia_range_start - mc2.ia_range_start);  // (discarding explicitly to keep the cases simple)
 		}
 
 		// now we know remains of current m1 and (after that shift) the current m2 are non-empty
-		// and mc1.virt == mc2.virt,
+		// and mc1.ia_range_start == mc2.ia_range_start,
 		// so there's some non-empty overlap between them.
 
-		if (mc1.target.k == mc2.target.k && (mc1.target.k == MAPPED)?(mc1.target.u.m.phys == mc2.target.u.m.phys && mc1.target.u.m.page_state == mc2.target.u.m.page_state && mc1.target.u.m.arch_prot == mc2.target.u.m.arch_prot && mc1.target.u.m.attr == mc2.target.u.m.attr && attr_at_level_equal(mc1.target.u.m.attr_at_level, mc2.target.u.m.attr_at_level)/* not checking attr here as we don't know what it should be set to: && mc1.attr == mc2.attr*/):(mc1.target.u.a.owner_id == mc2.target.u.a.owner_id && mc1.target.u.a.owner == mc2.target.u.a.owner)) {
+		if (maplet_target_eq_nonend(mc1.target, mc2.target)) {
 			// the common prefix matches
-			if (mc1.virt + mc1.size * PAGE_SIZE <= mc2.virt + mc2.size * PAGE_SIZE) {
+			if (ia_range_end(mc1) <= ia_range_end(mc2)) {
 				// current m1 done
 				continue;
 			} else {
 				// some of m1 remaining
-				maplet_shift(&mc1, (mc2.virt + mc2.size * PAGE_SIZE) - (mc1.virt + mc1.size * PAGE_SIZE));
-				continue;
+				// move mc1 up to end of mc2, and check the next m2
+				maplet_shift(&mc1, mc2.ia_range_nr_pages*PAGE_SIZE);
+				goto new_m2;
 			}
 		} else {
 			// the common prefix doesn't match
@@ -759,7 +886,7 @@ not_found:
 	hyp_putsp(" ");
 	hyp_putsp(s2);
 	hyp_putsp(" no corresponding mapping found for ");
-	hyp_putsxn("virt",mc1.virt,64);
+	hyp_putsxn("virt",mc1.ia_range_start,64);
 	hyp_putsp(GHOST_NORMAL);
 	hyp_putsp("in\n");
 	hyp_put_maplet(m1, i+2);
@@ -779,7 +906,7 @@ mismatch:
 	hyp_putsp(" ");
 	hyp_putsp(s2);
 	hyp_putsp(" mismatch at ");
-	hyp_putsxn("virt",mc1.virt,64);
+	hyp_putsxn("virt",mc1.ia_range_start,64);
 	hyp_putsp(GHOST_NORMAL);
 	hyp_putsp("in\n");
 	hyp_put_maplet(m1, i+2);
@@ -787,8 +914,8 @@ mismatch:
 	hyp_put_maplet(m2, i+2);
 	hyp_putc('\n');
 	hyp_puti(i+2);
-	hyp_putsxn("mc1.virt",mc1.virt,64); hyp_putsxn("mc2.virt",mc2.virt,64);
-	//	hyp_putsxn("mc1 phys",mc1.phys,64);hyp_putsxn("mc2 phys",mc2.phys,64);
+	hyp_putsxn("mc1.ia_range_start",mc1.ia_range_start,64); hyp_putsxn("mc2.ia_range_start",mc2.ia_range_start,64);
+	//	hyp_putsxn("mc1 phys",mc1.oa_range_start,64);hyp_putsxn("mc2 phys",mc2.oa_range_start,64);
 	//hyp_putsxn("mc1 attr",mc1.attr,64);hyp_putsxn("mc2 attr",mc2.attr,64);
 	hyp_putc('\n');
 	hyp_putspi(s1, i+2);hyp_putc('\n');
@@ -815,7 +942,7 @@ struct glist_head mapping_copy(struct glist_head head)
 
 	glist_for_each(pos2, &head) {
 		m2 = glist_entry(pos2, struct maplet, list);
-		extend_mapping_coalesce(&res, m2->virt, m2->size, m2->target);
+		extend_mapping_coalesce(&res, m2->stage, m2->ia_range_start, m2->ia_range_nr_pages, m2->target);
 	}
 
 	return res;
@@ -834,8 +961,8 @@ struct glist_head mapping_copy_except_absent(struct glist_head head)
 
 	glist_for_each(pos2, &head) {
 		m2 = glist_entry(pos2, struct maplet, list);
-		if (m2->target.k != ABSENT)
-			extend_mapping_coalesce(&res, m2->virt, m2->size, m2->target);
+		if (m2->target.kind != MAPLET_ABSENT)
+			extend_mapping_coalesce(&res, m2->stage, m2->ia_range_start, m2->ia_range_nr_pages, m2->target);
 	}
 
 	return res;
@@ -857,9 +984,8 @@ struct glist_head mapping_annot(struct glist_head head)
 
 	glist_for_each(pos2, &head) {
 		m2 = glist_entry(pos2, struct maplet, list);
-		if (m2->target.k == ANNOT) {
-			extend_mapping_coalesce(&res, m2->virt, m2->size, m2->target);
-		}
+		if (m2->target.kind == MAPLET_UNMAPPED)
+			extend_mapping_coalesce(&res, m2->stage, m2->ia_range_start, m2->ia_range_nr_pages, m2->target);
 	}
 
 	return res;
@@ -881,9 +1007,8 @@ struct glist_head mapping_shared(struct glist_head head)
 
 	glist_for_each(pos2, &head) {
 		m2 = glist_entry(pos2, struct maplet, list);
-		if (m2->target.k == MAPPED && ((m2->target.u.m.page_state == PKVM_PAGE_SHARED_OWNED) || (m2->target.u.m.page_state == PKVM_PAGE_SHARED_BORROWED))) {
-			extend_mapping_coalesce(&res, m2->virt, m2->size, m2->target);
-		}
+		if (m2->target.kind == MAPLET_MAPPED && is_oa_marked_shared(m2->target))
+			extend_mapping_coalesce(&res, m2->stage, m2->ia_range_start, m2->ia_range_nr_pages, m2->target);
 	}
 
 	return res;
@@ -905,9 +1030,8 @@ struct glist_head mapping_nonannot(struct glist_head head)
 
 	glist_for_each(pos2, &head) {
 		m2 = glist_entry(pos2, struct maplet, list);
-		if (m2->target.k == MAPPED) {
-			extend_mapping_coalesce(&res, m2->virt, m2->size, m2->target);
-		}
+		if (m2->target.kind == MAPLET_MAPPED)
+			extend_mapping_coalesce(&res, m2->stage, m2->ia_range_start, m2->ia_range_nr_pages, m2->target);
 	}
 
 	return res;
@@ -962,7 +1086,7 @@ struct glist_head mapping_plus(struct glist_head head2, struct glist_head head3)
 				pos2 = pos2->next;
 				m2 = glist_entry(pos2, struct maplet, list);
 				mc2 = *m2;
-				if (mc2.size == 0) {
+				if (mc2.ia_range_nr_pages == 0) {
 					//continue;
 				} else {
 					mc2_exhausted = false;
@@ -977,7 +1101,7 @@ struct glist_head mapping_plus(struct glist_head head2, struct glist_head head3)
 				pos3 = pos3->next;
 				m3 = glist_entry(pos3, struct maplet, list);
 				mc3 = *m3;
-				if (mc3.size == 0) {
+				if (mc3.ia_range_nr_pages == 0) {
 					//continue;
 				} else {
 					mc3_exhausted = false;
@@ -988,35 +1112,38 @@ struct glist_head mapping_plus(struct glist_head head2, struct glist_head head3)
 			// something left in ms2
 			if (mc3_exhausted) {
 				// no ms3 left; copy mc2 to output
-				extend_mapping_coalesce(&res, mc2.virt, mc2.size, mc2.target);
+				extend_mapping_coalesce(&res, mc2.stage, mc2.ia_range_start, mc2.ia_range_nr_pages, mc2.target);
 				mc2_exhausted = true;
-			} else if (mc2.virt < mc3.virt && mc2.virt + mc2.size*PAGE_SIZE <= mc3.virt) {
+			} else if (mc2.ia_range_start < mc3.ia_range_start && ia_range_end(mc2) <= mc3.ia_range_start) {
 				// all of mc2 is strictly before the start of mc3; copy all of mc2 to output
-				extend_mapping_coalesce(&res, mc2.virt, mc2.size, mc2.target);
+				extend_mapping_coalesce(&res, mc2.stage, mc2.ia_range_start, mc2.ia_range_nr_pages, mc2.target);
 				mc2_exhausted = true;
-			} else if (mc2.virt < mc3.virt && mc2.virt + mc2.size*PAGE_SIZE > mc3.virt) {
+			} else if (mc2.ia_range_start < mc3.ia_range_start && ia_range_end(mc2) > mc3.ia_range_start) {
+				struct maplet_target mc2_t = mc2.target;
 				// some but not all of mc2 is strictly before the start of mc3; copy that initial part of mc2 to output
-				mc2_size_initial = (mc3.virt - mc2.virt) / PAGE_SIZE;
-				mc2_size_remaining = mc2.size - mc2_size_initial;
-				extend_mapping_coalesce(&res, mc2.virt, mc2_size_initial, mc2.target);
+				mc2_size_initial = (mc3.ia_range_start - mc2.ia_range_start) / PAGE_SIZE;
+				mc2_size_remaining = mc2.ia_range_nr_pages - mc2_size_initial;
+				// don't put the whole maplet target in there, split it up and only put in taret up to start of mc3
+				maplet_target_reduce(&mc2_t, mc2_size_remaining * PAGE_SIZE);
+				extend_mapping_coalesce(&res, mc2.stage, mc2.ia_range_start, mc2_size_initial, mc2_t);
 				maplet_shift(&mc2, mc2_size_initial * PAGE_SIZE);
-			} else if (mc2.virt >= mc3.virt && mc2.virt + mc2.size*PAGE_SIZE <= mc3.virt+mc3.size*PAGE_SIZE) {
+			} else if (mc2.ia_range_start >= mc3.ia_range_start && ia_range_end(mc2) <= ia_range_end(mc3)) {
 				// mc2 is within mc3; discard this mc2
 				mc2_exhausted = true;
-			} else if (mc2.virt >= mc3.virt && mc2.virt + mc2.size*PAGE_SIZE >  mc3.virt+mc3.size*PAGE_SIZE && mc2.virt < mc3.virt+mc3.size*PAGE_SIZE ) {
+			} else if (mc2.ia_range_start >= mc3.ia_range_start && ia_range_end(mc2) > ia_range_end(mc3) && mc2.ia_range_start < ia_range_end(mc3) ) {
 				// mc2 starts within but extends strictly beyond the end of mc3; discard that initial part of mc2
-				mc2_size_initial = (mc3.virt+mc3.size*PAGE_SIZE - mc2.virt) / PAGE_SIZE;
+				mc2_size_initial = (ia_range_end(mc3) - mc2.ia_range_start) / PAGE_SIZE;
 				maplet_shift(&mc2, mc2_size_initial * PAGE_SIZE);
-			} else if (mc2.virt >= mc3.virt+mc3.size*PAGE_SIZE) {
+			} else if (mc2.ia_range_start >= ia_range_end(mc3)) {
 				// mc2 starts beyond the end of mc3; copy this mc3 to output
-				extend_mapping_coalesce(&res, mc3.virt, mc3.size, mc3.target);
+				extend_mapping_coalesce(&res, mc3.stage, mc3.ia_range_start, mc3.ia_range_nr_pages, mc3.target);
 				mc3_exhausted=true;
 			} else {
 				check_assert_fail("mapping_plus missing case");
 			}
 		} else if (!mc3_exhausted) {
 				// no mc2 left but some mc3; copy mc3 to output
-			extend_mapping_coalesce(&res, mc3.virt, mc3.size, mc3.target);
+			extend_mapping_coalesce(&res, mc3.stage, mc3.ia_range_start, mc3.ia_range_nr_pages, mc3.target);
 			mc3_exhausted = true;
 		} else {
 			// both exhausted
@@ -1029,13 +1156,13 @@ struct glist_head mapping_plus(struct glist_head head2, struct glist_head head3)
 }
 
 
-// compute head2 \ (virt..virt+nr_pages)
+// compute head2 \ (ia_range_start..ia_range_start+nr_pages)
 // (this has an inefficient extra copy, but avoids having to futz with the mapping_plus code)
 struct glist_head mapping_minus(struct glist_head head2, u64 virt, u64 nr_pages)
 {
 	struct glist_head tmp1, tmp2;
 	ghost_assert_maplets_locked();
-	tmp1 = mapping_plus(head2, mapping_singleton(virt, nr_pages, maplet_target_absent()));
+	tmp1 = mapping_plus(head2, mapping_singleton(GHOST_STAGE_NONE, virt, nr_pages, maplet_target_absent()));
 	tmp2 = mapping_copy_except_absent(tmp1);
 	free_mapping(tmp1);
 	return tmp2;
@@ -1084,7 +1211,7 @@ bool mapping_disjoint(struct glist_head head1, struct glist_head head2, char *s,
 			} else {
 				pos1 = pos1->next;
 				m1 = glist_entry(pos1, struct maplet, list);
-				if (m1->size != 0)
+				if (m1->ia_range_nr_pages != 0)
 					m1_do_next = false;
 			}
 		}
@@ -1095,7 +1222,7 @@ bool mapping_disjoint(struct glist_head head1, struct glist_head head2, char *s,
 			} else {
 				pos2 = pos2->next;
 				m2 = list_entry(pos2, struct maplet, list);
-				if (m2->size != 0)
+				if (m2->ia_range_nr_pages != 0)
 					m2_do_next = false;
 			}
 		}
@@ -1104,10 +1231,10 @@ bool mapping_disjoint(struct glist_head head1, struct glist_head head2, char *s,
 			disjoint = true;
 			break;
 		}
-		if (m1->virt + m1->size*PAGE_SIZE <= m2->virt) {
+		if (ia_range_end(*m1) <= m2->ia_range_start) {
 			// all of m1 is strictly before the start of m2; drop m1
 			m1_do_next = true;
-		} else if (m2->virt + m2->size*PAGE_SIZE <= m1->virt) {
+		} else if (ia_range_end(*m2) <= m1->ia_range_start) {
 			// all of m2 is strictly before the start of m1; drop m2
 			m2_do_next = true;
 		} else {
@@ -1146,11 +1273,12 @@ bool mapping_disjoint(struct glist_head head1, struct glist_head head2, char *s,
 
 
 /* compute whether addr is in the domain of mapping ms1 */
-bool maplet_in_domain(u64 virt, struct maplet *m)
+bool maplet_in_domain(u64 ia, struct maplet *m)
 {
-	if (m==NULL)
+	if (m == NULL)
 		return false;
-	return (virt >= m->virt && virt < m->virt + m->size*PAGE_SIZE);
+
+	return (m->ia_range_start <= ia && ia < ia_range_end(*m));
 }
 
 
@@ -1163,12 +1291,14 @@ bool mapping_in_domain(u64 virt, struct glist_head head)
 
 	if (glist_empty(&head))
 		return false;
+
 	glist_for_each(pos1, &head) {
 		m1 = glist_entry(pos1, struct maplet, list);
 		if (maplet_in_domain(virt, m1)) {
 			return true;
 		}
 	}
+
 	return false;
 }
 
@@ -1195,4 +1325,43 @@ void mapping_move(mapping *map_out, mapping map)
 {
 	free_mapping(*map_out);
 	*map_out = map;
+}
+
+void mapping_update(mapping *out, mapping in, mapping_update_kind_t kind, ghost_stage_t stage, u64 ia, u64 nr_pages, struct maplet_target t)
+{
+	mapping copy = mapping_copy(in);
+	free_mapping(*out);
+
+	switch (kind) {
+	case MAP_REMOVE_PAGE:
+		if (t.kind != MAPLET_ABSENT)
+			ghost_assert(false);
+
+		for (u64 p = 0; p < nr_pages; p++) {
+			if (!mapping_in_domain(ia + p*PAGE_SIZE, copy)) {
+				ghost_assert(false);
+			}
+		}
+		copy = mapping_minus(copy, ia, 1);
+		break;
+	case MAP_INSERT_PAGE:
+		for (u64 p = 0; p < nr_pages; p++) {
+			if (mapping_in_domain(ia + p*PAGE_SIZE, copy)) {
+				ghost_assert(false);
+			}
+		}
+		copy = mapping_plus(copy, mapping_singleton(stage, ia, nr_pages, t));
+		break;
+	case MAP_UPDATE_PAGE:
+		for (u64 p = 0; p < nr_pages; p++) {
+			if (!mapping_in_domain(ia + p*PAGE_SIZE, copy)) {
+				ghost_assert(false);
+			}
+		}
+		/* mapping plus discards lhs and overwrites with rhs */
+		copy = mapping_plus(copy, mapping_singleton(stage, ia, nr_pages, t));
+		break;
+	}
+
+	*out = copy;
 }

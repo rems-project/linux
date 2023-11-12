@@ -250,7 +250,7 @@ static bool kvm_pgtable_walk_continue(const struct kvm_pgtable_walker *walker,
 #if defined(CONFIG_NVHE_GHOST_SPEC) && defined(__KVM_NVHE_HYPERVISOR__)
 static int __kvm_pgtable_walk(struct kvm_pgtable_walk_data *data,
 			      struct kvm_pgtable_mm_ops *mm_ops, kvm_pteref_t pgtable, u32 level,
-			      u64 ghost_va_partial);
+			      u64 ghost_va_partial, bool s2);
 #else
 static int __kvm_pgtable_walk(struct kvm_pgtable_walk_data *data,
 			      struct kvm_pgtable_mm_ops *mm_ops, kvm_pteref_t pgtable, u32 level);
@@ -260,7 +260,7 @@ static int __kvm_pgtable_walk(struct kvm_pgtable_walk_data *data,
 static inline int __kvm_pgtable_visit(struct kvm_pgtable_walk_data *data,
 				      struct kvm_pgtable_mm_ops *mm_ops,
 				      kvm_pteref_t pteref, u32 level,
-				      u64 ghost_va_partial)
+				      u64 ghost_va_partial, bool s2)
 #else
 static inline int __kvm_pgtable_visit(struct kvm_pgtable_walk_data *data,
 				      struct kvm_pgtable_mm_ops *mm_ops,
@@ -323,7 +323,7 @@ static inline int __kvm_pgtable_visit(struct kvm_pgtable_walk_data *data,
 
 	childp = (kvm_pteref_t)kvm_pte_follow(ctx.old, mm_ops);
 #if defined(CONFIG_NVHE_GHOST_SPEC) && defined(__KVM_NVHE_HYPERVISOR__)
-	ret = __kvm_pgtable_walk(data, mm_ops, childp, level + 1, ghost_va_partial);
+	ret = __kvm_pgtable_walk(data, mm_ops, childp, level + 1, ghost_va_partial, s2);
 #else
 	ret = __kvm_pgtable_walk(data, mm_ops, childp, level + 1);
 #endif /* CONFIG_NVHE_GHOST_SPEC */
@@ -343,7 +343,7 @@ out:
 #if defined(CONFIG_NVHE_GHOST_SPEC) && defined(__KVM_NVHE_HYPERVISOR__)
 static int __kvm_pgtable_walk(struct kvm_pgtable_walk_data *data,
 			      struct kvm_pgtable_mm_ops *mm_ops, kvm_pteref_t pgtable, u32 level,
-			      u64 ghost_va_partial)
+			      u64 ghost_va_partial, bool s2)
 #else
 static int __kvm_pgtable_walk(struct kvm_pgtable_walk_data *data,
 			      struct kvm_pgtable_mm_ops *mm_ops, kvm_pteref_t pgtable, u32 level)
@@ -370,10 +370,23 @@ static int __kvm_pgtable_walk(struct kvm_pgtable_walk_data *data,
 		hyp_putc('\n');
 
 		ghost_lock_maplets();
-		mapping_pre = ghost_record_pgtable_partial(pgtable, level, ghost_va_partial, dummy_aal(), "__kvm_pgtable_walk pre", i+2);
+		ghost_mair_t mair;
+		ghost_stage_t stage;
+		if (s2) {
+			mair = no_mair();
+			stage = GHOST_STAGE2;
+		} else {
+			mair = read_mair(read_sysreg_el2(SYS_MAIR));
+			stage = GHOST_STAGE1;
+		}
+		u64 phys = ((struct stage2_map_data *)(data->walker->arg))->phys;
+		u64 nr_pages = (data->end - data->addr)/PAGE_SIZE;
+		mapping_pre = ghost_record_pgtable_partial(pgtable, stage, mair, level, ghost_va_partial, DUMMY_AAL, "__kvm_pgtable_walk pre", i+2);
 		if (((struct stage2_map_data *)(data->walker->arg))->anchor == NULL) { // if anchor not set
 			// TODO: I guess we need to cut down the (addr,end) to the footprint of the subpagetable we're working on. We don't see that in the boot as the fault-on-demand only seems to request a single-page mapping?  If it never does, the anchor machinery is irrelevant for that.
-			mapping_requested = mapping_singleton(data->addr, (data->end - data->addr)/PAGE_SIZE, maplet_target_mapped(((struct stage2_map_data *)(data->walker->arg))->phys, DUMMY_ATTR, dummy_aal()));
+			mapping_requested = mapping_singleton(
+				s2 ? GHOST_STAGE2 : GHOST_STAGE1, data->addr, nr_pages,
+				maplet_target_mapped_ext(phys, nr_pages, DUMMY_ATTR, DUMMY_ATTR, DUMMY_ATTR));
 		} else {
 			mapping_requested = mapping_empty_();
 		}
@@ -405,7 +418,7 @@ static int __kvm_pgtable_walk(struct kvm_pgtable_walk_data *data,
                 case 3: ghost_va_partial_new = ghost_va_partial | ((u64)idx << 12); break;
                 default: check_assert_fail("unhandled level"); // cases are exhaustive
                 }
-		ret = __kvm_pgtable_visit(data, mm_ops, pteref, level, ghost_va_partial_new);
+		ret = __kvm_pgtable_visit(data, mm_ops, pteref, level, ghost_va_partial_new, s2);
 #else
 		ret = __kvm_pgtable_visit(data, mm_ops, pteref, level);
 #endif /* CONFIG_NVHE_GHOST_SPEC */
@@ -419,7 +432,16 @@ out:
 		// sketch of the postcondition - punting on sundry rounding and error/edge cases
 		// some of this is shared with the kvm_pgtable_stage2_map postcondition, but for a subtable
 		ghost_lock_maplets();
-		mapping_post = ghost_record_pgtable_partial(pgtable, level, ghost_va_partial, dummy_aal(), "__kvm_pgtable_walk post", i+2);
+		ghost_mair_t mair;
+		ghost_stage_t stage;
+		if (s2) {
+			mair = no_mair();
+			stage = GHOST_STAGE2;
+		} else {
+			mair = read_mair(read_sysreg_el2(SYS_MAIR));
+			stage = GHOST_STAGE1;
+		}
+		mapping_post = ghost_record_pgtable_partial(pgtable, stage, mair, level, ghost_va_partial, DUMMY_AAL, "__kvm_pgtable_walk post", i+2);
 		// postcondition: mapping_requested included in mapping_post
 		mapping_submapping(mapping_requested, mapping_post, "__kvm_pgtable_walk_post", "mapping_requested", "mapping_post", i+2);
 		// postcondition: mapping_post included in mapping_pre + mapping_requested
@@ -472,7 +494,8 @@ static int _kvm_pgtable_walk(struct kvm_pgtable *pgt, struct kvm_pgtable_walk_da
 
 #if defined(CONFIG_NVHE_GHOST_SPEC) && defined(__KVM_NVHE_HYPERVISOR__)
 		ghost_va_partial = 0;  // TODO?
-		ret = __kvm_pgtable_walk(data, pgt->mm_ops, pteref, pgt->start_level, ghost_va_partial);
+		bool is_s2 = pgt->mmu != NULL;
+		ret = __kvm_pgtable_walk(data, pgt->mm_ops, pteref, pgt->start_level, ghost_va_partial, is_s2);
 #else
 		ret = __kvm_pgtable_walk(data, pgt->mm_ops, pteref, pgt->start_level);
 #endif /* CONFIG_NVHE_GHOST_SPEC */
@@ -1226,7 +1249,8 @@ int kvm_pgtable_stage2_map(struct kvm_pgtable *pgt, u64 addr, u64 size,
 
 		// mapping_requested = addr..addr+size |-> (phys..phys+size, prot)
 		ghost_lock_maplets();
-		mapping_requested = mapping_singleton(addr, size / PAGE_SIZE, maplet_target_mapped(phys, DUMMY_ATTR, dummy_aal()));
+		u64 nr_pages = size / PAGE_SIZE;
+		mapping_requested = mapping_singleton(GHOST_STAGE2, addr, nr_pages, maplet_target_mapped_ext(phys, nr_pages, DUMMY_ATTR, DUMMY_ATTR, DUMMY_ATTR));
 // the attribute we see in the constructed table is
 // 1000000000007fc
 // 0000000100000000000000000000000000000000000000000000011111111100
@@ -1671,7 +1695,7 @@ void kvm_pgtable_stage2_free_removed(struct kvm_pgtable_mm_ops *mm_ops, void *pg
 
 #if defined(CONFIG_NVHE_GHOST_SPEC) && defined(__KVM_NVHE_HYPERVISOR__)
 	u64 ghost_va_partial = 0;  // TODO?
-	WARN_ON(__kvm_pgtable_walk(&data, mm_ops, ptep, level + 1, ghost_va_partial));
+	WARN_ON(__kvm_pgtable_walk(&data, mm_ops, ptep, level + 1, ghost_va_partial, true));
 #else
 	WARN_ON(__kvm_pgtable_walk(&data, mm_ops, ptep, level + 1));
 #endif /* CONFIG_NVHE_GHOST_SPEC */
