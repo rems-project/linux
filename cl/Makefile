@@ -87,6 +87,10 @@ configure:
 	$(CONFIG) $(CONFIG_FLAGS) --set-val CONFIG_NVHE_GHOST_MEM_LOG2_MB 22
 .PHONY: configure
 
+menuconfig:
+	$(MAKE) -C .. ARCH=arm64 CC=$(CC) CROSS_COMPILE=aarch64-linux-gnu- menuconfig
+.PHONY: menuconfig
+
 build:
 	@echo ... building kernel image
 	$(MAKE) -C $(abspath ..) ARCH=arm64 CC=$(CC) CROSS_COMPILE=aarch64-linux-gnu- -j $$(nproc) Image
