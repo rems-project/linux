@@ -4,32 +4,10 @@
 
 #include <nvhe/ghost_control.h>
 
-#ifdef CONFIG_NVHE_GHOST_SPEC_NOISY
-static const bool noisy_spec = true;
-#else
-static const bool noisy_spec = false;
-#endif
-
-#ifdef CONFIG_NVHE_GHOST_SPEC_VERBOSE
-static const bool verbose_spec = true;
-#else
-static const bool verbose_spec = false;
-#endif
-
-#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL_NOISY
-static const bool noisy_sm = true;
-#else
-static const bool noisy_sm = false;
-#endif
-
-#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL_VERBOSE
-static const bool verbose_sm = true;
-#else
-static const bool verbose_sm = false;
-#endif
-
-static const bool check_host_hcalls = true;
-static const bool check_mem_abort = true;
+static const bool noisy_spec = IS_ENABLED(CONFIG_NVHE_GHOST_SPEC_NOISY);
+static const bool verbose_spec = IS_ENABLED(CONFIG_NVHE_GHOST_SPEC_VERBOSE);
+static const bool noisy_sm = IS_ENABLED(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL_NOISY);
+static const bool verbose_sm = IS_ENABLED(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL_VERBOSE);
 
 struct ghost_control_item {
 	const char* name;
@@ -50,18 +28,22 @@ static struct ghost_control_item ghost_controls[] = {
 	(struct ghost_control_item){.name="ghost_record_pre", .check=true, .print=verbose_spec},
 	(struct ghost_control_item){.name="ghost_post", .check=true, .print=verbose_spec},
 
+	(struct ghost_control_item){.name="ghost_post_dump_recorded_concrete_host_pgtable_diff", .check=true, .print=IS_ENABLED(CONFIG_NVHE_GHOST_DIFF_post_host_pgtable)},
+	(struct ghost_control_item){.name="ghost_post_dump_recorded_ghost_diff", .check=true, .print=IS_ENABLED(CONFIG_NVHE_GHOST_DIFF_pre_post_recorded)},
+	(struct ghost_control_item){.name="ghost_post_dump_computed_ghost_diff", .check=true, .print=IS_ENABLED(CONFIG_NVHE_GHOST_DIFF_post_computed)},
+
 	// hypercalls
-	(struct ghost_control_item){.name="__pkvm_host_share_hyp", .check=check_host_hcalls, .print=noisy_spec},
-	(struct ghost_control_item){.name="__pkvm_init_vm", .check=check_host_hcalls, .print=noisy_spec},
-	(struct ghost_control_item){.name="__pkvm_init_vcpu", .check=check_host_hcalls, .print=noisy_spec},
-	(struct ghost_control_item){.name="__pkvm_vcpu_load", .check=check_host_hcalls, .print=noisy_spec},
-	(struct ghost_control_item){.name="__pkvm_vcpu_put", .check=check_host_hcalls, .print=noisy_spec},
-	(struct ghost_control_item){.name="__kvm_vcpu_run", .check=check_host_hcalls, .print=noisy_spec},
-	(struct ghost_control_item){.name="__pkvm_host_map_guest", .check=check_host_hcalls, .print=noisy_spec},
-	(struct ghost_control_item){.name="__pkvm_teardown_vm", .check=check_host_hcalls, .print=noisy_spec},
-	(struct ghost_control_item){.name="__pkvm_reclaim_page", .check=check_host_hcalls, .print=noisy_spec},
-	(struct ghost_control_item){.name="__pkvm_host_unshare_hyp", .check=check_host_hcalls, .print=noisy_spec},
-	(struct ghost_control_item){.name="host_handle_mem_abort", .check=check_mem_abort, .print=noisy_spec},
+	(struct ghost_control_item){.name="__pkvm_host_share_hyp", .check=IS_ENABLED(CONFIG_NVHE_GHOST_SPEC_CHECK___pkvm_host_share_hyp), .print=noisy_spec},
+	(struct ghost_control_item){.name="__pkvm_init_vm", .check=IS_ENABLED(CONFIG_NVHE_GHOST_SPEC_CHECK___pkvm_init_vm), .print=noisy_spec},
+	(struct ghost_control_item){.name="__pkvm_init_vcpu", .check=IS_ENABLED(CONFIG_NVHE_GHOST_SPEC_CHECK___pkvm_init_vcpu), .print=noisy_spec},
+	(struct ghost_control_item){.name="__pkvm_vcpu_load", .check=IS_ENABLED(CONFIG_NVHE_GHOST_SPEC_CHECK___pkvm_vcpu_load), .print=noisy_spec},
+	(struct ghost_control_item){.name="__pkvm_vcpu_put", .check=IS_ENABLED(CONFIG_NVHE_GHOST_SPEC_CHECK___pkvm_vcpu_put), .print=noisy_spec},
+	(struct ghost_control_item){.name="__kvm_vcpu_run", .check=IS_ENABLED(CONFIG_NVHE_GHOST_SPEC_CHECK___kvm_vcpu_run), .print=noisy_spec},
+	(struct ghost_control_item){.name="__pkvm_host_map_guest", .check=IS_ENABLED(CONFIG_NVHE_GHOST_SPEC_CHECK___pkvm_host_map_guest), .print=noisy_spec},
+	(struct ghost_control_item){.name="__pkvm_teardown_vm", .check=IS_ENABLED(CONFIG_NVHE_GHOST_SPEC_CHECK___pkvm_teardown_vm), .print=noisy_spec},
+	(struct ghost_control_item){.name="__pkvm_reclaim_page", .check=IS_ENABLED(CONFIG_NVHE_GHOST_SPEC_CHECK___pkvm_reclaim_page), .print=noisy_spec},
+	(struct ghost_control_item){.name="__pkvm_host_unshare_hyp", .check=IS_ENABLED(CONFIG_NVHE_GHOST_SPEC_CHECK___pkvm_host_unshare_hyp), .print=noisy_spec},
+	(struct ghost_control_item){.name="handle_host_mem_abort", .check=IS_ENABLED(CONFIG_NVHE_GHOST_SPEC_CHECK_handle_host_mem_abort), .print=noisy_spec},
 
 	// old
 	(struct ghost_control_item){.name="handle_trap", .check=true, .print=verbose_spec},
@@ -102,4 +84,9 @@ bool ghost_control_check_enabled(const char* context)
 	}
 
 	return false;
+}
+
+bool ghost_print_on(const char* context)
+{
+	return !ghost_control_is_controlled(context) || ghost_control_print_enabled(context);
 }

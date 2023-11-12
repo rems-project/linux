@@ -545,27 +545,42 @@ void check_abstraction_equals_globals(struct ghost_state *gc, struct ghost_state
 
 // do we want these for an arbitrary g or for the global gs ?
 
+
 #ifdef CONFIG_NVHE_GHOST_DIFF
-static void post_dump_diff(struct ghost_state *gc, struct ghost_state *gr_post, struct ghost_state *gr_pre)
+/*
+ * Print the diff between the recorded pre concrete host pgtable state and recorded post pgtable state
+ */
+static void ghost_post_dump_recorded_concrete_host_pgtable_diff(struct ghost_state *gc, struct ghost_state *gr_post, struct ghost_state *gr_pre)
 {
 	struct ghost_diff *diff;
+	if (! ghost_print_on(__func__))
+		return;
 
-#ifdef CONFIG_NVHE_GHOST_SPEC_VERBOSE
 	if (gr_pre->host.present && gr_post->host.present) {
-		hyp_puts("pre->post host concrete pgtable: ");
+		ghost_printf("recorded post host pgtable diff from recorded pre:");
 		diff = ghost_diff_pgtable(&gr_pre->host.host_concrete_pgtable, &gr_post->host.host_concrete_pgtable);
 		if (diff) {
 			ghost_print_diff(diff);
-			hyp_puts("\n");
+			ghost_printf("\n");
 			free_diff(diff);
 		} else {
-			hyp_puts("<identical>\n");
+			ghost_printf("<identical>\n");
 		}
+
+		ghost_printf("\n");
 	}
-#endif /* CONFIG_NVHE_GHOST_SPEC_VERBOSE */
+}
 
+/*
+ * Print the diff between the recorded pre ghost state and recorded post ghost state
+ */
+static void ghost_post_dump_recorded_ghost_diff(struct ghost_state *gc, struct ghost_state *gr_post, struct ghost_state *gr_pre)
+{
+	struct ghost_diff *diff;
+	if (! ghost_print_on(__func__))
+		return;
 
-	ghost_printf("recorded post diff from recorded pre:");
+	ghost_printf("recorded post ghost state diff from recorded pre:");
 	diff = ghost_diff_state(gr_pre, gr_post);
 	if (diff) {
 		ghost_print_diff(diff);
@@ -576,7 +591,18 @@ static void post_dump_diff(struct ghost_state *gc, struct ghost_state *gr_post, 
 	}
 
 	ghost_printf("\n");
-	ghost_printf("computed spec diff from recorded post:");
+}
+
+/*
+ * Print the diff between the recorded post and computed (spec) post.
+ */
+static void ghost_post_dump_computed_ghost_diff(struct ghost_state *gc, struct ghost_state *gr_post, struct ghost_state *gr_pre)
+{
+	struct ghost_diff *diff;
+	if (! ghost_print_on(__func__))
+		return;
+
+	ghost_printf("computed ghost spec diff from recorded post:");
 	diff = ghost_diff_state(gr_post, gc);
 	if (diff) {
 		ghost_print_diff(diff);
@@ -585,6 +611,15 @@ static void post_dump_diff(struct ghost_state *gc, struct ghost_state *gr_post, 
 	} else {
 		ghost_printf("<identical>\n");
 	}
+
+	ghost_printf("\n");
+}
+
+static void post_dump_diff(struct ghost_state *gc, struct ghost_state *gr_post, struct ghost_state *gr_pre)
+{
+	ghost_post_dump_recorded_concrete_host_pgtable_diff(gc, gr_post, gr_pre);
+	ghost_post_dump_recorded_ghost_diff(gc, gr_post, gr_pre);
+	ghost_post_dump_computed_ghost_diff(gc, gr_post, gr_pre);
 }
 #endif /* CONFIG_NVHE_GHOST_SPEC_DIFF */
 

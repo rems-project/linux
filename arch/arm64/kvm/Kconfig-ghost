@@ -1,25 +1,18 @@
-config NVHE_GHOST_SPEC
-	bool "A ghost haunts nVHE EL2"
-	depends on KVM
-	default n
+menuconfig NVHE_GHOST_SPEC
+	bool "nVHE Ghost specification checking"
 	select NVHE_EL2_DEBUG
 	select PROTECTED_NVHE_STACKTRACE
 	select KVM_ARM_HYP_DEBUG_UART
+	depends on KVM
 	help
-	  And it's watching you.
+	  Enables compilation of ghost code inside nVHE sources.
 
 config NVHE_GHOST_SPEC_COLOURS
 	bool "Colours in the output of nVHE ghost spec"
 	depends on NVHE_GHOST_SPEC
 	default n
-
-config NVHE_GHOST_SIMPLIFIED_MODEL
-	bool "Runtime simplified model checking"
-	depends on NVHE_GHOST_SPEC
-	default n
-	select NVHE_EL2_DEBUG
-	select PROTECTED_NVHE_STACKTRACE
-	select KVM_ARM_HYP_DEBUG_UART
+	help
+	  When enabled, all ghost machinery prints ANSI colour codes.  Enables compilation of ghost code in nVHE sources.
 
 config NVHE_GHOST_MEM_LOG2_MB
 	int "Ghost dynamic memory pool size (log_2)"
@@ -33,7 +26,30 @@ config NVHE_GHOST_MEM_LOG2_MB
 	  This number denotes log_2 of the memory pool size, in bytes. For instance,
 	  22 denotes 4 MB.
 
-config NVHE_GHOST_SPEC_NOISY
+
+menuconfig NVHE_GHOST_SIMPLIFIED_MODEL
+	bool "Runtime simplified model checking"
+	depends on NVHE_GHOST_SPEC
+	default n
+	select NVHE_EL2_DEBUG
+	select PROTECTED_NVHE_STACKTRACE
+	select KVM_ARM_HYP_DEBUG_UART
+
+menuconfig NVHE_GHOST_SIMPLIFIED_MODEL_NOISY
+	bool "Noisy ghost simplified model output"
+	depends on NVHE_GHOST_SIMPLIFIED_MODEL
+	default n
+	help
+	  Enable some noisy logs from the ghost simplified model.
+
+config NVHE_GHOST_SIMPLIFIED_MODEL_VERBOSE
+	bool "Very noisy ghost simplified model output"
+	depends on NVHE_GHOST_SIMPLIFIED_MODEL_NOISY
+	default n
+	help
+	  Enable the full (very noisy) logs from the ghost simplified model.
+
+menuconfig NVHE_GHOST_SPEC_NOISY
 	bool "Noisy ghost spec checking machinery"
 	depends on NVHE_GHOST_SPEC
 	default n
@@ -49,23 +65,63 @@ config NVHE_GHOST_SPEC_VERBOSE
 	  Enable the full (very noisy) logs from the ghost spec recording
 	  and checking machinery.
 
-config NVHE_GHOST_SIMPLIFIED_MODEL_NOISY
-	bool "Noisy ghost simplified model output"
-	depends on NVHE_GHOST_SIMPLIFIED_MODEL
-	default n
-	help
-	  Enable some noisy logs from the ghost simplified model.
-
-config NVHE_GHOST_SIMPLIFIED_MODEL_VERBOSE
-	bool "Very noisy ghost simplified model output"
-	depends on NVHE_GHOST_SIMPLIFIED_MODEL_NOISY
-	default n
-	help
-	  Enable the full (very noisy) logs from the ghost simplified model.
-
-config NVHE_GHOST_DIFF
+menuconfig NVHE_GHOST_DIFF
 	bool "Show diffs between ghost states on traps"
 	depends on NVHE_GHOST_SPEC_NOISY
 	default n
 	help
 	  Prints diffs on each trap of the actual v expected ghost states.
+
+config NVHE_GHOST_DIFF_post_computed
+	bool "Show diffs of recorded->computed spec ghost state"
+	depends on NVHE_GHOST_DIFF
+	default n
+
+config NVHE_GHOST_DIFF_pre_post_recorded
+	bool "Show diffs of pre->post recorded ghost state"
+	depends on NVHE_GHOST_DIFF
+
+config NVHE_GHOST_DIFF_post_host_pgtable
+	bool "Show concrete diffs to host pgtable on each handler"
+	depends on NVHE_GHOST_DIFF
+	default n
+
+menu "Hypercalls"
+	depends on NVHE_GHOST_SPEC
+
+
+config NVHE_GHOST_SPEC_CHECK_handle_host_mem_abort
+	bool "Check handle_host_mem_abort"
+
+config NVHE_GHOST_SPEC_CHECK___pkvm_host_share_hyp
+	bool "Check __pkvm_host_share_hyp"
+config NVHE_GHOST_SPEC_CHECK___pkvm_host_unshare_hyp
+	bool "Check __pkvm_host_unshare_hyp"
+config NVHE_GHOST_SPEC_CHECK___pkvm_host_reclaim_page
+	bool "Check __pkvm_host_reclaim_page"
+config NVHE_GHOST_SPEC_CHECK___pkvm_host_map_guest
+	bool "Check __pkvm_host_map_guest"
+# config NVHE_GHOST_SPEC_CHECK___kvm_adjust_pc
+# 	bool "Check __kvm_adjust_pc"
+config NVHE_GHOST_SPEC_CHECK___kvm_vcpu_run
+	bool "Check __kvm_vcpu_run"
+# config NVHE_GHOST_SPEC_CHECK___kvm_timer_set_cntvoff
+# 	bool "Check __kvm_timer_set_cntvoff"
+# config NVHE_GHOST_SPEC_CHECK___vgic_v3_save_vmcr_aprs
+# 	bool "Check __vgic_v3_save_vmcr_aprs"
+# config NVHE_GHOST_SPEC_CHECK___vgic_v3_restore_vmcr_aprs
+# 	bool "Check __vgic_v3_restore_vmcr_aprs"
+config NVHE_GHOST_SPEC_CHECK___pkvm_init_vm
+	bool "Check __pkvm_init_vm"
+config NVHE_GHOST_SPEC_CHECK___pkvm_init_vcpu
+	bool "Check __pkvm_init_vcpu"
+config NVHE_GHOST_SPEC_CHECK___pkvm_teardown_vm
+	bool "Check __pkvm_teardown_vm"
+config NVHE_GHOST_SPEC_CHECK___pkvm_vcpu_load
+	bool "Check __pkvm_vcpu_load"
+config NVHE_GHOST_SPEC_CHECK___pkvm_vcpu_put
+	bool "Check __pkvm_vcpu_put"
+# config NVHE_GHOST_SPEC_CHECK___pkvm_vcpu_sync_state
+# 	bool "Check __pkvm_vcpu_sync_state"
+
+endmenu
