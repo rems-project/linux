@@ -53,6 +53,8 @@
 #include <nvhe/ghost_asserts.h>
 #include <nvhe/ghost_context.h>
 
+#include <nvhe/ghost_printer.h>
+
 
 
 
@@ -320,184 +322,168 @@ mapping mapping_singleton(ghost_stage_t stage, u64 virt, u64 nr_pages, struct ma
 
 /* ****************** maplets printing ****************** */
 
-void hyp_put_maplet_target(ghost_stage_t stage, struct maplet_target *target, u64 i)
+int gp_put_maplet_target(gp_stream_t *out, struct maplet_target *target)
 {
 	// for hypervisor-controlled pgtables, the targets are always physical addresses
 	// also pad the names to length 5 for consistency
 	char *oa_name_kind = "phys ";
 	char *oa_post_name_kind = "phys'";
 
-	// put indent
-	hyp_puti(i);
+	// targets are printed as:
+	// for   MAPPED: "${oa_name}:${oa} ${oa_name'}:${oa'} ${page_state} ${permissions} ${memorytype} (raw_arch_prot ${raw_arch_prot})"
+	// for UNMAPPED: "owner ${owner_id} (raw_arch_annot ${raw_arch_annot})"
+	// for MEMBLOCK: "memblock ${memblock_flags}"
+	//
+	// we pad each out so it's width 50 chars, and the names and raw bits align.
 
 	// we make each branch here output a string of length 2*25=50 chars.
 	switch (target->kind) {
 	case MAPLET_MAPPED: {
 		struct maplet_target_mapped m = target->map;
+		struct maplet_attributes attrs = m.attrs;
+
 		u64 oa = m.oa_range_start;
 		u64 oa_end = oa_range_end(m);
 
-		// these are also each 25 chars.
-		hyp_putsxn(oa_name_kind, oa, 64);
-		hyp_putsxn(oa_post_name_kind, oa_end, 64);
-		break;
-	};
-	case MAPLET_UNMAPPED:
-		// this fills 11 chars
-		hyp_puts("owner ");
-		switch (target->annot.owner) {
-		case MAPLET_OWNER_ANNOT_OWNED_HOST:
-			hyp_puts(" HOST");
-			break;
-		case MAPLET_OWNER_ANNOT_OWNED_GUEST:
-			hyp_puts("GUEST");
-			break;
-		case MAPLET_OWNER_ANNOT_OWNED_HYP:
-			hyp_puts("  HYP");
-			break;
-		case MAPLET_OWNER_ANNOT_UNKNOWN:
-			hyp_puts("  ???");
-			break;
-		default:
-			BUG();
-		};
-		// so pad up to 50
-		hyp_puti(50-11);
-		break;
-	case MAPLET_MEMBLOCK:
-		// this is length 9
-		hyp_puts("memblock ");
-		// and this length 2+8
-		hyp_putx32((u32)target->memblock);
-		// pad to 50
-		hyp_puti(50-9-(2+8));
-		break;
-	default:
-		BUG();
-	}
-
-	// each case writes 45 chars.
-	switch (target->kind) {
-	case MAPLET_MAPPED: {
-		struct maplet_attributes attrs = target->map.attrs;
-
-		// in total this case split writes  2 + 1 + 3 + 1 + 1 + 1 +                36                  chars = 45
-		//				    SB     RWX      D       ( raw_arch_prot:0x1122334455667788 )
+		char page_state[] = {'-', '-', '\0'};
+		char perms[] = {'-', '-', '-', '\0'};
+		char memty[] = {'-', '\0'};
 
 		switch (attrs.provenance) {
 		case MAPLET_PAGE_STATE_PRIVATE_OWNED:
-			hyp_puts("-- ");
+			page_state[0] = '-';
+			page_state[1] = 'O';
 			break;
 		case MAPLET_PAGE_STATE_SHARED_OWNED:
-			hyp_puts("SO ");
+			page_state[0] = 'S';
+			page_state[1] = 'O';
 			break;
 		case MAPLET_PAGE_STATE_SHARED_BORROWED:
-			hyp_puts("SB ");
+			page_state[0] = 'S';
+			page_state[1] = 'B';
 			break;
 		case MAPLET_PAGE_STATE_UNKNOWN:
-			hyp_puts("?? ");
+			page_state[0] = '?';
+			page_state[1] = '?';
 			break;
 		}
 
 		if (attrs.prot & MAPLET_PERM_R)
-			hyp_puts("R");
-		else
-			hyp_puts("-");
+			perms[0] = 'R';
 
 		if (attrs.prot & MAPLET_PERM_W)
-			hyp_puts("W");
-		else
-			hyp_puts("-");
+			perms[1] = 'W';
 
 		if (attrs.prot & MAPLET_PERM_X)
-			hyp_puts("X");
-		else
-			hyp_puts("-");
-
-		hyp_puts(" ");
+			perms[2] = 'X';
 
 		switch (attrs.memtype) {
 		case MAPLET_MEMTYPE_DEVICE:
-			hyp_puts("D ");
+		 	memty[0] = 'D';
 			break;
 		case MAPLET_MEMTYPE_NORMAL_CACHEABLE:
-			hyp_puts("M ");
+		 	memty[0] = 'M';
 			break;
 		case MAPLET_MEMTYPE_UNKNOWN:
-			hyp_puts("? ");
+		 	memty[0] = '?';
 			break;
 		default:
 			BUG();
 		}
 
-		hyp_puts("(");
-		hyp_putsxn("raw_arch_prot ", attrs.raw_arch_attrs, 64);
-		hyp_puts(")");
-		break;
-	}
-	case MAPLET_UNMAPPED:
-		// do padding first, so that the raw_* aligns.
-		hyp_puti(45-36);
-
-		// the following print is 36 chars
-		hyp_puts("(");
-		hyp_putsxn("raw_arch_annot", target->annot.raw_arch_annot, 64);
-		hyp_puts(")");
-		break;
-	default:
-		hyp_puti(45);
-		break;
+		// each name is 5, and the
+		return ghost_sprintf(
+			out,
+			"%s:%lx %s:%lx %s %s %s (raw_arch_prot %lx)",
+			oa_name_kind, oa, oa_post_name_kind, oa_end,
+			&page_state, &perms, &memty,
+			attrs.raw_arch_attrs
+		);
 	};
+	case MAPLET_UNMAPPED: {
+	 	const char *owner;
+		// each owner is 5 chars
+		switch (target->annot.owner) {
+		case MAPLET_OWNER_ANNOT_OWNED_HOST:
+			owner = " HOST";
+			break;
+		case MAPLET_OWNER_ANNOT_OWNED_GUEST:
+			owner = "GUEST";
+			break;
+		case MAPLET_OWNER_ANNOT_OWNED_HYP:
+			owner = "  HYP";
+			break;
+		case MAPLET_OWNER_ANNOT_UNKNOWN:
+			owner = "  ???";
+			break;
+		default:
+			BUG();
+		};
+
+		return ghost_sprintf(out, "owner %s%39s", owner, "");
+	}
+	case MAPLET_MEMBLOCK:
+		// this is length 9 + (2+8)
+		return ghost_sprintf(out, "memblock %x%31s", (u32)target->memblock, "");
+	default:
+		BUG();
+	}
+	unreachable();
 }
 
-void hyp_put_maplet(struct maplet *maplet, u64 i)
+int gp_put_maplet(gp_stream_t *out, struct maplet *maplet)
 {
 	char *ia_name_kind;
 	char *ia_post_name_kind;
+	char *stage;
 
 	u64 ia;
 	u64 ia_end;
 
 	ghost_assert_maplets_locked();
 
-	// write the indent
-	hyp_puti(i);
-
 	// the names are always of length 5
 	switch (maplet->stage) {
 		case GHOST_STAGE2:
 			ia_name_kind = "ipa..";
 			ia_post_name_kind = "ipa'.";
-			hyp_puts("S2");
+			stage = "S2";
 			break;
 		case GHOST_STAGE1:
 			/* Stage 1 in a single stage translation regime goes virt->phys directly. */
 			ia_name_kind = "virt.";
 			ia_post_name_kind = "virt'";
-			hyp_puts("S1");
+			stage = "S1";
 			break;
 		case GHOST_STAGE_NONE:
 			/* Must be memblock, which are just phys */
 			ia_name_kind = "phys.";
 			ia_post_name_kind = "phys'";
-			hyp_puts("--");
+			stage = "--";
 			break;
 		default:
 			BUG();
 	};
 
-	hyp_puts(" ");
-
 	// these are of length 5    +   1  +  2   +   16      + 1     = 25 chars.
 	//                    (name) (colon) (0x) (01AB23EF) (space)
 	ia = maplet->ia_range_start;
 	ia_end = ia_range_end(*maplet);
-	hyp_putsxn(ia_name_kind, ia, 64);
-	hyp_putsxn(ia_post_name_kind, ia_end, 64);
 
-	hyp_putsxn("nr_pages",(u32)maplet->ia_range_nr_pages,32);
+	return ghost_sprintf(
+		out, "%s %s:%lx %s:%lx nr_pages:%x %g(maplet_target)",
+		stage, ia_name_kind, ia, ia_post_name_kind, ia_end, (u32)maplet->ia_range_nr_pages, &maplet->target
+	);
+}
 
-	hyp_put_maplet_target(maplet->stage, &maplet->target, 0);
+void hyp_put_maplet_target(struct maplet_target *target, u64 indent)
+{
+	ghost_printf("%g(maplet_target)", target);
+}
+
+void hyp_put_maplet(struct maplet *maplet, u64 indent)
+{
+	ghost_printf("%g(maplet)", maplet);
 }
 
 void hyp_put_mapletptr(void *d)
@@ -506,8 +492,10 @@ void hyp_put_mapletptr(void *d)
 	hyp_put_maplet(m, 0);
 }
 
-void hyp_put_mapping(struct glist_head head, u64 i)
+void gp_put_mapping(gp_stream_t *out, mapping *mapp, u64 indent)
 {
+	struct glist_head head = *mapp;
+
 	struct glist_node *pos = NULL;
 	struct maplet *m;
 	bool first;
@@ -518,27 +506,33 @@ void hyp_put_mapping(struct glist_head head, u64 i)
 
 	first=true;
 	if (glist_empty(&head)) {
-		hyp_putspi("empty\n",i);
+		ghost_printf("empty\n", indent);
 		return;
 	}
+
 	glist_for_each( pos, &head)
 	{
-		hyp_puti(i);
-		//hyp_putsxn("hyp_put_maplets pos",(u64)pos,64);
+		char prefix;
+
 		m = glist_entry(pos, struct maplet, list);
-		if (!first && m->target.kind == MAPLET_MAPPED && m->target.map.oa_range_start == phys_first + size_first*PAGE_SIZE)
-			hyp_putc('-');
-		else
-			hyp_putc(' ');
+		if (!first && m->target.kind == MAPLET_MAPPED && m->target.map.oa_range_start == phys_first + size_first*PAGE_SIZE) {
+			prefix = '-';
+		} else {
+			prefix = ' ';
+		}
 
 		if (first && m->target.kind == MAPLET_MAPPED) {
 			phys_first = m->target.map.oa_range_start;
 			size_first = m->target.map.oa_range_nr_pages;
 			first = false;
 		}
-		hyp_put_maplet(m, 0);
-		hyp_putc('\n');
+		ghost_printf("%I%c%g(maplet)\n", indent, prefix, m);
 	}
+}
+
+void hyp_put_mapping(struct glist_head head, u64 i)
+{
+	ghost_printf("%gI(mapping)", &head, i);
 }
 
 
@@ -621,12 +615,6 @@ bool interpret_equals(struct glist_head head1, struct glist_head head2, u64 i)
 	if (glist_empty(&head1) && glist_empty(&head2))
 		return true;
 	if (glist_empty(&head1) || glist_empty(&head2)) {
-		hyp_putsp(GHOST_WHITE_ON_RED);
-		if (glist_empty(&head1))
-			hyp_putspi("interpret_equals mismatch first empty ", i);
-		else
-			hyp_putspi("interpret_equals mismatch second empty ", i);
-hyp_putsp(GHOST_NORMAL);
 		return false;
 	}
 
@@ -635,25 +623,12 @@ hyp_putsp(GHOST_NORMAL);
 	      (pos1 = pos1->next, pos2=pos2->next) ) {
 		      m1 = glist_entry(pos1, struct maplet, list);
 		      m2 = glist_entry(pos2, struct maplet, list);
-		      if ( !(maplet_eq_nonattr(m1, m2)) ) {
-			      hyp_puti(i);
-			      hyp_putsp(GHOST_WHITE_ON_RED);
-			      hyp_putsxn("interpret_equals mismatch at ia1", m1->ia_range_start, 64);
-			      hyp_putsxn("ia2", m2->ia_range_start, 64);
-			      hyp_putc('\n');
-			      hyp_put_maplet(m1,2);
-			      hyp_putc('\n');
-			      hyp_put_maplet(m2,2);
-			      hyp_putc('\n');
-			      hyp_putsp(GHOST_NORMAL);
-			      return false;
-		      }
-        }
+			if ( !(maplet_eq_nonattr(m1, m2)) ) {
+				return false;
+			}
+	}
 
 	if (! (pos1 == NULL && pos2 == NULL)) {
-		hyp_putsp(GHOST_WHITE_ON_RED);
-		hyp_putspi("interpret_equals mismatch different lengths", i);
-		hyp_putsp(GHOST_NORMAL);
 		return false;
 	}
 
@@ -685,8 +660,6 @@ void check_interpret_equals(struct glist_head head1, struct glist_head head2, u6
 		      m1 = glist_entry(pos1, struct maplet, list);
 		      m2 = glist_entry(pos2, struct maplet, list);
 		      if ( !(maplet_eq_nonattr(m1, m2)) ) {
-			      hyp_puti(i);
-			      hyp_putsp(GHOST_WHITE_ON_RED);
 			      GHOST_LOG_P(__func__, m1, hyp_put_mapletptr);
 			      GHOST_LOG_P(__func__, m2, hyp_put_mapletptr);
 			      GHOST_WARN("interpret_equals mismatch at virt1");
@@ -704,45 +677,6 @@ void check_interpret_equals(struct glist_head head1, struct glist_head head2, u6
 out:
 	GHOST_LOG_CONTEXT_EXIT();
 }
-
-
-
-/* ****************** maplets diff ****************** */
-
-/* print the naive set diff between two mappings, printing each element of ms1 that isn't in ms2, just looking at equality of their entries. This doesn't (but could) exploit the ordering invariant */
-void diff_mappings_one_way(struct glist_head head1, struct glist_head head2, char *s, u64 i)
-{
-	struct glist_node *pos1, *pos2;
-	struct maplet *m1, *m2;
-	if (glist_empty(&head1))
-		return;
-	glist_for_each(pos1, &head1) {
-		m1 = glist_entry(pos1, struct maplet, list);
-		if (!glist_empty(&head2)) {
-			glist_for_each(pos2, &head2) {
-				m2 = glist_entry(pos2, struct maplet, list);
-				if (maplet_eq(m1, m2)) goto found;
-			}
-		}
-		hyp_putspi(s, i);
-		hyp_put_maplet(m1, i+2);
-                hyp_putc('\n');
-found: ;
-	}
-	return;
-}
-
-void diff_mappings(struct glist_head head1, struct glist_head head2, u64 i)
-{
-	ghost_assert_maplets_locked();
-
-	hyp_putspi("diff_mappings\n", i);
-	diff_mappings_one_way(head1,head2,"removed ", i+2);
-	diff_mappings_one_way(head2,head1,"added   ", i+2);
-	hyp_putspi("end diff_mappings\n", i);
-}
-
-
 
 
 // check that ms1 and ms2 are equal mappings
@@ -866,62 +800,46 @@ foo:
 			goto mismatch;
 		}
 	}
+
 	// all of &head1 matched
-	hyp_putspi(s, i);
-	hyp_putsp(" ");
-	hyp_putsp("submapping ");
-	hyp_putsp(s1);
-	hyp_putsp(" ");
-	hyp_putsp(s2);
-	hyp_putsp(" ok");
-	hyp_putc('\n');
+	ghost_printf("%I%s submapping %s %s ok\n", i, s, s1, s2);
 	return true;
 
 not_found:
-	hyp_putspi(s, i);
-	hyp_putsp(" ");
-	hyp_putsp(GHOST_WHITE_ON_RED);
-	hyp_putsp("submapping ");
-	hyp_putsp(s1);
-	hyp_putsp(" ");
-	hyp_putsp(s2);
-	hyp_putsp(" no corresponding mapping found for ");
-	hyp_putsxn("virt",mc1.ia_range_start,64);
-	hyp_putsp(GHOST_NORMAL);
-	hyp_putsp("in\n");
-	hyp_put_maplet(m1, i+2);
-	hyp_putc('\n');
-	hyp_putspi(s1, i+2);hyp_putc('\n');
-	hyp_put_mapping(head1, i+2);
-	hyp_putspi(s2, i+2);hyp_putc('\n');
-	hyp_put_mapping(head2, i+2);
+	ghost_printf(
+		"%I " GHOST_WHITE_ON_RED "submapping %s %s no corresponding maping found for virt:%p" GHOST_NORMAL " in\n"
+		"%I%g(maplet)\n"
+		"%I%s\n"
+		"%gI(mapping)\n"
+		"%I%s\n"
+		"%gI(mapping)\n",
+		i, s, s1, s2, mc1.ia_range_start,
+		i+2, m1,
+		i+2, s1,
+		&head1, i+2,
+		i+2, s2,
+		&head2, i+2
+	);
 	return false;
 
 mismatch:
-	hyp_putspi(s, i);
-	hyp_putsp(" ");
-	hyp_putsp(GHOST_WHITE_ON_RED);
-	hyp_putsp("submapping ");
-	hyp_putsp(s1);
-	hyp_putsp(" ");
-	hyp_putsp(s2);
-	hyp_putsp(" mismatch at ");
-	hyp_putsxn("virt",mc1.ia_range_start,64);
-	hyp_putsp(GHOST_NORMAL);
-	hyp_putsp("in\n");
-	hyp_put_maplet(m1, i+2);
-	hyp_putc('\n');
-	hyp_put_maplet(m2, i+2);
-	hyp_putc('\n');
-	hyp_puti(i+2);
-	hyp_putsxn("mc1.ia_range_start",mc1.ia_range_start,64); hyp_putsxn("mc2.ia_range_start",mc2.ia_range_start,64);
-	//	hyp_putsxn("mc1 phys",mc1.oa_range_start,64);hyp_putsxn("mc2 phys",mc2.oa_range_start,64);
-	//hyp_putsxn("mc1 attr",mc1.attr,64);hyp_putsxn("mc2 attr",mc2.attr,64);
-	hyp_putc('\n');
-	hyp_putspi(s1, i+2);hyp_putc('\n');
-	hyp_put_mapping(head1, i+2);
-	hyp_putspi(s2, i+2);hyp_putc('\n');
-	hyp_put_mapping(head2, i+2);
+	ghost_printf(
+		"%I " GHOST_WHITE_ON_RED "submapping %s %s mismatch at virt:%p" GHOST_NORMAL " in\n"
+		"%I%s:%g(maplet)\n"
+		"%Ivs\n"
+		"%I%s:%g(maplet)\n"
+		"%I%s\n"
+		"%gI(mapping)\n"
+		"%I%s\n"
+		"%gI(mapping)\n",
+		i, s, s1, s2, mc1.ia_range_start,
+		i+2, s1, &mc1,
+		i+2, s2, &mc2,
+		i+2, s1,
+		&head1, i+2,
+		i+2, s2,
+		&head2, i+2
+	);
 	return false;
 }
 

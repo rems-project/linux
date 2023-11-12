@@ -42,12 +42,6 @@ void check_assert_fail(char *s);
 
 void hyp_putn(u64 n);
 
-/* This lock can be taken around a larger printing block to prevent
- * interleaving.
- */
-void ghost_print_begin(void);
-void ghost_print_end(void);
-
 /*
  * Helpers that duplicate the previous hyp_put* but that take pointers
  */

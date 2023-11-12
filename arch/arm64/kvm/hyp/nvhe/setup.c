@@ -488,17 +488,25 @@ int __pkvm_init(phys_addr_t phys, unsigned long size, unsigned long nr_cpus,
 #ifdef CONFIG_NVHE_GHOST_SPEC
 	GHOST_LOG_CONTEXT_ENTER();
 
-	hyp_puts("\n__pkvm_init:\n");
-	hyp_putsxnl("    CPU", hyp_smp_processor_id(), 32);
-	hyp_puts("  arguments:");
-	hyp_putsxnl("    phys", phys, 64);
-	hyp_putsxnl("    size", size, 32);
-	hyp_putsxnl("    nr_cpu", nr_cpus, 8);
-	hyp_putsxnl("    per_cpu_base", (u64)per_cpu_base, 64);
-	hyp_putsxnl("    hyp_va_bits", (u64)hyp_va_bits, 8);
-
-	hyp_puts("\n  interesting globals:\n");
-	hyp_putsxnl("    hyp_physvirt_offset", hyp_physvirt_offset, 64);
+	ghost_printf(
+		"\n"
+		"__pkvm_init:\n"
+		"    CPU:..................%d\n"
+		"\n"
+		"  arguments:\n"
+		"    phys:.................%p\n"
+		"    size:.................%lx\n"
+		"    nr_cpus:..............%d\n"
+		"    per_cpu_base:.........%p\n"
+		"    hyp_va_bits:..........%x\n"
+		"\n"
+		"  interesting globals:\n"
+		"    hyp_physvirt_offset:..%lx\n"
+		"\n"
+		,
+		hyp_smp_processor_id(), phys, size, nr_cpus,
+		per_cpu_base, hyp_va_bits, hyp_physvirt_offset
+	);
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 
 	BUG_ON(kvm_check_pvm_sysreg_table());

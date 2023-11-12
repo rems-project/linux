@@ -107,6 +107,6 @@ struct ghost_diff *ghost_diff_pgtable(abstract_pgtable *ap1, abstract_pgtable *a
 struct ghost_diff *ghost_diff_state(struct ghost_state *s1, struct ghost_state *s2);
 
 /* Printing */
-void hyp_dump_diff(struct ghost_diff *diff);
+void ghost_print_diff(struct ghost_diff *diff);
 
 #endif /* GHOST_ABSTRACTION_DIFF_H */

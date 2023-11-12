@@ -4,7 +4,7 @@
 #include <nvhe/ghost_pfn_set.h>
 #include <nvhe/ghost_context.h>
 
-#include <hyp/ghost_extra_debug-pl011.h>
+#include <nvhe/ghost_printer.h>
 
 void ghost_pfn_set_init(struct pfn_set *set, u64 pool_range_start, u64 pool_range_end)
 {
@@ -34,25 +34,22 @@ bool ghost_pfn_set_contains(struct pfn_set *set, u64 pfn)
 	return false;
 }
 
-void ghost_pfn_set_dump(struct pfn_set *set, u64 indent)
+int gp_print_pfn_set(gp_stream_t *out, struct pfn_set *set)
 {
+	int ret;
 	ghost_assert(set->len < GHOST_MAX_PFN_SET_LEN);
-	hyp_puti(indent);
-	hyp_putsp("range: (");
-	hyp_putx64(set->pool_range_start);
-	hyp_putsp("...");
-	hyp_putx64(set->pool_range_end);
-	hyp_putsp(")\n");
+	ret = ghost_sprintf(out, "pfns range:(%p..%p) external_pages:[");
 
-	hyp_puti(indent);
-	hyp_putsp("external_pfns: [");
 	for (int idx=0; idx < set->len; idx++) {
-		hyp_puti(indent+1);
-		hyp_putx64(set->external_pfns[idx]);
-		hyp_putsp("\n");
+		ret = ghost_sprintf(out, "%p", set->external_pfns[idx]);
+		if (ret)
+			return ret;
+
+		if (idx < set->len - 1) {
+			ret = ghost_sprintf(out, ", ");
+		}
 	}
-	hyp_puti(indent);
-	hyp_puts("]\n");
+	return ghost_sprintf(out, "]\n");
 }
 
 void ghost_pfn_set_copy(struct pfn_set *dst, struct pfn_set *src)
@@ -84,7 +81,7 @@ void ghost_pfn_set_assert_equal(struct pfn_set *lhs, struct pfn_set *rhs)
 static void print_set(void *set)
 {
 	struct pfn_set *s = *(struct pfn_set**)set;
-	ghost_pfn_set_dump(s, 0);
+	ghost_printf("%g(pfn_set)\n", s);
 }
 
 void ghost_pfn_set_assert_subseteq(struct pfn_set *lhs, struct pfn_set *rhs)

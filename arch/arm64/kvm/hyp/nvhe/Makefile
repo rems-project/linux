@@ -29,6 +29,7 @@ hyp-obj-$(CONFIG_DEBUG_LIST) += list_debug.o
 hyp-obj-y += $(lib-objs)
 
 ghosts += ../ghost_extra_debug-pl011.o
+ghosts += ../ghost_printer.o
 ghosts += ghost_mapping_reqs.o
 ghosts += ghost_misc.o
 ghosts += ghost_asm.o
@@ -48,7 +49,7 @@ hyp-obj-$(CONFIG_NVHE_GHOST_SPEC) += $(ghosts)
 hyp-obj-$(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) += ghost_simplified_model.o
 hyp-obj-$(CONFIG_NVHE_GHOST_DIFF) += ghost_abstraction_diff.o
 
-ghost-lib-objs := strcmp.o
+ghost-lib-objs := strcmp.o strlen.o
 hyp-obj-$(CONFIG_NVHE_GHOST_SPEC) += $(addprefix ../../../lib/, $(ghost-lib-objs))
 
 ##

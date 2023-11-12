@@ -12,6 +12,6 @@ obj-$(CONFIG_KVM) += vhe/ nvhe/ pgtable.o
 ghosts := \
 	ghost_maplets.o ghost_pgtable.o ghost_pfn_set.o \
 	ghost_control.o ghost_context.o ghost_extra_debug-pl011.o \
-	ghost_alloc.o
+	ghost_alloc.o ghost_printer.o
 
 obj-$(CONFIG_NVHE_GHOST_SPEC) += $(ghosts)

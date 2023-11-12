@@ -10,6 +10,9 @@
 #include <nvhe/ghost_context.h>
 #include <nvhe/ghost_control.h>
 
+#include <nvhe/ghost_printer.h>
+
+
 /**
  * GHOST_MAX_CONTEXT_FRAMES - Max depth of stack frames (per CPU)
  */
@@ -72,26 +75,23 @@ static bool frame_should_print_immediately(void)
 	return should_print_immediately;
 }
 
-static void colour_open(enum ghost_log_level level)
+static const char *msg_open_for(enum ghost_log_level level)
 {
 	switch (level) {
 	case GHOST_LOG_ERROR:
-		hyp_putsp("! ");
-		hyp_putsp(GHOST_WHITE_ON_RED);
-		break;
+		return "! " GHOST_WHITE_ON_RED;
 	default:
-		;
+		return "";
 	}
 }
 
-static void colour_close(enum ghost_log_level level)
+static const char *msg_close_for(enum ghost_log_level level)
 {
 	switch (level) {
 	case GHOST_LOG_ERROR:
-		hyp_putsp(GHOST_NORMAL);
-		break;
+		return GHOST_NORMAL;
 	default:
-		;
+		return "";
 	}
 }
 
@@ -113,12 +113,9 @@ void ghost_log_enter_context(const char *s)
 	frame->frame_id = ctx->count;
 
 	if (frame_should_print_immediately()) {
-		ghost_print_begin();
-		hyp_puti(i * 2);
-		hyp_putsp("[enter ");
-		hyp_putsp((char *)s);
-		hyp_putsp("\n");
-		ghost_print_end();
+		ghost_print_enter();
+		ghost_printf("%I[enter %s]\n", i*2, (char*)s);
+		ghost_print_exit();
 	}
 }
 
@@ -153,13 +150,12 @@ void ghost_log_context_attach(const char *current_frame_name, const char *s, voi
 	ctx_data->fn = printer;
 
 	if (frame_should_print_immediately()) {
-		ghost_print_begin();
-		hyp_putsp(".");
-		hyp_putsp((char *)s);
-		hyp_putsp(":");
+		ghost_print_enter();
+		/* TODO: make GHOST_LOG() take a ghost_printf %g(KIND) and use that here... */
+		ghost_printf(".%s:", (char*)s);
 		printer(data);
-		hyp_putsp("\n");
-		ghost_print_end();
+		ghost_printf("\n");
+		ghost_print_exit();
 	}
 }
 
@@ -185,12 +181,7 @@ void ghost_log_context_log(const char *s, enum ghost_log_level level)
 	ctx_data->has_data = false;
 
 	if (frame_should_print_immediately() || level == GHOST_LOG_ERROR) {
-		ghost_print_begin();
-		colour_open(level);
-		hyp_putsp((char *)s);
-		hyp_putsp("\n");
-		colour_close(level);
-		ghost_print_end();
+		ghost_printf("%s%s%s\n", msg_open_for(level), (char *)s, msg_close_for(level));
 	}
 }
 
@@ -211,27 +202,41 @@ void ghost_log_exit_context(const char *s)
 	}
 
 	if (frame_should_print_immediately()) {
-		ghost_print_begin();
-		hyp_puti(ctx->nr_frames * 2);
-		hyp_putsp("... end ");
-		hyp_putsp((char *)frame->ctx_name);
-		hyp_putsp("] \n");
-		ghost_print_end();
+		ghost_print_enter();
+		ghost_printf("%I[exit %s]\n", ctx->nr_frames*2, frame->ctx_name);
+		ghost_print_exit();
 	}
 
 	ctx->nr_frames--;
 }
 
-static void indent(u64 width)
+int gp_put_current_context_trace(gp_stream_t *out)
 {
-	for (int i = 0; i < width; i++) {
-		hyp_putsp(" ");
+	int ret;
+	struct ghost_context *ctx;
+
+	ctx = this_cpu_ptr(&g_context);
+
+	/* not in a context, nothing to do.*/
+	if (ctx->nr_frames == 0)
+		return 0;
+
+	ret = ghost_sprintf(out, "%s", ctx->frames[0].ctx_name);
+	if (ret)
+		return ret;
+
+	for (int i = 1; i < ctx->nr_frames; i++) {
+		struct ghost_context_frame *frame = &ctx->frames[i];
+		ret = ghost_sprintf(out, ":%s", frame->ctx_name);
+		if (ret)
+			return ret;
 	}
+
+	return 0;
 }
 
 // we want to use the pkvm pgtable walker to check validity of the VAs before trying to print them
 extern int kvm_nvhe_sym(__hyp_check_page_state_range)(u64 addr, u64 size, enum pkvm_page_state state);
-
 
 /*
  * annoyingly, but understandably, we need to take the pkvm pgd lock
@@ -250,34 +255,24 @@ static bool check_pkvm_locked(void)
 void ghost_log_context_traceback(void)
 {
 	struct ghost_context *ctx;
-	ghost_print_begin();
+	ghost_print_enter();
 
 	ctx = this_cpu_ptr(&g_context);
 
-	hyp_putsp("ghost context:\n");
+	ghost_printf("ghost context:\n");
 	for (int i = 0; i < ctx->nr_frames; i++) {
 		struct ghost_context_frame *frame = &ctx->frames[i];
 
-		indent(i*4);
-		hyp_putsp("in ");
-		hyp_putsp((char *)frame->ctx_name);
-		hyp_putsp("\n");
+		ghost_printf("%Iin %s\n", i*4, frame->ctx_name);
 
 		for (int d = 0; d < frame->nr_attached_data; d++) {
 			struct ghost_context_data *data = &frame->data[d];
-			indent(i*4);
-			hyp_putsp("| ");
 
-			colour_open(data->level);
-
-			hyp_putsp((char *)data->data_name);
 			if (data->has_data) {
 				u64 va;
 				bool va_walked;
 				bool va_valid;
 				bool locked_pkvm;
-
-				hyp_putsp(":");
 
 				va = (u64)data->data_ptr;
 
@@ -298,28 +293,29 @@ void ghost_log_context_traceback(void)
 					va_walked = false;
 				}
 
+				// TODO: if context used %g() codes, we could do this in one...
+				ghost_printf("%I|%s%s:", i*4, msg_open_for(data->level), data->data_name);
+
 				// don't try to dereference NULL pointers
 				if (! data->data_ptr) {
-					hyp_putsp("<inacessible>@NULL");
+					ghost_printf("<inacessible>@NULL");
 				// also check we can read it.
 				} else if (! va_valid) {
-					hyp_putsp("<inaccessible>@");
-					hyp_putx64(va);
+					ghost_printf("<inaccessible>@%p", va);
 				// if we didn't do a walk, give a warning and try anyway
 				} else if (! va_walked) {
-					hyp_putsp("<nowalk>@");
-					hyp_putx64(va);
-					hyp_putsp(":");
+					ghost_printf("<nowalk>@%p:", va);
 					data->fn(data->data_ptr);
 				// otherwise, was allowed to access and we checked, so just print away.
 				} else {
 					data->fn(data->data_ptr);
 				}
+				ghost_printf("%s\n", msg_close_for(data->level));
+			} else {
+				ghost_printf("%I|%s%s%s\n", i*4, msg_open_for(data->level), data->data_name, msg_close_for(data->level));
 			}
-			colour_close(data->level);
-			hyp_putsp("\n");
 		}
 	}
 
-	ghost_print_end();
+	ghost_print_exit();
 }

@@ -7,6 +7,8 @@
 
 #include <linux/memblock.h>   /* for enum memblock_flags */
 
+#include <nvhe/ghost_printer.h>
+
 /* ****************** maplet types ****************** */
 
 /* A struct maplet records a single piece of contiguous
@@ -252,11 +254,8 @@ typedef struct glist_head mapping;
 
 void free_mapping(mapping map);
 void extend_mapping_coalesce(mapping *mapp, ghost_stage_t stage, u64 ia, u64 nr_pages, struct maplet_target t);
-void hyp_put_maplet_target(ghost_stage_t stage, struct maplet_target *target, u64 i);
-void hyp_put_maplet(struct maplet *maplet, u64 indent);
 void hyp_put_mapping(mapping map, u64 indent);
 bool interpret_equals(mapping map1, mapping map2, u64 indent);
-void diff_mappings(mapping map1, mapping map2, u64 indent);
 
 mapping mapping_empty_(void); // the extra _ is to avoid a nameclash with the unrelated include/linux/pagemap.h
 mapping mapping_singleton(ghost_stage_t stage, u64 virt, u64 nr_pages, struct maplet_target t);
@@ -315,6 +314,13 @@ void mapping_move(mapping *map_out, mapping map);
 void ghost_lock_maplets(void);
 void ghost_unlock_maplets(void);
 inline void ghost_assert_maplets_locked(void);
+
+/* don't call these directly, instead use ghost_printf %g(maplet) and %g(maplet_target) codes */
+int gp_put_maplet_target(gp_stream_t *out, struct maplet_target *target);
+int gp_put_maplet(gp_stream_t *out, struct maplet *maplet);
+
+void hyp_put_maplet_target(struct maplet_target *target, u64 indent);
+void hyp_put_maplet(struct maplet *maplet, u64 indent);
 
 #endif  // _GHOST_MAPLETS_H
 

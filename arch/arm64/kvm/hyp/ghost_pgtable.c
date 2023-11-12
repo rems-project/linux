@@ -62,43 +62,42 @@ enum entry_kind entry_kind(unsigned long long pte, unsigned char level)
 
 
 /* page-table entry kind: print entry kind */
-void hyp_put_ek(enum entry_kind ek)
+int gp_put_ek(gp_stream_t *out, enum entry_kind ek)
 {
 	switch(ek) {
-	case EK_INVALID:                hyp_putsp("EK_INVALID");                break;
-	case EK_BLOCK:                  hyp_putsp("EK_BLOCK");                  break;
-	case EK_TABLE:                  hyp_putsp("EK_TABLE");                  break;
-	case EK_PAGE_DESCRIPTOR:        hyp_putsp("EK_PAGE_DESCRIPTOR");        break;
-	case EK_BLOCK_NOT_PERMITTED:    hyp_putsp("EK_BLOCK_NOT_PERMITTED");    break;
-	case EK_RESERVED:               hyp_putsp("EK_RESERVED");               break;
-	case EK_DUMMY:                  hyp_putsp("EK_DUMMY");                  break;
+	case EK_INVALID:                return ghost_sprintf(out, "EK_INVALID");
+	case EK_BLOCK:                  return ghost_sprintf(out, "EK_BLOCK");
+	case EK_TABLE:                  return ghost_sprintf(out, "EK_TABLE");
+	case EK_PAGE_DESCRIPTOR:        return ghost_sprintf(out, "EK_PAGE_DESCRIPTOR");
+	case EK_BLOCK_NOT_PERMITTED:    return ghost_sprintf(out, "EK_BLOCK_NOT_PERMITTED");
+	case EK_RESERVED:               return ghost_sprintf(out, "EK_RESERVED");
+	case EK_DUMMY:                  return ghost_sprintf(out, "EK_DUMMY");
 	}
 }
 
 /* page-table entry: print entry */
-void hyp_put_entry(kvm_pte_t pte, u8 level)
+int gp_put_entry(gp_stream_t *out, kvm_pte_t pte, u8 level)
 {
 	u64 oa;
 	enum entry_kind ek = entry_kind(pte, level);
 
-	hyp_put_ek(ek);
-	hyp_puts(" ");
 
 	switch(ek) {
 	case EK_INVALID:
 	case EK_BLOCK:
 	case EK_TABLE:
+		return ghost_sprintf(out, "%g(ek)", ek);
 		break;
 
 	case EK_PAGE_DESCRIPTOR:
 		oa = pte & GENMASK(47,12);
-		hyp_putsxn("oa", oa, 64);
+		return ghost_sprintf(out, "%g(ek) oa:%p", ek, oa);
 		break;
 
 	case EK_BLOCK_NOT_PERMITTED:
 	case EK_RESERVED:
 	case EK_DUMMY:
-		break;
+		return 0;
 
 	default:
 		unreachable();
@@ -112,18 +111,16 @@ void _dump_pgtable(u64 *pgd, u8 level)
 	u32 idx;
 	if (pgd) {
 		// dump this page
-		hyp_putsxn("level",level,8);
-		hyp_putsxn("table at virt", (u64)pgd, 64); hyp_puts("\n");
+		ghost_printf("level:%hhd table at virt:%p\n", level, pgd);
+
+		// dump each entry
 		for (idx = 0; idx < 512; idx++) {
 			kvm_pte_t pte = pgd[idx];
 			if (pte!=0) {
-				hyp_putsxn("level",level,8);
-				hyp_putsxn("entry at virt",(u64)(pgd+idx),64);
-				hyp_putsxn("raw",(u64)pte,64);
-				hyp_put_entry(pte, level);
-				hyp_puts("\n");
+				ghost_printf("level:%hhd table at virt:%p raw:%lx %gL(pte)\n", level, pgd+idx, pte, level);
 			}
 		}
+
 		// dump any sub-pages
 		for (idx = 0; idx < 512; idx++) {
 			kvm_pte_t pte = pgd[idx];
@@ -131,27 +128,22 @@ void _dump_pgtable(u64 *pgd, u8 level)
 				u64 next_level_phys_address, next_level_virt_address;
 				next_level_phys_address = pte & GENMASK(47,12);
 				next_level_virt_address = (u64)hyp_phys_to_virt((phys_addr_t)next_level_phys_address);
-				hyp_putsxn("table phys", next_level_phys_address, 64);
-				hyp_putsxn("table virt", next_level_virt_address, 64);
-				hyp_puts("\n");
+				ghost_printf("in level:%hhd table at virt:%p phys:%p\n", level, next_level_virt_address, next_level_phys_address);
 				_dump_pgtable((kvm_pte_t *)next_level_virt_address, level+1);
-				hyp_puts("\n");
+				ghost_printf("\n");
 			}
 		}
 	}
 	else {
-		hyp_puts("table address null");
+		ghost_printf("table address null\n");
 	}
 }
 
 
 void dump_pgtable(struct kvm_pgtable pg)
 {
-	hyp_putsxn("ia_bits", pg.ia_bits, 32);
-	hyp_putsxn("ia_start_level", pg.start_level, 32);
-	hyp_puts("");
+	ghost_printf("ia_bits:%x ia_start_level:%d\n", pg.ia_bits, pg.start_level);
 	_dump_pgtable(pg.pgd, pg.start_level);
-
 	return;
 }
 
@@ -481,11 +473,18 @@ void ghost_dump_pgtable(struct kvm_pgtable *pg, char *doc, u64 i)
 	ghost_unlock_maplets();
 }
 
+int gp_put_abstract_pgtable(gp_stream_t *out, abstract_pgtable *ap, u64 indent)
+{
+	return ghost_sprintf(
+		out,
+		"%g(mapping)\n"
+		"%I%g(pfn_set)",
+		&ap->mapping,
+		indent, &ap->table_pfns
+	);
+}
+
 void hyp_put_abstract_pgtable(abstract_pgtable *ap, u64 indent)
 {
-	hyp_put_mapping(ap->mapping, indent);
-
-	hyp_puti(indent);
-	hyp_puts("pfns: ");
-	ghost_pfn_set_dump(&ap->table_pfns, indent+2);
+	ghost_printf("%gI(pgtable)", ap, indent);
 }

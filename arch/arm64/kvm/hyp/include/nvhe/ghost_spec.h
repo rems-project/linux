@@ -18,6 +18,8 @@
 #include <nvhe/ghost_call_data.h>
 #include <nvhe/ghost_control.h>
 
+#include <nvhe/ghost_printer.h>
+
 // top-level spec types
 
 

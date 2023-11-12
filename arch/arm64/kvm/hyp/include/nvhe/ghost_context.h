@@ -1,6 +1,8 @@
 #ifndef GHOST_CONTEXT_H
 #define GHOST_CONTEXT_H
 
+#include <nvhe/ghost_printer.h>
+
 /*
  * Useful logging stacked traceback builders
  * Allows attaching arbitrary data with printers,
@@ -33,6 +35,7 @@ void ghost_log_exit_context(
 	const char *s
 );
 void ghost_log_context_traceback(void);
+int gp_put_current_context_trace(gp_stream_t *out);
 
 
 #define __INNER_NAME(name) "inner " name

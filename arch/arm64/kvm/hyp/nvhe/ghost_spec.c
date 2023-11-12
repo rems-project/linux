@@ -1063,13 +1063,12 @@ static void tag_exception_entry(struct kvm_cpu_context *ctxt)
 	struct ghost_running_state *gr_pre_cpu = this_cpu_ghost_run_state(gr_pre);
 
 #ifdef CONFIG_NVHE_GHOST_SPEC_NOISY
-	ghost_print_begin();
+	ghost_print_enter();
 
-	hyp_putsp("\n");
-	hyp_putsp(GHOST_WHITE_ON_BLUE);
-	hyp_putsp("****** TRAP ***************************************************************");
-	hyp_putsp(GHOST_NORMAL);
-	hyp_putsp("\n");
+	ghost_printf(
+		"\n"
+		GHOST_WHITE_ON_BLUE "****** TRAP ***************************************************************" GHOST_NORMAL "\n"
+	);
 #endif /* CONFIG_NVHE_GHOST_SPEC_NOISY */
 
 	if (gr_pre_cpu->guest_running)
@@ -1087,10 +1086,10 @@ static void tag_exception_entry(struct kvm_cpu_context *ctxt)
 		char *hcall_name = (char *)ghost_host_hcall_names[hcall_id];
 		GHOST_INFO(hcall_name);
 
-		hyp_putsp(GHOST_WHITE_ON_BLUE "handle_host_hcall");
-		hyp_putsp(" ");
-		hyp_putsp(hcall_name);
-		hyp_putsp(GHOST_NORMAL "\n");
+		ghost_printf(
+			GHOST_WHITE_ON_BLUE "handle_host_hcall %s" GHOST_NORMAL "\n",
+			hcall_name
+		);
 
 		tag_hcall_args(ctxt, hcall_id);
 #endif /* CONFIG_NVHE_GHOST_SPEC_NOISY */
@@ -1098,21 +1097,21 @@ static void tag_exception_entry(struct kvm_cpu_context *ctxt)
 	case ESR_ELx_EC_SMC64:
 		GHOST_INFO("SMC64");
 #ifdef CONFIG_NVHE_GHOST_SPEC_NOISY
-		hyp_putsp(GHOST_WHITE_ON_BLUE "handle_host_smc" GHOST_NORMAL "\n");
+		ghost_printf(GHOST_WHITE_ON_BLUE "handle_host_smc" GHOST_NORMAL "\n");
 #endif /* CONFIG_NVHE_GHOST_SPEC_NOISY */
 		break;
 	case ESR_ELx_EC_FP_ASIMD:
 	case ESR_ELx_EC_SVE:
 		GHOST_INFO("SVE");
 #ifdef CONFIG_NVHE_GHOST_SPEC_NOISY
-		hyp_putsp(GHOST_WHITE_ON_BLUE "fmsimd_host_restore" GHOST_NORMAL "\n");
+		ghost_printf(GHOST_WHITE_ON_BLUE "fmsimd_host_restore" GHOST_NORMAL "\n");
 #endif /* CONFIG_NVHE_GHOST_SPEC_NOISY */
 		break;
 	case ESR_ELx_EC_IABT_LOW:
 	case ESR_ELx_EC_DABT_LOW:
 		GHOST_INFO("IABT/DABT");
 #ifdef CONFIG_NVHE_GHOST_SPEC_NOISY
-		hyp_putsp(GHOST_WHITE_ON_BLUE "handle_host_mem_abort" GHOST_NORMAL "\n");
+		ghost_printf(GHOST_WHITE_ON_BLUE "handle_host_mem_abort" GHOST_NORMAL "\n");
 #endif /* CONFIG_NVHE_GHOST_SPEC_NOISY */
 		break;
 	default:
@@ -1121,8 +1120,8 @@ static void tag_exception_entry(struct kvm_cpu_context *ctxt)
 
 #ifdef CONFIG_NVHE_GHOST_SPEC_NOISY
 	if (! ghost_exec_enabled())
-		hyp_putsp(GHOST_WHITE_ON_YELLOW "skipping exec check" GHOST_NORMAL "\n");
-	ghost_print_end();
+		ghost_printf(GHOST_WHITE_ON_YELLOW "skipping exec check" GHOST_NORMAL "\n");
+	ghost_print_exit();
 #endif /* CONFIG_NVHE_GHOST_SPEC_NOISY */
 }
 
