@@ -557,16 +557,9 @@ static void ghost_post_dump_recorded_concrete_host_pgtable_diff(struct ghost_sta
 		return;
 
 	if (gr_pre->host.present && gr_post->host.present) {
-		ghost_printf("recorded post host pgtable diff from recorded pre:");
-		diff = ghost_diff_pgtable(&gr_pre->host.host_concrete_pgtable, &gr_post->host.host_concrete_pgtable);
-		if (diff) {
-			ghost_print_diff(diff);
-			ghost_printf("\n");
-			free_diff(diff);
-		} else {
-			ghost_printf("<identical>\n");
-		}
-
+		ghost_printf("\n");
+		ghost_printf("recorded post host pgtable diff from recorded pre: ");
+		ghost_diff_and_print_pgtable(&gr_pre->host.host_concrete_pgtable, &gr_post->host.host_concrete_pgtable);
 		ghost_printf("\n");
 	}
 }
@@ -580,16 +573,9 @@ static void ghost_post_dump_recorded_ghost_diff(struct ghost_state *gc, struct g
 	if (! ghost_print_on(__func__))
 		return;
 
-	ghost_printf("recorded post ghost state diff from recorded pre:");
-	diff = ghost_diff_state(gr_pre, gr_post);
-	if (diff) {
-		ghost_print_diff(diff);
-		ghost_printf("\n");
-		free_diff(diff);
-	} else {
-		ghost_printf("<identical>\n");
-	}
-
+	ghost_printf("\n");
+	ghost_printf("recorded post ghost state diff from recorded pre: ");
+	ghost_diff_and_print_state(gr_pre, gr_post);
 	ghost_printf("\n");
 }
 
@@ -602,16 +588,9 @@ static void ghost_post_dump_computed_ghost_diff(struct ghost_state *gc, struct g
 	if (! ghost_print_on(__func__))
 		return;
 
+	ghost_printf("\n");
 	ghost_printf("computed ghost spec diff from recorded post:");
-	diff = ghost_diff_state(gr_post, gc);
-	if (diff) {
-		ghost_print_diff(diff);
-		ghost_printf("\n");
-		free_diff(diff);
-	} else {
-		ghost_printf("<identical>\n");
-	}
-
+	ghost_diff_and_print_state(gr_post, gc);
 	ghost_printf("\n");
 }
 

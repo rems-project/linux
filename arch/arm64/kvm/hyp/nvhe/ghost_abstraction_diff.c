@@ -24,6 +24,96 @@
 
 #include <nvhe/ghost_abstraction_diff.h>
 
+/*
+ * Ghost state diffs:
+ * The whole ghost state is arranged as a tree
+ * so we duplicate that tree structure with a set of diffs..
+ */
+
+#define DIFF_MAX_CHILDREN 16
+
+
+enum ghost_diff_kind {
+	GHOST_DIFF_CONTAINER,
+
+	/**
+	 * A pair that didn't match.
+	 */
+	GHOST_DIFF_PAIR,
+
+	/**
+	 * An element that was or wasn't there.
+	 */
+	GHOST_DIFF_PM,
+};
+
+/*
+ * I Hate C, so let's just wrap up the common values (u64, bool, char* etc)
+ * so can write some half-generic functions.
+ */
+enum ghost_diff_val_kind {
+	/* suitable for keys */
+	Tu64,
+	Tstr,
+	Tgpr,
+
+	/* Plus some more */
+	Tbool,
+	Tmaplet,
+};
+
+struct diff_val {
+	enum ghost_diff_val_kind kind;
+	union {
+		bool b;
+		u64 n;
+		char *s;
+
+		// this is okay to be a reference since the diff is only alive if the two diff'd objects are.
+		struct maplet *m;
+	};
+};
+#define TBOOL(value) (struct diff_val){.kind=Tbool, .b=(value)}
+#define TU64(value) (struct diff_val){.kind=Tu64, .n=(value)}
+#define TSTR(value) (struct diff_val){.kind=Tstr, .s=(value)}
+#define TMAPLET(value) (struct diff_val){.kind=Tmaplet, .m=(value)}
+#define TGPREG(value) (struct diff_val){.kind=Tgpr, .n=(value)}
+
+struct ghost_diff {
+	/**
+	 * Invariant: key is either Tu64 (index) or Tstr (field)
+	 */
+	struct diff_val key;
+
+	enum ghost_diff_kind kind;
+	union {
+		struct diff_container_data {
+			u64 nr_children;
+			struct ghost_diff *children[DIFF_MAX_CHILDREN];
+		} container;
+
+		struct diff_pair_data {
+			struct diff_val lhs;
+			struct diff_val rhs;
+		} pair;
+
+		struct diff_pm_data {
+			/**
+			 * whether this is an addition or deletion...
+			 */
+			bool add;
+			struct diff_val val;
+		} pm;
+	};
+};
+
+
+/*
+ * Global diff state
+ * A set of allocatable diff nodes embeded in a free list
+ * and a lock to protect it all.
+ */
+
 DEFINE_HYP_SPINLOCK(ghost_diff_lock);
 
 #define GHOST_DIFF_MEMORY_NR_NODES 256
@@ -96,6 +186,10 @@ void free_node(struct ghost_diff *node)
 	hyp_spin_unlock(&ghost_diff_lock);
 }
 
+
+/* fwdref as free_container and free_diff are mutually recursive. */
+void free_diff(struct ghost_diff *node);
+
 void free_container(struct ghost_diff *node)
 {
 	ghost_assert(node->kind == GHOST_DIFF_CONTAINER);
@@ -158,6 +252,7 @@ static bool val_equal(struct diff_val lhs, struct diff_val rhs)
 	case Tbool:
 		return lhs.b == rhs.b;
 	case Tu64:
+	case Tgpr:
 		return lhs.n == rhs.n;
 	case Tstr:
 		return !strcmp(lhs.s, rhs.s);
@@ -238,6 +333,11 @@ void ghost_diff_attach(struct ghost_diff *container, struct ghost_diff *child)
 	__attach(container, TSTR(NULL), child);
 }
 
+void ghost_diff_gpr(struct ghost_diff *container, u64 reg, struct ghost_diff *child)
+{
+	__attach(container, TGPREG(reg), child);
+}
+
 /****************/
 // Differ!
 
@@ -261,8 +361,9 @@ struct ghost_diff *ghost_diff_pfns_array(struct pfn_set *s1, struct pfn_set *s2)
 			ghost_diff_field(node, "pfn", diff_pm(false, TU64(pfn)));
 	}
 
+	node = normalise(node);
 	GHOST_LOG_CONTEXT_EXIT();
-	return normalise(node);
+	return node;
 }
 
 struct ghost_diff *ghost_diff_pfns(struct pfn_set *s1, struct pfn_set *s2) {
@@ -271,8 +372,9 @@ struct ghost_diff *ghost_diff_pfns(struct pfn_set *s1, struct pfn_set *s2) {
 	ghost_diff_field(node, "pool_range_start", diff_pair(TU64(s1->pool_range_start), TU64(s2->pool_range_start)));
 	ghost_diff_field(node, "pool_range_end", diff_pair(TU64(s1->pool_range_end), TU64(s2->pool_range_end)));
 	ghost_diff_field(node, "external_pfns", ghost_diff_pfns_array(s1, s2));
+	node = normalise(node);
 	GHOST_LOG_CONTEXT_EXIT();
-	return normalise(node);
+	return node;
 }
 
 struct ghost_diff *ghost_diff_mappings(mapping *mp1, mapping *mp2)
@@ -287,6 +389,9 @@ struct ghost_diff *ghost_diff_mappings(mapping *mp1, mapping *mp2)
 	ghost_assert_maplets_locked();
 
 	if (glist_empty(&head1) && glist_empty(&head2)) {
+		if (node)
+			free_node(node);
+
 		GHOST_LOG_CONTEXT_EXIT();
 		return NULL;
 	}
@@ -335,8 +440,9 @@ struct ghost_diff *ghost_diff_mappings(mapping *mp1, mapping *mp2)
 			break;
 	}
 
+	node = normalise(node);
 	GHOST_LOG_CONTEXT_EXIT();
-	return normalise(node);
+	return node;
 }
 
 
@@ -347,8 +453,9 @@ struct ghost_diff *ghost_diff_pgtable(abstract_pgtable *ap1, abstract_pgtable *a
 	struct ghost_diff *node = container();
 	ghost_diff_field(node, "pfns", ghost_diff_pfns(&ap1->table_pfns, &ap2->table_pfns));
 	ghost_diff_field(node, "mapping", ghost_diff_mappings(&ap1->mapping, &ap2->mapping));
+	node = normalise(node);
 	GHOST_LOG_CONTEXT_EXIT();
-	return normalise(node);
+	return node;
 }
 
 struct ghost_diff *ghost_diff_pkvm(struct ghost_pkvm *p1, struct ghost_pkvm *p2)
@@ -358,8 +465,9 @@ struct ghost_diff *ghost_diff_pkvm(struct ghost_pkvm *p1, struct ghost_pkvm *p2)
 	ghost_diff_field(node, "present", diff_pair(TBOOL(p1->present), TBOOL(p2->present)));
 	if (p1->present && p2->present)
 		ghost_diff_field(node, "pgtable", ghost_diff_pgtable(&p1->pkvm_abstract_pgtable, &p2->pkvm_abstract_pgtable));
+	node = normalise(node);
 	GHOST_LOG_CONTEXT_EXIT();
-	return normalise(node);
+	return node;
 }
 
 struct ghost_diff *ghost_diff_host(struct ghost_host *h1, struct ghost_host *h2)
@@ -372,8 +480,9 @@ struct ghost_diff *ghost_diff_host(struct ghost_host *h1, struct ghost_host *h2)
 		ghost_diff_field(node, "annot", ghost_diff_mappings(&h1->host_abstract_pgtable_annot, &h2->host_abstract_pgtable_annot));
 		ghost_diff_field(node, "shared", ghost_diff_mappings(&h1->host_abstract_pgtable_shared, &h2->host_abstract_pgtable_shared));
 	}
+	node = normalise(node);
 	GHOST_LOG_CONTEXT_EXIT();
-	return normalise(node);
+	return node;
 }
 
 struct ghost_diff *ghost_diff_registers(struct ghost_register_state *r1, struct ghost_register_state *r2)
@@ -390,7 +499,7 @@ struct ghost_diff *ghost_diff_registers(struct ghost_register_state *r1, struct 
 		u64 ghost_el2_regs[] = (u64[])GHOST_EL2_REGS;
 		for (i=0; i<=30; i++) {
 			GHOST_LOG_CONTEXT_ENTER_INNER("loop gpr");
-			ghost_diff_index(gprs, i, diff_pair(TU64(r1->ctxt.regs.regs[i]), TU64(r2->ctxt.regs.regs[i])));
+			ghost_diff_gpr(gprs, i, diff_pair(TU64(r1->ctxt.regs.regs[i]), TU64(r2->ctxt.regs.regs[i])));
 			GHOST_LOG_CONTEXT_EXIT_INNER("loop gpr");
 		}
 		for (i=0; i<NR_SYS_REGS; i++) {
@@ -403,15 +512,16 @@ struct ghost_diff *ghost_diff_registers(struct ghost_register_state *r1, struct 
 			GHOST_LOG_CONTEXT_ENTER_INNER("loop el2_regs");
 			u64 r = ghost_el2_regs[i];
 			const char *name = GHOST_EL2_REG_NAMES[r];
-			ghost_diff_field(el1_sysregs, (char *)name, diff_pair(TU64(r1->el2_sysregs[r]), TU64(r2->el2_sysregs[r])));
+			ghost_diff_field(el2_sysregs, (char *)name, diff_pair(TU64(r1->el2_sysregs[r]), TU64(r2->el2_sysregs[r])));
 			GHOST_LOG_CONTEXT_EXIT_INNER("loop el2_regs");
 		}
 		ghost_diff_field(node, "gprs", normalise(gprs));
 		ghost_diff_field(node, "el1_sysregs", normalise(el1_sysregs));
 		ghost_diff_field(node, "el2_sysregs", normalise(el2_sysregs));
 	}
+	node = normalise(node);
 	GHOST_LOG_CONTEXT_EXIT();
-	return normalise(node);
+	return node;
 }
 
 struct ghost_diff *ghost_diff_vcpu(struct ghost_vcpu *vcpu1, struct ghost_vcpu *vcpu2)
@@ -422,8 +532,9 @@ struct ghost_diff *ghost_diff_vcpu(struct ghost_vcpu *vcpu1, struct ghost_vcpu *
 	ghost_diff_field(node, "loaded", diff_pair(TBOOL(vcpu1->loaded), TBOOL(vcpu2->loaded)));
 	ghost_diff_field(node, "initialised", diff_pair(TBOOL(vcpu1->initialised), TBOOL(vcpu2->initialised)));
 	ghost_diff_field(node, "regs", ghost_diff_registers(&vcpu1->regs, &vcpu2->regs));
+	node = normalise(node);
 	GHOST_LOG_CONTEXT_EXIT();
-	return normalise(node);
+	return node;
 }
 
 struct ghost_diff *ghost_diff_vm(struct ghost_vm *vm1, struct ghost_vm *vm2)
@@ -453,8 +564,9 @@ struct ghost_diff *ghost_diff_vm(struct ghost_vm *vm1, struct ghost_vm *vm2)
 		}
 	}
 
+	node = normalise(node);
 	GHOST_LOG_CONTEXT_EXIT();
-	return normalise(node);
+	return node;
 }
 
 struct ghost_diff *ghost_diff_vms(struct ghost_vms *vms1, struct ghost_vms *vms2)
@@ -494,8 +606,9 @@ struct ghost_diff *ghost_diff_vms(struct ghost_vms *vms1, struct ghost_vms *vms2
 	ghost_diff_field(node, "present", diff_pair(TBOOL(vms1->present), TBOOL(vms2->present)));
 
 cleanup:
+	node = normalise(node);
 	GHOST_LOG_CONTEXT_EXIT();
-	return normalise(node);
+	return node;
 }
 
 
@@ -507,8 +620,9 @@ struct ghost_diff *ghost_diff_globals(struct ghost_constant_globals *g1, struct 
 	ghost_diff_field(node, "hyp_physvirt_offset", diff_pair(TU64(g1->hyp_physvirt_offset), TU64(g2->hyp_physvirt_offset)));
 	ghost_diff_field(node, "tag_lsb", diff_pair(TU64(g1->tag_lsb), TU64(g2->tag_lsb)));
 	ghost_diff_field(node, "tag_val", diff_pair(TU64(g1->tag_val), TU64(g2->tag_val)));
+	node = normalise(node);
 	GHOST_LOG_CONTEXT_EXIT();
-	return normalise(node);
+	return node;
 }
 
 struct ghost_diff *ghost_diff_loaded_vcpu(struct ghost_loaded_vcpu *vcpu1, struct ghost_loaded_vcpu *vcpu2)
@@ -523,8 +637,9 @@ struct ghost_diff *ghost_diff_loaded_vcpu(struct ghost_loaded_vcpu *vcpu1, struc
 			ghost_diff_field(node, "vcpu_index", diff_pair(TU64(vcpu1->vcpu_index), TU64(vcpu2->vcpu_index)));
 		}
 	}
+	node = normalise(node);
 	GHOST_LOG_CONTEXT_EXIT();
-	return normalise(node);
+	return node;
 }
 
 struct ghost_diff *ghost_diff_running_state(struct ghost_running_state *r1, struct ghost_running_state *r2)
@@ -536,8 +651,9 @@ struct ghost_diff *ghost_diff_running_state(struct ghost_running_state *r1, stru
 		ghost_diff_field(node, "vm_handle", diff_pair(TU64(r1->vm_handle), TU64(r2->vm_handle)));
 		ghost_diff_field(node, "vcpu_index", diff_pair(TU64(r1->vcpu_index), TU64(r2->vcpu_index)));
 	}
+	node = normalise(node);
 	GHOST_LOG_CONTEXT_EXIT();
-	return normalise(node);
+	return node;
 }
 
 struct ghost_diff *ghost_diff_state(struct ghost_state *s1, struct ghost_state *s2)
@@ -574,6 +690,9 @@ static void __put_val(struct diff_val val, u64 indent)
 	case Tmaplet:
 		ghost_printf("%g(maplet)", val.m);
 		break;
+	case Tgpr:
+		ghost_printf("r%ld", val.n);
+		break;
 	default:
 		BUG();
 	}
@@ -593,6 +712,8 @@ static int __put_val_string(struct diff_val val, char *buf, u64 n)
 			return ghost_snprintf(buf, n, "false");
 	case Tmaplet:
 		return ghost_snprintf(buf, n, "%g(maplet)", val.m);
+	case Tgpr:
+		return ghost_snprintf(buf, n, "r%ld", val.n);
 	default:
 		BUG();
 	}
@@ -613,20 +734,21 @@ static void __put_dirty_string(char *s, bool *dirty, bool negate)
 	}
 }
 
+#define GHOST_STRING_DUMP_LEN 256
 static void __hyp_dump_string_diff(struct diff_val lhs, struct diff_val rhs)
 {
-	char lhs_s[100] = {0};
-	char rhs_s[100] = {0};
+	char lhs_s[GHOST_STRING_DUMP_LEN] = {0};
+	char rhs_s[GHOST_STRING_DUMP_LEN] = {0};
 
-	bool dirty[100] = {0};
+	bool dirty[GHOST_STRING_DUMP_LEN] = {0};
 
-	__put_val_string(lhs, lhs_s, 100);
-	__put_val_string(rhs, rhs_s, 100);
+	__put_val_string(lhs, lhs_s, GHOST_STRING_DUMP_LEN);
+	__put_val_string(rhs, rhs_s, GHOST_STRING_DUMP_LEN);
 
 	// now, we find those that differ
 	// TODO: do something more clever, and find inserted/removed text.
 	//       so far, everything is constant-width and consistent so it's ok
-	for (int i = 0; i < 100; i++) {
+	for (int i = 0; i < GHOST_STRING_DUMP_LEN; i++) {
 		if (lhs_s[i] != rhs_s[i])
 			dirty[i] = true;
 	}
@@ -642,20 +764,26 @@ static void __hyp_dump_string_diff(struct diff_val lhs, struct diff_val rhs)
 
 static void __ghost_print_diff(struct ghost_diff *diff, u64 indent)
 {
+	bool wrote_prefix = false;
+
 	if (! (diff->key.kind == Tstr && diff->key.s == NULL)) {
 		ghost_printf("%I", indent);
 		__put_val(diff->key, indent);
 		ghost_printf(": ");
+		wrote_prefix = true;
 	}
 
 	switch (diff->kind) {
 	case GHOST_DIFF_CONTAINER:
-		ghost_printf("\n");
+		if (wrote_prefix)
+			ghost_printf("\n");
+
 		for (int i = 0; i < diff->container.nr_children; i++) {
 			__ghost_print_diff(diff->container.children[i], indent + 2);
 			if (i < diff->container.nr_children - 1)
 				ghost_printf("\n");
 		};
+
 		break;
 	case GHOST_DIFF_PM:
 		if (diff->pm.add)
@@ -673,12 +801,33 @@ static void __ghost_print_diff(struct ghost_diff *diff, u64 indent)
 	}
 }
 
-void ghost_print_diff(struct ghost_diff *diff)
+void ghost_consume_diff(struct ghost_diff *diff)
 {
 	ghost_print_enter();
-	if (!diff)
+
+	/* diff might have failed to allocate,
+	 * TODO: but can't tell difference between failed-to-allocate diff
+	 *       and no diff because identical...
+	 */
+	if (!diff) {
 		ghost_printf("<identical>");
-	else
+	} else {
+		ghost_printf("\n");
 		__ghost_print_diff(diff, 0);
+		free_diff(diff);
+	}
 	ghost_print_exit();
+}
+
+
+void ghost_diff_and_print_pgtable(abstract_pgtable *ap1, abstract_pgtable *ap2)
+{
+	struct ghost_diff *diff = ghost_diff_pgtable(ap1, ap2);
+	ghost_consume_diff(diff);
+}
+
+void ghost_diff_and_print_state(struct ghost_state *s1, struct ghost_state *s2)
+{
+	struct ghost_diff *diff = ghost_diff_state(s1, s2);
+	ghost_consume_diff(diff);
 }

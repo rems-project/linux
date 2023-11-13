@@ -506,7 +506,7 @@ void gp_put_mapping(gp_stream_t *out, mapping *mapp, u64 indent)
 
 	first=true;
 	if (glist_empty(&head)) {
-		ghost_printf("empty\n", indent);
+		ghost_printf("%Iempty\n", indent);
 		return;
 	}
 
