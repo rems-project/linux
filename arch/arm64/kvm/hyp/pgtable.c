@@ -684,7 +684,7 @@ static int _kvm_pgtable_walk(struct kvm_pgtable *pgt, struct kvm_pgtable_walk_da
 	/*@ inv pgt == Data.pgt @*/
 	/*@ inv data == orig_data @*/
 	/*@ inv take Walker = KVM_PgTable_Walker(D.walker) @*/
-	/*@ inv 0 <= idx && idx < 16 @*/
+	/*@ inv 0u32 <= idx && idx < 16u32 @*/
 	{
 		kvm_pteref_t pteref = &pgt->pgd[idx * PTRS_PER_PTE];
 
@@ -866,14 +866,14 @@ static inline void coerce_page_to_ptes(kvm_pte_t *ptep)
 /*@ requires take ZP = Cond_Zero_Page (ptep) @*/
 /*@ requires ZP.exists @*/
 /*@ ensures take ptes = PTE_Array (ptep) @*/
-/*@ ensures each (integer i; i <= 0 && i < 4096) {ptes[i] == 0} @*/
+/*@ ensures each (i32 i; i <= 0i32 && i < 4096i32) {ptes[i] == 0u64} @*/
 {
 }
 
 static inline void coerce_null_ptes_to_IPT(kvm_pte_t *ptep, u32 level)
 /*@ trusted @*/
 /*@ requires take ptes = PTE_Array (ptep) @*/
-/*@ requires each (integer i; i <= 0 && i < 4096) {ptes[i] == 0} @*/
+/*@ requires each (i32 i; i <= 0i32 && i < 4096i32) {ptes[i] == 0u64} @*/
 /*@ requires valid_pgtable_level(level) @*/
 /*@ ensures take ptes2 = Page_Table_Entries (ptep, level) @*/
 {
@@ -888,7 +888,7 @@ static int hyp_map_walker(const struct kvm_pgtable_visit_ctx *ctx,
 /*@ requires not(is_table_entry(pte)) @*/
 /*@ ensures take D2 = Hyp_Map_Data(arg) @*/
 /*@ ensures take pte2 = Owned<kvm_pte_t>(ptep) @*/
-/*@ ensures take IPT2 = Indirect_Page_Table_Entries(ptep, level + 1, pte2) @*/
+/*@ ensures take IPT2 = Indirect_Page_Table_Entries(ptep, level + 1u32, pte2) @*/
 {
 	kvm_pte_t *childp, new;
 	struct hyp_map_data *data = ctx->arg;
