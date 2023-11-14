@@ -1134,9 +1134,8 @@ void record_and_check_abstraction_vms_pre(void)
 
 			vm->pkvm_handle = hyp_vm->kvm.arch.pkvm.handle;
 			vm->lock = &hyp_vm->lock;
-
-		}
 			g->vms.nr_vms++;
+		}
 	}
 	// record_abstraction_loaded_vcpu(g);
 	// check_abstraction_equals_loaded_vcpus(g, &gs);
