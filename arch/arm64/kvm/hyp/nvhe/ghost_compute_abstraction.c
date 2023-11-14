@@ -595,7 +595,7 @@ static void ghost_post_dump_computed_ghost_diff(struct ghost_state *gc, struct g
 		return;
 
 	ghost_printf("\n");
-	ghost_printf("computed ghost spec diff from recorded post:");
+	ghost_printf("computed ghost spec diff from recorded post: ");
 	ghost_diff_and_print_state(gr_post, gc);
 	ghost_printf("\n");
 }
