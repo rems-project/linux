@@ -294,19 +294,17 @@ void compute_new_abstract_state_handle___pkvm_host_share_hyp(struct ghost_state 
 
 	/* the host annot mapping is unchanged (we have established that host_addr is NOT already in there)
 	 * but, there is a new host shared mapping, PKVM_PAGE_SHARED_OWNED */
-	mapping_move(
+	mapping_update(
 		&g1->host.host_abstract_pgtable_shared,
-		mapping_plus(
-			g0->host.host_abstract_pgtable_shared,
-			mapping_singleton(GHOST_STAGE2, host_addr, 1, maplet_target_mapped_attrs(phys, 1, host_attrs)))
+		g0->host.host_abstract_pgtable_shared,
+		MAP_INSERT_PAGE, GHOST_STAGE2, host_addr, 1, maplet_target_mapped_attrs(phys, 1, host_attrs)
 	);
 
 	/* add a new hyp mapping, PKVM_PAGE_SHARED_BORROWED */
-	mapping_move(
+	mapping_update(
 		&g1->pkvm.pkvm_abstract_pgtable.mapping,
-		mapping_plus(
-			g0->pkvm.pkvm_abstract_pgtable.mapping,
-			mapping_singleton(GHOST_STAGE1, hyp_addr, 1, maplet_target_mapped_attrs(phys, 1, hyp_attrs)))
+		g0->pkvm.pkvm_abstract_pgtable.mapping,
+		MAP_INSERT_PAGE, GHOST_STAGE1, hyp_addr, 1, maplet_target_mapped_attrs(phys, 1, hyp_attrs)
 	);
 
 out:
