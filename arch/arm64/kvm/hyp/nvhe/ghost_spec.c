@@ -714,7 +714,7 @@ void compute_new_abstract_state_handle___pkvm_init_vm(struct ghost_state *g1, st
 	g1->vms.present = true;
 	struct ghost_vm *vm1 = ghost_vms_alloc(&g1->vms, handle);
 	ghost_assert(vm1);
-	g1->vms.nr_vms =g0->vms.nr_vms + 1;
+	g1->vms.nr_vms = g0->vms.nr_vms + 1;
 
 	// the calls to map_donated_memory() may run out of
 	// memory when updating the pKVM page table
