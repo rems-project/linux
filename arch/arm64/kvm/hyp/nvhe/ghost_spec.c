@@ -89,7 +89,7 @@ static inline hyp_va_t hyp_va_of_phys(const struct ghost_state *g, phys_addr_t p
 
 static inline phys_addr_t phys_of_hyp_va(const struct ghost_state *g, hyp_va_t hyp_va)
 {
-	return hyp_va - g->globals.hyp_physvirt_offset;
+	return hyp_va + g->globals.hyp_physvirt_offset;
 }
 
 // the Host stage 2 mapping is the identity mapping
