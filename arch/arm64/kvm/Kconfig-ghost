@@ -45,6 +45,7 @@ menuconfig NVHE_GHOST_SIMPLIFIED_MODEL_NOISY
 config NVHE_GHOST_SIMPLIFIED_MODEL_DIFF_ON_TRANS
 	bool "Print a diff to the simplified model state on each transition"
 	depends on NVHE_GHOST_SIMPLIFIED_MODEL_NOISY
+	depends on NVHE_GHOST_DIFF
 	default n
 	help
 	  Prints the diff that a transition made to the simplified model.
