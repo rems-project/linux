@@ -688,7 +688,7 @@ struct ghost_diff *ghost_diff_state(struct ghost_state *s1, struct ghost_state *
 
 static void one_way_diff_blob_slots(struct ghost_diff *container, struct ghost_memory_blob *b1, struct ghost_memory_blob *b2, bool add)
 {
-	for (u64 i = 0; i < PAGES_PER_BLOB*SLOTS_PER_PAGE; i++) {
+	for (u64 i = 0; i < SLOTS_PER_PAGE; i++) {
 		struct sm_location *loc1 = &b1->slots[i];
 		struct sm_location *loc2 = &b2->slots[i];
 		ghost_diff_attach(container, diff_pair(TSMLOC(loc1), TSMLOC(loc2)));
@@ -697,7 +697,7 @@ static void one_way_diff_blob_slots(struct ghost_diff *container, struct ghost_m
 
 static void one_way_add_all_blob(struct ghost_diff *container, struct ghost_memory_blob *b, bool add)
 {
-	for (u64 i = 0; i < PAGES_PER_BLOB*SLOTS_PER_PAGE; i++) {
+	for (u64 i = 0; i < SLOTS_PER_PAGE; i++) {
 		struct sm_location *loc = &b->slots[i];
 		if (loc->is_pte) {
 			ghost_diff_attach(container, diff_pm(add, TSMLOC(loc)));
