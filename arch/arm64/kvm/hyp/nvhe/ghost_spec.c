@@ -693,18 +693,21 @@ void compute_new_abstract_state_handle___pkvm_init_vm(struct ghost_state *g1, st
 
 	u64 handle = call->return_value;
 
-	// pKVM should not allocate the same handle to a previously existent VM
-	ghost_spec_assert(ghost_vms_get(&g0->vms, handle) == NULL);
-
 	// In the implementation, insert_vm_table_entry() may return -EINVAL,
 	// if during the init of pKVM vm_table could not allocated,
 	// so these ghost compute functions are only valid if properly initialised
 	ghost_assert(READ_ONCE(ghost_pkvm_init_finalized));
 
-	// if we've already allocated KVM_MAX_PVMS VMs, then fail with -ENOMEM
-	if (g0->vms.nr_vms == KVM_MAX_PVMS) {
-		ret = -ENOMEM;
-		goto out;
+
+	// pKVM should not allocate the same handle to a previously existent VM
+	if (g0->vms.present) {
+		ghost_spec_assert(ghost_vms_get(&g0->vms, handle) == NULL);
+
+		// if we've already allocated KVM_MAX_PVMS VMs, then fail with -ENOMEM
+		if (g0->vms.nr_vms == KVM_MAX_PVMS) {
+			ret = -ENOMEM;
+			goto out;
+		}
 	}
 
 	g1->vms.present = true;
