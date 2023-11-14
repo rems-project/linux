@@ -42,12 +42,19 @@ menuconfig NVHE_GHOST_SIMPLIFIED_MODEL_NOISY
 	help
 	  Enable some noisy logs from the ghost simplified model.
 
-config NVHE_GHOST_SIMPLIFIED_MODEL_VERBOSE
-	bool "Very noisy ghost simplified model output"
+config NVHE_GHOST_SIMPLIFIED_MODEL_DIFF_ON_TRANS
+	bool "Print a diff to the simplified model state on each transition"
 	depends on NVHE_GHOST_SIMPLIFIED_MODEL_NOISY
 	default n
 	help
-	  Enable the full (very noisy) logs from the ghost simplified model.
+	  Prints the diff that a transition made to the simplified model.
+
+config NVHE_GHOST_SIMPLIFIED_MODEL_DUMP_ON_TRANS
+	bool "Print the entire simplified model state on each transition"
+	depends on NVHE_GHOST_SIMPLIFIED_MODEL_NOISY
+	default n
+	help
+	  Dumps the entire simplified model state to the UART on each simplified model transition (very noisy).
 
 menuconfig NVHE_GHOST_SPEC_NOISY
 	bool "Noisy ghost spec checking machinery"

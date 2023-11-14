@@ -12,6 +12,9 @@
 #include <nvhe/ghost_maplets.h>
 #include <nvhe/ghost_pgtable.h>
 #include <nvhe/ghost_pfn_set.h>
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+#include <nvhe/ghost_simplified_model.h>
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 
 /*
  * The UART print stream
@@ -271,6 +274,12 @@ extern int gp_put_entry(gp_stream_t *out, u64 pte, u8 level);
 extern int gp_print_pfn_set(gp_stream_t *out, struct pfn_set *set);
 extern int gp_put_abstract_pgtable(gp_stream_t *out, abstract_pgtable *ap, u64 indent);
 extern int gp_put_current_context_trace(gp_stream_t *out);
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+extern int kvm_nvhe_sym(gp_print_sm_trans)(gp_stream_t *out, struct ghost_simplified_model_transition *trans);
+extern int kvm_nvhe_sym(gp_print_sm_pte_state)(gp_stream_t *out, struct sm_pte_state *st);
+extern int kvm_nvhe_sym(gp_print_sm_loc)(gp_stream_t *out, struct sm_location *loc);
+extern int kvm_nvhe_sym(gp_print_sm_state)(gp_stream_t *out, struct ghost_simplified_model_state *s);
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 
 int put_ghost_obj(gp_stream_t *out, char **p, u64 arg0, u64 arg1)
 {
@@ -297,6 +306,21 @@ int put_ghost_obj(gp_stream_t *out, char **p, u64 arg0, u64 arg1)
 	} else if (__matches((*p)+1, "(pgtable)")) {
 		*p += 9;
 		return gp_put_abstract_pgtable(out, (abstract_pgtable *)arg0, arg1);
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	} else if (__matches((*p)+1, "(sm_trans)")) {
+		*p += 10;
+		return kvm_nvhe_sym(gp_print_sm_trans)(out, (struct ghost_simplified_model_transition*)arg0);
+	} else if (__matches((*p)+1, "(sm_pte_state)")) {
+		*p += 14;
+		return kvm_nvhe_sym(gp_print_sm_pte_state)(out, (struct sm_pte_state*)arg0);
+	} else if (__matches((*p)+1, "(sm_loc)")) {
+		*p += 8;
+		return kvm_nvhe_sym(gp_print_sm_loc)(out, (struct sm_location*)arg0);
+	} else if (__matches((*p)+1, "(sm_state)")) {
+		*p += 10;
+		return kvm_nvhe_sym(gp_print_sm_state)(out, (struct ghost_simplified_model_state*)arg0);
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
+
 	} else {
 		return -EINVAL;
 	}

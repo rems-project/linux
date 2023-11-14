@@ -24,6 +24,10 @@
 
 #include <nvhe/ghost_abstraction_diff.h>
 
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+#include <nvhe/ghost_simplified_model.h>
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
+
 /*
  * Ghost state diffs:
  * The whole ghost state is arranged as a tree
@@ -60,6 +64,9 @@ enum ghost_diff_val_kind {
 	/* Plus some more */
 	Tbool,
 	Tmaplet,
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	Tsm_loc,
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 };
 
 struct diff_val {
@@ -71,6 +78,11 @@ struct diff_val {
 
 		// this is okay to be a reference since the diff is only alive if the two diff'd objects are.
 		struct maplet *m;
+
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+		// this is okay to be a reference since the diff is only alive if the two diff'd objects are.
+		struct sm_location *sm_loc;
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	};
 };
 #define TBOOL(value) (struct diff_val){.kind=Tbool, .b=(value)}
@@ -78,6 +90,9 @@ struct diff_val {
 #define TSTR(value) (struct diff_val){.kind=Tstr, .s=(value)}
 #define TMAPLET(value) (struct diff_val){.kind=Tmaplet, .m=(value)}
 #define TGPREG(value) (struct diff_val){.kind=Tgpr, .n=(value)}
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+#define TSMLOC(value) (struct diff_val){.kind=Tsm_loc, .sm_loc=(value)}
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 
 struct ghost_diff {
 	/**
@@ -258,6 +273,10 @@ static bool val_equal(struct diff_val lhs, struct diff_val rhs)
 		return !strcmp(lhs.s, rhs.s);
 	case Tmaplet:
 		return false;
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	case Tsm_loc:
+		return sm_loc_eq(lhs.sm_loc, rhs.sm_loc);
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	default:
 		BUG();
 	}
@@ -662,6 +681,112 @@ struct ghost_diff *ghost_diff_state(struct ghost_state *s1, struct ghost_state *
 }
 
 /************************************/
+// Simplified model diffing
+
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+
+static void one_way_diff_blob_slots(struct ghost_diff *container, struct ghost_memory_blob *b1, struct ghost_memory_blob *b2, bool add)
+{
+	for (u64 i = 0; i < PAGES_PER_BLOB*SLOTS_PER_PAGE; i++) {
+		struct sm_location *loc1 = &b1->slots[i];
+		struct sm_location *loc2 = &b2->slots[i];
+		ghost_diff_attach(container, diff_pair(TSMLOC(loc1), TSMLOC(loc2)));
+	}
+}
+
+static void one_way_add_all_blob(struct ghost_diff *container, struct ghost_memory_blob *b, bool add)
+{
+	for (u64 i = 0; i < PAGES_PER_BLOB*SLOTS_PER_PAGE; i++) {
+		struct sm_location *loc = &b->slots[i];
+		if (loc->is_pte) {
+			ghost_diff_attach(container, diff_pm(add, TSMLOC(loc)));
+		}
+	}
+}
+
+static void one_way_diff_blobs(struct ghost_diff *container, struct ghost_simplified_memory *m1, struct ghost_simplified_memory *m2, bool add, bool skip_eq)
+{
+	bool found;
+	for (u64 bi = 0; bi < MAX_BLOBS; bi++) {
+		struct ghost_memory_blob *b1 = &m1->blobs[bi];
+		if (!b1->valid)
+			continue;
+
+		found = false;
+		for (u64 bj = 0; bj < MAX_BLOBS; bj++) {
+			struct ghost_memory_blob *b2 = &m1->blobs[bi];
+			if (!b2->valid)
+				continue;
+
+			if (b1->phys == b2->phys) {
+				found = true;
+				if (!skip_eq) {
+					one_way_diff_blob_slots(container, b1, b2, add);
+				}
+			}
+		}
+
+		if (!found)
+			one_way_add_all_blob(container, b1, add);
+	}
+}
+
+struct ghost_diff *ghost_diff_sm_mem(struct ghost_simplified_memory *m1, struct ghost_simplified_memory *m2)
+{
+	struct ghost_diff *node = container();
+
+	// blobs are unordered
+	one_way_diff_blobs(node, m1, m2, false, false);
+	one_way_diff_blobs(node, m2, m1, true, true);
+
+	return normalise(node);
+}
+
+static void one_way_diff_roots(struct ghost_diff *container, u64 len, u64 *lhs, u64 *rhs, bool add)
+{
+	bool found;
+	for (u64 i = 0; i < len; i++) {
+		u64 r = lhs[i];
+		found = false;
+		for (u64 j = 0; j < len; j++) {
+			if (rhs[j] == r)
+				found = true;
+		}
+
+		// something was removed
+		if (!found)
+			ghost_diff_attach(container, diff_pm(add, TU64(r)));
+	}
+}
+
+struct ghost_diff *ghost_diff_sm_roots(u64 len, u64 *roots1, u64 *roots2)
+{
+	struct ghost_diff *node = container();
+
+	// roots are unordered
+
+	one_way_diff_roots(node, len, roots1, roots2, false);
+	one_way_diff_roots(node, len, roots2, roots1, true);
+
+	return normalise(node);
+}
+
+struct ghost_diff *ghost_diff_sm_state(struct ghost_simplified_model_state *s1, struct ghost_simplified_model_state *s2)
+{
+	struct ghost_diff *node = container();
+	ghost_diff_field(node, "base", diff_pair(TU64(s1->base_addr), TU64(s2->base_addr)));
+	ghost_diff_field(node, "size", diff_pair(TU64(s1->size), TU64(s2->size)));
+
+	ghost_diff_field(node, "s1_roots", ghost_diff_sm_roots(s1->nr_s1_roots, s1->s1_roots, s2->s1_roots));
+	ghost_diff_field(node, "s2_roots", ghost_diff_sm_roots(s1->nr_s2_roots, s1->s2_roots, s2->s2_roots));
+
+	ghost_diff_field(node, "mem", ghost_diff_sm_mem(&s1->memory, &s2->memory));
+	return normalise(node);
+}
+
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
+
+/************************************/
 // Printing
 
 static void __put_val(struct diff_val val, u64 indent)
@@ -685,6 +810,11 @@ static void __put_val(struct diff_val val, u64 indent)
 	case Tgpr:
 		ghost_printf("r%ld", val.n);
 		break;
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	case Tsm_loc:
+		ghost_printf("%g(sm_loc)", val.sm_loc);
+		break;
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	default:
 		BUG();
 	}
@@ -706,6 +836,10 @@ static int __put_val_string(struct diff_val val, char *buf, u64 n)
 		return ghost_snprintf(buf, n, "%g(maplet)", val.m);
 	case Tgpr:
 		return ghost_snprintf(buf, n, "r%ld", val.n);
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	case Tsm_loc:
+		return ghost_snprintf(buf, n, "%g(sm_loc)", val.sm_loc);
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	default:
 		BUG();
 	}
@@ -823,3 +957,11 @@ void ghost_diff_and_print_state(struct ghost_state *s1, struct ghost_state *s2)
 	struct ghost_diff *diff = ghost_diff_state(s1, s2);
 	ghost_consume_diff(diff);
 }
+
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+void ghost_diff_and_print_sm_state(struct ghost_simplified_model_state *s1, struct ghost_simplified_model_state *s2)
+{
+	struct ghost_diff *diff = ghost_diff_sm_state(s1, s2);
+	ghost_consume_diff(diff);
+}
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */

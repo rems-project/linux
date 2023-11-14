@@ -451,7 +451,11 @@ void __noreturn __pkvm_init_finalise(void)
 	ghost_init_diff_memory();
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
 	GHOST_LOG(pkvm_pgtable.start_level, u32);
-	initialise_ghost_simplified_model(ghost__pkvm_init_phys, ghost__pkvm_init_size);
+	u64 sm_size = PAGE_ALIGN(2 * sizeof(struct ghost_simplified_model_state));
+	unsigned long sm_virt;
+	// carve out some space just for us at the end, and hope it doesn't prevent the host making progress too much
+	BUG_ON(__pkvm_create_private_mapping(ghost__pkvm_init_phys+ghost__pkvm_init_size-sm_size, sm_size, PAGE_HYP, &sm_virt, HYP_WORKSPACE));
+	initialise_ghost_simplified_model(ghost__pkvm_init_phys, ghost__pkvm_init_size, sm_virt, sm_size);
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	WRITE_ONCE(ghost_pkvm_init_finalized, true);
 #endif /* CONFIG_NVHE_GHOST_SPEC */
@@ -487,6 +491,9 @@ int __pkvm_init(phys_addr_t phys, unsigned long size, unsigned long nr_cpus,
 
 #ifdef CONFIG_NVHE_GHOST_SPEC
 	GHOST_LOG_CONTEXT_ENTER();
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	u64 sm_size = PAGE_ALIGN(2 * sizeof(struct ghost_simplified_model_state));
+#endif
 
 	ghost_printf(
 		"\n"
@@ -503,9 +510,22 @@ int __pkvm_init(phys_addr_t phys, unsigned long size, unsigned long nr_cpus,
 		"  interesting globals:\n"
 		"    hyp_physvirt_offset:..%lx\n"
 		"\n"
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+		"  simplified model:\n"
+		"    phys:.................%p\n"
+		"    virt:.................%p\n"
+		"    size:.................%lx\n"
+		"\n"
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 		,
 		hyp_smp_processor_id(), phys, size, nr_cpus,
 		per_cpu_base, hyp_va_bits, hyp_physvirt_offset
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+		,
+		phys+size-sm_size,
+		virt+size-sm_size,
+		sm_size
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	);
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 
@@ -523,8 +543,11 @@ int __pkvm_init(phys_addr_t phys, unsigned long size, unsigned long nr_cpus,
 
 	hyp_spin_lock_init(&pkvm_pgd_lock);
 	hyp_nr_cpus = nr_cpus;
-
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	ret = divide_memory_pool(virt, size - sm_size);
+#else /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	ret = divide_memory_pool(virt, size);
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 #ifdef CONFIG_NVHE_GHOST_SPEC
 	if (ret) {
 		GHOST_LOG_CONTEXT_EXIT();

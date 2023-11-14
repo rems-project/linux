@@ -79,6 +79,9 @@ void __init kvm_hyp_reserve(void)
 	hyp_mem_pages += host_s2_pgtable_pages();
 	hyp_mem_pages += hyp_vm_table_pages();
 	hyp_mem_pages += hyp_vmemmap_pages(STRUCT_HYP_PAGE_SIZE);
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	hyp_mem_pages += 0x40100;
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 
 	/*
 	 * Try to allocate a PMD-aligned region to reduce TLB pressure once

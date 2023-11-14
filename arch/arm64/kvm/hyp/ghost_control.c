@@ -7,7 +7,6 @@
 static const bool noisy_spec = IS_ENABLED(CONFIG_NVHE_GHOST_SPEC_NOISY);
 static const bool verbose_spec = IS_ENABLED(CONFIG_NVHE_GHOST_SPEC_VERBOSE);
 static const bool noisy_sm = IS_ENABLED(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL_NOISY);
-static const bool verbose_sm = IS_ENABLED(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL_VERBOSE);
 
 struct ghost_control_item {
 	const char* name;
@@ -23,6 +22,8 @@ static struct ghost_control_item ghost_controls[] = {
 	// printing simplified model (#define disables checking entirely);
 	(struct ghost_control_item){.name="ghost_simplified_model_step", .check=true, .print=noisy_sm},
 	(struct ghost_control_item){.name="initialise_ghost_simplified_model", .check=true, .print=noisy_sm},
+	(struct ghost_control_item){.name="sm_dump_trans", .check=true, .print=IS_ENABLED(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL_DUMP_ON_TRANS)},
+	(struct ghost_control_item){.name="sm_diff_trans", .check=true, .print=IS_ENABLED(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL_DIFF_ON_TRANS)},
 
 	// verbose logs from the pre/post checkers
 	(struct ghost_control_item){.name="ghost_record_pre", .check=true, .print=verbose_spec},
