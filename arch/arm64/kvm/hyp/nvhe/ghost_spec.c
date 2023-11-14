@@ -1,6 +1,7 @@
 #include <asm/kvm_mmu.h>
 #include <hyp/ghost_extra_debug-pl011.h>
 //#include <nvhe/ghost_check_pgtables.h>
+#include <hyp/ghost_alloc.h>
 #include <nvhe/ghost_misc.h>
 #include <nvhe/ghost_pgtable.h>
 #pragma GCC diagnostic ignored "-Wdeclaration-after-statement"
@@ -770,7 +771,10 @@ void compute_new_abstract_state_handle___pkvm_init_vm(struct ghost_state *g1, st
 	vm1->pkvm_handle = handle;
 
 	for (int i = 0; i < KVM_MAX_VCPUS; i++) {
-		vm1->vcpus[i] = NULL;
+		vm1->vcpus[i] = malloc_or_die(sizeof(struct ghost_vcpu));
+		vm1->vcpus[i]->vcpu_handle = i;
+		vm1->vcpus[i]->loaded = false;
+		vm1->vcpus[i]->initialised = false;
 	}
 
 	// TODO:
