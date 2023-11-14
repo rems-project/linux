@@ -426,10 +426,15 @@ void __check_abstraction_vm_all_contained_in(struct ghost_vms *vms1, struct ghos
 
 void check_abstraction_equals_vms(struct ghost_vms *gc, struct ghost_vms *gr_post)
 {
+	GHOST_LOG_CONTEXT_ENTER();
 	ghost_assert(gc->present && gr_post->present);
+	GHOST_LOG(gc->nr_vms, u64);
+	GHOST_LOG(gr_post->nr_vms, u64);
+	ghost_spec_assert(gc->nr_vms == gr_post->nr_vms);
 	// the computed and recorded post states should have exactly the same set of touched VMs
 	__check_abstraction_vm_all_contained_in(gc, gr_post);
 	__check_abstraction_vm_all_contained_in(gr_post, gc);
+	GHOST_LOG_CONTEXT_EXIT();
 }
 
 void check_abstraction_equals_run_state(struct ghost_running_state *spec, struct ghost_running_state *recorded)
