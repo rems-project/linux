@@ -368,7 +368,11 @@ void check_abstraction_equals_vcpu(struct ghost_vcpu *vcpu1, struct ghost_vcpu *
 void check_abstraction_equals_vm(struct ghost_vm *vm1, struct ghost_vm *vm2)
 {
 	GHOST_LOG_CONTEXT_ENTER();
-	ghost_assert_vm_locked(vm1);
+	// NOTE: we can't have this check on the lock here because some calls
+	// of the current function compare the thread-local pre/post states in
+	// which case we don't hold the lock.
+	//
+	// ghost_assert_vm_locked(vm1);
 
 	// if not for the same guest VM, then not equal
 	// technically the handles are fields on the vm and protected by the vm
