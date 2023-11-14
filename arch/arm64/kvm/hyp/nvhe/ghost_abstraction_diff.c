@@ -708,27 +708,20 @@ static void one_way_add_all_blob(struct ghost_diff *container, struct ghost_memo
 static void one_way_diff_blobs(struct ghost_diff *container, struct ghost_simplified_memory *m1, struct ghost_simplified_memory *m2, bool add, bool skip_eq)
 {
 	bool found;
-	for (u64 bi = 0; bi < MAX_BLOBS; bi++) {
-		struct ghost_memory_blob *b1 = &m1->blobs[bi];
-		if (!b1->valid)
-			continue;
+	for (u64 bi = 0; bi < m1->nr_allocated_blobs; bi++) {
+		struct ghost_memory_blob *b1 = blob_of(m1, bi);
+		struct ghost_memory_blob *b2 = find_blob(m2, b1->phys);
 
-		found = false;
-		for (u64 bj = 0; bj < MAX_BLOBS; bj++) {
-			struct ghost_memory_blob *b2 = &m1->blobs[bi];
-			if (!b2->valid)
-				continue;
+		if (b2) {
+			found = true;
 
-			if (b1->phys == b2->phys) {
-				found = true;
-				if (!skip_eq) {
-					one_way_diff_blob_slots(container, b1, b2, add);
-				}
+			// only in one direction should we try diff the blobs themselves
+			if (!skip_eq) {
+				one_way_diff_blob_slots(container, b1, b2, add);
 			}
-		}
-
-		if (!found)
+		} else {
 			one_way_add_all_blob(container, b1, add);
+		}
 	}
 }
 
