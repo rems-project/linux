@@ -959,10 +959,10 @@ void ghost_diff_and_print_state(struct ghost_state *s1, struct ghost_state *s2)
 	ghost_consume_diff(diff);
 }
 
-#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL_DIFF_ON_TRANS
 void ghost_diff_and_print_sm_state(struct ghost_simplified_model_state *s1, struct ghost_simplified_model_state *s2)
 {
 	struct ghost_diff *diff = ghost_diff_sm_state(s1, s2);
 	ghost_consume_diff(diff);
 }
-#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL_DIFF_ON_TRANS */
