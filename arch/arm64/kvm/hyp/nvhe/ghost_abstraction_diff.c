@@ -549,13 +549,13 @@ static void ghost_diff_vm(struct diff_container *node, pkvm_handle_t handle, str
 	// in theory: handle should be the same...
 	ghost_diff_field(node, "handle", diff_pair(TU64((u64)vm1->pkvm_handle), TU64((u64)vm2->pkvm_handle)));
 	if (vm1->pkvm_handle == vm2->pkvm_handle) {
-		ghost_diff_field(node, "nr_vcpus", diff_pair(TU64(vm1->nr_vcpus), TU64(vm2->nr_vcpus)));
-		ghost_diff_field(node, "nr_initialised_vcpus", diff_pair(TU64(vm1->nr_initialised_vcpus), TU64(vm2->nr_initialised_vcpus)));
-		ghost_diff_pgtable(node, "vm_abstract_pgtable", &vm1->vm_abstract_pgtable, &vm2->vm_abstract_pgtable);
+		ghost_diff_field(node, "nr_vcpus", diff_pair(TU64(vm1->vm_table_locked.nr_vcpus), TU64(vm2->vm_table_locked.nr_vcpus)));
+		ghost_diff_field(node, "nr_initialised_vcpus", diff_pair(TU64(vm1->vm_table_locked.nr_initialised_vcpus), TU64(vm2->vm_table_locked.nr_initialised_vcpus)));
+		ghost_diff_pgtable(node, "vm_abstract_pgtable", &vm1->vm_locked.vm_abstract_pgtable, &vm2->vm_locked.vm_abstract_pgtable);
 
 		for (u64 i = 0; i < KVM_MAX_VCPUS; i++) {
-			struct ghost_vcpu *vcpu1 = vm1->vcpus[i];
-			struct ghost_vcpu *vcpu2 = vm2->vcpus[i];
+			struct ghost_vcpu *vcpu1 = vm1->vm_table_locked.vcpus[i];
+			struct ghost_vcpu *vcpu2 = vm2->vm_table_locked.vcpus[i];
 
 			if (vcpu1 && vcpu2) {
 				ghost_diff_vcpu(node, vcpu1, vcpu2);
@@ -579,6 +579,7 @@ static void ghost_diff_vms(struct diff_container *node, struct ghost_vms *vms1, 
 	ghost_diff_field(node, "present", diff_pair(TBOOL(vms1->present), TBOOL(vms2->present)));
 	if (!vms1->present || !vms2->present)
 		goto cleanup;
+	ghost_diff_field(node, "nr_vms", diff_pair(TU64(vms1->nr_vms), TU64(vms2->nr_vms)));
 
 	// find those that were removed from vms2
 	for (int i = 0; i < KVM_MAX_PVMS; i++) {

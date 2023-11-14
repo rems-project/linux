@@ -117,25 +117,45 @@ struct ghost_vcpu {
 };
 
 /**
- * struct ghost_vm - A guest VM
+ * struct ghost_vm_locked_by_vm_lock - A guest VM (part protected by the internal VM lock)
  *
  * @vm_abstract_pgtable: an abstract mapping of the concrete guest pagetable
+ *
+ * Context: Protected by the internal VM's lock,
+ */
+struct ghost_vm_locked_by_vm_lock {
+	bool present;
+	abstract_pgtable vm_abstract_pgtable;
+};
+/**
+ * struct ghost_vm_locked_by_vm_table - A guest VM (part protected by the VM table lock)
+ *
  * @nr_vcpus: the number of VCPUs this VM has
  * @nr_initialised_vcpus: the number VCPUs that have been initialised
  * @vcpus: the table of ghost_vcpu objects, valid up to nr_vcpus
  * @pkvm_handle: the opaque pkvm-assigned handle corresponding to this guest
  * @lock: a reference to the internal VM lock in pkvm.
  *
- * Context: Protected by the VM's lock,
+ * Context: Protected by the VM table lock,
  *          the `lock` field should not be used to take the lock, only to check it for sanity checking of the spec machinery
  */
-struct ghost_vm {
-	abstract_pgtable vm_abstract_pgtable;
+struct ghost_vm_locked_by_vm_table {
+	bool present;
 	u64 nr_vcpus;
 	u64 nr_initialised_vcpus;
 	struct ghost_vcpu *vcpus[KVM_MAX_VCPUS];
+};
+/**
+ * struct ghost_vm - A guest VM
+ *
+ * @vm_locked: fields protected by the internal VM lock
+ * @vm_table_locked: fields protected by the VM table lock
+ */
+struct ghost_vm {
 	pkvm_handle_t pkvm_handle;
 	hyp_spinlock_t *lock;
+	struct ghost_vm_locked_by_vm_lock vm_locked;
+	struct ghost_vm_locked_by_vm_table vm_table_locked;
 };
 
 /**

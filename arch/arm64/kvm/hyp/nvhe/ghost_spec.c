@@ -468,7 +468,7 @@ void compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost_state 
 		);
 
 		// finally, we mark that this page as one potentially used for a pagetable for this guest.
-		ghost_pfn_set_insert(&g1_vm->vm_abstract_pgtable.table_pfns, pfn);
+		ghost_pfn_set_insert(&g1_vm->vm_locked.vm_abstract_pgtable.table_pfns, pfn);
 	}
 
 	// TODO: non-protected VM/VCPUs?
@@ -479,7 +479,7 @@ void compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost_state 
 		goto out;
 	}
 	// if the addr is already mapped in the guest mapping, fail with -EPERM
-	if (mapping_in_domain(guest_ipa, g0_vm->vm_abstract_pgtable.mapping)) {
+	if (mapping_in_domain(guest_ipa, g0_vm->vm_locked.vm_abstract_pgtable.mapping)) {
 		ret = -EPERM;
 		goto out;
 	}
@@ -497,8 +497,8 @@ void compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost_state 
 	bool is_memory = ghost_addr_is_allowed_memory(g0, phys);
 	struct maplet_attributes vm_attrs = ghost_default_vm_memory_attributes(is_memory, MAPLET_PAGE_STATE_PRIVATE_OWNED);
 	mapping_move(
-		&g1_vm->vm_abstract_pgtable.mapping,
-		mapping_plus(g0_vm->vm_abstract_pgtable.mapping,
+		&g1_vm->vm_locked.vm_abstract_pgtable.mapping,
+		mapping_plus(g0_vm->vm_locked.vm_abstract_pgtable.mapping,
 			     mapping_singleton(GHOST_STAGE2, guest_ipa, 1, maplet_target_mapped_attrs(phys, 1, vm_attrs)))
 	);
 
@@ -526,10 +526,10 @@ void compute_new_abstract_state_handle___pkvm_vcpu_load(struct ghost_state *g1, 
 		goto out;
 
 	// if loading non-existent vcpu, do nothing.
-	if (vcpu_idx >= vm->nr_vcpus)
+	if (vcpu_idx >= vm->vm_table_locked.nr_vcpus)
 		goto out;
 
-	struct ghost_vcpu *vcpu = vm->vcpus[vcpu_idx];
+	struct ghost_vcpu *vcpu = vm->vm_table_locked.vcpus[vcpu_idx];
 	ghost_assert(vcpu_idx < KVM_MAX_VCPUS);
 	ghost_assert(vcpu);
 
@@ -540,8 +540,8 @@ void compute_new_abstract_state_handle___pkvm_vcpu_load(struct ghost_state *g1, 
 	// record in the ghost state of the vcpu 'vcpu_idx' that is has been loaded
 	struct ghost_vm *vm1 = ghost_vms_alloc(&g1->vms, vm->pkvm_handle);
 	ghost_vm_clone_into(vm1, vm);
-	ghost_assert(vm1->vcpus[vcpu_idx]);
-	vm1->vcpus[vcpu_idx]->loaded = true;
+	ghost_assert(vm1->vm_table_locked.vcpus[vcpu_idx]);
+	vm1->vm_table_locked.vcpus[vcpu_idx]->loaded = true;
 
 	// record in the ghost state that the current CPU has loaded
 	// the vcpu 'vcpu_idx' of vm 'vm_idx'
@@ -579,8 +579,8 @@ void compute_new_abstract_state_handle___pkvm_vcpu_put(struct ghost_state *g1, s
 
 	ghost_vm_clone_into(vm1, vm0);
 
-	ghost_assert(vm1->vcpus[vcpu_idx]);
-	vm1->vcpus[vcpu_idx]->loaded = false;
+	ghost_assert(vm1->vm_table_locked.vcpus[vcpu_idx]);
+	vm1->vm_table_locked.vcpus[vcpu_idx]->loaded = false;
 
 	loaded = true;
 
@@ -765,17 +765,17 @@ void compute_new_abstract_state_handle___pkvm_init_vm(struct ghost_state *g1, st
 	// NOTE: we expect the VM's page table to be place at the beginning
 	// of the first page of the memory region donated by the host
 	// for that purpose
-	ghost_pfn_set_init(&vm1->vm_abstract_pgtable.table_pfns, pgd_phys, pgd_phys + pgd_size);
-	vm1->vm_abstract_pgtable.mapping = mapping_empty_();
-	vm1->nr_vcpus = nr_vcpus;
-	vm1->nr_initialised_vcpus = 0;
+	ghost_pfn_set_init(&vm1->vm_locked.vm_abstract_pgtable.table_pfns, pgd_phys, pgd_phys + pgd_size);
+	vm1->vm_locked.vm_abstract_pgtable.mapping = mapping_empty_();
+	vm1->vm_table_locked.nr_vcpus = nr_vcpus;
+	vm1->vm_table_locked.nr_initialised_vcpus = 0;
 	vm1->pkvm_handle = handle;
 
 	for (int i = 0; i < nr_vcpus; i++) {
-		vm1->vcpus[i] = malloc_or_die(sizeof(struct ghost_vcpu));
-		vm1->vcpus[i]->vcpu_handle = i;
-		vm1->vcpus[i]->loaded = false;
-		vm1->vcpus[i]->initialised = false;
+		vm1->vm_table_locked.vcpus[i] = malloc_or_die(sizeof(struct ghost_vcpu));
+		vm1->vm_table_locked.vcpus[i]->vcpu_handle = i;
+		vm1->vm_table_locked.vcpus[i]->loaded = false;
+		vm1->vm_table_locked.vcpus[i]->initialised = false;
 	}
 
 	// TODO:
