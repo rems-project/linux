@@ -123,9 +123,9 @@ static inline unsigned long array_index_mask_nospec(unsigned long idx,
 #ifdef CONFIG_TEMP_PROOF_SIMPLIFICATION
 
 #define __smp_store_release(p, v)					\
-do {									\
+{									\
 	*p = v;								\
-} while (0)
+}
 
 
 #else
