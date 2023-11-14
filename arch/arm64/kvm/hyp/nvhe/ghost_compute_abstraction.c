@@ -901,13 +901,8 @@ void record_abstraction_vm(struct ghost_state *g, struct pkvm_hyp_vm *vm)
 
 	pkvm_handle_t handle = vm->kvm.arch.pkvm.handle;
 	struct ghost_vm *slot = ghost_vms_get(&g->vms, handle);
-
-	// get, and if it doesn't exist, create one
-	if (!slot) {
-		slot = ghost_vms_alloc(&g->vms, handle);
-	}
-
-	// if pKVM has space for a VM, the infrastructure should too.
+	ghost_assert(!slot);
+	slot = ghost_vms_alloc(&g->vms, handle);
 	ghost_assert(slot);
 
 	// write the vm directly into the slot

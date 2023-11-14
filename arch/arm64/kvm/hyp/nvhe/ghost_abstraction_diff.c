@@ -28,17 +28,19 @@
 #include <nvhe/ghost_simplified_model.h>
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 
+#define MAX_PRINT_DIFF_PER_SUBFIELDS 16
+
 /*
  * Ghost state diffs:
  * The whole ghost state is arranged as a tree
- * so we duplicate that tree structure with a set of diffs..
+ * so we duplicate that tree structure by walking the state
  */
 
-#define DIFF_MAX_CHILDREN 16
-
-
 enum ghost_diff_kind {
-	GHOST_DIFF_CONTAINER,
+	/**
+	 * A pair that matched (no diff)
+	 */
+	GHOST_DIFF_NONE,
 
 	/**
 	 * A pair that didn't match.
@@ -95,18 +97,8 @@ struct diff_val {
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 
 struct ghost_diff {
-	/**
-	 * Invariant: key is either Tu64 (index) or Tstr (field)
-	 */
-	struct diff_val key;
-
 	enum ghost_diff_kind kind;
 	union {
-		struct diff_container_data {
-			u64 nr_children;
-			struct ghost_diff *children[DIFF_MAX_CHILDREN];
-		} container;
-
 		struct diff_pair_data {
 			struct diff_val lhs;
 			struct diff_val rhs;
@@ -122,144 +114,19 @@ struct ghost_diff {
 	};
 };
 
+#define DIFF_NONE ((struct ghost_diff){.kind=GHOST_DIFF_NONE})
+#define MAX_CONTAINER_PATH 32
 
-/*
- * Global diff state
- * A set of allocatable diff nodes embeded in a free list
- * and a lock to protect it all.
- */
-
-DEFINE_HYP_SPINLOCK(ghost_diff_lock);
-
-#define GHOST_DIFF_MEMORY_NR_NODES 256
-
-struct ghost_diff_memory {
-	struct ghost_diff *free_list;
-	struct ghost_diff nodes[GHOST_DIFF_MEMORY_NR_NODES];
+struct diff_container {
+	int depth;
+	int clean_prefix;
+	const char *path[MAX_CONTAINER_PATH];
+	bool saw_diff;
+	u64 nr_subfield_diffs;
 };
 
-/***********************/
-// Awful Allocation
-
-struct ghost_diff_memory the_memory;
-
-static void insert_into_freelist(struct ghost_diff *node)
-{
-	struct ghost_diff *old_head;
-	old_head = the_memory.free_list;
-
-	the_memory.free_list = node;
-
-	*(struct ghost_diff**)node = old_head;
-}
-
-static struct ghost_diff *pop_from_freelist(void)
-{
-	if (the_memory.free_list) {
-		struct ghost_diff *node;
-		node = the_memory.free_list;
-		the_memory.free_list = *(struct ghost_diff**)node;
-		memset(node, 0, sizeof(struct ghost_diff));
-		return node;
-	} else {
-		// out-of-memory
-		ghost_printf(GHOST_WHITE_ON_YELLOW "! diff out-of-memory" GHOST_NORMAL "\n");
-		return NULL;
-	}
-}
-
-void ghost_init_diff_memory(void)
-{
-	for (int i = 0; i < GHOST_DIFF_MEMORY_NR_NODES; i++) {
-		insert_into_freelist(&the_memory.nodes[i]);
-	}
-}
-
-struct ghost_diff *__alloc_diff(void)
-{
-	return pop_from_freelist();
-}
-
-static void __free_node(struct ghost_diff *container)
-{
-	insert_into_freelist(container);
-}
-
-struct ghost_diff *alloc_diff(void)
-{
-	struct ghost_diff *node;
-	hyp_spin_lock(&ghost_diff_lock);
-	node = __alloc_diff();
-	hyp_spin_unlock(&ghost_diff_lock);
-	return node;
-}
-
-void free_node(struct ghost_diff *node)
-{
-	hyp_spin_lock(&ghost_diff_lock);
-	__free_node(node);
-	hyp_spin_unlock(&ghost_diff_lock);
-}
-
-
-/* fwdref as free_container and free_diff are mutually recursive. */
-void free_diff(struct ghost_diff *node);
-
-void free_container(struct ghost_diff *node)
-{
-	ghost_assert(node->kind == GHOST_DIFF_CONTAINER);
-
-	for (int c = 0; c < node->container.nr_children; c++) {
-		free_diff(node->container.children[c]);
-	}
-
-	free_node(node);
-}
-
-void free_diff(struct ghost_diff *node)
-{
-	ghost_assert(node);
-	switch (node->kind) {
-	case GHOST_DIFF_CONTAINER:
-		free_container(node);
-		break;
-	default:
-		free_node(node);
-		break;
-	}
-}
-
-
-struct ghost_diff *normalise(struct ghost_diff *node)
-{
-	if (!node)
-		return node;
-
-	if (node->kind != GHOST_DIFF_CONTAINER)
-		return node;
-
-	if (node->container.nr_children > 0)
-		return node;
-
-	free_container(node);
-	return NULL;
-}
-
-/****************************/
-// Creation
-
-
-struct ghost_diff *container(void)
-{
-	struct ghost_diff *node = alloc_diff();
-	if (!node)
-		return node;
-
-	node->key = TSTR(NULL);
-	node->kind = GHOST_DIFF_CONTAINER;
-	node->container.nr_children = 0;
-	return node;
-}
+/*********/
+// Differ
 
 static bool val_equal(struct diff_val lhs, struct diff_val rhs)
 {
@@ -281,507 +148,6 @@ static bool val_equal(struct diff_val lhs, struct diff_val rhs)
 		BUG();
 	}
 }
-
-/**
- * Compare two Tval and if not equal, return a diff.
- */
-struct ghost_diff *diff_pair(struct diff_val lhs, struct diff_val rhs)
-{
-	if (val_equal(lhs, rhs))
-		return NULL;
-
-	struct ghost_diff *node = alloc_diff();
-	if (!node)
-		return node;
-
-	node->key = TSTR(NULL);
-	node->kind = GHOST_DIFF_PAIR;
-	node->pair.lhs = lhs;
-	node->pair.rhs = rhs;
-	return node;
-}
-
-struct ghost_diff *diff_pm(bool add, struct diff_val val)
-{
-	struct ghost_diff *node = alloc_diff();
-	if (!node)
-		return node;
-
-	node->key = TSTR(NULL);
-	node->kind = GHOST_DIFF_PM;
-	node->pm.add = add;
-	node->pm.val = val;
-	return node;
-}
-
-static void __attach(struct ghost_diff *container, struct diff_val key, struct ghost_diff *child)
-{
-	/* can't attach to NULL */
-	if (!container) {
-		if (child) {
-			/* we took ownership of child on attaching
-			 * but if the container failed to allocate, this would be dropped
-			 * so clean it up now. */
-			free_diff(child);
-		}
-		return;
-	}
-
-	ghost_assert(container->kind == GHOST_DIFF_CONTAINER);
-	ghost_assert(container->container.nr_children < DIFF_MAX_CHILDREN);
-
-	if (child != NULL) {
-		child->key = key;
-		ghost_assert(container->container.nr_children < DIFF_MAX_CHILDREN);
-		container->container.children[container->container.nr_children++] = child;
-	}
-}
-
-void ghost_diff_field(struct ghost_diff *container, char *key, struct ghost_diff *child)
-{
-	__attach(container, TSTR(key), child);
-}
-
-void ghost_diff_index(struct ghost_diff *container, u64 key, struct ghost_diff *child)
-{
-	__attach(container, TU64(key), child);
-}
-
-void ghost_diff_attach(struct ghost_diff *container, struct ghost_diff *child)
-{
-	__attach(container, TSTR(NULL), child);
-}
-
-void ghost_diff_gpr(struct ghost_diff *container, u64 reg, struct ghost_diff *child)
-{
-	__attach(container, TGPREG(reg), child);
-}
-
-/****************/
-// Differ!
-
-struct ghost_diff *ghost_diff_pfns_array(struct pfn_set *s1, struct pfn_set *s2)
-{
-	GHOST_LOG_CONTEXT_ENTER();
-	struct ghost_diff *node = container();
-	ghost_diff_field(node, "len", diff_pair(TU64(s1->len), TU64(s2->len)));
-
-	for (int i = 0; i < s2->len; i++) {
-		u64 pfn = s2->external_pfns[i];
-
-		if (! ghost_pfn_set_contains(s1, pfn))
-			ghost_diff_field(node, "pfn", diff_pm(true, TU64(pfn)));
-	}
-
-	for (int i = 0; i < s1->len; i++) {
-		u64 pfn = s1->external_pfns[i];
-
-		if (! ghost_pfn_set_contains(s2, pfn))
-			ghost_diff_field(node, "pfn", diff_pm(false, TU64(pfn)));
-	}
-
-	node = normalise(node);
-	GHOST_LOG_CONTEXT_EXIT();
-	return node;
-}
-
-struct ghost_diff *ghost_diff_pfns(struct pfn_set *s1, struct pfn_set *s2) {
-	GHOST_LOG_CONTEXT_ENTER();
-	struct ghost_diff *node = container();
-	ghost_diff_field(node, "pool_range_start", diff_pair(TU64(s1->pool_range_start), TU64(s2->pool_range_start)));
-	ghost_diff_field(node, "pool_range_end", diff_pair(TU64(s1->pool_range_end), TU64(s2->pool_range_end)));
-	ghost_diff_field(node, "external_pfns", ghost_diff_pfns_array(s1, s2));
-	node = normalise(node);
-	GHOST_LOG_CONTEXT_EXIT();
-	return node;
-}
-
-struct ghost_diff *ghost_diff_mappings(mapping *mp1, mapping *mp2)
-{
-	GHOST_LOG_CONTEXT_ENTER();
-	struct ghost_diff *node = container();
-	struct glist_head head1 = *(struct glist_head*)mp1;
-	struct glist_head head2 = *(struct glist_head*)mp2;
-	struct glist_node *pos1, *pos2;
-	struct maplet *m1, *m2;
-
-	ghost_assert_maplets_locked();
-
-	if (glist_empty(&head1) && glist_empty(&head2)) {
-		if (node)
-			free_node(node);
-
-		GHOST_LOG_CONTEXT_EXIT();
-		return NULL;
-	}
-
-	pos1 = head1.first;
-	pos2 = head2.first;
-	while (pos1 != NULL || pos2 != NULL) {
-		if (pos1 != NULL)
-			m1 = glist_entry(pos1, struct maplet, list);
-
-		if (pos2 != NULL)
-			m2 = glist_entry(pos2, struct maplet, list);
-
-		if (pos1 == NULL) {
-			ghost_diff_attach(node, diff_pm(true, TMAPLET(m2)));
-			pos2 = pos2->next;
-	 	} else if (pos2 == NULL) {
-			ghost_diff_attach(node, diff_pm(false, TMAPLET(m1)));
-			pos1 = pos1->next;
-		} else if ( !(maplet_eq(m1, m2)) ) {
-			if (m1->ia_range_start < m2->ia_range_start) {
-				ghost_diff_attach(node, diff_pm(false, TMAPLET(m1)));
-				pos1=pos1->next;
-			} else if (m1->ia_range_start > m2->ia_range_start) {
-				ghost_diff_attach(node, diff_pm(true, TMAPLET(m2)));
-				pos2=pos2->next;
-			} else {
-				ghost_diff_attach(node, diff_pair(TMAPLET(m1), TMAPLET(m2)));
-				pos1 = pos1->next;
-				pos2 = pos2->next;
-			}
-		} else {
-			pos1 = pos1->next;
-			pos2 = pos2->next;
-		}
-
-		if (pos1 == NULL && pos2 == NULL)
-			break;
-	}
-
-	node = normalise(node);
-	GHOST_LOG_CONTEXT_EXIT();
-	return node;
-}
-
-
-
-struct ghost_diff *ghost_diff_pgtable(abstract_pgtable *ap1, abstract_pgtable *ap2)
-{
-	GHOST_LOG_CONTEXT_ENTER();
-	struct ghost_diff *node = container();
-	ghost_diff_field(node, "pfns", ghost_diff_pfns(&ap1->table_pfns, &ap2->table_pfns));
-	ghost_diff_field(node, "mapping", ghost_diff_mappings(&ap1->mapping, &ap2->mapping));
-	node = normalise(node);
-	GHOST_LOG_CONTEXT_EXIT();
-	return node;
-}
-
-struct ghost_diff *ghost_diff_pkvm(struct ghost_pkvm *p1, struct ghost_pkvm *p2)
-{
-	GHOST_LOG_CONTEXT_ENTER();
-	struct ghost_diff *node = container();
-	ghost_diff_field(node, "present", diff_pair(TBOOL(p1->present), TBOOL(p2->present)));
-	if (p1->present && p2->present)
-		ghost_diff_field(node, "pgtable", ghost_diff_pgtable(&p1->pkvm_abstract_pgtable, &p2->pkvm_abstract_pgtable));
-	node = normalise(node);
-	GHOST_LOG_CONTEXT_EXIT();
-	return node;
-}
-
-struct ghost_diff *ghost_diff_host(struct ghost_host *h1, struct ghost_host *h2)
-{
-	GHOST_LOG_CONTEXT_ENTER();
-	struct ghost_diff *node = container();
-	ghost_diff_field(node, "present", diff_pair(TBOOL(h1->present), TBOOL(h2->present)));
-	if (h1->present && h2->present) {
-		ghost_diff_field(node, "pfns", ghost_diff_pfns(&h1->host_pgtable_pages, &h2->host_pgtable_pages));
-		ghost_diff_field(node, "annot", ghost_diff_mappings(&h1->host_abstract_pgtable_annot, &h2->host_abstract_pgtable_annot));
-		ghost_diff_field(node, "shared", ghost_diff_mappings(&h1->host_abstract_pgtable_shared, &h2->host_abstract_pgtable_shared));
-	}
-	node = normalise(node);
-	GHOST_LOG_CONTEXT_EXIT();
-	return node;
-}
-
-struct ghost_diff *ghost_diff_registers(struct ghost_register_state *r1, struct ghost_register_state *r2)
-{
-	GHOST_LOG_CONTEXT_ENTER();
-	struct ghost_diff *node = container();
-	ghost_diff_field(node, "present", diff_pair(TBOOL(r1->present), TBOOL(r2->present)));
-	if (r1->present && r2->present) {
-		int i;
-		struct ghost_diff *gprs = container();
-		struct ghost_diff *el1_sysregs = container();
-		struct ghost_diff *el2_sysregs = container();
-
-		u64 ghost_el2_regs[] = (u64[])GHOST_EL2_REGS;
-		for (i=0; i<=30; i++) {
-			GHOST_LOG_CONTEXT_ENTER_INNER("loop gpr");
-			ghost_diff_gpr(gprs, i, diff_pair(TU64(r1->ctxt.regs.regs[i]), TU64(r2->ctxt.regs.regs[i])));
-			GHOST_LOG_CONTEXT_EXIT_INNER("loop gpr");
-		}
-		for (i=0; i<NR_SYS_REGS; i++) {
-			GHOST_LOG_CONTEXT_ENTER_INNER("loop sysreg");
-			const char *name = GHOST_VCPU_SYSREG_NAMES[i];
-			ghost_diff_field(el1_sysregs, (char *)name, diff_pair(TU64(r1->ctxt.sys_regs[i]), TU64(r2->ctxt.sys_regs[i])));
-			GHOST_LOG_CONTEXT_EXIT_INNER("loop sysreg");
-		}
-		for (i=0; i<sizeof(ghost_el2_regs)/sizeof(u64); i++) {
-			GHOST_LOG_CONTEXT_ENTER_INNER("loop el2_regs");
-			u64 r = ghost_el2_regs[i];
-			const char *name = GHOST_EL2_REG_NAMES[r];
-			ghost_diff_field(el2_sysregs, (char *)name, diff_pair(TU64(r1->el2_sysregs[r]), TU64(r2->el2_sysregs[r])));
-			GHOST_LOG_CONTEXT_EXIT_INNER("loop el2_regs");
-		}
-		ghost_diff_field(node, "gprs", normalise(gprs));
-		ghost_diff_field(node, "el1_sysregs", normalise(el1_sysregs));
-		ghost_diff_field(node, "el2_sysregs", normalise(el2_sysregs));
-	}
-	node = normalise(node);
-	GHOST_LOG_CONTEXT_EXIT();
-	return node;
-}
-
-struct ghost_diff *ghost_diff_vcpu(struct ghost_vcpu *vcpu1, struct ghost_vcpu *vcpu2)
-{
-	GHOST_LOG_CONTEXT_ENTER();
-	struct ghost_diff *node = container();
-	ghost_diff_field(node, "vcpu_handle", diff_pair(TU64(vcpu1->vcpu_handle), TU64(vcpu2->vcpu_handle)));
-	ghost_diff_field(node, "loaded", diff_pair(TBOOL(vcpu1->loaded), TBOOL(vcpu2->loaded)));
-	ghost_diff_field(node, "initialised", diff_pair(TBOOL(vcpu1->initialised), TBOOL(vcpu2->initialised)));
-	if (vcpu1->initialised && vcpu2->initialised)
-		ghost_diff_field(node, "regs", ghost_diff_registers(&vcpu1->regs, &vcpu2->regs));
-	node = normalise(node);
-	GHOST_LOG_CONTEXT_EXIT();
-	return node;
-}
-
-struct ghost_diff *ghost_diff_vm(struct ghost_vm *vm1, struct ghost_vm *vm2)
-{
-	GHOST_LOG_CONTEXT_ENTER();
-	struct ghost_diff *node = container();
-	// in theory: handle should be the same...
-	ghost_diff_field(node, "handle", diff_pair(TU64((u64)vm1->pkvm_handle), TU64((u64)vm2->pkvm_handle)));
-	if (vm1->pkvm_handle == vm2->pkvm_handle) {
-		ghost_diff_field(node, "nr_vcpus", diff_pair(TU64(vm1->nr_vcpus), TU64(vm2->nr_vcpus)));
-		ghost_diff_field(node, "nr_initialised_vcpus", diff_pair(TU64(vm1->nr_initialised_vcpus), TU64(vm2->nr_initialised_vcpus)));
-		ghost_diff_field(node, "vm_abstract_pgtable", ghost_diff_pgtable(&vm1->vm_abstract_pgtable, &vm2->vm_abstract_pgtable));
-
-		for (u64 i = 0; i < KVM_MAX_VCPUS; i++) {
-			struct ghost_vcpu *vcpu1 = vm1->vcpus[i];
-			struct ghost_vcpu *vcpu2 = vm2->vcpus[i];
-
-			if (vcpu1 && vcpu2) {
-				ghost_diff_index(node, i, ghost_diff_vcpu(vcpu1, vcpu2));
-			} else if (!vcpu1 && !vcpu2) {
-				continue;
-			} else if (vcpu1) {
-				ghost_diff_index(node, i, diff_pm(false, TU64(i)));
-			} else {
-				ghost_diff_index(node, i, diff_pm(true, TU64(i)));
-			}
-		}
-	}
-
-	node = normalise(node);
-	GHOST_LOG_CONTEXT_EXIT();
-	return node;
-}
-
-struct ghost_diff *ghost_diff_vms(struct ghost_vms *vms1, struct ghost_vms *vms2)
-{
-	GHOST_LOG_CONTEXT_ENTER();
-	struct ghost_diff *node = container();
-	ghost_diff_field(node, "present", diff_pair(TBOOL(vms1->present), TBOOL(vms2->present)));
-	if (!vms1->present || !vms2->present)
-		goto cleanup;
-
-	// find those that were removed from vms2
-	for (int i = 0; i < KVM_MAX_PVMS; i++) {
-		struct ghost_vm_slot *slot = &vms1->table[i];
-		if (slot->exists) {
-			pkvm_handle_t handle = slot->handle;
-			struct ghost_vm *vm2 = ghost_vms_get(vms2, handle);
-			if (! vm2) {
-				ghost_diff_index(node, (u64)handle, diff_pm(false, TU64((u64)handle)));
-			}
-		}
-	}
-
-	// now find those added or changed
-	for (int i = 0; i < KVM_MAX_PVMS; i++) {
-		struct ghost_vm_slot *slot = &vms2->table[i];
-		if (slot->exists) {
-			pkvm_handle_t handle = slot->handle;
-			struct ghost_vm *vm2 = slot->vm;
-			struct ghost_vm *vm1 = ghost_vms_get(vms1, handle);
-			if (! vm1) {
-				ghost_diff_index(node, (u64)handle, diff_pm(true, TU64((u64)handle)));
-			} else {
-				ghost_diff_index(node, (u64)handle, ghost_diff_vm(vm1, vm2));
-			}
-		}
-	}
-	ghost_diff_field(node, "present", diff_pair(TBOOL(vms1->present), TBOOL(vms2->present)));
-
-cleanup:
-	node = normalise(node);
-	GHOST_LOG_CONTEXT_EXIT();
-	return node;
-}
-
-
-struct ghost_diff *ghost_diff_globals(struct ghost_constant_globals *g1, struct ghost_constant_globals *g2)
-{
-	GHOST_LOG_CONTEXT_ENTER();
-	struct ghost_diff *node = container();
-	ghost_diff_field(node, "hyp_nr_cpus", diff_pair(TU64(g1->hyp_nr_cpus), TU64(g2->hyp_nr_cpus)));
-	ghost_diff_field(node, "hyp_physvirt_offset", diff_pair(TU64(g1->hyp_physvirt_offset), TU64(g2->hyp_physvirt_offset)));
-	ghost_diff_field(node, "tag_lsb", diff_pair(TU64(g1->tag_lsb), TU64(g2->tag_lsb)));
-	ghost_diff_field(node, "tag_val", diff_pair(TU64(g1->tag_val), TU64(g2->tag_val)));
-	node = normalise(node);
-	GHOST_LOG_CONTEXT_EXIT();
-	return node;
-}
-
-struct ghost_diff *ghost_diff_loaded_vcpu(struct ghost_loaded_vcpu *vcpu1, struct ghost_loaded_vcpu *vcpu2)
-{
-	GHOST_LOG_CONTEXT_ENTER();
-	struct ghost_diff *node = container();
-	ghost_diff_field(node, "present", diff_pair(TBOOL(vcpu1->present), TBOOL(vcpu2->present)));
-	if (vcpu1->present && vcpu2->present) {
-		ghost_diff_field(node, "loaded", diff_pair(TBOOL(vcpu1->loaded), TBOOL(vcpu2->loaded)));
-		if (vcpu1->loaded && vcpu2->loaded) {
-			ghost_diff_field(node, "vm_handle", diff_pair(TU64(vcpu1->vm_handle), TU64(vcpu2->vm_handle)));
-			ghost_diff_field(node, "vcpu_index", diff_pair(TU64(vcpu1->vcpu_index), TU64(vcpu2->vcpu_index)));
-		}
-	}
-	node = normalise(node);
-	GHOST_LOG_CONTEXT_EXIT();
-	return node;
-}
-
-struct ghost_diff *ghost_diff_running_state(struct ghost_running_state *r1, struct ghost_running_state *r2)
-{
-	GHOST_LOG_CONTEXT_ENTER();
-	struct ghost_diff *node = container();
-	ghost_diff_field(node, "guest_running", diff_pair(TBOOL(r1->guest_running), TU64(r2->guest_running)));
-	if (r1->guest_running && r2->guest_running) {
-		ghost_diff_field(node, "vm_handle", diff_pair(TU64(r1->vm_handle), TU64(r2->vm_handle)));
-		ghost_diff_field(node, "vcpu_index", diff_pair(TU64(r1->vcpu_index), TU64(r2->vcpu_index)));
-	}
-	node = normalise(node);
-	GHOST_LOG_CONTEXT_EXIT();
-	return node;
-}
-
-struct ghost_diff *ghost_diff_state(struct ghost_state *s1, struct ghost_state *s2)
-{
-	struct ghost_diff *node = container();
-	ghost_diff_field(node, "pkvm", ghost_diff_pkvm(&s1->pkvm, &s2->pkvm));
-	ghost_diff_field(node, "host", ghost_diff_host(&s1->host, &s2->host));
-	ghost_diff_field(node, "vms", ghost_diff_vms(&s1->vms, &s2->vms));
-	ghost_diff_field(node, "regs", ghost_diff_registers(this_cpu_ghost_register_state(s1), this_cpu_ghost_register_state(s2)));
-	ghost_diff_field(node, "globals", ghost_diff_globals(&s1->globals, &s2->globals));
-	ghost_diff_field(node, "loaded_vcpu", ghost_diff_loaded_vcpu(this_cpu_ghost_loaded_vcpu(s1), this_cpu_ghost_loaded_vcpu(s2)));
-	ghost_diff_field(node, "running_state", ghost_diff_running_state(this_cpu_ghost_run_state(s1), this_cpu_ghost_run_state(s2)));
-	return normalise(node);
-}
-
-/************************************/
-// Simplified model diffing
-
-#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-
-static void one_way_diff_blob_slots(struct ghost_diff *container, struct ghost_memory_blob *b1, struct ghost_memory_blob *b2, bool add)
-{
-	for (u64 i = 0; i < SLOTS_PER_PAGE; i++) {
-		struct sm_location *loc1 = &b1->slots[i];
-		struct sm_location *loc2 = &b2->slots[i];
-		ghost_diff_attach(container, diff_pair(TSMLOC(loc1), TSMLOC(loc2)));
-	}
-}
-
-static void one_way_add_all_blob(struct ghost_diff *container, struct ghost_memory_blob *b, bool add)
-{
-	for (u64 i = 0; i < SLOTS_PER_PAGE; i++) {
-		struct sm_location *loc = &b->slots[i];
-		if (loc->is_pte) {
-			ghost_diff_attach(container, diff_pm(add, TSMLOC(loc)));
-		}
-	}
-}
-
-static void one_way_diff_blobs(struct ghost_diff *container, struct ghost_simplified_memory *m1, struct ghost_simplified_memory *m2, bool add, bool skip_eq)
-{
-	bool found;
-	for (u64 bi = 0; bi < m1->nr_allocated_blobs; bi++) {
-		struct ghost_memory_blob *b1 = blob_of(m1, bi);
-		struct ghost_memory_blob *b2 = find_blob(m2, b1->phys);
-
-		if (b2) {
-			found = true;
-
-			// only in one direction should we try diff the blobs themselves
-			if (!skip_eq) {
-				one_way_diff_blob_slots(container, b1, b2, add);
-			}
-		} else {
-			one_way_add_all_blob(container, b1, add);
-		}
-	}
-}
-
-struct ghost_diff *ghost_diff_sm_mem(struct ghost_simplified_memory *m1, struct ghost_simplified_memory *m2)
-{
-	struct ghost_diff *node = container();
-
-	// blobs are unordered
-	one_way_diff_blobs(node, m1, m2, false, false);
-	one_way_diff_blobs(node, m2, m1, true, true);
-
-	return normalise(node);
-}
-
-static void one_way_diff_roots(struct ghost_diff *container, u64 len, u64 *lhs, u64 *rhs, bool add)
-{
-	bool found;
-	for (u64 i = 0; i < len; i++) {
-		u64 r = lhs[i];
-		found = false;
-		for (u64 j = 0; j < len; j++) {
-			if (rhs[j] == r)
-				found = true;
-		}
-
-		// something was removed
-		if (!found)
-			ghost_diff_attach(container, diff_pm(add, TU64(r)));
-	}
-}
-
-struct ghost_diff *ghost_diff_sm_roots(u64 len, u64 *roots1, u64 *roots2)
-{
-	struct ghost_diff *node = container();
-
-	// roots are unordered
-
-	one_way_diff_roots(node, len, roots1, roots2, false);
-	one_way_diff_roots(node, len, roots2, roots1, true);
-
-	return normalise(node);
-}
-
-struct ghost_diff *ghost_diff_sm_state(struct ghost_simplified_model_state *s1, struct ghost_simplified_model_state *s2)
-{
-	struct ghost_diff *node = container();
-	ghost_diff_field(node, "base", diff_pair(TU64(s1->base_addr), TU64(s2->base_addr)));
-	ghost_diff_field(node, "size", diff_pair(TU64(s1->size), TU64(s2->size)));
-
-	ghost_diff_field(node, "s1_roots", ghost_diff_sm_roots(s1->nr_s1_roots, s1->s1_roots, s2->s1_roots));
-	ghost_diff_field(node, "s2_roots", ghost_diff_sm_roots(s1->nr_s2_roots, s1->s2_roots, s2->s2_roots));
-
-	ghost_diff_field(node, "mem", ghost_diff_sm_mem(&s1->memory, &s2->memory));
-	return normalise(node);
-}
-
-#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
-
-/************************************/
-// Printing
 
 static void __put_val(struct diff_val val, u64 indent)
 {
@@ -884,26 +250,8 @@ static void __hyp_dump_string_diff(struct diff_val lhs, struct diff_val rhs)
 
 static void __ghost_print_diff(struct ghost_diff *diff, u64 indent)
 {
-	bool wrote_prefix = false;
-
-	if (! (diff->key.kind == Tstr && diff->key.s == NULL)) {
-		ghost_printf("%I", indent);
-		__put_val(diff->key, indent);
-		ghost_printf(": ");
-		wrote_prefix = true;
-	}
-
 	switch (diff->kind) {
-	case GHOST_DIFF_CONTAINER:
-		if (wrote_prefix)
-			ghost_printf("\n");
-
-		for (int i = 0; i < diff->container.nr_children; i++) {
-			__ghost_print_diff(diff->container.children[i], indent + 2);
-			if (i < diff->container.nr_children - 1)
-				ghost_printf("\n");
-		};
-
+	case GHOST_DIFF_NONE:
 		break;
 	case GHOST_DIFF_PM:
 		if (diff->pm.add)
@@ -921,41 +269,531 @@ static void __ghost_print_diff(struct ghost_diff *diff, u64 indent)
 	}
 }
 
-void ghost_consume_diff(struct ghost_diff *diff)
+/**
+ * Compare two Tval and if not equal, return a diff.
+ */
+static struct ghost_diff diff_pair(struct diff_val lhs, struct diff_val rhs)
 {
-	ghost_print_enter();
+	if (val_equal(lhs, rhs))
+		return DIFF_NONE;
 
-	/* diff might have failed to allocate,
-	 * TODO: but can't tell difference between failed-to-allocate diff
-	 *       and no diff because identical...
-	 */
-	if (!diff) {
-		ghost_printf("<identical>");
-	} else {
-		ghost_printf("\n");
-		__ghost_print_diff(diff, 0);
-		free_diff(diff);
+	struct ghost_diff n = {
+		.kind = GHOST_DIFF_PAIR,
+		.pair = (struct diff_pair_data){
+			.lhs = lhs,
+			.rhs = rhs,
+		},
+	};
+
+	return n;
+}
+
+static struct ghost_diff diff_pm(bool add, struct diff_val val)
+{
+	struct ghost_diff n = {
+		.kind = GHOST_DIFF_PM,
+		.pm = (struct diff_pm_data){
+			.add = add,
+			.val = val,
+		},
+	};
+	return n;
+}
+
+static void __attach(struct diff_container *node, struct diff_val key, struct ghost_diff diff)
+{
+	switch (diff.kind) {
+	case GHOST_DIFF_NONE:
+		break;
+	default:
+		node->nr_subfield_diffs++;
+
+		// print out the part of the path we've not printed before.
+		for (int i = node->clean_prefix; i < node->depth; i++) {
+			ghost_printf("\n%I%s:", i*4, node->path[i]);
+		};
+		if (node->clean_prefix != node->depth && node->nr_subfield_diffs >= MAX_PRINT_DIFF_PER_SUBFIELDS)
+			ghost_printf(GHOST_WHITE_ON_YELLOW "<skip diff>" GHOST_NORMAL "\n");
+
+		node->clean_prefix = node->depth;
+		node->saw_diff = true;
+
+		if (node->nr_subfield_diffs < MAX_PRINT_DIFF_PER_SUBFIELDS) {
+			ghost_printf("\n");
+			__ghost_print_diff(&diff, 0);
+		} else if (node->nr_subfield_diffs == MAX_PRINT_DIFF_PER_SUBFIELDS) {
+			// only once, not too noisy...
+			ghost_printf("\n");
+			ghost_printf(GHOST_WHITE_ON_YELLOW "<skipping diffs>" GHOST_NORMAL "\n");
+		}
 	}
-	ghost_print_exit();
+}
+
+static void ghost_diff_enter_subfield(struct diff_container *container, const char *name)
+{
+	container->path[container->depth++] = name;
+}
+
+static void ghost_diff_pop_subfield(struct diff_container *container)
+{
+	container->depth--;
+
+	if (container->depth < container->clean_prefix)
+		container->clean_prefix = container->depth;
+
+	container->nr_subfield_diffs = 0;
+}
+
+static void ghost_diff_field(struct diff_container *container, char *key, struct ghost_diff child)
+{
+	__attach(container, TSTR(key), child);
+}
+
+static void ghost_diff_index(struct diff_container *container, u64 key, struct ghost_diff child)
+{
+	__attach(container, TU64(key), child);
+}
+
+static void ghost_diff_attach(struct diff_container *container, struct ghost_diff child)
+{
+	__attach(container, TSTR(NULL), child);
+}
+
+static void ghost_diff_gpr(struct diff_container *container, u64 reg, struct ghost_diff child)
+{
+	__attach(container, TGPREG(reg), child);
+}
+
+/****************/
+// Differ!
+
+static void ghost_diff_registers(struct diff_container *node, struct ghost_register_state *r1, struct ghost_register_state *r2);
+
+static void ghost_diff_pfns_array(struct diff_container *node, struct pfn_set *s1, struct pfn_set *s2)
+{
+	GHOST_LOG_CONTEXT_ENTER();
+	ghost_diff_enter_subfield(node, "external_pfns");
+	ghost_diff_field(node, "len", diff_pair(TU64(s1->len), TU64(s2->len)));
+
+	for (int i = 0; i < s2->len; i++) {
+		u64 pfn = s2->external_pfns[i];
+
+		if (! ghost_pfn_set_contains(s1, pfn))
+			ghost_diff_field(node, "pfn", diff_pm(true, TU64(pfn)));
+	}
+
+	for (int i = 0; i < s1->len; i++) {
+		u64 pfn = s1->external_pfns[i];
+
+		if (! ghost_pfn_set_contains(s2, pfn))
+			ghost_diff_field(node, "pfn", diff_pm(false, TU64(pfn)));
+	}
+
+	ghost_diff_pop_subfield(node);
+	GHOST_LOG_CONTEXT_EXIT();
+}
+
+static void ghost_diff_pfns(struct diff_container *node, struct pfn_set *s1, struct pfn_set *s2) {
+	GHOST_LOG_CONTEXT_ENTER();
+	ghost_diff_enter_subfield(node, "pfns");
+	ghost_diff_field(node, "pool_range_start", diff_pair(TU64(s1->pool_range_start), TU64(s2->pool_range_start)));
+	ghost_diff_field(node, "pool_range_end", diff_pair(TU64(s1->pool_range_end), TU64(s2->pool_range_end)));
+	ghost_diff_pfns_array(node, s1, s2);
+	ghost_diff_pop_subfield(node);
+	GHOST_LOG_CONTEXT_EXIT();
+}
+
+static void ghost_diff_mappings(struct diff_container *node, const char *name, mapping *mp1, mapping *mp2)
+{
+	GHOST_LOG_CONTEXT_ENTER();
+	struct glist_head head1 = *(struct glist_head*)mp1;
+	struct glist_head head2 = *(struct glist_head*)mp2;
+	struct glist_node *pos1, *pos2;
+	struct maplet *m1, *m2;
+
+	ghost_diff_enter_subfield(node, name);
+
+	ghost_assert_maplets_locked();
+
+	if (glist_empty(&head1) && glist_empty(&head2))
+		goto cleanup_exit;
+
+	pos1 = head1.first;
+	pos2 = head2.first;
+	while (pos1 != NULL || pos2 != NULL) {
+		if (pos1 != NULL)
+			m1 = glist_entry(pos1, struct maplet, list);
+
+		if (pos2 != NULL)
+			m2 = glist_entry(pos2, struct maplet, list);
+
+		if (pos1 == NULL) {
+			ghost_diff_attach(node, diff_pm(true, TMAPLET(m2)));
+			pos2 = pos2->next;
+	 	} else if (pos2 == NULL) {
+			ghost_diff_attach(node, diff_pm(false, TMAPLET(m1)));
+			pos1 = pos1->next;
+		} else if ( !(maplet_eq(m1, m2)) ) {
+			if (m1->ia_range_start < m2->ia_range_start) {
+				ghost_diff_attach(node, diff_pm(false, TMAPLET(m1)));
+				pos1=pos1->next;
+			} else if (m1->ia_range_start > m2->ia_range_start) {
+				ghost_diff_attach(node, diff_pm(true, TMAPLET(m2)));
+				pos2=pos2->next;
+			} else {
+				ghost_diff_attach(node, diff_pair(TMAPLET(m1), TMAPLET(m2)));
+				pos1 = pos1->next;
+				pos2 = pos2->next;
+			}
+		} else {
+			pos1 = pos1->next;
+			pos2 = pos2->next;
+		}
+
+		if (pos1 == NULL && pos2 == NULL)
+			break;
+	}
+cleanup_exit:
+	ghost_diff_pop_subfield(node);
+	GHOST_LOG_CONTEXT_EXIT();
 }
 
 
-void ghost_diff_and_print_pgtable(abstract_pgtable *ap1, abstract_pgtable *ap2)
+
+static void ghost_diff_pgtable(struct diff_container *node, const char *name, abstract_pgtable *ap1, abstract_pgtable *ap2)
 {
-	struct ghost_diff *diff = ghost_diff_pgtable(ap1, ap2);
-	ghost_consume_diff(diff);
+	GHOST_LOG_CONTEXT_ENTER();
+	ghost_diff_enter_subfield(node, name);
+
+	ghost_diff_pfns(node, &ap1->table_pfns, &ap2->table_pfns);
+	ghost_diff_mappings(node, "mapping", &ap1->mapping, &ap2->mapping);
+
+	ghost_diff_pop_subfield(node);
+	GHOST_LOG_CONTEXT_EXIT();
+}
+
+static void ghost_diff_pkvm(struct diff_container *node, struct ghost_pkvm *p1, struct ghost_pkvm *p2)
+{
+	GHOST_LOG_CONTEXT_ENTER();
+	ghost_diff_enter_subfield(node, "pkvm");
+	ghost_diff_field(node, "present", diff_pair(TBOOL(p1->present), TBOOL(p2->present)));
+	if (p1->present && p2->present)
+		ghost_diff_pgtable(node, "pgtable", &p1->pkvm_abstract_pgtable, &p2->pkvm_abstract_pgtable);
+	ghost_diff_pop_subfield(node);
+	GHOST_LOG_CONTEXT_EXIT();
+}
+
+static void ghost_diff_host(struct diff_container *node, struct ghost_host *h1, struct ghost_host *h2)
+{
+	GHOST_LOG_CONTEXT_ENTER();
+	ghost_diff_enter_subfield(node, "host");
+	ghost_diff_field(node, "present", diff_pair(TBOOL(h1->present), TBOOL(h2->present)));
+	if (h1->present && h2->present) {
+		ghost_diff_pfns(node, &h1->host_pgtable_pages, &h2->host_pgtable_pages);
+		ghost_diff_mappings(node, "annot", &h1->host_abstract_pgtable_annot, &h2->host_abstract_pgtable_annot);
+		ghost_diff_mappings(node, "shared", &h1->host_abstract_pgtable_shared, &h2->host_abstract_pgtable_shared);
+	}
+	ghost_diff_pop_subfield(node);
+	GHOST_LOG_CONTEXT_EXIT();
+}
+
+static void ghost_diff_registers(struct diff_container *node, struct ghost_register_state *r1, struct ghost_register_state *r2)
+{
+	GHOST_LOG_CONTEXT_ENTER();
+	ghost_diff_enter_subfield(node, "regs");
+	ghost_diff_field(node, "present", diff_pair(TBOOL(r1->present), TBOOL(r2->present)));
+	if (r1->present && r2->present) {
+		int i;
+
+		u64 ghost_el2_regs[] = (u64[])GHOST_EL2_REGS;
+		for (i=0; i<=30; i++) {
+			GHOST_LOG_CONTEXT_ENTER_INNER("loop gpr");
+			ghost_diff_gpr(node, i, diff_pair(TU64(r1->ctxt.regs.regs[i]), TU64(r2->ctxt.regs.regs[i])));
+			GHOST_LOG_CONTEXT_EXIT_INNER("loop gpr");
+		}
+		for (i=0; i<NR_SYS_REGS; i++) {
+			GHOST_LOG_CONTEXT_ENTER_INNER("loop sysreg");
+			const char *name = GHOST_VCPU_SYSREG_NAMES[i];
+			ghost_diff_field(node, (char *)name, diff_pair(TU64(r1->ctxt.sys_regs[i]), TU64(r2->ctxt.sys_regs[i])));
+			GHOST_LOG_CONTEXT_EXIT_INNER("loop sysreg");
+		}
+		for (i=0; i<sizeof(ghost_el2_regs)/sizeof(u64); i++) {
+			GHOST_LOG_CONTEXT_ENTER_INNER("loop el2_regs");
+			u64 r = ghost_el2_regs[i];
+			const char *name = GHOST_EL2_REG_NAMES[r];
+			ghost_diff_field(node, (char *)name, diff_pair(TU64(r1->el2_sysregs[r]), TU64(r2->el2_sysregs[r])));
+			GHOST_LOG_CONTEXT_EXIT_INNER("loop el2_regs");
+		}
+	}
+	ghost_diff_pop_subfield(node);
+	GHOST_LOG_CONTEXT_EXIT();
+}
+
+static void ghost_diff_vcpu(struct diff_container *node, struct ghost_vcpu *vcpu1, struct ghost_vcpu *vcpu2)
+{
+	GHOST_LOG_CONTEXT_ENTER();
+	ghost_diff_enter_subfield(node, "vcpu");
+	ghost_diff_field(node, "vcpu_handle", diff_pair(TU64(vcpu1->vcpu_handle), TU64(vcpu2->vcpu_handle)));
+	ghost_diff_field(node, "loaded", diff_pair(TBOOL(vcpu1->loaded), TBOOL(vcpu2->loaded)));
+	ghost_diff_field(node, "initialised", diff_pair(TBOOL(vcpu1->initialised), TBOOL(vcpu2->initialised)));
+	if (vcpu1->initialised && vcpu2->initialised)
+		ghost_diff_registers(node, &vcpu1->regs, &vcpu2->regs);
+	ghost_diff_pop_subfield(node);
+	GHOST_LOG_CONTEXT_EXIT();
+}
+
+static void ghost_diff_vm(struct diff_container *node, pkvm_handle_t handle, struct ghost_vm *vm1, struct ghost_vm *vm2)
+{
+	GHOST_LOG_CONTEXT_ENTER();
+	ghost_diff_enter_subfield(node, "vm");
+	// in theory: handle should be the same...
+	ghost_diff_field(node, "handle", diff_pair(TU64((u64)vm1->pkvm_handle), TU64((u64)vm2->pkvm_handle)));
+	if (vm1->pkvm_handle == vm2->pkvm_handle) {
+		ghost_diff_field(node, "nr_vcpus", diff_pair(TU64(vm1->nr_vcpus), TU64(vm2->nr_vcpus)));
+		ghost_diff_field(node, "nr_initialised_vcpus", diff_pair(TU64(vm1->nr_initialised_vcpus), TU64(vm2->nr_initialised_vcpus)));
+		ghost_diff_pgtable(node, "vm_abstract_pgtable", &vm1->vm_abstract_pgtable, &vm2->vm_abstract_pgtable);
+
+		for (u64 i = 0; i < KVM_MAX_VCPUS; i++) {
+			struct ghost_vcpu *vcpu1 = vm1->vcpus[i];
+			struct ghost_vcpu *vcpu2 = vm2->vcpus[i];
+
+			if (vcpu1 && vcpu2) {
+				ghost_diff_vcpu(node, vcpu1, vcpu2);
+			} else if (!vcpu1 && !vcpu2) {
+				continue;
+			} else if (vcpu1) {
+				ghost_diff_index(node, i, diff_pm(false, TU64(i)));
+			} else {
+				ghost_diff_index(node, i, diff_pm(true, TU64(i)));
+			}
+		}
+	}
+	ghost_diff_pop_subfield(node);
+	GHOST_LOG_CONTEXT_EXIT();
+}
+
+static void ghost_diff_vms(struct diff_container *node, struct ghost_vms *vms1, struct ghost_vms *vms2)
+{
+	GHOST_LOG_CONTEXT_ENTER();
+	ghost_diff_enter_subfield(node, "vms");
+	ghost_diff_field(node, "present", diff_pair(TBOOL(vms1->present), TBOOL(vms2->present)));
+	if (!vms1->present || !vms2->present)
+		goto cleanup;
+
+	// find those that were removed from vms2
+	for (int i = 0; i < KVM_MAX_PVMS; i++) {
+		struct ghost_vm_slot *slot = &vms1->table[i];
+		if (slot->exists) {
+			pkvm_handle_t handle = slot->handle;
+			struct ghost_vm *vm2 = ghost_vms_get(vms2, handle);
+			if (! vm2) {
+				ghost_diff_index(node, (u64)handle, diff_pm(false, TU64((u64)handle)));
+			}
+		}
+	}
+
+	// now find those added or changed
+	for (int i = 0; i < KVM_MAX_PVMS; i++) {
+		struct ghost_vm_slot *slot = &vms2->table[i];
+		if (slot->exists) {
+			pkvm_handle_t handle = slot->handle;
+			struct ghost_vm *vm2 = slot->vm;
+			struct ghost_vm *vm1 = ghost_vms_get(vms1, handle);
+			if (! vm1) {
+				ghost_diff_index(node, (u64)handle, diff_pm(true, TU64((u64)handle)));
+			} else {
+				ghost_diff_vm(node, handle, vm1, vm2);
+			}
+		}
+	}
+
+cleanup:
+	ghost_diff_pop_subfield(node);
+	GHOST_LOG_CONTEXT_EXIT();
+}
+
+
+static void ghost_diff_globals(struct diff_container *node, struct ghost_constant_globals *g1, struct ghost_constant_globals *g2)
+{
+	GHOST_LOG_CONTEXT_ENTER();
+	ghost_diff_enter_subfield(node, "globals");
+	ghost_diff_field(node, "hyp_nr_cpus", diff_pair(TU64(g1->hyp_nr_cpus), TU64(g2->hyp_nr_cpus)));
+	ghost_diff_field(node, "hyp_physvirt_offset", diff_pair(TU64(g1->hyp_physvirt_offset), TU64(g2->hyp_physvirt_offset)));
+	ghost_diff_field(node, "tag_lsb", diff_pair(TU64(g1->tag_lsb), TU64(g2->tag_lsb)));
+	ghost_diff_field(node, "tag_val", diff_pair(TU64(g1->tag_val), TU64(g2->tag_val)));
+	ghost_diff_pop_subfield(node);
+	GHOST_LOG_CONTEXT_EXIT();
+}
+
+static void ghost_diff_loaded_vcpu(struct diff_container *node, struct ghost_loaded_vcpu *vcpu1, struct ghost_loaded_vcpu *vcpu2)
+{
+	GHOST_LOG_CONTEXT_ENTER();
+	ghost_diff_enter_subfield(node, "globals");
+	ghost_diff_field(node, "present", diff_pair(TBOOL(vcpu1->present), TBOOL(vcpu2->present)));
+	if (vcpu1->present && vcpu2->present) {
+		ghost_diff_field(node, "loaded", diff_pair(TBOOL(vcpu1->loaded), TBOOL(vcpu2->loaded)));
+		if (vcpu1->loaded && vcpu2->loaded) {
+			ghost_diff_field(node, "vm_handle", diff_pair(TU64(vcpu1->vm_handle), TU64(vcpu2->vm_handle)));
+			ghost_diff_field(node, "vcpu_index", diff_pair(TU64(vcpu1->vcpu_index), TU64(vcpu2->vcpu_index)));
+		}
+	}
+	ghost_diff_pop_subfield(node);
+	GHOST_LOG_CONTEXT_EXIT();
+}
+
+static void ghost_diff_running_state(struct diff_container *node, struct ghost_running_state *r1, struct ghost_running_state *r2)
+{
+	GHOST_LOG_CONTEXT_ENTER();
+	ghost_diff_enter_subfield(node, "run_state");
+	ghost_diff_field(node, "guest_running", diff_pair(TBOOL(r1->guest_running), TU64(r2->guest_running)));
+	if (r1->guest_running && r2->guest_running) {
+		ghost_diff_field(node, "vm_handle", diff_pair(TU64(r1->vm_handle), TU64(r2->vm_handle)));
+		ghost_diff_field(node, "vcpu_index", diff_pair(TU64(r1->vcpu_index), TU64(r2->vcpu_index)));
+	}
+	ghost_diff_pop_subfield(node);
+	GHOST_LOG_CONTEXT_EXIT();
+}
+
+static void ghost_diff_state(struct diff_container *node, struct ghost_state *s1, struct ghost_state *s2)
+{
+	ghost_diff_pkvm(node, &s1->pkvm, &s2->pkvm);
+	ghost_diff_host(node, &s1->host, &s2->host);
+	ghost_diff_vms(node, &s1->vms, &s2->vms);
+	ghost_diff_registers(node, this_cpu_ghost_register_state(s1), this_cpu_ghost_register_state(s2));
+	ghost_diff_globals(node, &s1->globals, &s2->globals);
+	ghost_diff_loaded_vcpu(node, this_cpu_ghost_loaded_vcpu(s1), this_cpu_ghost_loaded_vcpu(s2));
+	ghost_diff_running_state(node, this_cpu_ghost_run_state(s1), this_cpu_ghost_run_state(s2));
+}
+
+/************************************/
+// Simplified model diffing
+
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+
+static void one_way_diff_blob_slots(struct diff_container *container, struct ghost_memory_blob *b1, struct ghost_memory_blob *b2, bool add)
+{
+	for (u64 i = 0; i < SLOTS_PER_PAGE; i++) {
+		struct sm_location *loc1 = &b1->slots[i];
+		struct sm_location *loc2 = &b2->slots[i];
+		ghost_diff_attach(container, diff_pair(TSMLOC(loc1), TSMLOC(loc2)));
+	}
+}
+
+static void one_way_add_all_blob(struct diff_container *container, struct ghost_memory_blob *b, bool add)
+{
+	for (u64 i = 0; i < SLOTS_PER_PAGE; i++) {
+		struct sm_location *loc = &b->slots[i];
+		if (loc->is_pte) {
+			ghost_diff_attach(container, diff_pm(add, TSMLOC(loc)));
+		}
+	}
+}
+
+static void one_way_diff_blobs(struct diff_container *container, struct ghost_simplified_memory *m1, struct ghost_simplified_memory *m2, bool add, bool skip_eq)
+{
+	bool found;
+	for (u64 bi = 0; bi < m1->nr_allocated_blobs; bi++) {
+		struct ghost_memory_blob *b1 = blob_of(m1, bi);
+		struct ghost_memory_blob *b2 = find_blob(m2, b1->phys);
+
+		if (b2) {
+			found = true;
+
+			// only in one direction should we try diff the blobs themselves
+			if (!skip_eq) {
+				one_way_diff_blob_slots(container, b1, b2, add);
+			}
+		} else {
+			one_way_add_all_blob(container, b1, add);
+		}
+	}
+}
+
+static void ghost_diff_sm_mem(struct diff_container *node, struct ghost_simplified_memory *m1, struct ghost_simplified_memory *m2)
+{
+	ghost_diff_enter_subfield(node, "mem");
+	one_way_diff_blobs(node, m1, m2, false, false);
+	one_way_diff_blobs(node, m2, m1, true, true);
+	ghost_diff_pop_subfield(node);
+}
+
+static void one_way_diff_roots(struct diff_container *container, u64 len, u64 *lhs, u64 *rhs, bool add)
+{
+	bool found;
+	for (u64 i = 0; i < len; i++) {
+		u64 r = lhs[i];
+		found = false;
+		for (u64 j = 0; j < len; j++) {
+			if (rhs[j] == r)
+				found = true;
+		}
+
+		// something was removed
+		if (!found)
+			ghost_diff_attach(container, diff_pm(add, TU64(r)));
+	}
+}
+
+static void ghost_diff_sm_roots(struct diff_container *node, const char *name, u64 len, u64 *roots1, u64 *roots2)
+{
+	ghost_diff_enter_subfield(node, name);
+	// roots are unordered
+	one_way_diff_roots(node, len, roots1, roots2, false);
+	one_way_diff_roots(node, len, roots2, roots1, true);
+	ghost_diff_pop_subfield(node);
+}
+
+static void ghost_diff_sm_state(struct diff_container *node, struct ghost_simplified_model_state *s1, struct ghost_simplified_model_state *s2)
+{
+	ghost_diff_field(node, "base", diff_pair(TU64(s1->base_addr), TU64(s2->base_addr)));
+	ghost_diff_field(node, "size", diff_pair(TU64(s1->size), TU64(s2->size)));
+
+	ghost_diff_sm_roots(node, "s1_roots", s1->nr_s1_roots, s1->s1_roots, s2->s1_roots);
+	ghost_diff_sm_roots(node, "s2_roots", s1->nr_s2_roots, s1->s2_roots, s2->s2_roots);
+
+	ghost_diff_sm_mem(node, &s1->memory, &s2->memory);
+}
+
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
+
+static struct diff_container container(void)
+{
+	struct diff_container n;
+	n.depth = 0;
+	n.clean_prefix = 0;
+	n.saw_diff = false;
+	n.nr_subfield_diffs = 0;
+	return n;
 }
 
 void ghost_diff_and_print_state(struct ghost_state *s1, struct ghost_state *s2)
 {
-	struct ghost_diff *diff = ghost_diff_state(s1, s2);
-	ghost_consume_diff(diff);
+	struct diff_container node = container();
+	ghost_print_enter();
+	ghost_diff_state(&node, s1, s2);
+	if (!node.saw_diff)
+		ghost_printf("<identical>");
+	ghost_print_exit();
+}
+
+void ghost_diff_and_print_pgtable(abstract_pgtable *ap1, abstract_pgtable *ap2)
+{
+	struct diff_container node = container();
+	ghost_print_enter();
+	ghost_diff_pgtable(&node, "pgtable", ap1, ap2);
+	if (!node.saw_diff)
+		ghost_printf("<identical>");
+	ghost_print_exit();
 }
 
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL_DIFF_ON_TRANS
 void ghost_diff_and_print_sm_state(struct ghost_simplified_model_state *s1, struct ghost_simplified_model_state *s2)
 {
-	struct ghost_diff *diff = ghost_diff_sm_state(s1, s2);
-	ghost_consume_diff(diff);
+	struct diff_container node = container();
+	ghost_print_enter();
+	ghost_diff_sm_state(&node, s1, s2);
+	if (!node.saw_diff)
+		ghost_printf("<identical>");
+	ghost_print_exit();
 }
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL_DIFF_ON_TRANS */
