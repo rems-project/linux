@@ -396,14 +396,6 @@ struct ghost_diff *ghost_diff_mappings(mapping *mp1, mapping *mp2)
 		return NULL;
 	}
 
-	if (glist_empty(&head1)) {
-		ghost_diff_attach(node, diff_pm(true, TMAPLET(glist_entry(head2.first, struct maplet, list))));
-	}
-
-	if (glist_empty(&head2)) {
-		ghost_diff_attach(node, diff_pm(false, TMAPLET(glist_entry(head1.first, struct maplet, list))));
-	}
-
 	pos1 = head1.first;
 	pos2 = head2.first;
 	while (pos1 != NULL || pos2 != NULL) {
