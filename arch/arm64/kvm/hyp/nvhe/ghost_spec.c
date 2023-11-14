@@ -701,11 +701,14 @@ void compute_new_abstract_state_handle___pkvm_init_vm(struct ghost_state *g1, st
 	ghost_assert(READ_ONCE(ghost_pkvm_init_finalized));
 
 	// if we've already allocated KVM_MAX_PVMS VMs, then fail with -ENOMEM
-	struct ghost_vm *vm1 = ghost_vms_alloc(&g1->vms, handle);
-	if (!vm1) {
+	if (g0->vms.nr_vms == KVM_MAX_PVMS) {
 		ret = -ENOMEM;
 		goto out;
 	}
+
+	g1->vms.present = true;
+	struct ghost_vm *vm1 = ghost_vms_alloc(&g1->vms, handle);
+	ghost_assert(vm1);
 
 	// the calls to map_donated_memory() may run out of
 	// memory when updating the pKVM page table
@@ -753,8 +756,6 @@ void compute_new_abstract_state_handle___pkvm_init_vm(struct ghost_state *g1, st
 	ghost_map_donated_memory_nocheck(g1, last_ran_host_ipa, last_ran_size);
 	ghost_map_donated_memory_nocheck(g1, pgd_host_ipa, pgd_size);
 
-	g1->vms.present = true;
-
 	// NOTE: we expect the VM's page table to be place at the beginning
 	// of the first page of the memory region donated by the host
 	// for that purpose
@@ -767,7 +768,7 @@ void compute_new_abstract_state_handle___pkvm_init_vm(struct ghost_state *g1, st
 	for (int i = 0; i < KVM_MAX_VCPUS; i++) {
 		vm1->vcpus[i] = NULL;
 	}
-	
+
 	// TODO:
 	// in theory this is unsafe, as another thread could've swooped in between the end of the hypercall
 	// and this check, and removed the VM.

@@ -197,6 +197,7 @@ struct ghost_vm_slot {
  * struct ghost_vms - Ghost VM table
  *
  * @present: whether this part of the ghost state is set
+ * @nr_vms: if present, the number of VMs in the table.
  * @table: if present, a dictionary of ```VM handle -> VM```, implemented as a table of slots.
  *
  * Code should not access .table directly, but through the abstract ghost_vms_* functions below.
@@ -205,6 +206,7 @@ struct ghost_vm_slot {
  */
 struct ghost_vms {
 	bool present;
+	u64 nr_vms;
 	struct ghost_vm_slot table[KVM_MAX_PVMS];
 };
 

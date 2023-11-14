@@ -149,6 +149,7 @@ struct ghost_vm *ghost_vms_alloc(struct ghost_vms *vms, pkvm_handle_t handle)
 		slot->vm = malloc_or_die(sizeof(struct ghost_vm));
 		slot->exists = true;
 		slot->handle = handle;
+		++vms->nr_vms;
 		return slot->vm;
 	}
 
@@ -180,6 +181,7 @@ void ghost_vms_free(struct ghost_vms *vms, pkvm_handle_t handle)
 	// can only free something that exists in the table
 	ghost_assert(slot);
 	ghost_vm_clear_slot(slot);
+	--vms->nr_vms;
 }
 
 bool ghost_vms_is_valid_handle(struct ghost_vms *vms, pkvm_handle_t handle)
@@ -633,6 +635,7 @@ void init_abstraction(struct ghost_state *g)
 	g->host.present = false;
 	this_cpu_ghost_register_state(g)->present = false;
 	g->vms.present = false;
+	g->vms.nr_vms = 0;
 	for (int cpu=0; cpu<NR_CPUS; cpu++) {
 		g->loaded_hyp_vcpu[cpu].present = false;
 	}
@@ -689,6 +692,7 @@ void clear_abstraction_vms(struct ghost_state *g)
 {
 	int i;
 	g->vms.present = false;
+	g->vms.nr_vms = 0;
 	for (i=0; i<KVM_MAX_PVMS; i++) {
 		ghost_vm_clear_slot(&g->vms.table[i]);
 	}
