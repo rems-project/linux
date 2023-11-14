@@ -281,46 +281,47 @@ extern int kvm_nvhe_sym(gp_print_sm_loc)(gp_stream_t *out, struct sm_location *l
 extern int kvm_nvhe_sym(gp_print_sm_state)(gp_stream_t *out, struct ghost_simplified_model_state *s);
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 
+static bool __gp_case(char **p, const char *name)
+{
+	if (__matches((*p)+1, name)) {
+		*p += strlen(name);
+		return true;
+	} else {
+		return false;
+	}
+}
+
+#define GP_CASE(name) \
+	__gp_case(p, "(" name ")")
+
 int put_ghost_obj(gp_stream_t *out, char **p, u64 arg0, u64 arg1)
 {
 	// %g(KIND)
 
-	if (__matches((*p)+1, "(maplet)")) {
-		*p += 8;
+	if (GP_CASE("maplet")) {
 		return gp_put_maplet(out, (struct maplet*) arg0);
-	} else if (__matches((*p)+1, "(maplet_target)")) {
-		*p += 15;
+	} else if (GP_CASE("maplet_target")) {
 		return gp_put_maplet_target(out, (struct maplet_target*)arg0);
-	} else if (__matches((*p)+1, "(mapping)")) {
-		*p += 9;
+	} else if (GP_CASE("mapping")) {
 		return gp_put_mapping(out, (mapping*)arg0, arg1);
-	} else if (__matches((*p)+1, "(ek)")) {
-		*p += 4;
+	} else if (GP_CASE("ek")) {
 		return gp_put_ek(out, (enum entry_kind)arg0);
-	} else if (__matches((*p)+1, "(entry)")) {
-		*p += 7;
+	} else if (GP_CASE("entry")) {
 		return gp_put_entry(out, arg0, (u8)arg1);
-	} else if (__matches((*p)+1, "(pfn_set)")) {
-		*p += 9;
+	} else if (GP_CASE("pfn_set")) {
 		return gp_print_pfn_set(out, (struct pfn_set*)arg0);
-	} else if (__matches((*p)+1, "(pgtable)")) {
-		*p += 9;
+	} else if (GP_CASE("pgtable")) {
 		return gp_put_abstract_pgtable(out, (abstract_pgtable *)arg0, arg1);
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-	} else if (__matches((*p)+1, "(sm_trans)")) {
-		*p += 10;
+	} else if (GP_CASE("sm_trans")) {
 		return kvm_nvhe_sym(gp_print_sm_trans)(out, (struct ghost_simplified_model_transition*)arg0);
-	} else if (__matches((*p)+1, "(sm_pte_state)")) {
-		*p += 14;
+	} else if (GP_CASE("sm_pte_state")) {
 		return kvm_nvhe_sym(gp_print_sm_pte_state)(out, (struct sm_pte_state*)arg0);
-	} else if (__matches((*p)+1, "(sm_loc)")) {
-		*p += 8;
+	} else if (GP_CASE("sm_loc")) {
 		return kvm_nvhe_sym(gp_print_sm_loc)(out, (struct sm_location*)arg0);
-	} else if (__matches((*p)+1, "(sm_state)")) {
-		*p += 10;
+	} else if (GP_CASE("sm_state")) {
 		return kvm_nvhe_sym(gp_print_sm_state)(out, (struct ghost_simplified_model_state*)arg0);
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
-
 	} else {
 		return -EINVAL;
 	}
