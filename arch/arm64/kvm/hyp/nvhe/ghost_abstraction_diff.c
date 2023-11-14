@@ -26,10 +26,11 @@
 
 DEFINE_HYP_SPINLOCK(ghost_diff_lock);
 
+#define GHOST_DIFF_MEMORY_NR_NODES 256
+
 struct ghost_diff_memory {
-	u64 len;
 	struct ghost_diff *free_list;
-	struct ghost_diff nodes[100];
+	struct ghost_diff nodes[GHOST_DIFF_MEMORY_NR_NODES];
 };
 
 /***********************/
@@ -37,26 +38,45 @@ struct ghost_diff_memory {
 
 struct ghost_diff_memory the_memory;
 
-struct ghost_diff *__alloc_diff(void)
+static void insert_into_freelist(struct ghost_diff *node)
 {
-	struct ghost_diff *node;
+	struct ghost_diff *old_head;
+	old_head = the_memory.free_list;
+
+	the_memory.free_list = node;
+
+	*(struct ghost_diff**)node = old_head;
+}
+
+static struct ghost_diff *pop_from_freelist(void)
+{
 	if (the_memory.free_list) {
+		struct ghost_diff *node;
 		node = the_memory.free_list;
 		the_memory.free_list = *(struct ghost_diff**)node;
+		memset(node, 0, sizeof(struct ghost_diff));
+		return node;
 	} else {
-		ghost_assert(the_memory.len < 100);
-		node = &the_memory.nodes[the_memory.len++];
+		// out-of-memory
+		return NULL;
 	}
-	memset(node, 0, sizeof(struct ghost_diff));
-	return node;
+}
+
+void ghost_init_diff_memory(void)
+{
+	for (int i = 0; i < GHOST_DIFF_MEMORY_NR_NODES; i++) {
+		insert_into_freelist(&the_memory.nodes[i]);
+	}
+}
+
+struct ghost_diff *__alloc_diff(void)
+{
+	return pop_from_freelist();
 }
 
 static void __free_node(struct ghost_diff *container)
 {
-	struct ghost_diff *free_list;
-	free_list = the_memory.free_list;
-	the_memory.free_list = container;
-	memcpy((void*)container, &free_list, sizeof(struct ghost_diff *));
+	insert_into_freelist(container);
 }
 
 struct ghost_diff *alloc_diff(void)
@@ -102,6 +122,9 @@ void free_diff(struct ghost_diff *node)
 
 struct ghost_diff *normalise(struct ghost_diff *node)
 {
+	if (!node)
+		return node;
+
 	if (node->kind != GHOST_DIFF_CONTAINER)
 		return node;
 
@@ -119,6 +142,9 @@ struct ghost_diff *normalise(struct ghost_diff *node)
 struct ghost_diff *container(void)
 {
 	struct ghost_diff *node = alloc_diff();
+	if (!node)
+		return node;
+
 	node->key = TSTR(NULL);
 	node->kind = GHOST_DIFF_CONTAINER;
 	node->container.nr_children = 0;
@@ -150,6 +176,9 @@ struct ghost_diff *diff_pair(struct diff_val lhs, struct diff_val rhs)
 		return NULL;
 
 	struct ghost_diff *node = alloc_diff();
+	if (!node)
+		return node;
+
 	node->key = TSTR(NULL);
 	node->kind = GHOST_DIFF_PAIR;
 	node->pair.lhs = lhs;
@@ -160,6 +189,9 @@ struct ghost_diff *diff_pair(struct diff_val lhs, struct diff_val rhs)
 struct ghost_diff *diff_pm(bool add, struct diff_val val)
 {
 	struct ghost_diff *node = alloc_diff();
+	if (!node)
+		return node;
+
 	node->key = TSTR(NULL);
 	node->kind = GHOST_DIFF_PM;
 	node->pm.add = add;
@@ -169,11 +201,23 @@ struct ghost_diff *diff_pm(bool add, struct diff_val val)
 
 static void __attach(struct ghost_diff *container, struct diff_val key, struct ghost_diff *child)
 {
+	/* can't attach to NULL */
+	if (!container) {
+		if (child) {
+			/* we took ownership of child on attaching
+			 * but if the container failed to allocate, this would be dropped
+			 * so clean it up now. */
+			free_diff(child);
+		}
+		return;
+	}
+
 	ghost_assert(container->kind == GHOST_DIFF_CONTAINER);
 	ghost_assert(container->container.nr_children < DIFF_MAX_CHILDREN);
 
 	if (child != NULL) {
 		child->key = key;
+		ghost_assert(container->container.nr_children < DIFF_MAX_CHILDREN);
 		container->container.children[container->container.nr_children++] = child;
 	}
 }

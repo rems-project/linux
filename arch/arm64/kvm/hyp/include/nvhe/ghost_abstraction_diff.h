@@ -83,6 +83,9 @@ struct ghost_diff {
 	};
 };
 
+/* Initialisation */
+void ghost_init_diff_memory(void);
+
 /* Creation */
 struct ghost_diff *container(void);
 struct ghost_diff *normalise(struct ghost_diff *node);

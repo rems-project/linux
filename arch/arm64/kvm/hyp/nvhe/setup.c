@@ -24,6 +24,7 @@
 #include <nvhe/ghost_mapping_reqs.h>
 #include <nvhe/ghost_misc.h>
 #include <nvhe/ghost_compute_abstraction.h>
+#include <nvhe/ghost_abstraction_diff.h>
 #include <nvhe/ghost_pgtable.h>
 #include <nvhe/ghost_control.h>
 
@@ -447,6 +448,7 @@ void __noreturn __pkvm_init_finalise(void)
 #ifdef CONFIG_NVHE_GHOST_SPEC
 	init_abstraction_common();
 	record_abstraction_common();
+	ghost_init_diff_memory();
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
 	GHOST_LOG(pkvm_pgtable.start_level, u32);
 	initialise_ghost_simplified_model(ghost__pkvm_init_phys, ghost__pkvm_init_size);
