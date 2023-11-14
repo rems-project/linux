@@ -450,7 +450,7 @@ void __noreturn __pkvm_init_finalise(void)
 	record_abstraction_common();
 #ifdef CONFIG_NVHE_GHOST_DIFF
 	ghost_init_diff_memory();
-#endif CONFIG_NVHE_GHOST_DIFF
+#endif /* CONFIG_NVHE_GHOST_DIFF */
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
 	GHOST_LOG(pkvm_pgtable.start_level, u32);
 	u64 sm_size = PAGE_ALIGN(2 * sizeof(struct ghost_simplified_model_state));
