@@ -100,6 +100,9 @@ menu "Hypercalls"
 
 config NVHE_GHOST_SPEC_CHECK_handle_host_mem_abort
 	bool "Check handle_host_mem_abort"
+config NVHE_GHOST_SPEC_NOISY_handle_host_mem_abort
+	depends on NVHE_GHOST_SPEC_NOISY
+	bool "Noisy handle_host_mem_abort"
 
 config NVHE_GHOST_SPEC_CHECK___pkvm_host_share_hyp
 	bool "Check __pkvm_host_share_hyp"

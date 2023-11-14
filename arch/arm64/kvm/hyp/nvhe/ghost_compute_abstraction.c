@@ -609,7 +609,8 @@ void check_abstraction_equals_all(struct ghost_state *gc, struct ghost_state *gr
 	GHOST_LOG_CONTEXT_ENTER();
 
 #ifdef CONFIG_NVHE_GHOST_DIFF
-	post_dump_diff(gc, gr_post, gr_pre);
+	if (__this_cpu_read(ghost_print_this_hypercall))
+		post_dump_diff(gc, gr_post, gr_pre);
 #endif /* CONFIG_NVHE_GHOST_DIFF */
 
 

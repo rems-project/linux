@@ -18,8 +18,6 @@
 #include <nvhe/ghost_call_data.h>
 #include <nvhe/ghost_control.h>
 
-#include <nvhe/ghost_printer.h>
-
 // top-level spec types
 
 
@@ -45,6 +43,13 @@ extern bool ghost_pkvm_init_finalized;
 extern u64 ghost_prot_finalized_count;
 extern bool ghost_prot_finalized_all;
 DECLARE_PER_CPU(bool, ghost_check_this_hypercall);
+
+/*
+ * The noisy printing is controlled separately,
+ * A call can be checked but silently,
+ * or printed noisly with diffs but not checked.
+ */
+DECLARE_PER_CPU(bool, ghost_print_this_hypercall);
 
 /**
  * ghost_exec_enabled() - Whether executable checking is currently enabled on this CPU.
