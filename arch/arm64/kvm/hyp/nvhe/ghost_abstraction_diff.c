@@ -542,7 +542,8 @@ struct ghost_diff *ghost_diff_vcpu(struct ghost_vcpu *vcpu1, struct ghost_vcpu *
 	ghost_diff_field(node, "vcpu_handle", diff_pair(TU64(vcpu1->vcpu_handle), TU64(vcpu2->vcpu_handle)));
 	ghost_diff_field(node, "loaded", diff_pair(TBOOL(vcpu1->loaded), TBOOL(vcpu2->loaded)));
 	ghost_diff_field(node, "initialised", diff_pair(TBOOL(vcpu1->initialised), TBOOL(vcpu2->initialised)));
-	ghost_diff_field(node, "regs", ghost_diff_registers(&vcpu1->regs, &vcpu2->regs));
+	if (vcpu1->initialised && vcpu2->initialised)
+		ghost_diff_field(node, "regs", ghost_diff_registers(&vcpu1->regs, &vcpu2->regs));
 	node = normalise(node);
 	GHOST_LOG_CONTEXT_EXIT();
 	return node;
@@ -561,7 +562,7 @@ struct ghost_diff *ghost_diff_vm(struct ghost_vm *vm1, struct ghost_vm *vm2)
 
 		for (u64 i = 0; i < KVM_MAX_VCPUS; i++) {
 			struct ghost_vcpu *vcpu1 = vm1->vcpus[i];
-			struct ghost_vcpu *vcpu2 = vm1->vcpus[i];
+			struct ghost_vcpu *vcpu2 = vm2->vcpus[i];
 
 			if (vcpu1 && vcpu2) {
 				ghost_diff_index(node, i, ghost_diff_vcpu(vcpu1, vcpu2));
