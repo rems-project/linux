@@ -912,6 +912,7 @@ void copy_abstraction_vm_partial_vm_locked(struct ghost_state *g_tgt, struct gho
 void copy_abstraction_vms(struct ghost_state *g_tgt, struct ghost_state *g_src)
 {
 	ghost_assert_maplets_locked();
+	ghost_assert_vms_locked();
 	ghost_assert(g_src->vms.present);
 
 	clear_abstraction_vms(g_tgt);
@@ -924,6 +925,7 @@ void copy_abstraction_vms(struct ghost_state *g_tgt, struct ghost_state *g_src)
 			copy_abstraction_vm_partial_vm_table_locked(g_tgt, g_src, src_slot->handle);
 		}
 	}
+	g_tgt->vms.nr_vms = g_src->vms.nr_vms;
 }
 
 void copy_abstraction_loaded_vcpus(struct ghost_state *g_tgt, struct ghost_state *g_src)
