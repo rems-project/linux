@@ -837,8 +837,8 @@ static void ghost_vm_clone_into_vm_partial_vm_table_locked(struct ghost_vm *dest
 	dest->vm_table_locked.nr_vcpus = src->vm_table_locked.nr_vcpus;
 	dest->vm_table_locked.nr_initialised_vcpus = src->vm_table_locked.nr_initialised_vcpus;
 	ghost_assert(src->vm_table_locked.nr_vcpus <= KVM_MAX_VCPUS);
-	for (int vcpu_idx=0; vcpu_idx<src->vm_table_locked.nr_vcpus; vcpu_idx++) {
-		if (src->vm_table_locked.vcpus[vcpu_idx]) {
+	for (int vcpu_idx=0; vcpu_idx<KVM_MAX_VCPUS; vcpu_idx++) {
+		if (vcpu_idx<src->vm_table_locked.nr_vcpus && src->vm_table_locked.vcpus[vcpu_idx]) {
 			dest->vm_table_locked.vcpus[vcpu_idx] = malloc_or_die(sizeof(struct ghost_vcpu));
 			*dest->vm_table_locked.vcpus[vcpu_idx] = *src->vm_table_locked.vcpus[vcpu_idx];
 		} else {
@@ -993,26 +993,23 @@ static void record_abstraction_partial_vm_notable(struct ghost_state *g, struct 
 		ghost_assert(vm);
 	}
 
-	if (!vm->vm_table_locked.present) {
-		/* Only entries in the vm_table are actually live */
-		++g->vms.nr_vms;
-	}
-
 	vm->vm_table_locked.present = true;
 	vm->vm_table_locked.nr_vcpus = hyp_vm->kvm.created_vcpus;
 	vm->vm_table_locked.nr_initialised_vcpus = hyp_vm->nr_vcpus;
 
 	/* the pKVM hyp_vm .vcpus field is only defined up to created_vcpus */
-	for (int vcpu_idx=0; vcpu_idx < hyp_vm->kvm.created_vcpus; vcpu_idx++) {
-		struct pkvm_hyp_vcpu *vcpu = hyp_vm->vcpus[vcpu_idx];
-		if (vcpu) {
-			vm->vm_table_locked.vcpus[vcpu_idx] = malloc_or_die(sizeof (struct ghost_vcpu));
-			vm->vm_table_locked.vcpus[vcpu_idx]->vcpu_handle = vcpu_idx;
-			vm->vm_table_locked.vcpus[vcpu_idx]->loaded = hyp_vm->vcpus[vcpu_idx]->loaded_hyp_vcpu ? true : false;
-			vm->vm_table_locked.vcpus[vcpu_idx]->initialised = vcpu_idx < hyp_vm->nr_vcpus;
-			// TODO: regs
-		} else {
-			vm->vm_table_locked.vcpus[vcpu_idx] = NULL;
+	for (int vcpu_idx=0; vcpu_idx < KVM_MAX_PVMS; vcpu_idx++) {
+		vm->vm_table_locked.vcpus[vcpu_idx] = NULL;
+		if (vcpu_idx < hyp_vm->kvm.created_vcpus) {
+			struct pkvm_hyp_vcpu *vcpu = hyp_vm->vcpus[vcpu_idx];
+			if (vcpu) {
+				struct ghost_vcpu *g_vcpu = malloc_or_die(sizeof (struct ghost_vcpu));
+				g_vcpu->vcpu_handle = vcpu_idx;
+				g_vcpu->loaded = vcpu->loaded_hyp_vcpu ? true : false;
+				g_vcpu->initialised = vcpu_idx < hyp_vm->nr_vcpus;
+				// TODO: regs
+				vm->vm_table_locked.vcpus[vcpu_idx] = g_vcpu;
+			}
 		}
 	}
 
@@ -1030,15 +1027,17 @@ void record_abstraction_vms(struct ghost_state *g)
 {
 	GHOST_LOG_CONTEXT_ENTER();
 	g->vms.present = true;
+	g->vms.nr_vms = 0;
 	for (int idx=0; idx<KVM_MAX_PVMS; idx++) {
 		struct pkvm_hyp_vm *hyp_vm = vm_table[idx];
-
 		/* If we only have the table lock, not the entire vm lock
 		 * then can't record the pgtable right now,
 		 * so only take a partial view of it.
 		 */
-		if (hyp_vm)
+		if (hyp_vm) {
 			record_abstraction_partial_vm_notable(g, hyp_vm);
+			g->vms.nr_vms++;
+		}
 	}
 	GHOST_LOG_CONTEXT_EXIT();
 }
