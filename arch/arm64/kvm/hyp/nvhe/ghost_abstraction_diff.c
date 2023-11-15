@@ -96,6 +96,8 @@ struct diff_val {
 #define TSMLOC(value) (struct diff_val){.kind=Tsm_loc, .sm_loc=(value)}
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 
+#define EMPTY_KEY TSTR(NULL)
+
 struct ghost_diff {
 	enum ghost_diff_kind kind;
 	union {
@@ -269,6 +271,18 @@ static void __ghost_print_diff(struct ghost_diff *diff, u64 indent)
 	}
 }
 
+
+static void __put_key(struct diff_container *node, struct diff_val key)
+{
+	if (! val_equal(key, EMPTY_KEY)) {
+		ghost_printf("\n%I", node->depth*4);
+		__put_val(key, 0);
+		ghost_printf(":");
+	}
+
+	ghost_printf("\n");
+}
+
 /**
  * Compare two Tval and if not equal, return a diff.
  */
@@ -319,7 +333,7 @@ static void __attach(struct diff_container *node, struct diff_val key, struct gh
 		node->saw_diff = true;
 
 		if (node->nr_subfield_diffs < MAX_PRINT_DIFF_PER_SUBFIELDS) {
-			ghost_printf("\n");
+			__put_key(node, key);
 			__ghost_print_diff(&diff, 0);
 		} else if (node->nr_subfield_diffs == MAX_PRINT_DIFF_PER_SUBFIELDS) {
 			// only once, not too noisy...
@@ -356,7 +370,7 @@ static void ghost_diff_index(struct diff_container *container, u64 key, struct g
 
 static void ghost_diff_attach(struct diff_container *container, struct ghost_diff child)
 {
-	__attach(container, TSTR(NULL), child);
+	__attach(container, EMPTY_KEY, child);
 }
 
 static void ghost_diff_gpr(struct diff_container *container, u64 reg, struct ghost_diff child)
