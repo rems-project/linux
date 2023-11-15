@@ -37,7 +37,6 @@ void copy_abstraction_constants(struct ghost_state *g_tgt, struct ghost_state *g
 void copy_abstraction_hyp_memory(struct ghost_state *g_tgt, struct ghost_state *g_src);
 void copy_abstraction_host(struct ghost_state *g_tgt, struct ghost_state *g_src);
 void copy_abstraction_pkvm(struct ghost_state *g_tgt, struct ghost_state *g_src);
-void copy_abstraction_vm(struct ghost_state *g_tgt, struct ghost_state *g_src, pkvm_handle_t handle);
 void copy_abstraction_vms(struct ghost_state *g_tgt, struct ghost_state *g_src);
 
 void record_abstraction_hyp_memory(struct ghost_state *g);
