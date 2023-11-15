@@ -1140,6 +1140,15 @@ void record_and_check_abstraction_loaded_hyp_vcpu_pre(void)
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
+void record_and_copy_abstraction_loaded_hyp_vcpu_post(void)
+{
+	GHOST_LOG_CONTEXT_ENTER();
+	struct ghost_state *g = this_cpu_ptr(&gs_recorded_post);
+	record_abstraction_loaded_vcpu(g);
+	copy_abstraction_loaded_vcpus(&gs, g);
+	GHOST_LOG_CONTEXT_EXIT();
+}
+
 void record_and_check_abstraction_vms_pre(void)
 {
 	GHOST_LOG_CONTEXT_ENTER();
@@ -1155,15 +1164,6 @@ void record_and_copy_abstraction_vms_post(void)
 	struct ghost_state *g = this_cpu_ptr(&gs_recorded_post);
 	record_abstraction_vms(g);
 	copy_abstraction_vms(&gs, g);
-	GHOST_LOG_CONTEXT_EXIT();
-}
-
-void record_and_copy_abstraction_loaded_hyp_vcpu_post(void)
-{
-	GHOST_LOG_CONTEXT_ENTER();
-	struct ghost_state *g = this_cpu_ptr(&gs_recorded_post);
-	record_abstraction_loaded_vcpu(g);
-	copy_abstraction_loaded_vcpus(&gs, g);
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
