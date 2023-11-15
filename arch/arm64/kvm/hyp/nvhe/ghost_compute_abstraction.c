@@ -1005,14 +1005,16 @@ static void record_abstraction_partial_vm_notable(struct ghost_state *g, struct 
 		vm->vm_table_locked.vcpus[vcpu_idx] = NULL;
 		if (vcpu_idx < hyp_vm->kvm.created_vcpus) {
 			struct pkvm_hyp_vcpu *vcpu = hyp_vm->vcpus[vcpu_idx];
+			struct ghost_vcpu *g_vcpu = malloc_or_die(sizeof (struct ghost_vcpu));
+			g_vcpu->vcpu_handle = vcpu_idx;
+			g_vcpu->initialised = vcpu_idx < hyp_vm->nr_vcpus;
+			// vcpu_idx < hyp_vm->nr_vcpus --> vcpu is not NULL
+			ghost_spec_assert(!g_vcpu->initialised || vcpu);
 			if (vcpu) {
-				struct ghost_vcpu *g_vcpu = malloc_or_die(sizeof (struct ghost_vcpu));
-				g_vcpu->vcpu_handle = vcpu_idx;
 				g_vcpu->loaded = vcpu->loaded_hyp_vcpu ? true : false;
-				g_vcpu->initialised = vcpu_idx < hyp_vm->nr_vcpus;
 				// TODO: regs
-				vm->vm_table_locked.vcpus[vcpu_idx] = g_vcpu;
 			}
+			vm->vm_table_locked.vcpus[vcpu_idx] = g_vcpu;
 		}
 	}
 
