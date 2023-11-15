@@ -16,6 +16,13 @@
 	BUG_ON(!(c)); \
 }
 
+#ifdef CONFIG_NVHE_GHOST_SPEC_SAFETY_CHECKS
+#define ghost_safety_check(c) \
+	ghost_assert(c)
+#else /* CONFIG_NVHE_GHOST_SPEC_SAFETY_CHECKS */
+#define ghost_safety_check(c)
+#endif /* CONFIG_NVHE_GHOST_SPEC_SAFETY_CHECKS */
+
 #define GHOST_SPEC_FAIL(msg) { \
 	GHOST_WARN(msg); \
 	ghost_spec_assert(false); \

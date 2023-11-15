@@ -7,6 +7,14 @@ menuconfig NVHE_GHOST_SPEC
 	help
 	  Enables compilation of ghost code inside nVHE sources.
 
+config NVHE_GHOST_SPEC_SAFETY_CHECKS
+	bool "Redundant safety checks"
+	depends on NVHE_GHOST_SPEC
+	default y
+	help
+	help
+	  Enables a variety of safety checks that would otherwise slow down the checking too much
+
 config NVHE_GHOST_SPEC_COLOURS
 	bool "Colours in the output of nVHE ghost spec"
 	depends on NVHE_GHOST_SPEC
