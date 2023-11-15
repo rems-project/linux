@@ -279,6 +279,7 @@ extern int kvm_nvhe_sym(gp_print_sm_trans)(gp_stream_t *out, struct ghost_simpli
 extern int kvm_nvhe_sym(gp_print_sm_pte_state)(gp_stream_t *out, struct sm_pte_state *st);
 extern int kvm_nvhe_sym(gp_print_sm_loc)(gp_stream_t *out, struct sm_location *loc);
 extern int kvm_nvhe_sym(gp_print_sm_state)(gp_stream_t *out, struct ghost_simplified_model_state *s);
+extern int kvm_nvhe_sym(gp_print_sm_blob_info)(gp_stream_t *out, struct ghost_memory_blob *b);
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 
 static bool __gp_case(char **p, const char *name)
@@ -319,6 +320,8 @@ int put_ghost_obj(gp_stream_t *out, char **p, u64 arg0, u64 arg1)
 		return kvm_nvhe_sym(gp_print_sm_pte_state)(out, (struct sm_pte_state*)arg0);
 	} else if (GP_CASE("sm_loc")) {
 		return kvm_nvhe_sym(gp_print_sm_loc)(out, (struct sm_location*)arg0);
+	} else if (GP_CASE("sm_blob")) {
+		return kvm_nvhe_sym(gp_print_sm_blob_info)(out, (struct ghost_memory_blob*)arg0);
 	} else if (GP_CASE("sm_state")) {
 		return kvm_nvhe_sym(gp_print_sm_state)(out, (struct ghost_simplified_model_state*)arg0);
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
