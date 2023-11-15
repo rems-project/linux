@@ -65,10 +65,12 @@ enum ghost_diff_val_kind {
 
 	/* Plus some more */
 	Tbool,
-	Tmaplet,
-#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-	Tsm_loc,
-#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
+
+	/* A pair of a format string and u64
+	 * ("%...", u64)
+	 * which can be passed to ghost_snprintf
+	 * to generate a string to diff */
+	Tgprint,
 };
 
 struct diff_val {
@@ -79,21 +81,23 @@ struct diff_val {
 		char *s;
 
 		// this is okay to be a reference since the diff is only alive if the two diff'd objects are.
-		struct maplet *m;
-
-#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-		// this is okay to be a reference since the diff is only alive if the two diff'd objects are.
-		struct sm_location *sm_loc;
-#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
+		struct gprint_data {
+			const char *fmt;
+			void *ptr;
+	 	} gp;
 	};
 };
 #define TBOOL(value) (struct diff_val){.kind=Tbool, .b=(value)}
 #define TU64(value) (struct diff_val){.kind=Tu64, .n=(value)}
 #define TSTR(value) (struct diff_val){.kind=Tstr, .s=(value)}
-#define TMAPLET(value) (struct diff_val){.kind=Tmaplet, .m=(value)}
 #define TGPREG(value) (struct diff_val){.kind=Tgpr, .n=(value)}
+#define TGPRINT(FMT, VAL) (struct diff_val){.kind=Tgprint, .gp=(struct gprint_data){.fmt=FMT, .ptr=(VAL)}}
+
+#define TMAPLET(M) TGPRINT("%g(maplet)", M)
+
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-#define TSMLOC(value) (struct diff_val){.kind=Tsm_loc, .sm_loc=(value)}
+#define TSMLOC(LOC) TGPRINT("%g(sm_loc)", LOC)
+#define TSMBLOB(BLOB) TGPRINT("%g(sm_blob)", BLOB)
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 
 #define EMPTY_KEY TSTR(NULL)
@@ -130,6 +134,27 @@ struct diff_container {
 /*********/
 // Differ
 
+static int __put_val_string(struct diff_val val, char *buf, u64 n)
+{
+	switch (val.kind) {
+	case Tu64:
+		return ghost_snprintf(buf, n, "%lx", val.n);
+	case Tstr:
+		return ghost_snprintf(buf, n, "%s", val.s);
+	case Tbool:
+		if (val.b)
+			return ghost_snprintf(buf, n, "true");
+		else
+			return ghost_snprintf(buf, n, "false");
+	case Tgpr:
+		return ghost_snprintf(buf, n, "r%ld", val.n);
+	case Tgprint:
+		return ghost_snprintf(buf, n, val.gp.fmt, val.gp.ptr);
+	default:
+		BUG();
+	}
+}
+
 static bool val_equal(struct diff_val lhs, struct diff_val rhs)
 {
 	switch (lhs.kind) {
@@ -139,13 +164,22 @@ static bool val_equal(struct diff_val lhs, struct diff_val rhs)
 	case Tgpr:
 		return lhs.n == rhs.n;
 	case Tstr:
-		return !strcmp(lhs.s, rhs.s);
-	case Tmaplet:
-		return false;
-#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-	case Tsm_loc:
-		return sm_loc_eq(lhs.sm_loc, rhs.sm_loc);
-#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
+		if (!lhs.s || !rhs.s)
+			return lhs.s == rhs.s;
+		else
+			return !strcmp(lhs.s, rhs.s);
+	case Tgprint: {
+		/* 256 should be long enough for any of our ghost-y prints.
+		 * by construction */
+		char buf1[256];
+		char buf2[256];
+		if (__put_val_string(lhs, buf1, 120) || __put_val_string(rhs, buf2, 120)) {
+			GHOST_LOG(lhs.gp.fmt, str);
+			GHOST_LOG(lhs.gp.ptr, u64);
+			ghost_assert(false);
+		}
+		return !strcmp(buf1, buf2);
+	}
 	default:
 		BUG();
 	}
@@ -166,46 +200,18 @@ static void __put_val(struct diff_val val, u64 indent)
 		else
 			ghost_printf("false");
 		break;
-	case Tmaplet:
-		ghost_printf("%g(maplet)", val.m);
-		break;
 	case Tgpr:
 		ghost_printf("r%ld", val.n);
 		break;
-#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-	case Tsm_loc:
-		ghost_printf("%g(sm_loc)", val.sm_loc);
+	case Tgprint:
+		ghost_printf(val.gp.fmt, val.gp.ptr);
 		break;
-#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	default:
 		BUG();
 	}
 }
 
-static int __put_val_string(struct diff_val val, char *buf, u64 n)
-{
-	switch (val.kind) {
-	case Tu64:
-		return ghost_snprintf(buf, n, "%lx", val.n);
-	case Tstr:
-		return ghost_snprintf(buf, n, "%s", val.s);
-	case Tbool:
-		if (val.b)
-			return ghost_snprintf(buf, n, "true");
-		else
-			return ghost_snprintf(buf, n, "false");
-	case Tmaplet:
-		return ghost_snprintf(buf, n, "%g(maplet)", val.m);
-	case Tgpr:
-		return ghost_snprintf(buf, n, "r%ld", val.n);
-#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-	case Tsm_loc:
-		return ghost_snprintf(buf, n, "%g(sm_loc)", val.sm_loc);
-#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
-	default:
-		BUG();
-	}
-}
+
 
 static void __put_dirty_string(char *s, bool *dirty, bool negate)
 {
@@ -685,21 +691,25 @@ static void ghost_diff_state(struct diff_container *node, struct ghost_state *s1
 
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
 
+#define TSMLOC_TRACK(LOC) TGPRINT("track %g(sm_loc)", (LOC))
+
 static void one_way_diff_blob_slots(struct diff_container *container, struct ghost_memory_blob *b1, struct ghost_memory_blob *b2, bool add)
 {
+	bool saw_unclean = false;
+
 	for (u64 i = 0; i < SLOTS_PER_PAGE; i++) {
 		struct sm_location *loc1 = &b1->slots[i];
 		struct sm_location *loc2 = &b2->slots[i];
-		ghost_diff_attach(container, diff_pair(TSMLOC(loc1), TSMLOC(loc2)));
-	}
-}
 
-static void one_way_add_all_blob(struct diff_container *container, struct ghost_memory_blob *b, bool add)
-{
-	for (u64 i = 0; i < SLOTS_PER_PAGE; i++) {
-		struct sm_location *loc = &b->slots[i];
-		if (loc->is_pte) {
-			ghost_diff_attach(container, diff_pm(add, TSMLOC(loc)));
+		// only show the diffs if one side is unclean
+		if (loc1->state.kind == STATE_PTE_INVALID_UNCLEAN || loc2->state.kind == STATE_PTE_INVALID_UNCLEAN) {
+			if (loc1->is_pte && loc2->is_pte)
+				ghost_diff_attach(container, diff_pair(TSMLOC(loc1), TSMLOC(loc2)));
+			else if (loc1->is_pte)
+				ghost_diff_attach(container, diff_pm(add, TSMLOC_TRACK(loc1)));
+			else if (loc2->is_pte)
+				ghost_diff_attach(container, diff_pm(!add, TSMLOC_TRACK(loc2)));
+			saw_unclean = true;
 		}
 	}
 }
@@ -719,7 +729,7 @@ static void one_way_diff_blobs(struct diff_container *container, struct ghost_si
 				one_way_diff_blob_slots(container, b1, b2, add);
 			}
 		} else {
-			one_way_add_all_blob(container, b1, add);
+			ghost_diff_attach(container, diff_pm(add, TSMBLOB(b1)));
 		}
 	}
 }
