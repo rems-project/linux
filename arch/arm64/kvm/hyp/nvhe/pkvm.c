@@ -849,6 +849,8 @@ int __pkvm_init_vcpu(pkvm_handle_t handle, struct kvm_vcpu *host_vcpu,
 	hyp_vm->nr_vcpus++;
 unlock:
 #ifdef CONFIG_NVHE_GHOST_SPEC
+	if (ghost_exec_enabled())
+		record_and_copy_abstraction_vms_post();
 	vm_table_unlock_component();
 #else /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_spin_unlock(&vm_table_lock);
