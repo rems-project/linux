@@ -728,7 +728,7 @@ static void one_way_diff_blobs(struct diff_container *container, struct ghost_si
 			if (!skip_eq) {
 				one_way_diff_blob_slots(container, b1, b2, add);
 			}
-		} else {
+		} else if (blob_unclean(b1)) {
 			ghost_diff_attach(container, diff_pm(add, TSMBLOB(b1)));
 		}
 	}
