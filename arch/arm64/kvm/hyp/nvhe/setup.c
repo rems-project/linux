@@ -463,12 +463,6 @@ out:
 
 #ifdef CONFIG_NVHE_GHOST_SPEC
 	GHOST_LOG_CONTEXT_EXIT(); // __pkvm_init_finalise
-
-	// because we tail called here with no intention of returning,
-	// pop the parents off as well.
-	GHOST_LOG_CONTEXT_EXIT_FORCE("__pkvm_init");
-	GHOST_LOG_CONTEXT_EXIT_FORCE("handle_host_hcall");
-	GHOST_LOG_CONTEXT_EXIT_FORCE("handle_trap");
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 
 	/*
@@ -578,6 +572,11 @@ int __pkvm_init(phys_addr_t phys, unsigned long size, unsigned long nr_cpus,
 
 #ifdef CONFIG_NVHE_GHOST_SPEC
 	//	hyp_putc('P');hyp_putc('S');hyp_putc('H');hyp_putc('A');hyp_putc('C');hyp_putc('k');hyp_putc('\n');
+	GHOST_LOG_CONTEXT_EXIT();
+	// because we will tail call here with no intention of returning,
+	// pop the parents off as well.
+	GHOST_LOG_CONTEXT_EXIT_FORCE("handle_host_hcall");
+	GHOST_LOG_CONTEXT_EXIT_FORCE("handle_trap");
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 
 	/* Jump in the idmap page to switch to the new page-tables */
