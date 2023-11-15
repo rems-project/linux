@@ -837,14 +837,17 @@ static void ghost_vm_clone_into_vm_partial_vm_table_locked(struct ghost_vm *dest
 	dest->vm_table_locked.nr_vcpus = src->vm_table_locked.nr_vcpus;
 	dest->vm_table_locked.nr_initialised_vcpus = src->vm_table_locked.nr_initialised_vcpus;
 	ghost_assert(src->vm_table_locked.nr_vcpus <= KVM_MAX_VCPUS);
+	int copied_vcpu = 0;
 	for (int vcpu_idx=0; vcpu_idx<KVM_MAX_VCPUS; vcpu_idx++) {
 		if (vcpu_idx<src->vm_table_locked.nr_vcpus && src->vm_table_locked.vcpus[vcpu_idx]) {
+			copied_vcpu++;
 			dest->vm_table_locked.vcpus[vcpu_idx] = malloc_or_die(sizeof(struct ghost_vcpu));
 			*dest->vm_table_locked.vcpus[vcpu_idx] = *src->vm_table_locked.vcpus[vcpu_idx];
 		} else {
 			dest->vm_table_locked.vcpus[vcpu_idx] = NULL;
 		}
 	}
+	ghost_assert(copied_vcpu == dest->vm_table_locked.nr_vcpus);
 	dest->pkvm_handle = src->pkvm_handle;
 	dest->lock = src->lock;
 }
