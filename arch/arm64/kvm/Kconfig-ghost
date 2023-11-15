@@ -88,6 +88,11 @@ menuconfig NVHE_GHOST_DIFF
 	help
 	  Prints diffs on each trap of the actual v expected ghost states.
 
+config NVHE_GHOST_DIFF_MAX_DIFFS_PER_NODE
+	int "Number of diffs to display per group"
+	depends on NVHE_GHOST_DIFF
+	default 16
+
 config NVHE_GHOST_DIFF_post_computed
 	bool "Show diffs of recorded->computed spec ghost state"
 	depends on NVHE_GHOST_DIFF

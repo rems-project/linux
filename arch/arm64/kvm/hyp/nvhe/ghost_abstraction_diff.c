@@ -28,7 +28,7 @@
 #include <nvhe/ghost_simplified_model.h>
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 
-#define MAX_PRINT_DIFF_PER_SUBFIELDS 16
+#define MAX_PRINT_DIFF_PER_SUBFIELDS CONFIG_NVHE_GHOST_DIFF_MAX_DIFFS_PER_NODE
 
 /*
  * Ghost state diffs:
