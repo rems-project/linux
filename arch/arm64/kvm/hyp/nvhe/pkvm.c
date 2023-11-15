@@ -772,6 +772,8 @@ int __pkvm_init_vm(struct kvm *host_kvm, unsigned long vm_hva,
 	if (ret)
 		goto err_remove_vm_table_entry;
 #ifdef CONFIG_NVHE_GHOST_SPEC
+	if (ghost_exec_enabled())
+		record_and_copy_abstraction_vms_post();
 	vm_table_unlock_component();
 #else /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_spin_unlock(&vm_table_lock);

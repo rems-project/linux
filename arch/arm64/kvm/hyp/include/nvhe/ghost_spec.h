@@ -286,13 +286,6 @@ void ghost_vms_free(struct ghost_vms *vms, pkvm_handle_t handle);
 bool ghost_vms_is_valid_handle(struct ghost_vms *vms, pkvm_handle_t handle);
 
 /**
- * ghost_vm_clone_into_nomappings() - Copies all the fields (not mappings) from one VM slot to another
- *
- * Must own the  ghost vms lock, *and* both VMs locks
- */
-void ghost_vm_clone_into_nomappings(struct ghost_vm *dest, struct ghost_vm *src);
-
-/**
  * ghost_vm_clone_into() - Copies all the fields (including mappings) from one VM slot to another
  *
  * Must own the vm_table table lock, *and* both VMs locks

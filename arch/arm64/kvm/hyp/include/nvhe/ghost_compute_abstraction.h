@@ -27,6 +27,7 @@ void record_and_check_abstraction_vm_pre(struct pkvm_hyp_vm *vm);
 void record_and_copy_abstraction_pkvm_post(void);
 void record_and_copy_abstraction_host_post(void);
 void record_and_copy_abstraction_loaded_hyp_vcpu_post(void);
+void record_and_copy_abstraction_vms_post(void);
 void record_and_copy_abstraction_vm_post(struct pkvm_hyp_vm *vm);
 
 // additional functions used only in ghost files
