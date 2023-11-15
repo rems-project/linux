@@ -157,6 +157,9 @@ static int __put_val_string(struct diff_val val, char *buf, u64 n)
 
 static bool val_equal(struct diff_val lhs, struct diff_val rhs)
 {
+	if (lhs.kind != rhs.kind)
+		return false;
+
 	switch (lhs.kind) {
 	case Tbool:
 		return lhs.b == rhs.b;
@@ -173,9 +176,11 @@ static bool val_equal(struct diff_val lhs, struct diff_val rhs)
 		 * by construction */
 		char buf1[256];
 		char buf2[256];
-		if (__put_val_string(lhs, buf1, 120) || __put_val_string(rhs, buf2, 120)) {
-			GHOST_LOG(lhs.gp.fmt, str);
-			GHOST_LOG(lhs.gp.ptr, u64);
+		int r1 = __put_val_string(lhs, buf1, 256);
+		int r2 = __put_val_string(rhs, buf2, 256);
+		if (r1 || r2) {
+			GHOST_ERROR_VAR(r1, u32);
+			GHOST_ERROR_VAR(r2, u32);
 			ghost_assert(false);
 		}
 		return !strcmp(buf1, buf2);
