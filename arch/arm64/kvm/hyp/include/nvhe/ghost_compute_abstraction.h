@@ -59,7 +59,7 @@ void check_abstraction_equals_loaded_vcpu(struct ghost_loaded_vcpu *loaded_vcpu1
 void check_abstraction_equals_loaded_vcpus(struct ghost_state *g1, struct ghost_state *g2);
 void check_abstraction_equals_vcpu(struct ghost_vcpu *vcpu1, struct ghost_vcpu *vcpu2);
 void check_abstraction_equals_vm(struct ghost_vm *vm1, struct ghost_vm *vm2);
-void check_abstraction_equals_vms(struct ghost_vms *gc, struct ghost_vms *gr_post);
+void check_abstraction_vms_subseteq(struct ghost_vms *gc, struct ghost_vms *gr_post);
 void check_abstract_pgtable_equal(
 	abstract_pgtable *pgt1,
 	abstract_pgtable *pgt2,

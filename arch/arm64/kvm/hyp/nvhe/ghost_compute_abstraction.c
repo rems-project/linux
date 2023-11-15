@@ -444,16 +444,21 @@ void __check_abstraction_vm_all_contained_in(struct ghost_vms *vms1, struct ghos
 	}
 }
 
-void check_abstraction_equals_vms(struct ghost_vms *gc, struct ghost_vms *gr_post)
+void check_abstraction_vms_subseteq(struct ghost_vms *gc, struct ghost_vms *gr_post)
 {
 	GHOST_LOG_CONTEXT_ENTER();
 	ghost_assert(gc->present && gr_post->present);
 	GHOST_LOG(gc->nr_vms, u64);
 	GHOST_LOG(gr_post->nr_vms, u64);
 	ghost_spec_assert(gc->nr_vms == gr_post->nr_vms);
-	// the computed and recorded post states should have exactly the same set of touched VMs
+
+	/* it might be that we recorded more of the state than was touched by the spec,
+	 * in that case there may be VMs (e.g. whose locks were spuriously taken by the implementation)
+	 * which are in the recorded post, but not mentioned by the spec.
+	 *
+	 * So we need to only check that `VMS(spec) subseteq VMS(recorded)`
+	 */
 	__check_abstraction_vm_all_contained_in(gc, gr_post);
-	__check_abstraction_vm_all_contained_in(gr_post, gc);
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
@@ -530,12 +535,12 @@ void check_abstraction_refined_vms(struct ghost_state *gc, struct ghost_state *g
 
 	// TODO: ensure we actually own the locks of any VMs we touched in the hypercall before doing this...
 	if (gc->vms.present && gr_post->vms.present) {
-		check_abstraction_equals_vms(&gc->vms, &gr_post->vms);
+		check_abstraction_vms_subseteq(&gc->vms, &gr_post->vms);
 	} else if (gc->vms.present && !gr_post->vms.present) {
 		ghost_assert(false);
 	} else if (!gc->vms.present && gr_post->vms.present) {
 		ghost_assert(gr_pre->vms.present);
-		check_abstraction_equals_vms(&gr_post->vms, &gr_pre->vms);
+		check_abstraction_vms_subseteq(&gr_post->vms, &gr_pre->vms);
 	}
 
 	GHOST_LOG_CONTEXT_EXIT();
@@ -1310,7 +1315,7 @@ void record_and_check_abstraction_vms_pre(void)
 	ghost_lock_maplets();
 	ghost_lock_vms();
 	record_abstraction_vms(g);
-	check_abstraction_equals_vms(&g->vms, &gs.vms);
+	check_abstraction_vms_subseteq(&g->vms, &gs.vms);
 	ghost_unlock_vms();
 	ghost_unlock_maplets();
 	GHOST_LOG_CONTEXT_EXIT();
