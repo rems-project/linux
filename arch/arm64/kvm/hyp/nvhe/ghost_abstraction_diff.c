@@ -83,7 +83,7 @@ struct diff_val {
 		// this is okay to be a reference since the diff is only alive if the two diff'd objects are.
 		struct gprint_data {
 			const char *fmt;
-			void *ptr;
+			u64 val;
 	 	} gp;
 	};
 };
@@ -91,13 +91,13 @@ struct diff_val {
 #define TU64(value) (struct diff_val){.kind=Tu64, .n=(value)}
 #define TSTR(value) (struct diff_val){.kind=Tstr, .s=(value)}
 #define TGPREG(value) (struct diff_val){.kind=Tgpr, .n=(value)}
-#define TGPRINT(FMT, VAL) (struct diff_val){.kind=Tgprint, .gp=(struct gprint_data){.fmt=FMT, .ptr=(VAL)}}
+#define TGPRINT(FMT, VAL) (struct diff_val){.kind=Tgprint, .gp=(struct gprint_data){.fmt=FMT, .val=(VAL)}}
 
-#define TMAPLET(M) TGPRINT("%g(maplet)", M)
+#define TMAPLET(M) TGPRINT("%g(maplet)", (u64)(M))
 
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-#define TSMLOC(LOC) TGPRINT("%g(sm_loc)", LOC)
-#define TSMBLOB(BLOB) TGPRINT("%g(sm_blob)", BLOB)
+#define TSMLOC(LOC) TGPRINT("%g(sm_loc)", (u64)(LOC))
+#define TSMBLOB(BLOB) TGPRINT("%g(sm_blob)", (u64)(BLOB))
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 
 #define EMPTY_KEY TSTR(NULL)
@@ -126,7 +126,7 @@ struct ghost_diff {
 struct diff_container {
 	int depth;
 	int clean_prefix;
-	const char *path[MAX_CONTAINER_PATH];
+	struct diff_val path[MAX_CONTAINER_PATH];
 	bool saw_diff;
 	u64 nr_subfield_diffs;
 };
@@ -149,7 +149,7 @@ static int __put_val_string(struct diff_val val, char *buf, u64 n)
 	case Tgpr:
 		return ghost_snprintf(buf, n, "r%ld", val.n);
 	case Tgprint:
-		return ghost_snprintf(buf, n, val.gp.fmt, val.gp.ptr);
+		return ghost_snprintf(buf, n, val.gp.fmt, val.gp.val);
 	default:
 		BUG();
 	}
@@ -209,7 +209,7 @@ static void __put_val(struct diff_val val, u64 indent)
 		ghost_printf("r%ld", val.n);
 		break;
 	case Tgprint:
-		ghost_printf(val.gp.fmt, val.gp.ptr);
+		ghost_printf(val.gp.fmt, val.gp.val);
 		break;
 	default:
 		BUG();
@@ -282,7 +282,6 @@ static void __ghost_print_diff(struct ghost_diff *diff, u64 indent)
 	}
 }
 
-
 static void __put_key(struct diff_container *node, struct diff_val key)
 {
 	if (! val_equal(key, EMPTY_KEY)) {
@@ -335,7 +334,9 @@ static void __attach(struct diff_container *node, struct diff_val key, struct gh
 
 		// print out the part of the path we've not printed before.
 		for (int i = node->clean_prefix; i < node->depth; i++) {
-			ghost_printf("\n%I%s:", i*4, node->path[i]);
+			ghost_printf("\n%I", i*4);
+			__put_val(node->path[i], 0);
+			ghost_printf(":");
 		};
 		if (node->clean_prefix != node->depth && node->nr_subfield_diffs >= MAX_PRINT_DIFF_PER_SUBFIELDS)
 			ghost_printf(GHOST_WHITE_ON_YELLOW "<skip diff>" GHOST_NORMAL "\n");
@@ -354,9 +355,14 @@ static void __attach(struct diff_container *node, struct diff_val key, struct gh
 	}
 }
 
-static void ghost_diff_enter_subfield(struct diff_container *container, const char *name)
+static void ghost_diff_enter_subfield_val(struct diff_container *container, struct diff_val name)
 {
 	container->path[container->depth++] = name;
+}
+
+static void ghost_diff_enter_subfield(struct diff_container *container, const char *name)
+{
+	container->path[container->depth++] = TSTR((char*)name);
 }
 
 static void ghost_diff_pop_subfield(struct diff_container *container)
@@ -554,10 +560,11 @@ static void ghost_diff_registers(struct diff_container *node, struct ghost_regis
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
-static void ghost_diff_vcpu(struct diff_container *node, struct ghost_vcpu *vcpu1, struct ghost_vcpu *vcpu2)
+static void ghost_diff_vcpu(struct diff_container *node, int vcpu_idx, struct ghost_vcpu *vcpu1, struct ghost_vcpu *vcpu2)
 {
 	GHOST_LOG_CONTEXT_ENTER();
-	ghost_diff_enter_subfield(node, "vcpu");
+	ghost_assert(vcpu1 && vcpu2);
+	ghost_diff_enter_subfield_val(node, TGPRINT("vcpu #%ld", (u64)vcpu_idx));
 	ghost_diff_field(node, "vcpu_handle", diff_pair(TU64(vcpu1->vcpu_handle), TU64(vcpu2->vcpu_handle)));
 	ghost_diff_field(node, "loaded", diff_pair(TBOOL(vcpu1->loaded), TBOOL(vcpu2->loaded)));
 	ghost_diff_field(node, "initialised", diff_pair(TBOOL(vcpu1->initialised), TBOOL(vcpu2->initialised)));
@@ -570,7 +577,7 @@ static void ghost_diff_vcpu(struct diff_container *node, struct ghost_vcpu *vcpu
 static void ghost_diff_vm(struct diff_container *node, pkvm_handle_t handle, struct ghost_vm *vm1, struct ghost_vm *vm2)
 {
 	GHOST_LOG_CONTEXT_ENTER();
-	ghost_diff_enter_subfield(node, "vm");
+	ghost_diff_enter_subfield_val(node, TGPRINT("vm #%lx", (u64)handle));
 	// in theory: handle should be the same...
 	ghost_diff_field(node, "handle", diff_pair(TU64((u64)vm1->pkvm_handle), TU64((u64)vm2->pkvm_handle)));
 	if (vm1->pkvm_handle == vm2->pkvm_handle) {
@@ -582,15 +589,12 @@ static void ghost_diff_vm(struct diff_container *node, pkvm_handle_t handle, str
 			struct ghost_vcpu *vcpu1 = vm1->vm_table_locked.vcpus[i];
 			struct ghost_vcpu *vcpu2 = vm2->vm_table_locked.vcpus[i];
 
-			if (vcpu1 && vcpu2) {
-				ghost_diff_vcpu(node, vcpu1, vcpu2);
-			} else if (!vcpu1 && !vcpu2) {
-				continue;
-			} else if (vcpu1) {
-				ghost_diff_index(node, i, diff_pm(false, TU64(i)));
-			} else {
-				ghost_diff_index(node, i, diff_pm(true, TU64(i)));
-			}
+			if (vcpu1 && vcpu2)
+				ghost_diff_vcpu(node, i, vcpu1, vcpu2);
+			else if (vcpu1)
+				ghost_diff_attach(node, diff_pm(false, TGPRINT("vcpu %ld", vcpu1->vcpu_handle)));
+			else if (vcpu2)
+				ghost_diff_attach(node, diff_pm(true, TGPRINT("vcpu %ld", vcpu2->vcpu_handle)));
 		}
 	}
 	ghost_diff_pop_subfield(node);
