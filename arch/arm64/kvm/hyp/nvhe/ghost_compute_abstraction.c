@@ -863,6 +863,38 @@ void record_abstraction_loaded_vcpu(struct ghost_state *g)
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
+void record_abstraction_vms(struct ghost_state *g)
+{
+	GHOST_LOG_CONTEXT_ENTER();
+	g->vms.present = true;
+	for (int idx=0; idx<KVM_MAX_PVMS; idx++) {
+		struct pkvm_hyp_vm *hyp_vm = vm_table[idx];
+		if (hyp_vm) {
+			struct ghost_vm *vm = ghost_vms_alloc(&g->vms, hyp_vm->kvm.arch.pkvm.handle);
+			vm->vm_table_locked.present = true;
+			vm->vm_table_locked.nr_vcpus = hyp_vm->kvm.created_vcpus;
+			vm->vm_table_locked.nr_initialised_vcpus = hyp_vm->nr_vcpus;
+			for (int vcpu_idx=0; vcpu_idx < KVM_MAX_VCPUS; vcpu_idx++) {
+				struct pkvm_hyp_vcpu *vcpu = hyp_vm->vcpus[vcpu_idx];
+				if (vcpu) {
+					vm->vm_table_locked.vcpus[vcpu_idx] = malloc_or_die(sizeof (struct ghost_vcpu));
+					vm->vm_table_locked.vcpus[vcpu_idx]->vcpu_handle = vcpu_idx;
+					vm->vm_table_locked.vcpus[vcpu_idx]->loaded = hyp_vm->vcpus[vcpu_idx]->loaded_hyp_vcpu ? true : false;
+					vm->vm_table_locked.vcpus[vcpu_idx]->initialised = vcpu_idx < hyp_vm->nr_vcpus;
+					// TODO: regs
+				} else {
+					vm->vm_table_locked.vcpus[vcpu_idx] = NULL;
+				}
+			}
+
+			vm->pkvm_handle = hyp_vm->kvm.arch.pkvm.handle;
+			vm->lock = &hyp_vm->lock;
+			g->vms.nr_vms++;
+		}
+	}
+	GHOST_LOG_CONTEXT_EXIT();
+}
+
 void record_abstraction_host(struct ghost_state *g)
 {
 	ghost_assert(!g->host.present);
@@ -1112,33 +1144,17 @@ void record_and_check_abstraction_vms_pre(void)
 {
 	GHOST_LOG_CONTEXT_ENTER();
 	struct ghost_state *g = this_cpu_ptr(&gs_recorded_pre);
-	g->vms.present = true;
-	for (int idx=0; idx<KVM_MAX_PVMS; idx++) {
-		struct pkvm_hyp_vm *hyp_vm = vm_table[idx];
-		if (hyp_vm) {
-			struct ghost_vm *vm = ghost_vms_alloc(&g->vms, hyp_vm->kvm.arch.pkvm.handle);
-			vm->vm_table_locked.present = true;
-			vm->vm_table_locked.nr_vcpus = hyp_vm->kvm.created_vcpus;
-			vm->vm_table_locked.nr_initialised_vcpus = hyp_vm->nr_vcpus;
-			for (int vcpu_idx=0; vcpu_idx < KVM_MAX_VCPUS; vcpu_idx++) {
-				if (vcpu_idx < hyp_vm->nr_vcpus) {
-					vm->vm_table_locked.vcpus[vcpu_idx] = malloc_or_die(sizeof (struct ghost_vcpu));
-					vm->vm_table_locked.vcpus[vcpu_idx]->vcpu_handle = vcpu_idx;
-					vm->vm_table_locked.vcpus[vcpu_idx]->loaded = hyp_vm->vcpus[vcpu_idx]->loaded_hyp_vcpu ? true : false;
-					vm->vm_table_locked.vcpus[vcpu_idx]->initialised = vcpu_idx < hyp_vm->nr_vcpus;
-					// TODO: regs
-				} else {
-					vm->vm_table_locked.vcpus[vcpu_idx] = NULL;
-				}
-			}
+	record_abstraction_vms(g);
+	check_abstraction_equals_vms(&g->vms, &gs.vms);
+	GHOST_LOG_CONTEXT_EXIT();
+}
 
-			vm->pkvm_handle = hyp_vm->kvm.arch.pkvm.handle;
-			vm->lock = &hyp_vm->lock;
-			g->vms.nr_vms++;
-		}
-	}
-	// record_abstraction_loaded_vcpu(g);
-	// check_abstraction_equals_loaded_vcpus(g, &gs);
+void record_and_copy_abstraction_vms_post(void)
+{
+	GHOST_LOG_CONTEXT_ENTER();
+	struct ghost_state *g = this_cpu_ptr(&gs_recorded_post);
+	record_abstraction_vms(g);
+	copy_abstraction_vms(&gs, g);
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
