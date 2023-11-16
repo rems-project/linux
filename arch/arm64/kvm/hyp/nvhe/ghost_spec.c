@@ -788,6 +788,93 @@ out:
 	ghost_reg_gpr(g1, 1) = ret;
 }
 
+/* Locking shape in the implementation:
+ * 
+ *  (1) [L_host L_hyp  host_donate_hyp(vcpu_hva) U_hyp U_host] 
+        [L_vm_table
+		(2) [L_host L_hyp  hyp_pin_shared_mem(host_vcpu) U_hyp U_host]
+		(3) (optional) [L_host L_hyp  hyp_pin_shared_mem(sve_state) U_hyp U_host]
+	U_vm_table]
+ */
+void compute_new_abstract_state_handle___pkvm_init_vcpu(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call)
+{
+	int ret = 0;
+	int vcpu_idx;
+	struct ghost_vcpu *vcpu;
+
+	pkvm_handle_t vm_handle = ghost_reg_gpr(g0, 1);
+	host_va_t host_vcpu_hva = ghost_reg_gpr(g0, 2);
+	host_va_t vcpu_hva = ghost_reg_gpr(g0, 3);
+//	struct kvm_vcpu *host_vcpu_hyp_va = (struct kvm_vcpu *)hyp_va_of_host_va(g0, host_vcpu_hva);
+
+	struct ghost_vm *vm = ghost_vms_get(&g0->vms, vm_handle);
+	if (!vm) {
+		ret = -ENOENT;
+		goto out;
+	}
+
+	vcpu_idx = vm->vm_table_locked.nr_initialised_vcpus;
+	if (vcpu_idx >= vm->vm_table_locked.nr_vcpus) {
+		ret = -EINVAL;
+		goto out;
+	}
+	ghost_spec_assert(vcpu_idx < KVM_MAX_VCPUS);
+	vcpu = vm->vm_table_locked.vcpus[vcpu_idx];
+	ghost_assert(vcpu);
+
+	copy_abstraction_host(g1, g0);
+	copy_abstraction_pkvm(g1, g0);
+
+	host_ipa_t vcpu_ipa = host_ipa_of_phys(phys_of_hyp_va(g0, hyp_va_of_host_va(g0, vcpu_hva)));
+	if (!ghost_map_donated_memory_checkonly(g1, vcpu_ipa, sizeof(struct pkvm_hyp_vcpu))) {
+		ret = -ENOMEM;
+		goto out;
+	}
+	ghost_map_donated_memory_nocheck(g1, vcpu_ipa, sizeof(struct pkvm_hyp_vcpu));
+
+	// TODO: if the vcpu is NOT protected the spec should not care about the sysregs stuff and skip
+
+
+	// TODO ret = init_pkvm_hyp_vcpu(hyp_vcpu, hyp_vm, host_vcpu, idx);
+
+	// TODO: this can't be in the spec at the moment because the load of host_vcpu->vcpu_idx is not READ_ONCE()
+	// if (host_vcpu->vcpu_idx != vcpu_idx) {
+	// 	ret = -EINVAL;
+	// 	goto done;
+	// }
+
+	if (!ghost_hyp_check_host_shared_mem(g0, host_vcpu_hva, host_vcpu_hva + sizeof(struct kvm_vcpu))) {
+		ret = -EBUSY;
+		goto out;
+	}
+
+
+	// TODO -> hyp_pin_shared_mem(host_vcpu, host_vcpu + 1)
+/*
+
+	hyp_vcpu->vcpu.vcpu_id = READ_ONCE_GHOST_RECORD(host_vcpu->vcpu_id);
+	hyp_vcpu->vcpu.vcpu_idx = vcpu_idx;
+
+	hyp_vcpu->vcpu.arch.hw_mmu = &hyp_vm->kvm.arch.mmu;
+	hyp_vcpu->vcpu.arch.cflags = READ_ONCE(host_vcpu->arch.cflags);
+	hyp_vcpu->vcpu.arch.mp_state.mp_state = KVM_MP_STATE_STOPPED;
+
+*/
+// struct ghost_vcpu {
+// 	struct ghost_register_state regs;
+// };
+
+	// TODO if ret != 0 ==> goto out
+	vcpu->vcpu_handle = vcpu_idx;
+	vcpu->loaded = false;
+	vcpu->initialised = true;
+	vm->vm_table_locked.nr_initialised_vcpus++;
+out:
+	ghost_reg_gpr(g1, 1) = ret;
+}
+
+
+
 void compute_new_abstract_state_handle_host_hcall(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call, bool *new_state_computed)
 {
 	GHOST_LOG_CONTEXT_ENTER();
@@ -833,6 +920,10 @@ void compute_new_abstract_state_handle_host_hcall(struct ghost_state *g1, struct
 		*new_state_computed = true;
 		break;
 
+	case __KVM_HOST_SMCCC_FUNC___pkvm_init_vcpu:
+		compute_new_abstract_state_handle___pkvm_init_vcpu(g1, g0, call);
+		*new_state_computed = true;
+		break;
 		// TODO: and their bodies, and all the other cases
 	default:
 		smccc_ret = SMCCC_RET_NOT_SUPPORTED;
