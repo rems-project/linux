@@ -886,6 +886,59 @@ out:
 }
 
 
+void compute_new_abstract_state_handle___pkvm_teardown_vm(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call)
+{
+	int ret = 0;
+
+	pkvm_handle_t vm_handle = ghost_reg_gpr(g0, 1);
+	struct ghost_vm *vm = ghost_vms_get(&g0->vms, vm_handle);
+	if (!vm) {
+		ret = -ENOENT;
+		goto out;
+	}
+
+	// TODO(doc): we can have an ND EBUSY, because of hyp_page_count() > 0
+	// TODO: this is if the vm has loaded vcpu
+	// if (call->return_value == -EBUSY) {
+	// 	ret = -EBUSY;
+	// 	goto out;
+	// }
+	// TODO: more abstract version of the previous
+	for (int i=0; i<KVM_MAX_VCPUS; i++) {
+		if (vm->vm_table_locked.vcpus[i]->loaded) {
+			ret = -EBUSY;
+			goto out;
+		}
+	}
+
+	// TODO: copy the pfs from vm->vm_abstract_pgtable.table_pfns;
+	// into a some "reclaimable_pfn_sets" list in ghost_state
+	// and mark them as "need_poisoning" or "pending_reclaim" depending on their state
+
+	/* TODO: reclaim_guest_pages(hyp_vm, mc);
+	 * this does:
+	 *	1. mark all leaves of the page table as
+			- HOST_PAGE_NEED_POISONING (if exclusively owned by guest)
+			- HOST_PAGE_PENDING_RECLAIM (if shared borrowed/owned)
+	 *	2. destroy the guest pgtable (free the tables and ???)
+	 *	3. sets the guest stage 2 pgtable root phys_addr to 0 (the kvm mmu struct)
+	 */
+
+	// TODO: unpin_host_vcpus(hyp_vm->vcpus, hyp_vm->nr_vcpus);
+
+	// TODO: for each vcpu, move pages from vcpu_memcache to hyp_memcast
+	//	 AND unmap_donated_memory_noclear()
+	//	 AND teardown_donated_memory(mc, hyp_vcpu, sizeof(*hyp_vcpu));
+
+	// TODO: teardown_donated_memory() for last_vcpu_ran
+
+	// TODO: teardown_donated_memory() for hyp_vm
+	// TODO: hyp_unpin_shared_mem() from hyp_vm
+
+	ghost_vms_free(&g0->vms, vm_handle);
+out:
+	ghost_reg_gpr(g1, 1) = ret;
+}
 
 void compute_new_abstract_state_handle_host_hcall(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call, bool *new_state_computed)
 {
@@ -936,6 +989,11 @@ void compute_new_abstract_state_handle_host_hcall(struct ghost_state *g1, struct
 		compute_new_abstract_state_handle___pkvm_init_vcpu(g1, g0, call);
 		*new_state_computed = true;
 		break;
+
+	case __KVM_HOST_SMCCC_FUNC___pkvm_teardown_vm:
+		compute_new_abstract_state_handle___pkvm_teardown_vm(g1, g0, call);
+		break;
+
 		// TODO: and their bodies, and all the other cases
 	default:
 		smccc_ret = SMCCC_RET_NOT_SUPPORTED;
