@@ -364,6 +364,7 @@ void pkvm_put_hyp_vcpu(struct pkvm_hyp_vcpu *hyp_vcpu)
 	hyp_page_ref_dec(hyp_virt_to_page(hyp_vm));
 
 #ifdef CONFIG_NVHE_GHOST_SPEC
+	if (ghost_exec_enabled())
 		record_and_copy_abstraction_loaded_hyp_vcpu_post(NULL);
 	vm_table_unlock_component();
 #else /* CONFIG_NVHE_GHOST_SPEC */
