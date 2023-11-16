@@ -1329,14 +1329,6 @@ void ghost_record_pre(struct kvm_cpu_context *ctxt)
 		ghost_cpu_running_state_copy(this_cpu_ghost_run_state(gr_pre), cpu_run_state);
 
 		ghost_clear_call_data();
-
-#ifdef CONFIG_NVHE_GHOST_SPEC_DUMP_STATE
-		if (this_trap_print_controlled(ctxt)) {
-			ghost_printf("ghost recorded pre (full):\n");
-			ghost_dump_state(gr_pre);
-			ghost_printf("\n");
-		}
-#endif /* CONFIG_NVHE_GHOST_SPEC_DUMP_STATE */
 	}
 
 exit_context:
@@ -1365,13 +1357,6 @@ void ghost_post(struct kvm_cpu_context *ctxt)
 		ghost_cpu_running_state_copy(this_cpu_ghost_run_state(gr_post), cpu_run_state);
 		call->return_value = cpu_reg(ctxt, 1);
 
-#ifdef CONFIG_NVHE_GHOST_SPEC_DUMP_STATE
-		if (this_trap_print_controlled(ctxt)) {
-			ghost_printf("ghost recorded post (full):\n");
-			ghost_dump_state(gr_post);
-			ghost_printf("\n");
-		}
-#endif /* CONFIG_NVHE_GHOST_SPEC_DUMP_STATE */
 
 		// compute the new spec abstract state
 
@@ -1391,6 +1376,14 @@ void ghost_post(struct kvm_cpu_context *ctxt)
 #endif /* CONFIG_NVHE_GHOST_SPEC_NOISY */
 #ifdef CONFIG_NVHE_GHOST_SPEC_DUMP_STATE
 			if (this_trap_print_controlled(ctxt)) {
+				ghost_printf("ghost recorded pre (full):\n");
+				ghost_dump_state(gr_pre);
+				ghost_printf("\n");
+				ghost_printf("\n");
+				ghost_printf("ghost recorded post (full):\n");
+				ghost_dump_state(gr_post);
+				ghost_printf("\n");
+				ghost_printf("\n");
 				ghost_printf("ghost computed post (full):\n");
 				ghost_dump_state(gc_post);
 				ghost_printf("\n");
