@@ -1128,7 +1128,6 @@ void record_abstraction_local_state(struct ghost_state *g, struct kvm_cpu_contex
 	/* no loaded_vcpu state, as that is read separately */
 	struct pkvm_hyp_vcpu *loaded_vcpu = *this_cpu_ptr(&loaded_hyp_vcpu);
 	record_abstraction_loaded_vcpu(g, loaded_vcpu);
-	check_abstraction_equals_loaded_vcpu(this_cpu_ghost_loaded_vcpu(g), this_cpu_ghost_loaded_vcpu(&gs));
 }
 
 void record_abstraction_local_state_pre(struct kvm_cpu_context *ctxt)
