@@ -1475,14 +1475,17 @@ struct ghost_running_state *this_cpu_ghost_run_state(struct ghost_state *g)
 /*****************************************/
 // Dumper
 
+#define GHOST_MISSING_FIELD "<not recorded>"
+
 static void ghost_dump_pkvm(struct ghost_pkvm *pkvm)
 {
+	ghost_printf("pkvm: ");
 
 	if (!pkvm->present) {
-		ghost_printf("pkvm: <missing>\n");
+		ghost_printf(GHOST_MISSING_FIELD "\n");
 	} else {
 		ghost_printf(
-			"pkvm:\n"
+			"\n"
 			"%I%gI(pgtable)\n",
 			2, &pkvm->pkvm_abstract_pgtable, 2
 		);
@@ -1494,7 +1497,7 @@ static void ghost_dump_host(struct ghost_host *host)
 	ghost_printf("host: ");
 
 	if (!host->present) {
-		ghost_printf("<missing>\n");
+		ghost_printf(GHOST_MISSING_FIELD "\n");
 		return;
 	}
 
@@ -1521,14 +1524,19 @@ static void ghost_dump_vm(struct ghost_vm *vm, u64 i)
 
 	ghost_printf("%Ivm_locked: ", i+4);
 	if (vm->vm_locked.present) {
-		ghost_printf("%I%gI(pgtable)\n", i+8, &vm->vm_locked.vm_abstract_pgtable, i+8);
+		ghost_printf(
+			"\n"
+			"%I%gI(pgtable)\n",
+			i+8,
+			&vm->vm_locked.vm_abstract_pgtable, i+8
+		);
 	} else {
-		ghost_printf("<missing>\n");
+		ghost_printf(GHOST_MISSING_FIELD "\n");
 	}
 
 	ghost_printf("%Ivm_table_locked: ", i+4);
 	if (!vm->vm_table_locked.present) {
-		ghost_printf("<missing>\n");
+		ghost_printf(GHOST_MISSING_FIELD "\n");
 		return;
 	}
 
@@ -1562,7 +1570,7 @@ static void ghost_dump_vms(struct ghost_vms *vms)
 	ghost_printf("vms: ");
 
 	if (!vms->present) {
-		ghost_printf("<missing>\n");
+		ghost_printf(GHOST_MISSING_FIELD "\n");
 		return;
 	}
 
@@ -1574,7 +1582,7 @@ static void ghost_dump_vms(struct ghost_vms *vms)
 		ghost_printf("        nr_vms:%lx\n", vms->table_data.nr_vms);
 
 	} else {
-		ghost_printf("<missing>\n");
+		ghost_printf(GHOST_MISSING_FIELD "\n");
 	}
 
 	ghost_printf("    vm_table:\n", vms->table_data.nr_vms);
@@ -1611,7 +1619,7 @@ static void ghost_dump_loaded_vcpu(struct ghost_loaded_vcpu *vcpu)
 	ghost_printf("loaded_vcpu[cpu:%d]: ", hyp_smp_processor_id());
 
 	if (!vcpu->present) {
-		ghost_printf("<missing>\n");
+		ghost_printf(GHOST_MISSING_FIELD "\n");
 	} else if (!vcpu->loaded) {
 		ghost_printf("<unloaded>\n");
 	} else {
