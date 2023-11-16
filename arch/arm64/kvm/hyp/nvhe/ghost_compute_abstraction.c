@@ -1349,7 +1349,7 @@ void record_and_copy_abstraction_vm_post(struct pkvm_hyp_vm *vm)
 	ghost_lock_vms();
 	struct ghost_state *g = this_cpu_ptr(&gs_recorded_post);
 	record_abstraction_vm_partial(g, vm, VMS_VM_OWNED);
-	copy_abstraction_vm_partial(&gs, g, vm->kvm.arch.pkvm.handle, VMS_VM_TABLE_OWNED);
+	copy_abstraction_vm_partial(&gs, g, vm->kvm.arch.pkvm.handle, VMS_VM_OWNED);
 	ghost_unlock_vms();
 	ghost_unlock_maplets();
 	GHOST_LOG_CONTEXT_EXIT();
