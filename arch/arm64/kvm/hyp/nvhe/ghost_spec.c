@@ -1334,6 +1334,7 @@ void ghost_record_pre(struct kvm_cpu_context *ctxt)
 		if (this_trap_print_controlled(ctxt)) {
 			ghost_printf("ghost recorded pre (full):\n");
 			ghost_dump_state(gr_pre);
+			ghost_printf("\n");
 		}
 #endif /* CONFIG_NVHE_GHOST_SPEC_DUMP_STATE */
 	}
@@ -1368,6 +1369,7 @@ void ghost_post(struct kvm_cpu_context *ctxt)
 		if (this_trap_print_controlled(ctxt)) {
 			ghost_printf("ghost recorded post (full):\n");
 			ghost_dump_state(gr_post);
+			ghost_printf("\n");
 		}
 #endif /* CONFIG_NVHE_GHOST_SPEC_DUMP_STATE */
 
@@ -1391,6 +1393,7 @@ void ghost_post(struct kvm_cpu_context *ctxt)
 			if (this_trap_print_controlled(ctxt)) {
 				ghost_printf("ghost computed post (full):\n");
 				ghost_dump_state(gc_post);
+				ghost_printf("\n");
 			}
 #endif /* CONFIG_NVHE_GHOST_SPEC_DUMP_STATE */
 			check_abstraction_equals_all(gc_post, gr_post, gr_pre);
