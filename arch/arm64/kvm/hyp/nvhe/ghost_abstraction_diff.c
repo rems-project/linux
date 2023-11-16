@@ -748,11 +748,11 @@ static void one_way_diff_blob_slots(struct diff_container *container, struct gho
 		// only show the diffs if one side is unclean
 		if (loc1->state.kind == STATE_PTE_INVALID_UNCLEAN || loc2->state.kind == STATE_PTE_INVALID_UNCLEAN) {
 			if (loc1->is_pte && loc2->is_pte)
-				ghost_diff_attach(container, diff_pair(TSMLOC(loc1), TSMLOC(loc2)));
+				ghost_diff_attach(container, diff_pair(TSMLOC((u64)loc1), TSMLOC((u64)loc2)));
 			else if (loc1->is_pte)
-				ghost_diff_attach(container, diff_pm(add, TSMLOC_TRACK(loc1)));
+				ghost_diff_attach(container, diff_pm(add, TSMLOC_TRACK((u64)loc1)));
 			else if (loc2->is_pte)
-				ghost_diff_attach(container, diff_pm(!add, TSMLOC_TRACK(loc2)));
+				ghost_diff_attach(container, diff_pm(!add, TSMLOC_TRACK((u64)loc2)));
 			saw_unclean = true;
 		}
 	}
