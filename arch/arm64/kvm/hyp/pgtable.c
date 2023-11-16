@@ -644,9 +644,9 @@ static int __kvm_pgtable_walk(struct kvm_pgtable_walk_data *data,
 		if (data->addr >= data->end)
 			break;
 
-		/*@ extract Owned<kvm_pte_t>, idx; @*/
-		/*@ instantiate good<kvm_pte_t>, idx; @*/
-		/*@ extract Indirect_Page_Table_Entries, idx; @*/
+		/*@ extract Owned<kvm_pte_t>, (i32)idx; @*/
+		/*@ instantiate good<kvm_pte_t>, (i32)idx; @*/
+		/*@ extract Indirect_Page_Table_Entries, (i32)idx; @*/
 
 		ret = __kvm_pgtable_visit(data, mm_ops, pteref, level);
 
