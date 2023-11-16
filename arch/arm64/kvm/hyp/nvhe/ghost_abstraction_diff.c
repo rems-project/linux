@@ -234,7 +234,7 @@ static void __put_dirty_string(char *s, bool *dirty, bool negate)
 }
 
 #define GHOST_STRING_DUMP_LEN 256
-static void __hyp_dump_string_diff(struct diff_val lhs, struct diff_val rhs)
+static void __hyp_dump_string_diff(struct diff_container *node, struct diff_val lhs, struct diff_val rhs)
 {
 	char lhs_s[GHOST_STRING_DUMP_LEN] = {0};
 	char rhs_s[GHOST_STRING_DUMP_LEN] = {0};
@@ -252,21 +252,23 @@ static void __hyp_dump_string_diff(struct diff_val lhs, struct diff_val rhs)
 			dirty[i] = true;
 	}
 
-	ghost_printf("\n");
+	ghost_printf("\n%I", node->depth*4);
 	ghost_printf("-");
 	__put_dirty_string(lhs_s, dirty, true);
 
-	ghost_printf("\n");
+	ghost_printf("\n%I", node->depth*4);
 	ghost_printf("+");
 	__put_dirty_string(rhs_s, dirty, false);
 }
 
-static void __ghost_print_diff(struct ghost_diff *diff, u64 indent)
+static void __ghost_print_diff(struct diff_container *node, struct ghost_diff *diff, u64 indent)
 {
 	switch (diff->kind) {
 	case GHOST_DIFF_NONE:
 		break;
 	case GHOST_DIFF_PM:
+		ghost_printf("\n%I", node->depth*4);
+
 		if (diff->pm.add)
 			ghost_printf(GHOST_WHITE_ON_GREEN "+");
 		else
@@ -277,20 +279,24 @@ static void __ghost_print_diff(struct ghost_diff *diff, u64 indent)
 		ghost_printf(GHOST_NORMAL);
 		break;
 	case GHOST_DIFF_PAIR:
-		__hyp_dump_string_diff(diff->pair.lhs, diff->pair.rhs);
+		__hyp_dump_string_diff(node, diff->pair.lhs, diff->pair.rhs);
 		break;
 	}
 }
 
-static void __put_key(struct diff_container *node, struct diff_val key)
+static int __put_key(struct diff_container *node, struct diff_val key)
 {
 	if (! val_equal(key, EMPTY_KEY)) {
 		ghost_printf("\n%I", node->depth*4);
 		__put_val(key, 0);
 		ghost_printf(":");
-	}
 
-	ghost_printf("\n");
+		/* the key is really just a transient node */
+		node->depth++;
+		return 1;
+	} else {
+		return 0;
+	}
 }
 
 /**
@@ -345,8 +351,9 @@ static void __attach(struct diff_container *node, struct diff_val key, struct gh
 		node->saw_diff = true;
 
 		if (node->nr_subfield_diffs < MAX_PRINT_DIFF_PER_SUBFIELDS) {
-			__put_key(node, key);
-			__ghost_print_diff(&diff, 0);
+			int i = __put_key(node, key);
+			__ghost_print_diff(node, &diff, 0);
+			node->depth -= i;
 		} else if (node->nr_subfield_diffs == MAX_PRINT_DIFF_PER_SUBFIELDS) {
 			// only once, not too noisy...
 			ghost_printf("\n");
@@ -378,11 +385,6 @@ static void ghost_diff_pop_subfield(struct diff_container *container)
 static void ghost_diff_field(struct diff_container *container, char *key, struct ghost_diff child)
 {
 	__attach(container, TSTR(key), child);
-}
-
-static void ghost_diff_index(struct diff_container *container, u64 key, struct ghost_diff child)
-{
-	__attach(container, TU64(key), child);
 }
 
 static void ghost_diff_attach(struct diff_container *container, struct ghost_diff child)
@@ -564,7 +566,7 @@ static void ghost_diff_vcpu(struct diff_container *node, int vcpu_idx, struct gh
 {
 	GHOST_LOG_CONTEXT_ENTER();
 	ghost_assert(vcpu1 && vcpu2);
-	ghost_diff_enter_subfield_val(node, TGPRINT("vcpu #%ld", (u64)vcpu_idx));
+	ghost_diff_enter_subfield_val(node, TGPRINT("vcpu %ld", (u64)vcpu_idx));
 	ghost_diff_field(node, "vcpu_handle", diff_pair(TU64(vcpu1->vcpu_handle), TU64(vcpu2->vcpu_handle)));
 	ghost_diff_field(node, "loaded", diff_pair(TBOOL(vcpu1->loaded), TBOOL(vcpu2->loaded)));
 	ghost_diff_field(node, "initialised", diff_pair(TBOOL(vcpu1->initialised), TBOOL(vcpu2->initialised)));
@@ -577,7 +579,7 @@ static void ghost_diff_vcpu(struct diff_container *node, int vcpu_idx, struct gh
 static void ghost_diff_vm(struct diff_container *node, pkvm_handle_t handle, struct ghost_vm *vm1, struct ghost_vm *vm2)
 {
 	GHOST_LOG_CONTEXT_ENTER();
-	ghost_diff_enter_subfield_val(node, TGPRINT("vm #%lx", (u64)handle));
+	ghost_diff_enter_subfield_val(node, TGPRINT("vm %lx", (u64)handle));
 	// in theory: handle should be the same...
 	ghost_diff_field(node, "handle", diff_pair(TU64((u64)vm1->pkvm_handle), TU64((u64)vm2->pkvm_handle)));
 	if (vm1->pkvm_handle == vm2->pkvm_handle) {
@@ -607,37 +609,59 @@ static void ghost_diff_vms(struct diff_container *node, struct ghost_vms *vms1, 
 	ghost_diff_enter_subfield(node, "vms");
 	ghost_diff_field(node, "present", diff_pair(TBOOL(vms1->present), TBOOL(vms2->present)));
 	if (!vms1->present || !vms2->present)
-		goto cleanup;
-	ghost_diff_field(node, "nr_vms", diff_pair(TU64(vms1->nr_vms), TU64(vms2->nr_vms)));
+		goto cleanup_and_exit;
 
-	// find those that were removed from vms2
+	ghost_diff_enter_subfield(node, "vm_table_data");
+	ghost_diff_field(node, "present", diff_pair(TBOOL(vms1->table_data.present), TBOOL(vms2->table_data.present)));
+	if (!vms1->table_data.present || !vms1->table_data.present)
+		goto cleanup_table_data;
+
+	ghost_diff_field(node, "nr_vms", diff_pair(TU64(vms1->table_data.nr_vms), TU64(vms2->table_data.nr_vms)));
+	ghost_diff_pop_subfield(node);
+
+	ghost_diff_enter_subfield(node, "vm_table");
+	/* things in left-hand side but not in right are things that were removed */
 	for (int i = 0; i < KVM_MAX_PVMS; i++) {
 		struct ghost_vm_slot *slot = &vms1->table[i];
 		if (slot->exists) {
 			pkvm_handle_t handle = slot->handle;
 			struct ghost_vm *vm2 = ghost_vms_get(vms2, handle);
 			if (! vm2) {
-				ghost_diff_index(node, (u64)handle, diff_pm(false, TU64((u64)handle)));
+				ghost_diff_attach(node, diff_pm(false, TGPRINT("vm %lx", (u64)handle)));
 			}
 		}
 	}
 
-	// now find those added or changed
+	/* things in right-hand side but not in left are things that were added */
 	for (int i = 0; i < KVM_MAX_PVMS; i++) {
 		struct ghost_vm_slot *slot = &vms2->table[i];
 		if (slot->exists) {
 			pkvm_handle_t handle = slot->handle;
-			struct ghost_vm *vm2 = slot->vm;
 			struct ghost_vm *vm1 = ghost_vms_get(vms1, handle);
 			if (! vm1) {
-				ghost_diff_index(node, (u64)handle, diff_pm(true, TU64((u64)handle)));
-			} else {
-				ghost_diff_vm(node, handle, vm1, vm2);
+				ghost_diff_attach(node, diff_pm(true, TGPRINT("vm %lx", (u64)handle)));
 			}
 		}
 	}
 
-cleanup:
+	/* things in both should be diff'd */
+	for (int i = 0; i < KVM_MAX_PVMS; i++) {
+		struct ghost_vm_slot *slot = &vms2->table[i];
+		if (slot->exists) {
+			pkvm_handle_t handle = slot->handle;
+			struct ghost_vm *vm1 = ghost_vms_get(vms1, handle);
+			struct ghost_vm *vm2 = slot->vm;
+			if (vm1) {
+				ghost_diff_vm(node, handle, vm1, vm2);
+			}
+		}
+	}
+	ghost_diff_pop_subfield(node);
+	goto cleanup_and_exit;
+
+cleanup_table_data:
+	ghost_diff_pop_subfield(node);
+cleanup_and_exit:
 	ghost_diff_pop_subfield(node);
 	GHOST_LOG_CONTEXT_EXIT();
 }
@@ -658,7 +682,7 @@ static void ghost_diff_globals(struct diff_container *node, struct ghost_constan
 static void ghost_diff_loaded_vcpu(struct diff_container *node, struct ghost_loaded_vcpu *vcpu1, struct ghost_loaded_vcpu *vcpu2)
 {
 	GHOST_LOG_CONTEXT_ENTER();
-	ghost_diff_enter_subfield(node, "globals");
+	ghost_diff_enter_subfield(node, "loaded_vcpu[cpu]");
 	ghost_diff_field(node, "present", diff_pair(TBOOL(vcpu1->present), TBOOL(vcpu2->present)));
 	if (vcpu1->present && vcpu2->present) {
 		ghost_diff_field(node, "loaded", diff_pair(TBOOL(vcpu1->loaded), TBOOL(vcpu2->loaded)));
@@ -674,7 +698,7 @@ static void ghost_diff_loaded_vcpu(struct diff_container *node, struct ghost_loa
 static void ghost_diff_running_state(struct diff_container *node, struct ghost_running_state *r1, struct ghost_running_state *r2)
 {
 	GHOST_LOG_CONTEXT_ENTER();
-	ghost_diff_enter_subfield(node, "run_state");
+	ghost_diff_enter_subfield(node, "run_state[cpu]");
 	ghost_diff_field(node, "guest_running", diff_pair(TBOOL(r1->guest_running), TBOOL(r2->guest_running)));
 	if (r1->guest_running && r2->guest_running) {
 		ghost_diff_field(node, "vm_handle", diff_pair(TU64((u64)r1->vm_handle), TU64((u64)r2->vm_handle)));
