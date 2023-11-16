@@ -26,7 +26,7 @@ void record_and_check_abstraction_vms_pre(void);
 void record_and_check_abstraction_vm_pre(struct pkvm_hyp_vm *vm);
 void record_and_copy_abstraction_pkvm_post(void);
 void record_and_copy_abstraction_host_post(void);
-void record_and_copy_abstraction_loaded_hyp_vcpu_post(void);
+void record_and_copy_abstraction_loaded_hyp_vcpu_post(struct pkvm_hyp_vcpu *vcpu);
 void record_and_copy_abstraction_vms_post(void);
 void record_and_copy_abstraction_vm_post(struct pkvm_hyp_vm *vm);
 
@@ -38,6 +38,8 @@ void copy_abstraction_hyp_memory(struct ghost_state *g_tgt, struct ghost_state *
 void copy_abstraction_host(struct ghost_state *g_tgt, struct ghost_state *g_src);
 void copy_abstraction_pkvm(struct ghost_state *g_tgt, struct ghost_state *g_src);
 void copy_abstraction_vms(struct ghost_state *g_tgt, struct ghost_state *g_src);
+void copy_abstraction_vms_partial(struct ghost_state *g_tgt, struct ghost_state *g_src, enum vm_field_owner owner);
+void copy_abstraction_vm_partial(struct ghost_state *g_tgt, struct ghost_state *g_src, pkvm_handle_t handle, enum vm_field_owner owner);
 
 void record_abstraction_hyp_memory(struct ghost_state *g);
 

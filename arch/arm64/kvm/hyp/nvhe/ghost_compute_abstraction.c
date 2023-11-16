@@ -94,10 +94,24 @@ void compute_abstraction_host(struct ghost_host *dest)
 	dest->present = true;
 }
 
+static void make_abstraction_vms(struct ghost_vms *vms)
+{
+	ghost_assert(!vms->present);
+
+	// this creates an empty table of vm slots (where all .exists are false)
+	for (int vm_index = 0; vm_index < KVM_MAX_PVMS; vm_index++) {
+		vms->table[vm_index].exists = false;
+	}
+
+	vms->present = true;
+	vms->table_data.present = false;
+}
 
 static struct ghost_vm_slot *__ghost_vm_or_free_slot_from_handle(struct ghost_vms *vms, pkvm_handle_t handle) {
-	ghost_assert(vms->present);
 	ghost_assert_vms_locked();
+
+	if (!vms->present)
+		make_abstraction_vms(vms);
 
 	struct ghost_vm_slot *free_slot = NULL;
 
@@ -206,14 +220,43 @@ bool ghost_vms_is_valid_handle(struct ghost_vms *vms, pkvm_handle_t handle)
 }
 
 /// from a vm_table index compute the abstract ghost VM
-void compute_abstraction_vm_partial_table(struct ghost_vm *dest, struct pkvm_hyp_vm *vm) {
-	ghost_assert(vm);
-	hyp_assert_lock_held(&vm->lock);
+void compute_abstraction_vm_partial(struct ghost_vm *dest, struct pkvm_hyp_vm *hyp_vm, enum vm_field_owner owner) {
+	ghost_assert(hyp_vm);
 
-	dest->pkvm_handle = vm->kvm.arch.pkvm.handle;
-	dest->lock = &vm->lock;
-	dest->vm_locked.present = true;
-	ghost_record_pgtable_ap(&dest->vm_locked.vm_abstract_pgtable, &vm->pgt, vm->pool.range_start, vm->pool.range_end, "guest_mmu.pgt", 0);
+	dest->pkvm_handle = hyp_vm->kvm.arch.pkvm.handle;
+	dest->lock = &hyp_vm->lock;
+
+	if (owner & VMS_VM_OWNED) {
+		hyp_assert_lock_held(&hyp_vm->lock);
+		dest->vm_locked.present = true;
+		ghost_record_pgtable_ap(&dest->vm_locked.vm_abstract_pgtable, &hyp_vm->pgt, hyp_vm->pool.range_start, hyp_vm->pool.range_end, "guest_mmu.pgt", 0);
+	}
+
+
+	if (owner & VMS_VM_TABLE_OWNED) {
+		ghost_assert_pkvm_vm_table_locked();
+		dest->vm_table_locked.present = true;
+		dest->vm_table_locked.nr_vcpus = hyp_vm->kvm.created_vcpus;
+		dest->vm_table_locked.nr_initialised_vcpus = hyp_vm->nr_vcpus;
+
+		/* the pKVM hyp_vm .vcpus field is only defined up to created_vcpus */
+		for (int vcpu_idx=0; vcpu_idx < KVM_MAX_PVMS; vcpu_idx++) {
+			dest->vm_table_locked.vcpus[vcpu_idx] = NULL;
+			if (vcpu_idx < hyp_vm->kvm.created_vcpus) {
+				struct pkvm_hyp_vcpu *vcpu = hyp_vm->vcpus[vcpu_idx];
+				struct ghost_vcpu *g_vcpu = malloc_or_die(sizeof (struct ghost_vcpu));
+				g_vcpu->vcpu_handle = vcpu_idx;
+				g_vcpu->initialised = vcpu_idx < hyp_vm->nr_vcpus;
+				// vcpu_idx < hyp_vm->nr_vcpus --> vcpu is not NULL
+				ghost_spec_assert(!g_vcpu->initialised || vcpu);
+				if (vcpu) {
+					g_vcpu->loaded = vcpu->loaded_hyp_vcpu ? true : false;
+					// TODO: regs
+				}
+				dest->vm_table_locked.vcpus[vcpu_idx] = g_vcpu;
+			}
+		}
+	}
 }
 
 void check_abstract_pgtable_equal(abstract_pgtable *ap1, abstract_pgtable *ap2, char *cmp_name, char* ap1_name, char* ap2_name, u64 indent)
@@ -360,33 +403,41 @@ void check_abstraction_equals_vm(struct ghost_vm *vm1, struct ghost_vm *vm2)
 	// ghost_assert_vm_locked(vm1);
 
 	// if not for the same guest VM, then not equal
-	// technically the handles are fields on the vm and protected by the vm
-	// but if we hold the vm_table lock they can't change out from under us
-	// and we don't want to lock vm2 if it's not the same guest as vm1
+
+	/* these fields are protected by the ghost_vms_lock and duplicated on the VM struct for ease of access */
 	GHOST_LOG(vm1->pkvm_handle, u32);
 	GHOST_LOG(vm2->pkvm_handle, u32);
 	ghost_spec_assert(vm1->pkvm_handle == vm2->pkvm_handle);
-
-	// TODO: BS: should we be worried about partial VMs here?
-
-	GHOST_LOG(vm1->vm_table_locked.nr_vcpus, u64);
-	GHOST_LOG(vm2->vm_table_locked.nr_vcpus, u64);
-	ghost_spec_assert(vm1->vm_table_locked.nr_vcpus == vm2->vm_table_locked.nr_vcpus);
-
 	ghost_safety_check(vm1->lock == vm2->lock);
 
-	// GHOST_LOG(vm1->nr_initialised_vcpus, u64);
-	// GHOST_LOG(vm2->nr_initialised_vcpus, u64);
-	// ghost_spec_assert(vm1->nr_initialised_vcpus == vm2->nr_initialised_vcpus);
+	if (vm1->vm_table_locked.present) {
+		if (!vm2->vm_table_locked.present)
+			GHOST_SPEC_FAIL("vm2->vm_table_locked missing");
 
-	for (int i=0; i < vm1->vm_table_locked.nr_vcpus; i++) {
-		GHOST_LOG_CONTEXT_ENTER_INNER("loop vcpus");
-		GHOST_LOG_INNER("loop vcpus", i, u32);
-		check_abstraction_equals_vcpu(vm1->vm_table_locked.vcpus[i], vm2->vm_table_locked.vcpus[i]);
-		GHOST_LOG_CONTEXT_EXIT_INNER("loop vcpus");
+		GHOST_LOG(vm1->vm_table_locked.nr_vcpus, u64);
+		GHOST_LOG(vm2->vm_table_locked.nr_vcpus, u64);
+		ghost_spec_assert(vm1->vm_table_locked.nr_vcpus == vm2->vm_table_locked.nr_vcpus);
+
+
+		// GHOST_LOG(vm1->vm_table_locked.nr_initialised_vcpus, u64);
+		// GHOST_LOG(vm2->vm_table_locked.nr_initialised_vcpus, u64);
+		// ghost_spec_assert(vm1->vm_table_locked.nr_initialised_vcpus == vm2->vm_table_locked.nr_initialised_vcpus);
+
+		for (int i=0; i < vm1->vm_table_locked.nr_vcpus; i++) {
+			GHOST_LOG_CONTEXT_ENTER_INNER("loop vcpus");
+			GHOST_LOG_INNER("loop vcpus", i, u32);
+			check_abstraction_equals_vcpu(vm1->vm_table_locked.vcpus[i], vm2->vm_table_locked.vcpus[i]);
+			GHOST_LOG_CONTEXT_EXIT_INNER("loop vcpus");
+		}
 	}
 
-	check_abstract_pgtable_equal(&vm1->vm_locked.vm_abstract_pgtable, &vm2->vm_locked.vm_abstract_pgtable, "abstraction_equals_vm", "vm1.vm_abstract_pgtable", "vm2.vm_abstract_pgtable", 4);
+	if (vm1->vm_locked.present) {
+		if (!vm2->vm_locked.present)
+			GHOST_SPEC_FAIL("vm2->vm_locked missing");
+
+		check_abstract_pgtable_equal(&vm1->vm_locked.vm_abstract_pgtable, &vm2->vm_locked.vm_abstract_pgtable, "abstraction_equals_vm", "vm1.vm_abstract_pgtable", "vm2.vm_abstract_pgtable", 4);
+	}
+
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
@@ -432,9 +483,15 @@ void check_abstraction_vms_subseteq(struct ghost_vms *gc, struct ghost_vms *gr_p
 {
 	GHOST_LOG_CONTEXT_ENTER();
 	ghost_assert(gc->present && gr_post->present);
-	GHOST_LOG(gc->nr_vms, u64);
-	GHOST_LOG(gr_post->nr_vms, u64);
-	ghost_spec_assert(gc->nr_vms == gr_post->nr_vms);
+
+	if (gc->table_data.present) {
+		if (!gr_post->table_data.present)
+			GHOST_SPEC_FAIL("gr_post->table_data was missing");
+
+		GHOST_LOG(gc->table_data.nr_vms, u64);
+		GHOST_LOG(gr_post->table_data.nr_vms, u64);
+		ghost_spec_assert(gc->table_data.nr_vms == gr_post->table_data.nr_vms);
+	}
 
 	/* it might be that we recorded more of the state than was touched by the spec,
 	 * in that case there may be VMs (e.g. whose locks were spuriously taken by the implementation)
@@ -631,25 +688,12 @@ void check_abstraction_equals_all(struct ghost_state *gc, struct ghost_state *gr
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
-static void init_abstraction_vms(struct ghost_state *g)
-{
-	ghost_assert(!g->vms.present);
-
-	// this creates an empty table of vm slots (where all .exists are false)
-	for (int vm_index = 0; vm_index < KVM_MAX_PVMS; vm_index++) {
-		g->vms.table[vm_index].exists = false;
-	}
-
-	g->vms.present = true;
-	g->vms.nr_vms = 0;
-}
-
 void init_abstraction(struct ghost_state *g)
 {
 	g->pkvm.present = false;
 	g->host.present = false;
+	g->vms.present = false;
 	this_cpu_ghost_register_state(g)->present = false;
-	init_abstraction_vms(g);
 	for (int cpu=0; cpu<NR_CPUS; cpu++) {
 		g->loaded_hyp_vcpu[cpu].present = false;
 	}
@@ -708,25 +752,7 @@ static void ghost_vms_partial_vm_try_free_slot(struct ghost_state *g, struct gho
 	ghost_vms_free(&g->vms, vm->pkvm_handle);
 }
 
-void clear_abstraction_vm_partial_vm_table_locked(struct ghost_state *g, pkvm_handle_t handle)
-{
-	ghost_assert_vms_locked();
-	struct ghost_vm *vm = ghost_vms_get(&g->vms, handle);
-
-	/* already doesn't exist,
-	 * nothing to do. */
-	if (!vm)
-		return;
-
-	vm->vm_table_locked.present = false;
-
-	/* Removing from the vm_table really means one less VM */
-	--g->vms.nr_vms;
-
-	ghost_vms_partial_vm_try_free_slot(g, vm);
-}
-
-void clear_abstraction_vm_partial_vm_locked(struct ghost_state *g, pkvm_handle_t handle)
+void clear_abstraction_vm_partial(struct ghost_state *g, pkvm_handle_t handle, enum vm_field_owner owner)
 {
 	ghost_assert_vms_locked();
 	struct ghost_vm *vm = ghost_vms_get(&g->vms, handle);
@@ -735,19 +761,36 @@ void clear_abstraction_vm_partial_vm_locked(struct ghost_state *g, pkvm_handle_t
 	if (!vm)
 		return;
 
-	if (vm->vm_locked.present) {
-		clear_abstract_pgtable(&vm->vm_locked.vm_abstract_pgtable);
+	if (owner & VMS_VM_OWNED) {
+		if (vm->vm_locked.present)
+			clear_abstract_pgtable(&vm->vm_locked.vm_abstract_pgtable);
+
+
+		vm->vm_locked.present = false;
 	}
 
-	vm->vm_locked.present = false;
+	if (owner & VMS_VM_TABLE_OWNED)
+		vm->vm_table_locked.present = false;
+
 	ghost_vms_partial_vm_try_free_slot(g, vm);
+}
+
+void clear_abstraction_vms_partial(struct ghost_state *g, enum vm_field_owner owner)
+{
+	if (!g->vms.present)
+		return;
+
+	for (int i=0; i < KVM_MAX_PVMS; i++) {
+		struct ghost_vm_slot *slot = &g->vms.table[i];
+		clear_abstraction_vm_partial(g, slot->handle, owner);
+	}
 }
 
 void clear_abstraction_vms(struct ghost_state *g)
 {
 	int i;
 	g->vms.present = false;
-	g->vms.nr_vms = 0;
+	g->vms.table_data.present = false;
 	for (i=0; i<KVM_MAX_PVMS; i++) {
 		ghost_vm_clear_slot(&g->vms.table[i]);
 	}
@@ -821,111 +864,97 @@ void copy_abstraction_host(struct ghost_state *g_tgt, struct ghost_state *g_src)
 	g_tgt->host.present = g_src->host.present;
 }
 
-static void ghost_vm_clone_into_vm_partial_vm_table_locked(struct ghost_vm *dest, struct ghost_vm *src)
+static void ghost_vm_clone_into_vm_partial(struct ghost_vm *dest, struct ghost_vm *src, enum vm_field_owner owner)
 {
-	dest->vm_table_locked.nr_vcpus = src->vm_table_locked.nr_vcpus;
-	dest->vm_table_locked.nr_initialised_vcpus = src->vm_table_locked.nr_initialised_vcpus;
-	ghost_assert(src->vm_table_locked.nr_vcpus <= KVM_MAX_VCPUS);
-	int copied_vcpu = 0;
-	for (int vcpu_idx=0; vcpu_idx<KVM_MAX_VCPUS; vcpu_idx++) {
-		if (vcpu_idx<src->vm_table_locked.nr_vcpus && src->vm_table_locked.vcpus[vcpu_idx]) {
-			copied_vcpu++;
-			dest->vm_table_locked.vcpus[vcpu_idx] = malloc_or_die(sizeof(struct ghost_vcpu));
-			*dest->vm_table_locked.vcpus[vcpu_idx] = *src->vm_table_locked.vcpus[vcpu_idx];
-		} else {
-			dest->vm_table_locked.vcpus[vcpu_idx] = NULL;
-		}
-	}
-	ghost_assert(copied_vcpu == dest->vm_table_locked.nr_vcpus);
 	dest->pkvm_handle = src->pkvm_handle;
 	dest->lock = src->lock;
-}
 
-static void ghost_vm_clone_into_vm_partial_vm_locked(struct ghost_vm *dest, struct ghost_vm *src)
-{
-	ghost_assert_vm_locked(src);
-	abstract_pgtable_copy(&dest->vm_locked.vm_abstract_pgtable, &src->vm_locked.vm_abstract_pgtable);
+	/* no need to check we actually own any locks
+	 * as we're only copying between ghost objects. */
+
+	if (owner & VMS_VM_TABLE_OWNED) {
+		dest->vm_table_locked.present = true;
+		dest->vm_table_locked.nr_vcpus = src->vm_table_locked.nr_vcpus;
+		dest->vm_table_locked.nr_initialised_vcpus = src->vm_table_locked.nr_initialised_vcpus;
+		ghost_assert(src->vm_table_locked.nr_vcpus <= KVM_MAX_VCPUS);
+		int copied_vcpu = 0;
+		for (int vcpu_idx=0; vcpu_idx<KVM_MAX_VCPUS; vcpu_idx++) {
+			if (vcpu_idx<src->vm_table_locked.nr_vcpus && src->vm_table_locked.vcpus[vcpu_idx]) {
+				copied_vcpu++;
+				dest->vm_table_locked.vcpus[vcpu_idx] = malloc_or_die(sizeof(struct ghost_vcpu));
+				*dest->vm_table_locked.vcpus[vcpu_idx] = *src->vm_table_locked.vcpus[vcpu_idx];
+			} else {
+				dest->vm_table_locked.vcpus[vcpu_idx] = NULL;
+			}
+		}
+		ghost_assert(copied_vcpu == dest->vm_table_locked.nr_vcpus);
+	}
+
+	if (owner & VMS_VM_OWNED) {
+		ghost_assert_maplets_locked();
+		dest->vm_locked.present = true;
+		abstract_pgtable_copy(&dest->vm_locked.vm_abstract_pgtable, &src->vm_locked.vm_abstract_pgtable);
+	}
+
 }
 
 void ghost_vm_clone_into(struct ghost_vm *dest, struct ghost_vm *src)
 {
-	dest->vm_locked.present = src->vm_locked.present;
-	dest->vm_table_locked.present = src->vm_table_locked.present;
-
-	dest->pkvm_handle = src->pkvm_handle;
-	dest->lock = src->lock;
-
 	if (src->vm_table_locked.present)
-		ghost_vm_clone_into_vm_partial_vm_table_locked(dest, src);
+		ghost_vm_clone_into_vm_partial(dest, src, VMS_VM_TABLE_OWNED);
 
 	if (src->vm_locked.present)
-		ghost_vm_clone_into_vm_partial_vm_locked(dest, src);
+		ghost_vm_clone_into_vm_partial(dest, src, VMS_VM_OWNED);
 }
 
-void copy_abstraction_vm_partial_vm_table_locked(struct ghost_state *g_tgt, struct ghost_state *g_src, pkvm_handle_t handle)
+void copy_abstraction_vm_partial(struct ghost_state *g_tgt, struct ghost_state *g_src, pkvm_handle_t handle, enum vm_field_owner owner)
 {
 	GHOST_LOG_CONTEXT_ENTER();
-	ghost_assert_maplets_locked();
 
 	/* if the vms table isn't present in the target
 	 * which might be if it had been previously cleared
 	 * re-create a new one */
 	if (!g_tgt->vms.present)
-		init_abstraction_vms(g_tgt);
+		make_abstraction_vms(&g_tgt->vms);
 
 	struct ghost_vm *src_vm = ghost_vms_get(&g_src->vms, handle);
 	ghost_assert(src_vm);
 
-	clear_abstraction_vm_partial_vm_table_locked(g_tgt, handle);
-	struct ghost_vm *tgt_vm = ghost_vms_alloc(&g_tgt->vms, handle);
-	ghost_assert(tgt_vm);
+	clear_abstraction_vm_partial(g_tgt, handle, owner);
 
-	ghost_vm_clone_into_vm_partial_vm_table_locked(tgt_vm, src_vm);
+	struct ghost_vm *tgt_vm = ghost_vms_get(&g_tgt->vms, handle);
+	if (!tgt_vm) {
+		tgt_vm = ghost_vms_alloc(&g_tgt->vms, handle);
+		ghost_assert(tgt_vm);
+	}
+
+	ghost_vm_clone_into_vm_partial(tgt_vm, src_vm, owner);
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
-void copy_abstraction_vm_partial_vm_locked(struct ghost_state *g_tgt, struct ghost_state *g_src, pkvm_handle_t handle)
+void copy_abstraction_vms_partial(struct ghost_state *g_tgt, struct ghost_state *g_src, enum vm_field_owner owner)
 {
-	GHOST_LOG_CONTEXT_ENTER();
-	ghost_assert_maplets_locked();
-
-	/* if the vms table isn't present in the target
-	 * which might be if it had been previously cleared
-	 * re-create a new one */
-	if (!g_tgt->vms.present)
-		init_abstraction_vms(g_tgt);
-
-	struct ghost_vm *src_vm = ghost_vms_get(&g_src->vms, handle);
-	ghost_assert(src_vm);
-
-	// TODO: BS: I think this lock held assert is incorrect?
-	// ghost_assert_vm_locked(src_vm);
-
-	clear_abstraction_vm_partial_vm_locked(g_tgt, handle);
-	struct ghost_vm *tgt_vm = ghost_vms_alloc(&g_tgt->vms, handle);
-	ghost_assert(tgt_vm);
-
-	ghost_vm_clone_into(tgt_vm, src_vm);
-	GHOST_LOG_CONTEXT_EXIT();
-}
-
-void copy_abstraction_vms(struct ghost_state *g_tgt, struct ghost_state *g_src)
-{
-	ghost_assert_maplets_locked();
 	ghost_assert_vms_locked();
 	ghost_assert(g_src->vms.present);
 
-	clear_abstraction_vms(g_tgt);
+	clear_abstraction_vms_partial(g_tgt, owner);
 
 	// for each VM, copy it.
 	for (int i=0; i<KVM_MAX_PVMS; i++) {
 		struct ghost_vm_slot *src_slot = &g_src->vms.table[i];
-		bool exists = src_slot->exists;
+
 		if (src_slot->exists) {
-			copy_abstraction_vm_partial_vm_table_locked(g_tgt, g_src, src_slot->handle);
+			copy_abstraction_vm_partial(g_tgt, g_src, src_slot->handle, owner);
 		}
 	}
-	g_tgt->vms.nr_vms = g_src->vms.nr_vms;
+
+	if (owner & VMS_VM_TABLE_OWNED)
+		g_tgt->vms.table_data = g_src->vms.table_data;
+}
+
+void copy_abstraction_vms(struct ghost_state *g_tgt, struct ghost_state *g_src)
+{
+	copy_abstraction_vms_partial(g_tgt, g_src, VMS_VM_TABLE_OWNED | VMS_VM_OWNED);
 }
 
 void copy_abstraction_loaded_vcpus(struct ghost_state *g_tgt, struct ghost_state *g_src)
@@ -948,32 +977,16 @@ void record_abstraction_pkvm(struct ghost_state *g)
 	compute_abstraction_pkvm(&g->pkvm);
 }
 
-void record_abstraction_loaded_vcpu(struct ghost_state *g)
+void record_abstraction_vm_partial(struct ghost_state *g, struct pkvm_hyp_vm *hyp_vm, enum vm_field_owner owner)
 {
 	GHOST_LOG_CONTEXT_ENTER();
-	bool loaded = false;
-	pkvm_handle_t vm_handle = 0;
-	u64 vcpu_index = 0;
-	struct pkvm_hyp_vcpu *loaded_vcpu = pkvm_get_loaded_hyp_vcpu();
-	if (loaded_vcpu) {
-		// Now we dereference the vcpu struct, even though we're not protected by a lock
-		// this is somehow ok?
-		vm_handle = loaded_vcpu->vcpu.kvm->arch.pkvm.handle;
-		vcpu_index = loaded_vcpu->vcpu.vcpu_idx;
-		loaded = true;
-	}
-	*this_cpu_ghost_loaded_vcpu(g) = (struct ghost_loaded_vcpu){
-		.present = true,
-		.loaded = loaded,
-		.vm_handle = vm_handle,
-		.vcpu_index = vcpu_index,
-	};
-	GHOST_LOG_CONTEXT_EXIT();
-}
+	ghost_assert_vms_locked();
 
-static void record_abstraction_partial_vm_notable(struct ghost_state *g, struct pkvm_hyp_vm *hyp_vm)
-{
 	pkvm_handle_t handle = hyp_vm->kvm.arch.pkvm.handle;
+
+	// if recording the first vm, make an empty dictionary.
+	if (!g->vms.present)
+		make_abstraction_vms(&g->vms);
 
 	/*
 	* It may be that we're taking or releasing a vm_table_lock
@@ -987,43 +1000,24 @@ static void record_abstraction_partial_vm_notable(struct ghost_state *g, struct 
 		ghost_assert(vm);
 	}
 
-	vm->vm_table_locked.present = true;
-	vm->vm_table_locked.nr_vcpus = hyp_vm->kvm.created_vcpus;
-	vm->vm_table_locked.nr_initialised_vcpus = hyp_vm->nr_vcpus;
-
-	/* the pKVM hyp_vm .vcpus field is only defined up to created_vcpus */
-	for (int vcpu_idx=0; vcpu_idx < KVM_MAX_PVMS; vcpu_idx++) {
-		vm->vm_table_locked.vcpus[vcpu_idx] = NULL;
-		if (vcpu_idx < hyp_vm->kvm.created_vcpus) {
-			struct pkvm_hyp_vcpu *vcpu = hyp_vm->vcpus[vcpu_idx];
-			struct ghost_vcpu *g_vcpu = malloc_or_die(sizeof (struct ghost_vcpu));
-			g_vcpu->vcpu_handle = vcpu_idx;
-			g_vcpu->initialised = vcpu_idx < hyp_vm->nr_vcpus;
-			// vcpu_idx < hyp_vm->nr_vcpus --> vcpu is not NULL
-			ghost_spec_assert(!g_vcpu->initialised || vcpu);
-			if (vcpu) {
-				g_vcpu->loaded = vcpu->loaded_hyp_vcpu ? true : false;
-				// TODO: regs
-			}
-			vm->vm_table_locked.vcpus[vcpu_idx] = g_vcpu;
-		}
-	}
-
-	/* these are not protected by the vm lock
-	 * but are supposed to be read-only once the struct is created
-	 */
-	vm->pkvm_handle = handle;
-	/* NOTE: on taking the vm_table in vm_init, pKVM hasn't created the lock yet
-	 * we can remember the address, but can't assert it's held yet */
-	vm->lock = &hyp_vm->lock;
-
+	compute_abstraction_vm_partial(vm, hyp_vm, owner);
+	GHOST_LOG_CONTEXT_EXIT();
 }
 
-void record_abstraction_vms(struct ghost_state *g)
+void record_abstraction_vms_partial(struct ghost_state *g, enum vm_field_owner owner)
 {
 	GHOST_LOG_CONTEXT_ENTER();
-	g->vms.present = true;
-	g->vms.nr_vms = 0;
+
+	/* Make empty table if not already there */
+	if (!g->vms.present) {
+		make_abstraction_vms(&g->vms);
+	}
+
+	if (owner & VMS_VM_TABLE_OWNED) {
+		g->vms.table_data.present = true;
+		g->vms.table_data.nr_vms = 0;
+	}
+
 	for (int idx=0; idx<KVM_MAX_PVMS; idx++) {
 		struct pkvm_hyp_vm *hyp_vm = vm_table[idx];
 		/* If we only have the table lock, not the entire vm lock
@@ -1031,10 +1025,40 @@ void record_abstraction_vms(struct ghost_state *g)
 		 * so only take a partial view of it.
 		 */
 		if (hyp_vm) {
-			record_abstraction_partial_vm_notable(g, hyp_vm);
-			g->vms.nr_vms++;
+			record_abstraction_vm_partial(g, hyp_vm, owner);
+
+			if (owner & VMS_VM_TABLE_OWNED)
+				g->vms.table_data.nr_vms++;
 		}
 	}
+	GHOST_LOG_CONTEXT_EXIT();
+}
+
+void record_abstraction_loaded_vcpu(struct ghost_state *g, struct pkvm_hyp_vcpu *loaded_vcpu)
+{
+	GHOST_LOG_CONTEXT_ENTER();
+	bool loaded = false;
+	pkvm_handle_t vm_handle = 0;
+	u64 vcpu_index = 0;
+	if (loaded_vcpu) {
+		// Now we dereference the vcpu struct, even though we're not protected by a lock
+		// this is somehow ok?
+		vm_handle = loaded_vcpu->vcpu.kvm->arch.pkvm.handle;
+		vcpu_index = loaded_vcpu->vcpu.vcpu_idx;
+		loaded = true;
+
+		/* The vm_table lock is still protecting us, ensuring the vcpu is only on one core
+		 * it's just that we 'forgot' about that on the hypercall
+		 * so just re-compute the vm-table-owned data. */
+		record_abstraction_vm_partial(g, pkvm_hyp_vcpu_to_hyp_vm(loaded_vcpu), VMS_VM_TABLE_OWNED);
+	}
+
+	*this_cpu_ghost_loaded_vcpu(g) = (struct ghost_loaded_vcpu){
+		.present = true,
+		.loaded = loaded,
+		.vm_handle = vm_handle,
+		.vcpu_index = vcpu_index,
+	};
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
@@ -1044,38 +1068,6 @@ void record_abstraction_host(struct ghost_state *g)
 	compute_abstraction_host(&g->host);
 }
 
-void record_abstraction_vm_partial_table(struct ghost_state *g, struct pkvm_hyp_vm *vm)
-{
-	GHOST_LOG_CONTEXT_ENTER();
-	ghost_assert_vms_locked();
-
-	// if recording the first vm, make an empty dictionary.
-	if (!g->vms.present)
-		init_abstraction_vms(g);
-
-	// we really should only call record_abstraction_vm to record a vm that actually exists
-	// and that we own
-	ghost_assert(vm);
-	hyp_assert_lock_held(&vm->lock);
-
-	pkvm_handle_t handle = vm->kvm.arch.pkvm.handle;
-
-	/* the vm may already exist in `g`
-	 * if we had earlier loaded the vm_table and put a partial record in there
-	 */
-	struct ghost_vm *g_vm = ghost_vms_get(&g->vms, handle);
-
-	/* if not, we took the vm lock without the vm_table lock
-	 * and have to make a ghost VM struct. */
-	if (!g_vm) {
-		g_vm = ghost_vms_alloc(&g->vms, handle);
-		ghost_assert(g_vm);
-	}
-
-	// write the vm directly into the slot
-	compute_abstraction_vm_partial_table(g_vm, vm);
-	GHOST_LOG_CONTEXT_EXIT();
-}
 
 void record_abstraction_vms_and_check_none(struct ghost_state *g)
 {
@@ -1084,10 +1076,13 @@ void record_abstraction_vms_and_check_none(struct ghost_state *g)
 	ghost_assert_pkvm_vm_table_locked();
 
 	// empty the dictionary first;
+	// then set it to be present, but empty.
 	clear_abstraction_vms(g);
+	make_abstraction_vms(&g->vms);
 
-	// set it to be present, but empty.
-	init_abstraction_vms(g);
+	// make there be a vm_table_data but make it empty.
+	g->vms.table_data.present = true;
+	g->vms.table_data.nr_vms = 0;
 
 	for (int vm_index = 0; vm_index < KVM_MAX_PVMS; vm_index++) {
 		struct pkvm_hyp_vm *hyp_vm = vm_table[vm_index];
@@ -1271,7 +1266,7 @@ void record_abstraction_loaded_vcpu_and_check_none(void)
 {
 	struct pkvm_hyp_vcpu *loaded_vcpu = pkvm_get_loaded_hyp_vcpu();
 	// this cpu should have a loaded vcpu yet
-	ghost_assert(!loaded_vcpu);
+	ghost_spec_assert(!loaded_vcpu);
 	this_cpu_ghost_loaded_vcpu(&gs)->present = true;
 	this_cpu_ghost_loaded_vcpu(&gs)->loaded = false;
 }
@@ -1280,17 +1275,22 @@ void record_and_check_abstraction_loaded_hyp_vcpu_pre(void)
 {
 	GHOST_LOG_CONTEXT_ENTER();
 	struct ghost_state *g = this_cpu_ptr(&gs_recorded_pre);
-	record_abstraction_loaded_vcpu(g);
+	struct pkvm_hyp_vcpu *loaded_vcpu = pkvm_get_loaded_hyp_vcpu();
+	ghost_lock_vms();
+	record_abstraction_loaded_vcpu(g, loaded_vcpu);
 	check_abstraction_equals_loaded_vcpus(g, &gs);
+	ghost_unlock_vms();
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
-void record_and_copy_abstraction_loaded_hyp_vcpu_post(void)
+void record_and_copy_abstraction_loaded_hyp_vcpu_post(struct pkvm_hyp_vcpu *vcpu)
 {
 	GHOST_LOG_CONTEXT_ENTER();
 	struct ghost_state *g = this_cpu_ptr(&gs_recorded_post);
-	record_abstraction_loaded_vcpu(g);
+	ghost_lock_vms();
+	record_abstraction_loaded_vcpu(g, vcpu);
 	copy_abstraction_loaded_vcpus(&gs, g);
+	ghost_unlock_vms();
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
@@ -1298,12 +1298,10 @@ void record_and_check_abstraction_vms_pre(void)
 {
 	GHOST_LOG_CONTEXT_ENTER();
 	struct ghost_state *g = this_cpu_ptr(&gs_recorded_pre);
-	ghost_lock_maplets();
 	ghost_lock_vms();
-	record_abstraction_vms(g);
+	record_abstraction_vms_partial(g, VMS_VM_TABLE_OWNED);
 	check_abstraction_vms_subseteq(&g->vms, &gs.vms);
 	ghost_unlock_vms();
-	ghost_unlock_maplets();
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
@@ -1311,12 +1309,10 @@ void record_and_copy_abstraction_vms_post(void)
 {
 	GHOST_LOG_CONTEXT_ENTER();
 	struct ghost_state *g = this_cpu_ptr(&gs_recorded_post);
-	ghost_lock_maplets();
 	ghost_lock_vms();
-	record_abstraction_vms(g);
-	copy_abstraction_vms(&gs, g);
+	record_abstraction_vms_partial(g, VMS_VM_TABLE_OWNED);
+	copy_abstraction_vms_partial(&gs, g, VMS_VM_TABLE_OWNED);
 	ghost_unlock_vms();
-	ghost_unlock_maplets();
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
@@ -1337,7 +1333,7 @@ void record_and_check_abstraction_vm_pre(struct pkvm_hyp_vm *vm)
 	// NOTE: this is ok, because at the unlock we will put this vm in there,
 	// so on future locks we will do the check.
 	if (ghost_vms_is_valid_handle(&gs.vms, handle)) {
-		record_abstraction_vm_partial_table(g, vm);
+		record_abstraction_vm_partial(g, vm, VMS_VM_OWNED);
 		check_abstraction_vm_in_vms_and_equal(handle, g, &gs.vms);
 	}
 
@@ -1352,8 +1348,8 @@ void record_and_copy_abstraction_vm_post(struct pkvm_hyp_vm *vm)
 	ghost_lock_maplets();
 	ghost_lock_vms();
 	struct ghost_state *g = this_cpu_ptr(&gs_recorded_post);
-	record_abstraction_vm_partial_table(g, vm);
-	copy_abstraction_vm_partial_vm_locked(&gs, g, vm->kvm.arch.pkvm.handle);
+	record_abstraction_vm_partial(g, vm, VMS_VM_OWNED);
+	copy_abstraction_vm_partial(&gs, g, vm->kvm.arch.pkvm.handle, VMS_VM_TABLE_OWNED);
 	ghost_unlock_vms();
 	ghost_unlock_maplets();
 	GHOST_LOG_CONTEXT_EXIT();
@@ -1513,13 +1509,38 @@ static void ghost_dump_host(struct ghost_host *host)
 	);
 }
 
-static void ghost_dump_vm(struct ghost_vm *vm)
+static void ghost_dump_vm(struct ghost_vm *vm, u64 i)
 {
 	if (!vm)
 		return;
 
-	ghost_printf("vm handle:%x nr_vcpus:%ld nr_initialised_vcpus:ld, pgtable:\n", vm->pkvm_handle, vm->vm_table_locked.nr_vcpus, vm->vm_table_locked.nr_initialised_vcpus);
-	ghost_printf("%I%gI(pgtable)\n", 4, &vm->vm_locked.vm_abstract_pgtable, 4);
+	ghost_printf("%Ivm %x:\n", i, vm->pkvm_handle);
+	ghost_printf("%Ivm_table_locked:\n", i+4);
+	ghost_printf("%Ipresent:%b\n", i+8, vm->vm_table_locked.present);
+	if (vm->vm_table_locked.present) {
+		ghost_printf("%Inr_vcpus:%ld\n", i+8, vm->vm_table_locked.nr_vcpus);
+		ghost_printf("%Inr_initialised_vcpus:%ld\n", i+8, vm->vm_table_locked.nr_initialised_vcpus);
+	}
+
+	ghost_printf("%Ivm_locked:\n", i+4);
+	ghost_printf("%Ipresent:%b\n", i+8, vm->vm_locked.present);
+	if (vm->vm_locked.present) {
+		ghost_printf("%I%gI(pgtable)\n", i+8, &vm->vm_locked.vm_abstract_pgtable, i+8);
+	}
+
+	ghost_printf("%Ivcpus:\n", i+4);
+	for (int i = 0; i < vm->vm_table_locked.nr_vcpus; i++) {
+		struct ghost_vcpu *vcpu = vm->vm_table_locked.vcpus[i];
+		ghost_printf("%Ivcpu %ld ", i+8);
+
+		if (vcpu->loaded)
+			ghost_printf("L");
+
+		if (vcpu->initialised)
+			ghost_printf("I");
+
+		ghost_printf("\n");
+	}
 }
 
 static void ghost_dump_vms(struct ghost_vms *vms)
@@ -1529,10 +1550,16 @@ static void ghost_dump_vms(struct ghost_vms *vms)
 		return;
 	}
 
+	ghost_printf("    vm_table_data:\n");
+	ghost_printf("        present:%b\n", vms->table_data.present);
+	if (vms->table_data.present)
+		ghost_printf("        nr_vms:%lx\n", vms->table_data.nr_vms);
+
+	ghost_printf("    vm_table:\n", vms->table_data.nr_vms);
 	for (int i = 0; i < KVM_MAX_PVMS; i++) {
 		struct ghost_vm_slot *slot = &vms->table[i];
 		if (slot->exists) {
-			ghost_dump_vm(slot->vm);
+			ghost_dump_vm(slot->vm, 4+4);
 		}
 	}
 }

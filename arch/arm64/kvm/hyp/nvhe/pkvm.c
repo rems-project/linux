@@ -259,10 +259,14 @@ static DEFINE_HYP_SPINLOCK(vm_table_lock);
 static void vm_table_lock_component(void)
 {
 	hyp_spin_lock(&vm_table_lock);
+	if (ghost_exec_enabled())
+		record_and_check_abstraction_vms_pre();
 }
 
 static void vm_table_unlock_component(void)
 {
+	if (ghost_exec_enabled())
+		record_and_copy_abstraction_vms_post();
 	hyp_spin_unlock(&vm_table_lock);
 }
 #endif /* CONFIG_NVHE_GHOST_SPEC */
@@ -329,6 +333,8 @@ struct pkvm_hyp_vcpu *pkvm_load_hyp_vcpu(pkvm_handle_t handle,
 	hyp_page_ref_inc(hyp_virt_to_page(hyp_vm));
 unlock:
 #ifdef CONFIG_NVHE_GHOST_SPEC
+	if (ghost_exec_enabled())
+		record_and_copy_abstraction_loaded_hyp_vcpu_post(hyp_vcpu);
 	vm_table_unlock_component();
 #else /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_spin_unlock(&vm_table_lock);
@@ -336,11 +342,6 @@ unlock:
 
 	if (hyp_vcpu)
 		__this_cpu_write(loaded_hyp_vcpu, hyp_vcpu);
-
-#ifdef CONFIG_NVHE_GHOST_SPEC
-	if (ghost_exec_enabled())
-		record_and_copy_abstraction_loaded_hyp_vcpu_post();
-#endif /* CONFIG_NVHE_GHOST_SPEC */
 
 	return hyp_vcpu;
 }
@@ -360,14 +361,10 @@ void pkvm_put_hyp_vcpu(struct pkvm_hyp_vcpu *hyp_vcpu)
 	hyp_vcpu->loaded_hyp_vcpu = NULL;
 	__this_cpu_write(loaded_hyp_vcpu, NULL);
 
-#ifdef CONFIG_NVHE_GHOST_SPEC
-	if (ghost_exec_enabled())
-		record_and_copy_abstraction_loaded_hyp_vcpu_post();
-#endif /* CONFIG_NVHE_GHOST_SPEC */
-
 	hyp_page_ref_dec(hyp_virt_to_page(hyp_vm));
 
 #ifdef CONFIG_NVHE_GHOST_SPEC
+		record_and_copy_abstraction_loaded_hyp_vcpu_post(hyp_vcpu);
 	vm_table_unlock_component();
 #else /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_spin_unlock(&vm_table_lock);
@@ -759,8 +756,6 @@ int __pkvm_init_vm(struct kvm *host_kvm, unsigned long vm_hva,
 
 #ifdef CONFIG_NVHE_GHOST_SPEC
 	vm_table_lock_component();
-	if (ghost_exec_enabled())
-		record_and_check_abstraction_vms_pre();
 #else /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_spin_lock(&vm_table_lock);
 #endif /* CONFIG_NVHE_GHOST_SPEC */
@@ -772,8 +767,6 @@ int __pkvm_init_vm(struct kvm *host_kvm, unsigned long vm_hva,
 	if (ret)
 		goto err_remove_vm_table_entry;
 #ifdef CONFIG_NVHE_GHOST_SPEC
-	if (ghost_exec_enabled())
-		record_and_copy_abstraction_vms_post();
 	vm_table_unlock_component();
 #else /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_spin_unlock(&vm_table_lock);
@@ -819,8 +812,6 @@ int __pkvm_init_vcpu(pkvm_handle_t handle, struct kvm_vcpu *host_vcpu,
 
 #ifdef CONFIG_NVHE_GHOST_SPEC
 	vm_table_lock_component();
-	if (ghost_exec_enabled())
-		record_and_check_abstraction_vms_pre();
 #else /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_spin_lock(&vm_table_lock);
 #endif /* CONFIG_NVHE_GHOST_SPEC */
@@ -849,8 +840,6 @@ int __pkvm_init_vcpu(pkvm_handle_t handle, struct kvm_vcpu *host_vcpu,
 	hyp_vm->nr_vcpus++;
 unlock:
 #ifdef CONFIG_NVHE_GHOST_SPEC
-	if (ghost_exec_enabled())
-		record_and_copy_abstraction_vms_post();
 	vm_table_unlock_component();
 #else /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_spin_unlock(&vm_table_lock);
@@ -884,7 +873,12 @@ int __pkvm_teardown_vm(pkvm_handle_t handle)
 	unsigned int idx;
 	int err;
 
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	vm_table_lock_component();
+#else /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_spin_lock(&vm_table_lock);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
+
 	hyp_vm = get_vm_by_handle(handle);
 	if (!hyp_vm) {
 		err = -ENOENT;
@@ -901,7 +895,11 @@ int __pkvm_teardown_vm(pkvm_handle_t handle)
 	/* Ensure the VMID is clean before it can be reallocated */
 	__kvm_tlb_flush_vmid(&hyp_vm->kvm.arch.mmu);
 	remove_vm_table_entry(handle);
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	vm_table_unlock_component();
+#else /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_spin_unlock(&vm_table_lock);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 
 	/* Reclaim guest pages (including page-table pages) */
 	mc = &host_kvm->arch.pkvm.teardown_mc;
@@ -935,7 +933,11 @@ int __pkvm_teardown_vm(pkvm_handle_t handle)
 	return 0;
 
 err_unlock:
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	vm_table_unlock_component();
+#else /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_spin_unlock(&vm_table_lock);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	return err;
 }
 

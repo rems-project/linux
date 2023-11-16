@@ -117,6 +117,17 @@ struct ghost_vcpu {
 };
 
 /**
+ * enum vm_field_owner - Lock which owns a particular field.
+ * @VMS_VM_TABLE_OWNED: for fields owned by pKVM's own vm_table_lock
+ * @VMS_VM_OWNED: for fields owned/protected by the VM's own pgtable lock (so, the pgtable itself).
+ */
+enum vm_field_owner {
+	VMS_VM_TABLE_OWNED = BIT(0),
+	VMS_VM_OWNED = BIT(1),
+};
+
+
+/**
  * struct ghost_vm_locked_by_vm_lock - A guest VM (part protected by the internal VM lock)
  *
  * @vm_abstract_pgtable: an abstract mapping of the concrete guest pagetable
@@ -145,11 +156,20 @@ struct ghost_vm_locked_by_vm_table {
 	u64 nr_initialised_vcpus;
 	struct ghost_vcpu *vcpus[KVM_MAX_VCPUS];
 };
+
 /**
  * struct ghost_vm - A guest VM
+ * @pkvm_handle: the opaque pKVM-defined handle for this VM.
+ * @lock: a reference to the underlying spinlock of the real hyp VM, for instrumentation purposes.
+ * @vm_locked: fields owned by the internal VM lock
+ * @vm_table_locked: fields protected by the pKVM vm_table lock
  *
- * @vm_locked: fields protected by the internal VM lock
- * @vm_table_locked: fields protected by the VM table lock
+ * The VM is split into two parts: the pgtable (owned by the VM's own internal lock)
+ * and the other metadata which is collectively owned by the VM struct itself,
+ * which is protected by the pKVM vm_table lock.
+ *
+ * We split the struct into two sub-structs for the parts protected by separate locks,
+ * and these can be filled separately leading to partially initialised ghost VM structs.
  */
 struct ghost_vm {
 	pkvm_handle_t pkvm_handle;
@@ -210,7 +230,7 @@ struct ghost_pkvm {
  * @vm: if exists, the actual VM in this slot.
  *
  * Context: the fields are protected by the ghost vms lock,
- *          the vm itself is protected by that VM's lock.
+ *          but the memory pointed to `vm` is owned by separate locks (see ghost_vm).
  */
 struct ghost_vm_slot {
 	bool exists;
@@ -219,19 +239,30 @@ struct ghost_vm_slot {
 };
 
 /**
+ * strcut ghost_vms_table_data - pKVM-owned data about the whole vm table state
+ *
+ * Context: owned by pKVM's vm_table_lock.
+ */
+struct ghost_vms_table_data {
+	bool present;
+	u64 nr_vms;
+};
+
+/**
  * struct ghost_vms - Ghost VM table
  *
  * @present: whether this part of the ghost state is set
- * @nr_vms: if present, the number of VMs in the table.
+ * @table_data: if present, metadata (e.g. nr_vms) of the vms.
  * @table: if present, a dictionary of ```VM handle -> VM```, implemented as a table of slots.
  *
  * Code should not access .table directly, but through the abstract ghost_vms_* functions below.
- * Context: the structure is protected by the ghost_vms_lock
- *          but the internal VMs are protected by their respective VM locks.
+ * Context: the table itself is protected by the ghost_vms_lock
+ *          but the table_data is owned by pKVM's own vm_table lock
+ *          and each of the internal VMs are split with parts owned by different locks (see ghost_vm).
  */
 struct ghost_vms {
 	bool present;
-	u64 nr_vms;
+	struct ghost_vms_table_data table_data;
 	struct ghost_vm_slot table[KVM_MAX_PVMS];
 };
 
