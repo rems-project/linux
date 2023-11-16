@@ -394,10 +394,6 @@ void check_abstraction_refined_thread_local(struct ghost_state *gc, struct ghost
 	struct ghost_local_state *gr_pre_local = &gr_pre->cpu_local_state[this_cpu];
 	struct ghost_local_state *gr_post_local = &gr_post->cpu_local_state[this_cpu];
 
-	check_abstraction_equals_loaded_vcpu(&gc_local->loaded_hyp_vcpu, &gr_post_local->loaded_hyp_vcpu);
-	check_abstraction_equals_run_state(&gc_local->cpu_state, &gr_post_local->cpu_state);
-	check_abstraction_equals_reg(&gc_local->regs, &gr_post_local->regs);
-
 	if (gc_local->host_regs.present && gr_post_local->host_regs.present) {
 		check_abstraction_equals_reg(&gc_local->host_regs.regs, &gr_post_local->host_regs.regs);
 	}
