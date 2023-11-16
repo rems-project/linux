@@ -1323,8 +1323,8 @@ void ghost_record_pre(struct kvm_cpu_context *ctxt)
 
 		ghost_lock_maplets();
 		record_abstraction_constants_pre();
-		record_abstraction_local_state_pre(ctxt);
 		ghost_unlock_maplets();
+		record_abstraction_local_state_pre(ctxt);
 
 		ghost_clear_call_data();
 	}
