@@ -1625,14 +1625,14 @@ static void ghost_dump_globals(struct ghost_constant_globals *globals)
 	/* TODO: dump hyp memory */
 }
 
-static void ghost_dump_regs(struct ghost_register_state *regs)
+static void ghost_dump_regs(struct ghost_register_state *regs, u64 i)
 {
-	ghost_printf("regs[cpu:%d]:<TODO>\n", hyp_smp_processor_id());
+	ghost_printf("%Iregs[cpu:%d]:<TODO>\n", i, hyp_smp_processor_id());
 }
 
-static void ghost_dump_loaded_vcpu(struct ghost_loaded_vcpu *vcpu)
+static void ghost_dump_loaded_vcpu(struct ghost_loaded_vcpu *vcpu, u64 i)
 {
-	ghost_printf("loaded_vcpu[cpu:%d]: ", hyp_smp_processor_id());
+	ghost_printf("%Iloaded_vcpu[cpu:%d]: ", i, hyp_smp_processor_id());
 
 	if (!vcpu->present) {
 		ghost_printf(GHOST_MISSING_FIELD "\n");
@@ -1643,9 +1643,9 @@ static void ghost_dump_loaded_vcpu(struct ghost_loaded_vcpu *vcpu)
 	}
 }
 
-static void ghost_dump_running_state(struct ghost_running_state *run)
+static void ghost_dump_running_state(struct ghost_running_state *run, u64 i)
 {
-	ghost_printf("run_state[cpu:%d]: ", hyp_smp_processor_id());
+	ghost_printf("%Irun_state[cpu:%d]: ", i, hyp_smp_processor_id());
 
 	if (!run->guest_running) {
 		ghost_printf("<host running>\n");
@@ -1654,9 +1654,9 @@ static void ghost_dump_running_state(struct ghost_running_state *run)
 	}
 }
 
-void ghost_dump_host_regs(struct ghost_host_regs *host_regs)
+void ghost_dump_host_regs(struct ghost_host_regs *host_regs, u64 i)
 {
-	ghost_printf("host regs: ");
+	ghost_printf("%Ihost regs: ", i);
 
 	if (!host_regs->present) {
 		ghost_printf(GHOST_MISSING_FIELD "\n");
@@ -1667,10 +1667,16 @@ void ghost_dump_host_regs(struct ghost_host_regs *host_regs)
 
 void ghost_dump_thread_local(struct ghost_local_state *local)
 {
-	ghost_dump_regs(&local->regs);
-	ghost_dump_loaded_vcpu(&local->loaded_hyp_vcpu);
-	ghost_dump_running_state(&local->cpu_state);
-	ghost_dump_host_regs(&local->host_regs);
+	ghost_printf("locals[%ld]: ", hyp_smp_processor_id());
+	if (!local->present) {
+		ghost_printf(GHOST_MISSING_FIELD "\n");
+	} else {
+		ghost_printf("\n");
+		ghost_dump_regs(&local->regs, 4);
+		ghost_dump_loaded_vcpu(&local->loaded_hyp_vcpu, 4);
+		ghost_dump_running_state(&local->cpu_state, 4);
+		ghost_dump_host_regs(&local->host_regs, 4);
+	}
 }
 
 void ghost_dump_state(struct ghost_state *g)
