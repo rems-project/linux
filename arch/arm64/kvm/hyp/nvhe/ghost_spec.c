@@ -1135,7 +1135,11 @@ static bool this_trap_check_controlled(struct kvm_cpu_context *ctxt)
 	case ESR_ELx_EC_HVC64:
 		hcall_id = cpu_reg(ctxt, 0);
 		hcall_id -= KVM_HOST_SMCCC_ID(0);
-		name = (char *)ghost_host_hcall_names[hcall_id];
+		if (hcall_id <= __KVM_HOST_SMCCC_FUNC___pkvm_vcpu_sync_state)
+			name = (char *)ghost_host_hcall_names[hcall_id];
+		else
+			/* unknown HCALL */
+			return false;
 		break;
 	case ESR_ELx_EC_SMC64:
 		name = NULL;
@@ -1174,7 +1178,11 @@ static bool this_trap_print_controlled(struct kvm_cpu_context *ctxt)
 	case ESR_ELx_EC_HVC64:
 		hcall_id = cpu_reg(ctxt, 0);
 		hcall_id -= KVM_HOST_SMCCC_ID(0);
-		name = (char *)ghost_host_hcall_names[hcall_id];
+		if (hcall_id <= __KVM_HOST_SMCCC_FUNC___pkvm_vcpu_sync_state)
+			name = (char *)ghost_host_hcall_names[hcall_id];
+		else
+			/* unknown HCALL */
+			return true;
 		break;
 	case ESR_ELx_EC_SMC64:
 		name = NULL;
@@ -1212,10 +1220,14 @@ static void tag_host_exception_entry(struct kvm_cpu_context *ctxt)
 		GHOST_INFO("HVC64");
 #ifdef CONFIG_NVHE_GHOST_SPEC_NOISY
 		u64 hcall_id;
+		char *hcall_name;
 		hcall_id = cpu_reg(ctxt, 0);
 		hcall_id -= KVM_HOST_SMCCC_ID(0);
+		if (hcall_id <= __KVM_HOST_SMCCC_FUNC___pkvm_vcpu_sync_state)
+			hcall_name = (char *)ghost_host_hcall_names[hcall_id];
+		else
+			hcall_name = "<unknown>";
 
-		char *hcall_name = (char *)ghost_host_hcall_names[hcall_id];
 		GHOST_INFO(hcall_name);
 
 		ghost_printf(
