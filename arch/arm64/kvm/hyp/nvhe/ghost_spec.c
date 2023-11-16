@@ -541,11 +541,15 @@ void compute_new_abstract_state_handle___pkvm_vcpu_load(struct ghost_state *g1, 
 	struct ghost_vm *vm1 = ghost_vms_alloc(&g1->vms, vm->pkvm_handle);
 	ghost_vm_clone_into(vm1, vm);
 
+	// this vm's vcpu is now marked as loaded
 	ghost_assert(vm1->vm_table_locked.vcpus[vcpu_idx]);
 	vm1->vm_table_locked.vcpus[vcpu_idx]->loaded = true;
 
-	// record in the ghost state that the current CPU has loaded
-	// the vcpu 'vcpu_idx' of vm 'vm_idx'
+	// and the table has the same number of vms as before.
+	g1->vms.table_data.present = true;
+	g1->vms.table_data.nr_vms = g0->vms.table_data.nr_vms;
+
+	// and mark this cpu as having a loaded vcpu
 	*this_cpu_ghost_loaded_vcpu(g1) = (struct ghost_loaded_vcpu){
 		.present = true,
 		.loaded = true,
@@ -559,14 +563,11 @@ out:
 
 void compute_new_abstract_state_handle___pkvm_vcpu_put(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call)
 {
-	bool loaded;
-
 	struct ghost_loaded_vcpu *loaded_vcpu = this_cpu_ghost_loaded_vcpu(g0);
 	ghost_assert(loaded_vcpu->present);
 
 	// have to have done a previous vcpu_load
 	if (!loaded_vcpu->loaded) {
-		loaded = false;
 		goto out;
 	}
 
@@ -579,15 +580,18 @@ void compute_new_abstract_state_handle___pkvm_vcpu_put(struct ghost_state *g1, s
 	ghost_assert(vm1);
 	ghost_vm_clone_into(vm1, vm0);
 
+	// the vm's vcpu is now marked as not loaded.
 	ghost_assert(vm1->vm_table_locked.vcpus[vcpu_idx]);
 	vm1->vm_table_locked.vcpus[vcpu_idx]->loaded = false;
 
-	loaded = true;
+	// and the table has the same number of vms as before.
+	g1->vms.table_data.present = true;
+	g1->vms.table_data.nr_vms = g0->vms.table_data.nr_vms;
 
 out:
 	*this_cpu_ghost_loaded_vcpu(g1) = (struct ghost_loaded_vcpu){
 		.present = true,
-		.loaded = loaded,
+		.loaded = false,
 	};
 	/* NOTE: vcpu_put does not write back to any general purpose register */
 	return;
