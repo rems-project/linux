@@ -540,6 +540,7 @@ void compute_new_abstract_state_handle___pkvm_vcpu_load(struct ghost_state *g1, 
 	// record in the ghost state of the vcpu 'vcpu_idx' that is has been loaded
 	struct ghost_vm *vm1 = ghost_vms_alloc(&g1->vms, vm->pkvm_handle);
 	ghost_vm_clone_into(vm1, vm);
+
 	ghost_assert(vm1->vm_table_locked.vcpus[vcpu_idx]);
 	vm1->vm_table_locked.vcpus[vcpu_idx]->loaded = true;
 
@@ -574,9 +575,8 @@ void compute_new_abstract_state_handle___pkvm_vcpu_put(struct ghost_state *g1, s
 
 	struct ghost_vm *vm0 = ghost_vms_get(&g0->vms, vm_handle);
 	struct ghost_vm *vm1 = ghost_vms_alloc(&g1->vms, vm_handle);
-	ghost_spec_assert(vm0); // must have existed to have loaded it.
+	ghost_assert(vm0);
 	ghost_assert(vm1);
-
 	ghost_vm_clone_into(vm1, vm0);
 
 	ghost_assert(vm1->vm_table_locked.vcpus[vcpu_idx]);
@@ -699,22 +699,24 @@ void compute_new_abstract_state_handle___pkvm_init_vm(struct ghost_state *g1, st
 	// so these ghost compute functions are only valid if properly initialised
 	ghost_assert(READ_ONCE(ghost_pkvm_init_finalized));
 
+	// the implementation must have taken the vm_table lock
+	ghost_spec_assert(g0->vms.present);
 
 	// pKVM should not allocate the same handle to a previously existent VM
-	if (g0->vms.present) {
-		ghost_spec_assert(ghost_vms_get(&g0->vms, handle) == NULL);
+	ghost_spec_assert(ghost_vms_get(&g0->vms, handle) == NULL);
 
-		// if we've already allocated KVM_MAX_PVMS VMs, then fail with -ENOMEM
-		if (g0->vms.nr_vms == KVM_MAX_PVMS) {
-			ret = -ENOMEM;
-			goto out;
-		}
+	// if we've already allocated KVM_MAX_PVMS VMs, then fail with -ENOMEM
+	if (g0->vms.table_data.nr_vms == KVM_MAX_PVMS) {
+		ret = -ENOMEM;
+		goto out;
 	}
 
-	g1->vms.present = true;
+	// otherwise, we have all the same vms as before, plus one more
+	copy_abstraction_vms_partial(g1, g0, VMS_VM_TABLE_OWNED);
 	struct ghost_vm *vm1 = ghost_vms_alloc(&g1->vms, handle);
+	g1->vms.table_data.present = true;
+	g1->vms.table_data.nr_vms = g0->vms.table_data.nr_vms + 1;
 	ghost_assert(vm1);
-	g1->vms.nr_vms = g0->vms.nr_vms + 1;
 
 	// the calls to map_donated_memory() may run out of
 	// memory when updating the pKVM page table
@@ -1147,7 +1149,8 @@ static bool this_trap_check_controlled(struct kvm_cpu_context *ctxt)
 		name = "handle_host_mem_abort";
 		break;
 	default:
-		BUG();
+		/* unknown or unhandled EC */
+		return true;
 	}
 
 	if (name == NULL)
@@ -1158,6 +1161,11 @@ static bool this_trap_check_controlled(struct kvm_cpu_context *ctxt)
 
 static bool this_trap_print_controlled(struct kvm_cpu_context *ctxt)
 {
+	struct ghost_running_state *cpu_run_state = this_cpu_ptr(&ghost_cpu_run_state);
+
+	if (cpu_run_state->guest_running)
+		return true; // TODO: dispatch trap print control on guest traps.
+
 	u64 esr = read_sysreg_el2(SYS_ESR);
 	u64 ec = ESR_ELx_EC(esr);
 	u64 hcall_id;
@@ -1189,29 +1197,15 @@ static bool this_trap_print_controlled(struct kvm_cpu_context *ctxt)
 	return ghost_print_on(name);
 }
 
-static void tag_exception_entry(struct kvm_cpu_context *ctxt)
+static void tag_guest_exception_entry(struct kvm_cpu_context *ctxt)
 {
-	bool print_enabled;
-	struct ghost_state *gr_pre = this_cpu_ptr(&gs_recorded_pre);
-	struct ghost_running_state *gr_pre_cpu = this_cpu_ghost_run_state(gr_pre);
-
-#ifdef CONFIG_NVHE_GHOST_SPEC_NOISY
-	ghost_print_enter();
-
-	print_enabled = this_trap_print_controlled(ctxt);
-	__this_cpu_write(ghost_print_this_hypercall, print_enabled);
-	if (! print_enabled)
-		goto print_exit;
-
 	ghost_printf(
-		"\n"
-		GHOST_WHITE_ON_BLUE "****** TRAP ***************************************************************" GHOST_NORMAL "\n"
+		GHOST_WHITE_ON_BLUE "guest entry" GHOST_NORMAL "\n"
 	);
-#endif /* CONFIG_NVHE_GHOST_SPEC_NOISY */
+}
 
-	if (gr_pre_cpu->guest_running)
-		return;
-
+static void tag_host_exception_entry(struct kvm_cpu_context *ctxt)
+{
 	u64 esr = read_sysreg_el2(SYS_ESR);
 	switch (ESR_ELx_EC(esr)) {
 	case ESR_ELx_EC_HVC64:
@@ -1253,16 +1247,50 @@ static void tag_exception_entry(struct kvm_cpu_context *ctxt)
 #endif /* CONFIG_NVHE_GHOST_SPEC_NOISY */
 		break;
 	default:
-		BUG();
+#ifdef CONFIG_NVHE_GHOST_SPEC_NOISY
+		ghost_printf(GHOST_WHITE_ON_BLUE "<unknown: %ld>" GHOST_NORMAL "\n", ESR_ELx_EC(esr));
+#endif /* CONFIG_NVHE_GHOST_SPEC_NOISY */
+		break;
 	}
+}
+
+static void tag_exception_entry(struct kvm_cpu_context *ctxt)
+{
+	bool print_enabled;
+#ifdef CONFIG_NVHE_GHOST_SPEC_NOISY
+	ghost_print_enter();
+#endif /* CONFIG_NVHE_GHOST_SPEC_NOISY */
+
+	// TODO: dispatch on ghost or cpu run state?
+	// struct ghost_state *gr_pre = this_cpu_ptr(&gs_recorded_pre);
+	// struct ghost_running_state *gr_pre_cpu = this_cpu_ghost_run_state(gr_pre);
+	struct ghost_running_state *cpu_run_state = this_cpu_ptr(&ghost_cpu_run_state);
+
+	print_enabled = this_trap_print_controlled(ctxt);
+	__this_cpu_write(ghost_print_this_hypercall, print_enabled);
+	if (! print_enabled)
+		goto print_exit;
 
 #ifdef CONFIG_NVHE_GHOST_SPEC_NOISY
+	ghost_printf(
+		"\n"
+		GHOST_WHITE_ON_BLUE "****** TRAP ***************************************************************" GHOST_NORMAL "\n"
+	);
+#endif /* CONFIG_NVHE_GHOST_SPEC_NOISY */
+
+	if (cpu_run_state->guest_running)
+		tag_guest_exception_entry(ctxt);
+	else
+		tag_host_exception_entry(ctxt);
+
 	if (! ghost_exec_enabled())
 		ghost_printf(GHOST_WHITE_ON_YELLOW "skipping exec check" GHOST_NORMAL "\n");
 print_exit:
+#ifdef CONFIG_NVHE_GHOST_SPEC_NOISY
 	ghost_print_exit();
 #endif /* CONFIG_NVHE_GHOST_SPEC_NOISY */
 }
+
 
 void ghost_record_pre(struct kvm_cpu_context *ctxt)
 {
@@ -1311,7 +1339,6 @@ void ghost_post(struct kvm_cpu_context *ctxt)
 	struct ghost_state *gr_post = this_cpu_ptr(&gs_recorded_post);
 	struct ghost_state *gc_post = this_cpu_ptr(&gs_computed_post);
 	struct ghost_call_data *call = this_cpu_ptr(&gs_call_data);
-	struct ghost_running_state *gr_pre_cpu = this_cpu_ghost_run_state(gr_pre);
 
 	GHOST_LOG_CONTEXT_ENTER();
 	if (ghost_exec_enabled()) {
@@ -1333,7 +1360,10 @@ void ghost_post(struct kvm_cpu_context *ctxt)
 #endif /* CONFIG_NVHE_GHOST_SPEC_DUMP_STATE */
 
 		// compute the new spec abstract state
-		if (gr_pre_cpu->guest_running)
+
+		// TODO: do this check on real or ghost? Probably ghost...
+		// if (gr_pre_cpu->guest_running)
+		if (cpu_run_state->guest_running)
 			compute_new_abstract_state_handle_guest_trap(gc_post, gr_pre, call, &new_state_computed);
 		else
 			compute_new_abstract_state_handle_host_trap(gc_post, gr_pre, call, &new_state_computed);
