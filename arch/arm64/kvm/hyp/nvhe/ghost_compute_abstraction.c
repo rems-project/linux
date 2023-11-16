@@ -1529,15 +1529,21 @@ static void ghost_dump_vm(struct ghost_vm *vm, u64 i)
 	}
 
 	ghost_printf("%Ivcpus:\n", i+4);
-	for (int i = 0; i < vm->vm_table_locked.nr_vcpus; i++) {
-		struct ghost_vcpu *vcpu = vm->vm_table_locked.vcpus[i];
-		ghost_printf("%Ivcpu %ld ", i+8);
-
-		if (vcpu->loaded)
-			ghost_printf("L");
+	for (int vcpu_indx = 0; vcpu_indx < vm->vm_table_locked.nr_vcpus; vcpu_indx++) {
+		struct ghost_vcpu *vcpu = vm->vm_table_locked.vcpus[vcpu_indx];
+		ghost_printf("%Ivcpu %ld ", i+8, vcpu_indx);
 
 		if (vcpu->initialised)
-			ghost_printf("I");
+			ghost_printf("(initialised)");
+		else
+			ghost_printf("             ");
+
+		ghost_printf(" ");
+
+		if (vcpu->loaded)
+			ghost_printf("(loaded)");
+		else
+			ghost_printf("        ");
 
 		ghost_printf("\n");
 	}
