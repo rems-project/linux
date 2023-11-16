@@ -1488,7 +1488,7 @@ static void ghost_dump_pkvm(struct ghost_pkvm *pkvm)
 
 static void ghost_dump_host(struct ghost_host *host)
 {
-	ghost_printf("host:");
+	ghost_printf("host: ");
 
 	if (!host->present) {
 		ghost_printf("<missing>\n");
@@ -1515,23 +1515,28 @@ static void ghost_dump_vm(struct ghost_vm *vm, u64 i)
 		return;
 
 	ghost_printf("%Ivm %x:\n", i, vm->pkvm_handle);
-	ghost_printf("%Ivm_table_locked:\n", i+4);
-	ghost_printf("%Ipresent:%b\n", i+8, vm->vm_table_locked.present);
-	if (vm->vm_table_locked.present) {
-		ghost_printf("%Inr_vcpus:%ld\n", i+8, vm->vm_table_locked.nr_vcpus);
-		ghost_printf("%Inr_initialised_vcpus:%ld\n", i+8, vm->vm_table_locked.nr_initialised_vcpus);
-	}
 
-	ghost_printf("%Ivm_locked:\n", i+4);
-	ghost_printf("%Ipresent:%b\n", i+8, vm->vm_locked.present);
+	ghost_printf("%Ivm_locked: ", i+4);
 	if (vm->vm_locked.present) {
 		ghost_printf("%I%gI(pgtable)\n", i+8, &vm->vm_locked.vm_abstract_pgtable, i+8);
+	} else {
+		ghost_printf("<missing>\n");
 	}
 
-	ghost_printf("%Ivcpus:\n", i+4);
+	ghost_printf("%Ivm_table_locked: ", i+4);
+	if (!vm->vm_table_locked.present) {
+		ghost_printf("<missing>\n");
+		return;
+	}
+
+	ghost_printf("\n");
+	ghost_printf("%Inr_vcpus:%ld\n", i+8, vm->vm_table_locked.nr_vcpus);
+	ghost_printf("%Inr_initialised_vcpus:%ld\n", i+8, vm->vm_table_locked.nr_initialised_vcpus);
+
+	ghost_printf("%Ivcpus: ", i+8);
 	for (int vcpu_indx = 0; vcpu_indx < vm->vm_table_locked.nr_vcpus; vcpu_indx++) {
 		struct ghost_vcpu *vcpu = vm->vm_table_locked.vcpus[vcpu_indx];
-		ghost_printf("%Ivcpu %ld ", i+8, vcpu_indx);
+		ghost_printf("%Ivcpu %ld ", i+12, vcpu_indx);
 
 		if (vcpu->initialised)
 			ghost_printf("(initialised)");
@@ -1551,17 +1556,23 @@ static void ghost_dump_vm(struct ghost_vm *vm, u64 i)
 
 static void ghost_dump_vms(struct ghost_vms *vms)
 {
+	ghost_printf("vms: ");
+
 	if (!vms->present) {
-		ghost_printf("vms:<missing>\n");
+		ghost_printf("<missing>\n");
 		return;
 	}
 
-	ghost_printf("vms:\n");
+	ghost_printf("\n");
 
-	ghost_printf("    vm_table_data:\n");
-	ghost_printf("        present:%b\n", vms->table_data.present);
-	if (vms->table_data.present)
+	ghost_printf("    vm_table_data: ");
+	if (vms->table_data.present) {
+		ghost_printf("\n");
 		ghost_printf("        nr_vms:%lx\n", vms->table_data.nr_vms);
+
+	} else {
+		ghost_printf("<missing>\n");
+	}
 
 	ghost_printf("    vm_table:\n", vms->table_data.nr_vms);
 	for (int i = 0; i < KVM_MAX_PVMS; i++) {
@@ -1601,7 +1612,7 @@ static void ghost_dump_loaded_vcpu(struct ghost_loaded_vcpu *vcpu)
 	} else if (!vcpu->loaded) {
 		ghost_printf("<unloaded>\n");
 	} else {
-		ghost_printf("<loaded vm_handle:%x vcpu_index:ld>\n", vcpu->vm_handle, vcpu->vcpu_index);
+		ghost_printf("<loaded vm_handle:%x vcpu_index:%ld>\n", vcpu->vm_handle, vcpu->vcpu_index);
 	}
 }
 
