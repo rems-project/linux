@@ -38,7 +38,7 @@ int gp_print_pfn_set(gp_stream_t *out, struct pfn_set *set)
 {
 	int ret;
 	ghost_assert(set->len < GHOST_MAX_PFN_SET_LEN);
-	ret = ghost_sprintf(out, "pfns range:(%p..%p) external_pages:[");
+	ret = ghost_sprintf(out, "pfns range:(%p..%p) external_pages:[", set->pool_range_start, set->pool_range_end);
 
 	for (int idx=0; idx < set->len; idx++) {
 		ret = ghost_sprintf(out, "%p", set->external_pfns[idx]);
