@@ -1533,7 +1533,7 @@ static void ghost_dump_vm(struct ghost_vm *vm, u64 i)
 	ghost_printf("%Inr_vcpus:%ld\n", i+8, vm->vm_table_locked.nr_vcpus);
 	ghost_printf("%Inr_initialised_vcpus:%ld\n", i+8, vm->vm_table_locked.nr_initialised_vcpus);
 
-	ghost_printf("%Ivcpus: ", i+8);
+	ghost_printf("%Ivcpus:\n", i+8);
 	for (int vcpu_indx = 0; vcpu_indx < vm->vm_table_locked.nr_vcpus; vcpu_indx++) {
 		struct ghost_vcpu *vcpu = vm->vm_table_locked.vcpus[vcpu_indx];
 		ghost_printf("%Ivcpu %ld ", i+12, vcpu_indx);
