@@ -768,15 +768,19 @@ void compute_new_abstract_state_handle___pkvm_init_vm(struct ghost_state *g1, st
 	ghost_map_donated_memory_nocheck(g1, last_ran_host_ipa, last_ran_size);
 	ghost_map_donated_memory_nocheck(g1, pgd_host_ipa, pgd_size);
 
+	// Now setup the VM with the right initial state:
+	// an empty mapping with the right pool,
+	// and the first nr_vcpus un-initialised unloaded vcpus.
+	vm1->vm_locked.present = true;
+	vm1->vm_locked.vm_abstract_pgtable.mapping = mapping_empty_();
 	// NOTE: we expect the VM's page table to be place at the beginning
 	// of the first page of the memory region donated by the host
 	// for that purpose
 	ghost_pfn_set_init(&vm1->vm_locked.vm_abstract_pgtable.table_pfns, pgd_phys, pgd_phys + pgd_size);
-	vm1->vm_locked.vm_abstract_pgtable.mapping = mapping_empty_();
+	vm1->vm_table_locked.present = true;
 	vm1->vm_table_locked.nr_vcpus = nr_vcpus;
 	vm1->vm_table_locked.nr_initialised_vcpus = 0;
 	vm1->pkvm_handle = handle;
-
 	for (int i = 0; i < nr_vcpus; i++) {
 		vm1->vm_table_locked.vcpus[i] = malloc_or_die(sizeof(struct ghost_vcpu));
 		vm1->vm_table_locked.vcpus[i]->vcpu_handle = i;
@@ -784,10 +788,12 @@ void compute_new_abstract_state_handle___pkvm_init_vm(struct ghost_state *g1, st
 		vm1->vm_table_locked.vcpus[i]->initialised = false;
 	}
 
-	// TODO:
-	// in theory this is unsafe, as another thread could've swooped in between the end of the hypercall
-	// and this check, and removed the VM.
-	// In future this should be part of the call data or something.
+	// in theory this is unsafe, as another thread could've swooped in between
+	// the release of all the locks  and this check,
+	// and removed the VM.
+	//
+	// However, the chance of another thread removing this VV, before __pkvm_init_vm has even returned,
+	// is so remotely small we don't care.
 	vm1->lock = ghost_pointer_to_vm_lock(handle);
 	ret = handle;
 out:
