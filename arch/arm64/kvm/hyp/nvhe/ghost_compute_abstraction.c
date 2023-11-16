@@ -1109,9 +1109,10 @@ void ghost_cpu_running_state_copy(struct ghost_running_state *run_tgt, struct gh
 	run_tgt->vcpu_index = g_src->vcpu_index;
 }
 
-void record_abstraction_local_state(struct ghost_local_state *local, struct kvm_cpu_context *ctxt)
+DECLARE_PER_CPU(struct pkvm_hyp_vcpu *, loaded_hyp_vcpu);
+void record_abstraction_local_state(struct ghost_state *g, struct kvm_cpu_context *ctxt)
 {
-	int this_cpu = hyp_smp_processor_id();
+	struct ghost_local_state *local = ghost_this_cpu_local_state(g);
 	struct ghost_running_state *cpu_run_state = this_cpu_ptr(&ghost_cpu_run_state);
 
 	if (ctxt)
@@ -1125,18 +1126,21 @@ void record_abstraction_local_state(struct ghost_local_state *local, struct kvm_
 	local->present = true;
 
 	/* no loaded_vcpu state, as that is read separately */
+	struct pkvm_hyp_vcpu *loaded_vcpu = *this_cpu_ptr(&loaded_hyp_vcpu);
+	record_abstraction_loaded_vcpu(g, loaded_vcpu);
+	check_abstraction_equals_loaded_vcpu(this_cpu_ghost_loaded_vcpu(g), this_cpu_ghost_loaded_vcpu(&gs));
 }
 
 void record_abstraction_local_state_pre(struct kvm_cpu_context *ctxt)
 {
 	struct ghost_state *g = this_cpu_ptr(&gs_recorded_pre);
-	record_abstraction_local_state(ghost_this_cpu_local_state(g), ctxt);
+	record_abstraction_local_state(g, ctxt);
 }
 
 void record_abstraction_local_state_post(struct kvm_cpu_context *ctxt)
 {
 	struct ghost_state *g = this_cpu_ptr(&gs_recorded_post);
-	record_abstraction_local_state(ghost_this_cpu_local_state(g), ctxt);
+	record_abstraction_local_state(g, ctxt);
 }
 
 /**
@@ -1179,7 +1183,7 @@ void record_abstraction_all(struct ghost_state *g, struct kvm_cpu_context *ctxt)
 	record_abstraction_pkvm(g);
 	record_abstraction_host(g);
 	record_abstraction_vms_and_check_none(g);
-	record_abstraction_local_state(ghost_this_cpu_local_state(g), ctxt);
+	record_abstraction_local_state(g, ctxt);
 	record_abstraction_constants(g);
 	GHOST_LOG_CONTEXT_EXIT();
 }
@@ -1268,30 +1272,6 @@ void record_abstraction_loaded_vcpu_and_check_none(void)
 	ghost_spec_assert(!loaded_vcpu);
 	this_cpu_ghost_loaded_vcpu(&gs)->present = true;
 	this_cpu_ghost_loaded_vcpu(&gs)->loaded = false;
-}
-
-DECLARE_PER_CPU(struct pkvm_hyp_vcpu *, loaded_hyp_vcpu);
-void record_and_check_abstraction_loaded_hyp_vcpu_pre(void)
-{
-	GHOST_LOG_CONTEXT_ENTER();
-	struct ghost_state *g = this_cpu_ptr(&gs_recorded_pre);
-	struct pkvm_hyp_vcpu *loaded_vcpu = *this_cpu_ptr(&loaded_hyp_vcpu);
-	ghost_lock_vms();
-	record_abstraction_loaded_vcpu(g, loaded_vcpu);
-	check_abstraction_equals_loaded_vcpu(this_cpu_ghost_loaded_vcpu(g), this_cpu_ghost_loaded_vcpu(&gs));
-	ghost_unlock_vms();
-	GHOST_LOG_CONTEXT_EXIT();
-}
-
-void record_and_copy_abstraction_loaded_hyp_vcpu_post(struct pkvm_hyp_vcpu *vcpu)
-{
-	GHOST_LOG_CONTEXT_ENTER();
-	struct ghost_state *g = this_cpu_ptr(&gs_recorded_post);
-	ghost_lock_vms();
-	record_abstraction_loaded_vcpu(g, vcpu);
-	copy_abstraction_loaded_vcpu(this_cpu_ghost_loaded_vcpu(&gs), this_cpu_ghost_loaded_vcpu(g));
-	ghost_unlock_vms();
-	GHOST_LOG_CONTEXT_EXIT();
 }
 
 void record_and_check_abstraction_vms_pre(void)

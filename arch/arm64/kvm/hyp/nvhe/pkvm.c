@@ -312,8 +312,6 @@ struct pkvm_hyp_vcpu *pkvm_load_hyp_vcpu(pkvm_handle_t handle,
 
 #ifdef CONFIG_NVHE_GHOST_SPEC
 	vm_table_lock_component();
-	if (ghost_exec_enabled())
-		record_and_check_abstraction_loaded_hyp_vcpu_pre();
 #else /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_spin_lock(&vm_table_lock);
 #endif /* CONFIG_NVHE_GHOST_SPEC */
@@ -333,8 +331,6 @@ struct pkvm_hyp_vcpu *pkvm_load_hyp_vcpu(pkvm_handle_t handle,
 	hyp_page_ref_inc(hyp_virt_to_page(hyp_vm));
 unlock:
 #ifdef CONFIG_NVHE_GHOST_SPEC
-	if (ghost_exec_enabled())
-		record_and_copy_abstraction_loaded_hyp_vcpu_post(hyp_vcpu);
 	vm_table_unlock_component();
 #else /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_spin_unlock(&vm_table_lock);
@@ -352,8 +348,6 @@ void pkvm_put_hyp_vcpu(struct pkvm_hyp_vcpu *hyp_vcpu)
 
 #ifdef CONFIG_NVHE_GHOST_SPEC
 	vm_table_lock_component();
-	if (ghost_exec_enabled())
-		record_and_check_abstraction_loaded_hyp_vcpu_pre();
 #else /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_spin_lock(&vm_table_lock);
 #endif /* CONFIG_NVHE_GHOST_SPEC */
@@ -364,8 +358,6 @@ void pkvm_put_hyp_vcpu(struct pkvm_hyp_vcpu *hyp_vcpu)
 	hyp_page_ref_dec(hyp_virt_to_page(hyp_vm));
 
 #ifdef CONFIG_NVHE_GHOST_SPEC
-	if (ghost_exec_enabled())
-		record_and_copy_abstraction_loaded_hyp_vcpu_post(NULL);
 	vm_table_unlock_component();
 #else /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_spin_unlock(&vm_table_lock);
@@ -374,18 +366,7 @@ void pkvm_put_hyp_vcpu(struct pkvm_hyp_vcpu *hyp_vcpu)
 
 struct pkvm_hyp_vcpu *pkvm_get_loaded_hyp_vcpu(void)
 {
-#ifdef CONFIG_NVHE_GHOST_SPEC
-	// loaded_hyp_vcpu is thread-local so no lock needed
-	// and the actual vm is protected by the fact it's loaded on this core.
-	if (ghost_exec_enabled())
-		record_and_check_abstraction_loaded_hyp_vcpu_pre();
-	struct pkvm_hyp_vcpu *vcpu = __this_cpu_read(loaded_hyp_vcpu);
-	if (ghost_exec_enabled())
-		record_and_copy_abstraction_loaded_hyp_vcpu_post(vcpu);
-	return vcpu;
-#else /* CONFIG_NVHE_GHOST_SPEC */
 	return __this_cpu_read(loaded_hyp_vcpu);
-#endif /* CONFIG_NVHE_GHOST_SPEC */
 }
 
 static void pkvm_vcpu_init_features_from_host(struct pkvm_hyp_vcpu *hyp_vcpu)
@@ -833,10 +814,6 @@ int __pkvm_init_vcpu(pkvm_handle_t handle, struct kvm_vcpu *host_vcpu,
 		ret = -ENOENT;
 		goto unlock;
 	}
-// #ifdef CONFIG_NVHE_GHOST_SPEC
-// if (ghost_exec_enabled())
-// 		record_and_check_abstraction_vm_pre(hyp_vm);
-// #endif /* CONFIG_NVHE_GHOST_SPEC */
 
 	idx = hyp_vm->nr_vcpus;
 	if (idx >= hyp_vm->kvm.created_vcpus) {
