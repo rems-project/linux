@@ -373,7 +373,18 @@ void pkvm_put_hyp_vcpu(struct pkvm_hyp_vcpu *hyp_vcpu)
 
 struct pkvm_hyp_vcpu *pkvm_get_loaded_hyp_vcpu(void)
 {
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	// loaded_hyp_vcpu is thread-local so no lock needed
+	// and the actual vm is protected by the fact it's loaded on this core.
+	if (ghost_exec_enabled())
+		record_and_check_abstraction_loaded_hyp_vcpu_pre();
+	struct pkvm_hyp_vcpu *vcpu = __this_cpu_read(loaded_hyp_vcpu);
+	if (ghost_exec_enabled())
+		record_and_copy_abstraction_loaded_hyp_vcpu_post(vcpu);
+	return vcpu;
+#else /* CONFIG_NVHE_GHOST_SPEC */
 	return __this_cpu_read(loaded_hyp_vcpu);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 }
 
 static void pkvm_vcpu_init_features_from_host(struct pkvm_hyp_vcpu *hyp_vcpu)

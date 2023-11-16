@@ -227,6 +227,7 @@ void compute_abstraction_vm_partial(struct ghost_vm *dest, struct pkvm_hyp_vm *h
 	dest->lock = &hyp_vm->lock;
 
 	if (owner & VMS_VM_OWNED) {
+		/* really do need to hold this lock */
 		hyp_assert_lock_held(&hyp_vm->lock);
 		dest->vm_locked.present = true;
 		ghost_record_pgtable_ap(&dest->vm_locked.vm_abstract_pgtable, &hyp_vm->pgt, hyp_vm->pool.range_start, hyp_vm->pool.range_end, "guest_mmu.pgt", 0);
@@ -234,7 +235,8 @@ void compute_abstraction_vm_partial(struct ghost_vm *dest, struct pkvm_hyp_vm *h
 
 
 	if (owner & VMS_VM_TABLE_OWNED) {
-		ghost_assert_pkvm_vm_table_locked();
+		/* can't assert the lock held, as it might be that we're in a loaded vcpu
+		 * so don't need the lock at all. */
 		dest->vm_table_locked.present = true;
 		dest->vm_table_locked.nr_vcpus = hyp_vm->kvm.created_vcpus;
 		dest->vm_table_locked.nr_initialised_vcpus = hyp_vm->nr_vcpus;
@@ -1271,11 +1273,12 @@ void record_abstraction_loaded_vcpu_and_check_none(void)
 	this_cpu_ghost_loaded_vcpu(&gs)->loaded = false;
 }
 
+DECLARE_PER_CPU(struct pkvm_hyp_vcpu *, loaded_hyp_vcpu);
 void record_and_check_abstraction_loaded_hyp_vcpu_pre(void)
 {
 	GHOST_LOG_CONTEXT_ENTER();
 	struct ghost_state *g = this_cpu_ptr(&gs_recorded_pre);
-	struct pkvm_hyp_vcpu *loaded_vcpu = pkvm_get_loaded_hyp_vcpu();
+	struct pkvm_hyp_vcpu *loaded_vcpu = *this_cpu_ptr(&loaded_hyp_vcpu);
 	ghost_lock_vms();
 	record_abstraction_loaded_vcpu(g, loaded_vcpu);
 	check_abstraction_equals_loaded_vcpus(g, &gs);
