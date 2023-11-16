@@ -73,6 +73,11 @@ menuconfig NVHE_GHOST_SPEC_NOISY
 	  Enable some quite noisy prints from the ghost spec recording
 	  and checking machinery.
 
+config NVHE_GHOST_SPEC_DUMP_STATE
+	bool "Dump complete pre/post ghost state on transition"
+	depends on NVHE_GHOST_SPEC_NOISY
+	default n
+
 config NVHE_GHOST_SPEC_VERBOSE
 	bool "Very noisy ghost spec checking machinery"
 	depends on NVHE_GHOST_SPEC_NOISY
