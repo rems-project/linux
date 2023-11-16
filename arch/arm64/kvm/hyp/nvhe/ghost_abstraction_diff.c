@@ -686,6 +686,7 @@ static void ghost_diff_globals(struct diff_container *node, struct ghost_constan
 	ghost_diff_field(node, "hyp_physvirt_offset", diff_pair(TU64(g1->hyp_physvirt_offset), TU64(g2->hyp_physvirt_offset)));
 	ghost_diff_field(node, "tag_lsb", diff_pair(TU64(g1->tag_lsb), TU64(g2->tag_lsb)));
 	ghost_diff_field(node, "tag_val", diff_pair(TU64(g1->tag_val), TU64(g2->tag_val)));
+	/* TODO: hyp_memory */
 	ghost_diff_pop_subfield(node);
 	GHOST_LOG_CONTEXT_EXIT();
 }
@@ -719,15 +720,25 @@ static void ghost_diff_running_state(struct diff_container *node, struct ghost_r
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
+static void ghost_diff_local_state(struct diff_container *node, struct ghost_local_state *l1, struct ghost_local_state *l2)
+{
+	ghost_diff_loaded_vcpu(node, &l1->loaded_hyp_vcpu, &l2->loaded_hyp_vcpu);
+	ghost_diff_running_state(node, &l1->cpu_state, &l2->cpu_state);
+	ghost_diff_registers(node, &l1->regs, &l2->regs);
+	ghost_diff_enter_subfield(node, "host_regs");
+	ghost_diff_field(node, "present", diff_pair(TBOOL(l1->host_regs.present), TBOOL(l2->host_regs.present)));
+	if (l1->host_regs.present && l2->host_regs.present)
+		ghost_diff_registers(node, &l1->host_regs.regs, &l2->host_regs.regs);
+	ghost_diff_pop_subfield(node);
+}
+
 static void ghost_diff_state(struct diff_container *node, struct ghost_state *s1, struct ghost_state *s2)
 {
 	ghost_diff_pkvm(node, &s1->pkvm, &s2->pkvm);
 	ghost_diff_host(node, &s1->host, &s2->host);
 	ghost_diff_vms(node, &s1->vms, &s2->vms);
-	ghost_diff_registers(node, this_cpu_ghost_register_state(s1), this_cpu_ghost_register_state(s2));
 	ghost_diff_globals(node, &s1->globals, &s2->globals);
-	ghost_diff_loaded_vcpu(node, this_cpu_ghost_loaded_vcpu(s1), this_cpu_ghost_loaded_vcpu(s2));
-	ghost_diff_running_state(node, this_cpu_ghost_run_state(s1), this_cpu_ghost_run_state(s2));
+	ghost_diff_local_state(node, ghost_this_cpu_local_state(s1), ghost_this_cpu_local_state(s2));
 }
 
 /************************************/

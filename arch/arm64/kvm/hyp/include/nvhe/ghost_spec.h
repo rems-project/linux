@@ -99,6 +99,10 @@ struct ghost_register_state {
 	u64 el2_sysregs[GHOST_NR_SYSREGS];
 };
 
+#define GHOST_GPR(GRS, N) (GRS)->ctxt.regs.regs[(N)]
+#define GHOST_SYSREG_EL1(GRS, N) (GRS)->ctxt.sys_regs[(N)]
+#define GHOST_SYSREG_EL2(GRS, N) (GRS)->el2_sysregs[(N)]
+
 /**
  * struct ghost_vcpu - A single vcpu within a VM
  *
@@ -179,6 +183,16 @@ struct ghost_vm {
 };
 
 /**
+ * struct ghost_host_regs - The host register bank.
+ * @present: whether the parent ghost_state has recorded the ghost registers.
+ * @regs: if present, the set of host registers (general-purpose, el1 and el2 sysregs).
+ */
+struct ghost_host_regs {
+	bool present;
+	struct ghost_register_state regs;
+};
+
+/**
  * struct ghost_host - The host android/linux mapping
  *
  * @present: whether the parent ghost_state has some ghost host data
@@ -194,6 +208,7 @@ struct ghost_vm {
  */
 struct ghost_host {
 	bool present;
+
 	mapping host_abstract_pgtable_annot;
 	mapping host_abstract_pgtable_shared;
 	struct pfn_set host_pgtable_pages;
@@ -356,6 +371,7 @@ static inline void ghost_assert_pkvm_vm_table_locked(void)
 
 /**
  * struct ghost_constant_globals - Copy of the hypervisor read-only globals
+ * @hyp_memory: abstract mapping interpretation of the hyp_memory array.
  * @hyp_nr_cpus: the actual count of the number of CPUs there are.
  * @hyp_physvirt_offset: the global physical offset of physical memory within the hyp VA space.
  * @tag_lsb: the pKVM VA tag (NOT the one of the Host kernel).
@@ -366,6 +382,7 @@ static inline void ghost_assert_pkvm_vm_table_locked(void)
  * Context: not protected by any lock, as should be read-only globals.
  */
 struct ghost_constant_globals {
+	mapping hyp_memory;
 	u64 hyp_nr_cpus;
 	s64 hyp_physvirt_offset;
 	u64 tag_lsb;
@@ -387,34 +404,45 @@ struct ghost_running_state {
 void ghost_cpu_running_state_copy(struct ghost_running_state *run_tgt, struct ghost_running_state *g_src);
 
 /**
+ * struct ghost_local_state - Physical CPU-local ghost state.
+ * @present: whether the ghost state has local state recorded for this CPU.
+ * @regs: if present, physical register banks (general purpose, el2 system, el1 system) registers.
+ * @loaded_hyp_vcpu: if present, ghost copies of the state of the currently loaded vcpu.
+ * @cpu_state: if present, what is currently running on this CPU.
+ * @host_regs: (optionally) if present, the host registers, for this physical CPU.
+ */
+struct ghost_local_state {
+	bool present;
+	struct ghost_register_state regs;
+	struct ghost_loaded_vcpu loaded_hyp_vcpu;
+	struct ghost_running_state cpu_state;
+	struct ghost_host_regs host_regs;
+};
+
+/**
  * struct ghost_state - Ghost copy of the whole EL2 state
  *
- * @hyp_memory: abstract mapping interpretation of the hyp_memory array.
  * @pkvm: ghost EL2 hypervisor state, including EL2 Stage1 pagetables, protected by the pkvm hyp lock.
  * @host: ghost host pagetable state, protected by the host pgtable lock.
- * @regs: ghost copies of initial general-purpose and current system registers.
  * @vms: vm table, protected by the pKVM vm_table table lock, with each inner vm protected by that vm's own lock.
  * @globals: a copy of the set of hypervisor constant globals.
- * @loaded_hyp_vcpu: per-physical-cpu ghost copies of the state of the currently loaded vcpu.
- * @cpu_state: the per-physical-cpu state of what was running on it.
+ * @cpu_local_state: per-CPU array of thread-local state for each physical CPU.
  *
  * A ghost state may be partial, and only have some of the above fields present.
  * In that case, the ghost state is valid for those parts that are present,
  * and should match the real physical state for those parts.
  */
 struct ghost_state {
-	mapping hyp_memory;
 	struct ghost_pkvm pkvm;
 	struct ghost_host host;
-	struct ghost_register_state regs[NR_CPUS];
 	struct ghost_vms vms;
 	struct ghost_constant_globals globals;
-	struct ghost_loaded_vcpu loaded_hyp_vcpu[NR_CPUS];
-	struct ghost_running_state cpu_state[NR_CPUS];
+	struct ghost_local_state cpu_local_state[NR_CPUS];
 };
 
 void ghost_dump_state(struct ghost_state *g);
 
+struct ghost_local_state *ghost_this_cpu_local_state(struct ghost_state *g);
 /**
  * this_cpu_read_ghost_loaded_vcpu() - Get the loaded_hyp_vcpu for this CPU
  */
@@ -486,10 +514,14 @@ DECLARE_PER_CPU(struct ghost_running_state, ghost_cpu_run_state);
 //struct ghost_state spec_handle_trap(struct ghost_state *g);
 
 // functions to make ghost register accesses more uniform
-#define ghost_reg_gpr(g, reg_index) (this_cpu_ghost_register_state(g)->ctxt.regs.regs[reg_index])
-#define ghost_reg_el2(g, reg_index) (this_cpu_ghost_register_state(g)->el2_sysregs[reg_index])
-#define ghost_reg_el1(g, reg_index) (this_cpu_ghost_register_state(g)->ctxt.sys_regs[reg_index])
-//#define ghost_reg_ctxt(g,r)
+#define ghost_reg_gpr(g, reg_index) \
+	GHOST_GPR(this_cpu_ghost_register_state(g), reg_index)
+
+#define ghost_reg_el2(g, reg_index) \
+	GHOST_SYSREG_EL2(this_cpu_ghost_register_state(g), reg_index)
+
+#define ghost_reg_el1(g, reg_index) \
+	GHOST_SYSREG_EL1(this_cpu_ghost_register_state(g), reg_index)
 
 /**
  * ghost_record_pre() - Record the state on entry to pKVM

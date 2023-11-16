@@ -272,46 +272,39 @@ void check_abstract_pgtable_equal(abstract_pgtable *ap1, abstract_pgtable *ap2, 
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
-void check_abstraction_equals_hyp_memory(struct ghost_state *g1, struct ghost_state *g2)
-{
-	GHOST_LOG_CONTEXT_ENTER();
-	check_mapping_equal(g1->hyp_memory, g2->hyp_memory);
-	GHOST_LOG_CONTEXT_EXIT();
-}
-
-void check_abstraction_equals_reg(struct ghost_state *g1, struct ghost_state *g2)
+void check_abstraction_equals_reg(struct ghost_register_state *r1, struct ghost_register_state *r2)
 {
 	GHOST_LOG_CONTEXT_ENTER();
 	u64 i;
 	u64 ghost_el2_regs[] = (u64[])GHOST_EL2_REGS;
 	for (i=0; i<=30; i++) {
-		if (ghost_reg_gpr(g1,i) != ghost_reg_gpr(g2,i)) {
+		if (GHOST_GPR(r1, i) != GHOST_GPR(r2, i)) {
 			GHOST_LOG(i, u64);
-			GHOST_LOG(ghost_reg_gpr(g1,i), u64);
-			GHOST_LOG(ghost_reg_gpr(g2,i), u64);
+			GHOST_LOG(GHOST_GPR(r1, i), u64);
+			GHOST_LOG(GHOST_GPR(r2, i), u64);
 			GHOST_WARN("gpr register mismatch");
 			ghost_spec_assert(false);
 		}
 	}
 	for (i=0; i<NR_SYS_REGS; i++) {
-		if (ghost_reg_el1(g1,i) != ghost_reg_el1(g2,i)) {
+		if (GHOST_SYSREG_EL1(r1, i) != GHOST_SYSREG_EL1(r2, i)) {
 			const char *name = GHOST_VCPU_SYSREG_NAMES[i];
 			GHOST_LOG(i, u64);
 			GHOST_LOG(name, str);
-			GHOST_LOG(ghost_reg_el1(g1,i), u64);
-			GHOST_LOG(ghost_reg_el1(g2,i), u64);
+			GHOST_LOG(GHOST_SYSREG_EL1(r1, i), u64);
+			GHOST_LOG(GHOST_SYSREG_EL1(r2, i), u64);
 			GHOST_WARN("EL1 sysreg register mismatch");
 			ghost_spec_assert(false);
 		}
 	}
 	for (i=0; i<sizeof(ghost_el2_regs)/sizeof(u64); i++) {
 		u64 r = ghost_el2_regs[i];
-		if (ghost_reg_el2(g1, r) != ghost_reg_el2(g2,r)) {
+		if (GHOST_SYSREG_EL2(r1, i) != GHOST_SYSREG_EL2(r2, i)) {
 			const char *name = GHOST_EL2_REG_NAMES[r];
 			GHOST_LOG(r, u64);
 			GHOST_LOG(name, str);
-			GHOST_LOG(ghost_reg_el2(g1,r), u64);
-			GHOST_LOG(ghost_reg_el2(g2,r), u64);
+			GHOST_LOG(GHOST_SYSREG_EL2(r1, i), u64);
+			GHOST_LOG(GHOST_SYSREG_EL2(r2, i), u64);
 			GHOST_WARN("el2_sysreg register mismatch");
 			ghost_spec_assert(false);
 		}
@@ -362,22 +355,59 @@ void check_abstraction_equals_loaded_vcpu(struct ghost_loaded_vcpu *loaded_vcpu1
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
-void check_abstraction_equals_loaded_vcpus(struct ghost_state *g1, struct ghost_state *g2)
+void check_abstraction_equals_run_state(struct ghost_running_state *spec, struct ghost_running_state *recorded)
 {
 	GHOST_LOG_CONTEXT_ENTER();
-	for (int i=0; i < g1->globals.hyp_nr_cpus; i++) {
-		GHOST_LOG_CONTEXT_ENTER_INNER("loop vcpus");
-		GHOST_LOG_INNER("loop vcpus", i, u32);
-		GHOST_LOG_INNER("loop vcpus", g1->loaded_hyp_vcpu[i].present, bool);
-		GHOST_LOG_INNER("loop vcpus", g2->loaded_hyp_vcpu[i].present, bool);
-		if (g1->loaded_hyp_vcpu[i].present && g2->loaded_hyp_vcpu[i].present) {
-			check_abstraction_equals_loaded_vcpu(&g1->loaded_hyp_vcpu[i], &g2->loaded_hyp_vcpu[i]);
-		} else if (g1->loaded_hyp_vcpu[i].present && !g2->loaded_hyp_vcpu[i].present) {
-			ghost_assert(false);
-		}
-		GHOST_LOG_CONTEXT_EXIT_INNER("loop vcpus");
+
+	GHOST_SPEC_ASSERT_VAR_EQ(spec->guest_running, recorded->guest_running, bool);
+
+	if (spec->guest_running) {
+		GHOST_SPEC_ASSERT_VAR_EQ(spec->vm_handle, recorded->vm_handle, u32);
+		GHOST_SPEC_ASSERT_VAR_EQ(spec->vcpu_index, recorded->vcpu_index, u64);
 	}
+
 	GHOST_LOG_CONTEXT_EXIT();
+}
+
+void check_abstraction_refined_run_state(struct ghost_state *gc, struct ghost_state *gr_post, struct ghost_state *gr_pre)
+{
+	GHOST_LOG_CONTEXT_ENTER();
+	struct ghost_running_state *gc_run = this_cpu_ghost_run_state(gc);
+	struct ghost_running_state *gr_post_run = this_cpu_ghost_run_state(gr_post);
+
+	check_abstraction_equals_run_state(gc_run, gr_post_run);
+
+	GHOST_LOG_CONTEXT_EXIT();
+}
+
+void check_abstraction_equals_thread_local(struct ghost_local_state *local1, struct ghost_local_state *local2)
+{
+	GHOST_LOG_CONTEXT_ENTER();
+
+	GHOST_LOG_CONTEXT_EXIT();
+}
+
+void check_abstraction_refined_thread_local(struct ghost_state *gc, struct ghost_state *gr_pre, struct ghost_state *gr_post)
+{
+	int this_cpu = hyp_smp_processor_id();
+	struct ghost_local_state *gc_local = &gc->cpu_local_state[this_cpu];
+	struct ghost_local_state *gr_pre_local = &gr_pre->cpu_local_state[this_cpu];
+	struct ghost_local_state *gr_post_local = &gr_post->cpu_local_state[this_cpu];
+
+	check_abstraction_equals_loaded_vcpu(&gc_local->loaded_hyp_vcpu, &gr_post_local->loaded_hyp_vcpu);
+	check_abstraction_equals_run_state(&gc_local->cpu_state, &gr_post_local->cpu_state);
+	check_abstraction_equals_reg(&gc_local->regs, &gr_post_local->regs);
+
+	if (gc_local->host_regs.present && gr_post_local->host_regs.present) {
+		check_abstraction_equals_reg(&gc_local->host_regs.regs, &gr_post_local->host_regs.regs);
+	}
+	else if (gc_local->host_regs.present && !gr_post_local->host_regs.present) {
+		ghost_assert(false);
+	}
+	else if (!gc_local->host_regs.present && gr_post_local->host_regs.present) {
+		ghost_assert(gr_pre_local->host_regs.present);
+		check_abstraction_equals_reg(&gr_post_local->host_regs.regs, &gr_pre_local->host_regs.regs);
+	}
 }
 
 void check_abstraction_equals_vcpu(struct ghost_vcpu *vcpu1, struct ghost_vcpu *vcpu2)
@@ -505,31 +535,6 @@ void check_abstraction_vms_subseteq(struct ghost_vms *gc, struct ghost_vms *gr_p
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
-void check_abstraction_equals_run_state(struct ghost_running_state *spec, struct ghost_running_state *recorded)
-{
-	GHOST_LOG_CONTEXT_ENTER();
-
-	GHOST_SPEC_ASSERT_VAR_EQ(spec->guest_running, recorded->guest_running, bool);
-
-	if (spec->guest_running) {
-		GHOST_SPEC_ASSERT_VAR_EQ(spec->vm_handle, recorded->vm_handle, u32);
-		GHOST_SPEC_ASSERT_VAR_EQ(spec->vcpu_index, recorded->vcpu_index, u64);
-	}
-
-	GHOST_LOG_CONTEXT_EXIT();
-}
-
-void check_abstraction_refined_run_state(struct ghost_state *gc, struct ghost_state *gr_post, struct ghost_state *gr_pre)
-{
-	GHOST_LOG_CONTEXT_ENTER();
-	struct ghost_running_state *gc_run = this_cpu_ghost_run_state(gc);
-	struct ghost_running_state *gr_post_run = this_cpu_ghost_run_state(gr_post);
-
-	check_abstraction_equals_run_state(gc_run, gr_post_run);
-
-	GHOST_LOG_CONTEXT_EXIT();
-}
-
 void check_abstraction_refined_pkvm(struct ghost_state *gc, struct ghost_state *gr_post, struct ghost_state *gr_pre)
 {
 	GHOST_LOG_CONTEXT_ENTER();
@@ -600,7 +605,7 @@ void check_abstraction_equals_globals(struct ghost_state *gc, struct ghost_state
 		&& gc->globals.tag_val == gr_post->globals.tag_val
 	);
 
-
+	check_mapping_equal(gc->globals.hyp_memory, gr_post->globals.hyp_memory);
 
 	GHOST_LOG_CONTEXT_EXIT();
 }
@@ -680,12 +685,10 @@ void check_abstraction_equals_all(struct ghost_state *gc, struct ghost_state *gr
 	check_abstraction_refined_host(gc, gr_post, gr_pre);
 	check_abstraction_refined_vms(gc, gr_post, gr_pre);
 	check_abstraction_refined_run_state(gc, gr_post, gr_pre);
+	check_abstraction_refined_thread_local(gc, gr_post, gr_pre);
 
 	// these must always be present and therefore always checked
-	check_abstraction_equals_hyp_memory(gc, gr_post);
-	check_abstraction_equals_reg(gc, gr_post);
 	check_abstraction_equals_globals(gc, gr_post);
-	check_abstraction_equals_loaded_vcpus(gc, gr_post);
 
 	GHOST_LOG_CONTEXT_EXIT();
 }
@@ -695,10 +698,7 @@ void init_abstraction(struct ghost_state *g)
 	g->pkvm.present = false;
 	g->host.present = false;
 	g->vms.present = false;
-	this_cpu_ghost_register_state(g)->present = false;
-	for (int cpu=0; cpu<NR_CPUS; cpu++) {
-		g->loaded_hyp_vcpu[cpu].present = false;
-	}
+	ghost_this_cpu_local_state(g)->present = false;
 }
 
 void init_abstraction_common(void)
@@ -804,9 +804,7 @@ void clear_abstraction_all(struct ghost_state *g)
 	clear_abstraction_host(g);
 	clear_abstraction_regs(g);
 	clear_abstraction_vms(g);
-	for (int i=0; i<NR_CPUS; i++) {
-		g->loaded_hyp_vcpu[i].present = false;
-	}
+	ghost_this_cpu_local_state(g)->present = false;
 }
 
 void clear_abstraction_thread_local(void)
@@ -820,11 +818,11 @@ void clear_abstraction_thread_local(void)
 	ghost_unlock_maplets();
 }
 
-void copy_abstraction_regs(struct ghost_state *g_tgt, struct ghost_state *g_src)
+void copy_abstraction_regs(struct ghost_register_state *g_tgt, struct ghost_register_state *g_src)
 {
-	ghost_assert(this_cpu_ghost_register_state(g_src)->present);
-	ghost_assert(!this_cpu_ghost_register_state(g_tgt)->present);
-	memcpy((void*) &(g_tgt->regs[hyp_smp_processor_id()]), (void*) &(g_src->regs[hyp_smp_processor_id()]), sizeof(struct ghost_register_state));
+	ghost_assert(g_tgt->present);
+	ghost_assert(g_src->present);
+	memcpy(g_tgt, g_src, sizeof(struct ghost_register_state));
 }
 
 void copy_abstraction_constants(struct ghost_state *g_tgt, struct ghost_state *g_src)
@@ -833,11 +831,7 @@ void copy_abstraction_constants(struct ghost_state *g_tgt, struct ghost_state *g
 	g_tgt->globals.hyp_physvirt_offset = g_src->globals.hyp_physvirt_offset;
 	g_tgt->globals.tag_lsb = g_src->globals.tag_lsb;
 	g_tgt->globals.tag_val = g_src->globals.tag_val;
-}
-
-void copy_abstraction_hyp_memory(struct ghost_state *g_tgt, struct ghost_state *g_src)
-{
-	g_tgt->hyp_memory = mapping_copy(g_src->hyp_memory);
+	g_tgt->globals.hyp_memory = mapping_copy(g_src->globals.hyp_memory);
 }
 
 void copy_abstraction_pkvm(struct ghost_state *g_tgt, struct ghost_state *g_src)
@@ -959,18 +953,14 @@ void copy_abstraction_vms(struct ghost_state *g_tgt, struct ghost_state *g_src)
 	copy_abstraction_vms_partial(g_tgt, g_src, VMS_VM_TABLE_OWNED | VMS_VM_OWNED);
 }
 
-void copy_abstraction_loaded_vcpus(struct ghost_state *g_tgt, struct ghost_state *g_src)
+void copy_abstraction_loaded_vcpu(struct ghost_loaded_vcpu *tgt, struct ghost_loaded_vcpu *src)
 {
-	for (int i=0; i < g_src->globals.hyp_nr_cpus; i++) {
-		if (g_src->loaded_hyp_vcpu[i].present) {
-			g_tgt->loaded_hyp_vcpu[i] = g_src->loaded_hyp_vcpu[i];
-		}
-	}
+	memcpy(tgt, src, sizeof(*src));
 }
 
-void record_abstraction_hyp_memory(struct ghost_state *g)
+void copy_abstraction_local_state(struct ghost_local_state *l_tgt, struct ghost_local_state *l_src)
 {
-	g->hyp_memory = compute_abstraction_hyp_memory();
+	memcpy(l_tgt, l_src, sizeof(*l_src));
 }
 
 void record_abstraction_pkvm(struct ghost_state *g)
@@ -1055,12 +1045,14 @@ void record_abstraction_loaded_vcpu(struct ghost_state *g, struct pkvm_hyp_vcpu 
 		record_abstraction_vm_partial(g, pkvm_hyp_vcpu_to_hyp_vm(loaded_vcpu), VMS_VM_TABLE_OWNED);
 	}
 
-	*this_cpu_ghost_loaded_vcpu(g) = (struct ghost_loaded_vcpu){
+	ghost_assert(ghost_this_cpu_local_state(g)->present);
+	ghost_this_cpu_local_state(g)->loaded_hyp_vcpu = (struct ghost_loaded_vcpu){
 		.present = true,
 		.loaded = loaded,
 		.vm_handle = vm_handle,
 		.vcpu_index = vcpu_index,
 	};
+
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
@@ -1097,40 +1089,22 @@ void record_abstraction_vms_and_check_none(struct ghost_state *g)
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
-void record_abstraction_regs(struct ghost_state *g, struct kvm_cpu_context *ctxt)
+void record_abstraction_regs(struct ghost_register_state *gr, struct kvm_cpu_context *ctxt)
 {
 	int i;
-	this_cpu_ghost_register_state(g)->present = true;
+	gr->present = true;
 
 	// copy GPR values from the ctxt saved by the exception vector
 	for (i=0; i<=30; i++) {
-		this_cpu_ghost_register_state(g)->ctxt.regs.regs[i] = ctxt->regs.regs[i];
+		GHOST_GPR(gr, i) = ctxt->regs.regs[i];
 	}
+
 	// save EL2 registers
-	ghost_get_sysregs(this_cpu_ghost_register_state(g)->el2_sysregs);
+	ghost_get_sysregs(gr->el2_sysregs);
+
 	// save EL1 registers comprising pKVM's view of the context
-	__sysreg_save_state_nvhe(&this_cpu_ghost_register_state(g)->ctxt);
+	__sysreg_save_state_nvhe(&gr->ctxt);
 }
-
-void record_abstraction_hyp_memory_pre(void)
-{
-		ghost_lock_maplets();
-		record_abstraction_hyp_memory(this_cpu_ptr(&gs_recorded_pre));
-		ghost_unlock_maplets();
-}
-
-void record_abstraction_regs_pre(struct kvm_cpu_context *ctxt)
-{
-	struct ghost_state *g = this_cpu_ptr(&gs_recorded_pre);
-	record_abstraction_regs(g, ctxt);
-}
-
-void record_abstraction_regs_post(struct kvm_cpu_context *ctxt)
-{
-	struct ghost_state *g = this_cpu_ptr(&gs_recorded_post);
-	record_abstraction_regs(g, ctxt);
-}
-
 
 void ghost_cpu_running_state_copy(struct ghost_running_state *run_tgt, struct ghost_running_state *g_src)
 {
@@ -1139,6 +1113,33 @@ void ghost_cpu_running_state_copy(struct ghost_running_state *run_tgt, struct gh
 	run_tgt->vcpu_index = g_src->vcpu_index;
 }
 
+void record_abstraction_local_state(struct ghost_local_state *local, struct kvm_cpu_context *ctxt)
+{
+	int this_cpu = hyp_smp_processor_id();
+	struct ghost_running_state *cpu_run_state = this_cpu_ptr(&ghost_cpu_run_state);
+
+	if (ctxt)
+		record_abstraction_regs(&local->regs, ctxt);
+
+	ghost_cpu_running_state_copy(&local->cpu_state, cpu_run_state);
+
+	local->host_regs.present = true;
+	record_abstraction_regs(&local->host_regs.regs, &this_cpu_ptr(&kvm_host_data)->host_ctxt);
+
+	/* no loaded_vcpu state, as that is read separately */
+}
+
+void record_abstraction_local_state_pre(struct kvm_cpu_context *ctxt)
+{
+	struct ghost_state *g = this_cpu_ptr(&gs_recorded_pre);
+	record_abstraction_local_state(ghost_this_cpu_local_state(g), ctxt);
+}
+
+void record_abstraction_local_state_post(struct kvm_cpu_context *ctxt)
+{
+	struct ghost_state *g = this_cpu_ptr(&gs_recorded_post);
+	record_abstraction_local_state(ghost_this_cpu_local_state(g), ctxt);
+}
 
 /**
  * these are here to make __kvm_nvhe_ versions of them that are accessible in both the nvhe and non-nvhe code
@@ -1158,6 +1159,7 @@ void record_abstraction_constants(struct ghost_state *g)
 	g->globals.hyp_physvirt_offset = hyp_physvirt_offset;
 	g->globals.tag_lsb = tag_lsb;
 	g->globals.tag_val = tag_val;
+	g->globals.hyp_memory = compute_abstraction_hyp_memory();
 }
 
 void record_abstraction_constants_pre(void)
@@ -1176,13 +1178,10 @@ void record_abstraction_constants_post(void)
 void record_abstraction_all(struct ghost_state *g, struct kvm_cpu_context *ctxt)
 {
 	GHOST_LOG_CONTEXT_ENTER();
-	record_abstraction_hyp_memory(g);
 	record_abstraction_pkvm(g);
 	record_abstraction_host(g);
 	record_abstraction_vms_and_check_none(g);
-	if (ctxt) {
-		record_abstraction_regs(g,ctxt);
-	}
+	record_abstraction_local_state(ghost_this_cpu_local_state(g), ctxt);
 	record_abstraction_constants(g);
 	GHOST_LOG_CONTEXT_EXIT();
 }
@@ -1281,7 +1280,7 @@ void record_and_check_abstraction_loaded_hyp_vcpu_pre(void)
 	struct pkvm_hyp_vcpu *loaded_vcpu = *this_cpu_ptr(&loaded_hyp_vcpu);
 	ghost_lock_vms();
 	record_abstraction_loaded_vcpu(g, loaded_vcpu);
-	check_abstraction_equals_loaded_vcpus(g, &gs);
+	check_abstraction_equals_loaded_vcpu(this_cpu_ghost_loaded_vcpu(g), this_cpu_ghost_loaded_vcpu(&gs));
 	ghost_unlock_vms();
 	GHOST_LOG_CONTEXT_EXIT();
 }
@@ -1292,7 +1291,7 @@ void record_and_copy_abstraction_loaded_hyp_vcpu_post(struct pkvm_hyp_vcpu *vcpu
 	struct ghost_state *g = this_cpu_ptr(&gs_recorded_post);
 	ghost_lock_vms();
 	record_abstraction_loaded_vcpu(g, vcpu);
-	copy_abstraction_loaded_vcpus(&gs, g);
+	copy_abstraction_loaded_vcpu(this_cpu_ghost_loaded_vcpu(&gs), this_cpu_ghost_loaded_vcpu(g));
 	ghost_unlock_vms();
 	GHOST_LOG_CONTEXT_EXIT();
 }
@@ -1458,18 +1457,22 @@ struct ghost_at_translation *ghost_at_translations_get(struct ghost_at_translati
 
 /********************************************/
 // ghost per-cpu state helpers
+struct ghost_local_state *ghost_this_cpu_local_state(struct ghost_state *g)
+{
+	return &g->cpu_local_state[hyp_smp_processor_id()];
+}
 
 struct ghost_loaded_vcpu *this_cpu_ghost_loaded_vcpu(struct ghost_state *g)
 {
-	return &g->loaded_hyp_vcpu[hyp_smp_processor_id()];
+	return &ghost_this_cpu_local_state(g)->loaded_hyp_vcpu;
 }
 struct ghost_register_state *this_cpu_ghost_register_state(struct ghost_state *g)
 {
-	return &g->regs[hyp_smp_processor_id()];
+	return &ghost_this_cpu_local_state(g)->regs;
 }
 struct ghost_running_state *this_cpu_ghost_run_state(struct ghost_state *g)
 {
-	return &g->cpu_state[hyp_smp_processor_id()];
+	return &ghost_this_cpu_local_state(g)->cpu_state;
 }
 
 /*****************************************/
@@ -1607,6 +1610,7 @@ static void ghost_dump_globals(struct ghost_constant_globals *globals)
 		globals->tag_lsb,
 		globals->tag_val
 	);
+	/* TODO: dump hyp memory */
 }
 
 static void ghost_dump_regs(struct ghost_register_state *regs)
@@ -1638,13 +1642,30 @@ static void ghost_dump_running_state(struct ghost_running_state *run)
 	}
 }
 
+void ghost_dump_host_regs(struct ghost_host_regs *host_regs)
+{
+	ghost_printf("host regs: ");
+
+	if (!host_regs->present) {
+		ghost_printf(GHOST_MISSING_FIELD "\n");
+	} else {
+		ghost_printf("<TODO>\n");
+	}
+}
+
+void ghost_dump_thread_local(struct ghost_local_state *local)
+{
+	ghost_dump_regs(&local->regs);
+	ghost_dump_loaded_vcpu(&local->loaded_hyp_vcpu);
+	ghost_dump_running_state(&local->cpu_state);
+	ghost_dump_host_regs(&local->host_regs);
+}
+
 void ghost_dump_state(struct ghost_state *g)
 {
 	ghost_dump_pkvm(&g->pkvm);
 	ghost_dump_host(&g->host);
-	ghost_dump_regs(this_cpu_ghost_register_state(g));
 	ghost_dump_vms(&g->vms);
 	ghost_dump_globals(&g->globals);
-	ghost_dump_loaded_vcpu(this_cpu_ghost_loaded_vcpu(g));
-	ghost_dump_running_state(this_cpu_ghost_run_state(g));
+	ghost_dump_thread_local(ghost_this_cpu_local_state(g));
 }

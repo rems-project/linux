@@ -117,7 +117,7 @@ static inline hyp_va_t hyp_va_of_host_va(const struct ghost_state *g, host_va_t 
 bool ghost_addr_is_memory(struct ghost_state *g, phys_addr_t phys)
 {
 	struct maplet_target t;
-	if ( !mapping_lookup(phys, g->hyp_memory, &t) ) {
+	if ( !mapping_lookup(phys, g->globals.hyp_memory, &t) ) {
 		return false;
 	}
 	ghost_assert(t.kind == MAPLET_MEMBLOCK);
@@ -129,7 +129,7 @@ bool ghost_addr_is_memory(struct ghost_state *g, phys_addr_t phys)
 bool ghost_addr_is_allowed_memory(struct ghost_state *g, phys_addr_t phys)
 {
 	struct maplet_target t;
-	if (!mapping_lookup(phys, g->hyp_memory, &t))
+	if (!mapping_lookup(phys, g->globals.hyp_memory, &t))
 		return false;
 	ghost_assert(t.kind == MAPLET_MEMBLOCK);
 	return !(t.memblock & MEMBLOCK_NOMAP);
@@ -428,7 +428,7 @@ void compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost_state 
 	 */
 	copy_abstraction_host(g1, g0);
 	copy_abstraction_pkvm(g1, g0);
-	ghost_vm_clone_into(g1_vm, g0_vm);
+	// ghost_vm_clone_into_partial(g1_vm, g0_vm, VMS_VM_OWNED);
 
 	for (int d=0; d<call->memcache_donations.len; d++) {
 		u64 pfn = call->memcache_donations.pages[d];
@@ -704,7 +704,7 @@ void compute_new_abstract_state_handle___pkvm_init_vm(struct ghost_state *g1, st
 	ghost_assert(READ_ONCE(ghost_pkvm_init_finalized));
 
 	// the implementation must have taken the vm_table lock
-	ghost_spec_assert(g0->vms.present);
+	ghost_spec_assert(g0->vms.present && g0->vms.table_data.present);
 
 	// pKVM should not allocate the same handle to a previously existent VM
 	ghost_spec_assert(ghost_vms_get(&g0->vms, handle) == NULL);
@@ -718,7 +718,6 @@ void compute_new_abstract_state_handle___pkvm_init_vm(struct ghost_state *g1, st
 	// otherwise, we have all the same vms as before, plus one more
 	copy_abstraction_vms_partial(g1, g0, VMS_VM_TABLE_OWNED);
 	struct ghost_vm *vm1 = ghost_vms_alloc(&g1->vms, handle);
-	g1->vms.table_data.present = true;
 	g1->vms.table_data.nr_vms = g0->vms.table_data.nr_vms + 1;
 	ghost_assert(vm1);
 
@@ -836,6 +835,7 @@ void compute_new_abstract_state_handle___pkvm_init_vcpu(struct ghost_state *g1, 
 
 	copy_abstraction_host(g1, g0);
 	copy_abstraction_pkvm(g1, g0);
+	copy_abstraction_vms_partial(g1, g0, VMS_VM_TABLE_OWNED);
 
 	host_ipa_t vcpu_ipa = host_ipa_of_phys(phys_of_hyp_va(g0, hyp_va_of_host_va(g0, vcpu_hva)));
 	if (!ghost_map_donated_memory_checkonly(g1, vcpu_ipa, sizeof(struct pkvm_hyp_vcpu))) {
@@ -1037,9 +1037,6 @@ void compute_new_abstract_state_handle_host_mem_abort(struct ghost_state *g1, st
 	*/
 }
 
-
-
-
 void compute_new_abstract_state_handle_host_trap(struct ghost_state *post, struct ghost_state *pre, struct ghost_call_data *call, bool *new_state_computed)
 {
 	GHOST_LOG_CONTEXT_ENTER();
@@ -1050,14 +1047,11 @@ void compute_new_abstract_state_handle_host_trap(struct ghost_state *post, struc
 	GHOST_LOG(this_cpu_ghost_register_state(post)->present, bool);
 	ghost_assert(!post->pkvm.present && !post->host.present && !this_cpu_ghost_register_state(post)->present);
 
-	// copy the g0 regs to g1; we'll update them to make the final g1
-	copy_abstraction_regs(post, pre);
-
-	// hyp_memory is supposed to be constant, so just copy the old one
-	copy_abstraction_hyp_memory(post, pre);
-
-	// the globals are supposed to be constant, so copy them over
+	// copy over the things that were supposed to be constant, and always present.
 	copy_abstraction_constants(post, pre);
+
+	// and all the thread-local state the cpu can always see
+	copy_abstraction_local_state(ghost_this_cpu_local_state(post), ghost_this_cpu_local_state(pre));
 
 	switch (ESR_ELx_EC(ghost_reg_el2(pre,GHOST_ESR_EL2))) {
 	case ESR_ELx_EC_HVC64:
@@ -1316,9 +1310,6 @@ print_exit:
 
 void ghost_record_pre(struct kvm_cpu_context *ctxt)
 {
-	struct ghost_running_state *cpu_run_state = this_cpu_ptr(&ghost_cpu_run_state);
-	struct ghost_state *gr_pre = this_cpu_ptr(&gs_recorded_pre);
-
 	__this_cpu_write(ghost_check_this_hypercall, READ_ONCE(ghost_prot_finalized_all) && this_trap_check_controlled(ctxt));
 
 	tag_exception_entry(ctxt);
@@ -1331,12 +1322,9 @@ void ghost_record_pre(struct kvm_cpu_context *ctxt)
 		clear_abstraction_thread_local();
 
 		ghost_lock_maplets();
-		record_abstraction_hyp_memory(gr_pre);
-		ghost_unlock_maplets();
-
-		record_abstraction_regs_pre(ctxt);
 		record_abstraction_constants_pre();
-		ghost_cpu_running_state_copy(this_cpu_ghost_run_state(gr_pre), cpu_run_state);
+		record_abstraction_local_state_pre(ctxt);
+		ghost_unlock_maplets();
 
 		ghost_clear_call_data();
 	}
@@ -1347,7 +1335,6 @@ exit_context:
 
 void ghost_post(struct kvm_cpu_context *ctxt)
 {
-	struct ghost_running_state *cpu_run_state = this_cpu_ptr(&ghost_cpu_run_state);
 	bool new_state_computed = false;
 
 	struct ghost_state *gr_pre = this_cpu_ptr(&gs_recorded_pre);
@@ -1361,15 +1348,12 @@ void ghost_post(struct kvm_cpu_context *ctxt)
 		// record the remaining parts of the new impl abstract state
 		// (the pkvm, host, and vm components having been recorded at impl lock points)
 		ghost_lock_maplets();
-		ghost_lock_vms();
-		record_abstraction_hyp_memory(gr_post);
-		record_abstraction_regs_post(ctxt);
 		record_abstraction_constants_post();
-		ghost_cpu_running_state_copy(this_cpu_ghost_run_state(gr_post), cpu_run_state);
+		record_abstraction_local_state_post(ctxt);
 		call->return_value = cpu_reg(ctxt, 1);
 
-
 		// compute the new spec abstract state
+		ghost_lock_vms();
 
 		// need to dispatch on the saved ghost pre
 		// as might have swapped from guest<->host during the implementation of the trap.
