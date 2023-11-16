@@ -1122,6 +1122,8 @@ void record_abstraction_local_state(struct ghost_local_state *local, struct kvm_
 	local->host_regs.present = true;
 	record_abstraction_regs(&local->host_regs.regs, &this_cpu_ptr(&kvm_host_data)->host_ctxt);
 
+	local->present = true;
+
 	/* no loaded_vcpu state, as that is read separately */
 }
 
