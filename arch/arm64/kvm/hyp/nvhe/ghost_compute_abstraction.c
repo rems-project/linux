@@ -380,19 +380,46 @@ void check_abstraction_refined_run_state(struct ghost_state *gc, struct ghost_st
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
-void check_abstraction_equals_thread_local(struct ghost_local_state *local1, struct ghost_local_state *local2)
+void check_abstraction_equals_host_regs(struct ghost_host_regs *r1, struct ghost_host_regs *r2)
 {
 	GHOST_LOG_CONTEXT_ENTER();
-
+	ghost_assert(r1->present == r2->present);
+	if (r1->present && r2->present)
+		check_abstraction_equals_reg(&r1->regs, &r2->regs);
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
-void check_abstraction_refined_thread_local(struct ghost_state *gc, struct ghost_state *gr_pre, struct ghost_state *gr_post)
+void check_abstraction_equals_local_state(struct ghost_state *g1, struct ghost_state *g2)
 {
-	int this_cpu = hyp_smp_processor_id();
-	struct ghost_local_state *gc_local = &gc->cpu_local_state[this_cpu];
-	struct ghost_local_state *gr_pre_local = &gr_pre->cpu_local_state[this_cpu];
-	struct ghost_local_state *gr_post_local = &gr_post->cpu_local_state[this_cpu];
+	GHOST_LOG_CONTEXT_ENTER();
+	struct ghost_local_state *l1 = ghost_this_cpu_local_state(g1);
+	struct ghost_local_state *l2 = ghost_this_cpu_local_state(g2);
+
+	check_abstraction_equals_reg(&l1->regs, &l2->regs);
+	check_abstraction_equals_run_state(&l1->cpu_state, &l2->cpu_state);
+	check_abstraction_equals_loaded_vcpu(&l1->loaded_hyp_vcpu, &l2->loaded_hyp_vcpu);
+	check_abstraction_equals_host_regs(&l1->host_regs, &l2->host_regs);
+	GHOST_LOG_CONTEXT_EXIT();
+}
+
+void check_abstraction_refined_local_state(struct ghost_state *gc, struct ghost_state *gr_pre, struct ghost_state *gr_post)
+{
+	GHOST_LOG_CONTEXT_ENTER();
+	struct ghost_local_state *gc_local = ghost_this_cpu_local_state(gc);
+	struct ghost_local_state *gr_pre_local = ghost_this_cpu_local_state(gr_pre);
+	struct ghost_local_state *gr_post_local = ghost_this_cpu_local_state(gr_post);
+
+
+	if (gc_local->loaded_hyp_vcpu.present && gr_post_local->loaded_hyp_vcpu.present) {
+		check_abstraction_equals_loaded_vcpu(&gc_local->loaded_hyp_vcpu, &gr_post_local->loaded_hyp_vcpu);
+	}
+	else if (gc_local->loaded_hyp_vcpu.present && !gr_post_local->loaded_hyp_vcpu.present) {
+		ghost_assert(false);
+	}
+	else if (!gc_local->loaded_hyp_vcpu.present && gr_post_local->loaded_hyp_vcpu.present) {
+		ghost_assert(gr_pre_local->loaded_hyp_vcpu.present);
+		check_abstraction_equals_loaded_vcpu(&gr_post_local->loaded_hyp_vcpu, &gr_pre_local->loaded_hyp_vcpu);
+	}
 
 	if (gc_local->host_regs.present && gr_post_local->host_regs.present) {
 		check_abstraction_equals_reg(&gc_local->host_regs.regs, &gr_post_local->host_regs.regs);
@@ -404,6 +431,7 @@ void check_abstraction_refined_thread_local(struct ghost_state *gc, struct ghost
 		ghost_assert(gr_pre_local->host_regs.present);
 		check_abstraction_equals_reg(&gr_post_local->host_regs.regs, &gr_pre_local->host_regs.regs);
 	}
+	GHOST_LOG_CONTEXT_EXIT();
 }
 
 void check_abstraction_equals_vcpu(struct ghost_vcpu *vcpu1, struct ghost_vcpu *vcpu2)
@@ -681,7 +709,7 @@ void check_abstraction_equals_all(struct ghost_state *gc, struct ghost_state *gr
 	check_abstraction_refined_host(gc, gr_post, gr_pre);
 	check_abstraction_refined_vms(gc, gr_post, gr_pre);
 	check_abstraction_refined_run_state(gc, gr_post, gr_pre);
-	check_abstraction_refined_thread_local(gc, gr_post, gr_pre);
+	check_abstraction_refined_local_state(gc, gr_post, gr_pre);
 
 	// these must always be present and therefore always checked
 	check_abstraction_equals_globals(gc, gr_post);
@@ -1130,16 +1158,20 @@ void record_abstraction_local_state(struct ghost_state *g, struct kvm_cpu_contex
 	record_abstraction_loaded_vcpu(g, loaded_vcpu);
 }
 
-void record_abstraction_local_state_pre(struct kvm_cpu_context *ctxt)
+void record_and_check_abstraction_local_state_pre(struct kvm_cpu_context *ctxt)
 {
 	struct ghost_state *g = this_cpu_ptr(&gs_recorded_pre);
 	record_abstraction_local_state(g, ctxt);
+
+	if (this_cpu_ghost_register_state(&gs)->present)
+		check_abstraction_equals_local_state(g, &gs);
 }
 
-void record_abstraction_local_state_post(struct kvm_cpu_context *ctxt)
+void record_and_copy_abstraction_local_state_post(struct kvm_cpu_context *ctxt)
 {
 	struct ghost_state *g = this_cpu_ptr(&gs_recorded_post);
 	record_abstraction_local_state(g, ctxt);
+	copy_abstraction_local_state(ghost_this_cpu_local_state(&gs), ghost_this_cpu_local_state(g));
 }
 
 /**
@@ -1182,7 +1214,10 @@ void record_abstraction_all(struct ghost_state *g, struct kvm_cpu_context *ctxt)
 	record_abstraction_pkvm(g);
 	record_abstraction_host(g);
 	record_abstraction_vms_and_check_none(g);
-	record_abstraction_local_state(g, ctxt);
+	/* dont record local state right at start,
+	 * as the registers and other CPU local state aren't valid until
+	 * the start of the first real hypercall after __pkvm_prot_finalize */
+	// record_abstraction_local_state(g, ctxt);
 	record_abstraction_constants(g);
 	GHOST_LOG_CONTEXT_EXIT();
 }

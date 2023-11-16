@@ -1324,7 +1324,7 @@ void ghost_record_pre(struct kvm_cpu_context *ctxt)
 		ghost_lock_maplets();
 		record_abstraction_constants_pre();
 		ghost_unlock_maplets();
-		record_abstraction_local_state_pre(ctxt);
+		record_and_check_abstraction_local_state_pre(ctxt);
 
 		ghost_clear_call_data();
 	}
@@ -1350,7 +1350,7 @@ void ghost_post(struct kvm_cpu_context *ctxt)
 		ghost_lock_maplets();
 		record_abstraction_constants_post();
 		ghost_lock_vms();
-		record_abstraction_local_state_post(ctxt);
+		record_and_copy_abstraction_local_state_post(ctxt);
 		call->return_value = cpu_reg(ctxt, 1);
 
 		// compute the new spec abstract state
