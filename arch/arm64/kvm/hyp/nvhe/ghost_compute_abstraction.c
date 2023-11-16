@@ -1545,7 +1545,7 @@ static void ghost_dump_vm(struct ghost_vm *vm, u64 i)
 
 static void ghost_dump_vms(struct ghost_vms *vms)
 {
-	if (vms->present) {
+	if (!vms->present) {
 		ghost_printf("vms:<missing>\n");
 		return;
 	}
