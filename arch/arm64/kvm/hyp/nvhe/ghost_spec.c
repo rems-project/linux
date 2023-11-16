@@ -440,7 +440,7 @@ void compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost_state 
 		struct maplet_attributes hyp_attrs = ghost_default_hyp_memory_attributes(is_memory, MAPLET_PAGE_STATE_PRIVATE_OWNED);
 
 		// TODO: what if location was not shared with pKVM?
-		if (!(is_owned_and_shared_by(g0, GHOST_HOST, donated_phys) && is_borrowed_by(g0, GHOST_HYP, donated_phys)))
+		if (!(is_owned_and_shared_by(g0, GHOST_HOST, host_page_ipa) && is_borrowed_by(g0, GHOST_HYP, hyp_page_addr)))
 			ghost_spec_assert(false);
 
 		// Each memcache page that is donated must be swapped from shared to owned in pKVM's tables,
