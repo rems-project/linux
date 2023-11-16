@@ -583,21 +583,32 @@ static void ghost_diff_vm(struct diff_container *node, pkvm_handle_t handle, str
 	// in theory: handle should be the same...
 	ghost_diff_field(node, "handle", diff_pair(TU64((u64)vm1->pkvm_handle), TU64((u64)vm2->pkvm_handle)));
 	if (vm1->pkvm_handle == vm2->pkvm_handle) {
-		ghost_diff_field(node, "nr_vcpus", diff_pair(TU64(vm1->vm_table_locked.nr_vcpus), TU64(vm2->vm_table_locked.nr_vcpus)));
-		ghost_diff_field(node, "nr_initialised_vcpus", diff_pair(TU64(vm1->vm_table_locked.nr_initialised_vcpus), TU64(vm2->vm_table_locked.nr_initialised_vcpus)));
-		ghost_diff_pgtable(node, "vm_abstract_pgtable", &vm1->vm_locked.vm_abstract_pgtable, &vm2->vm_locked.vm_abstract_pgtable);
-
-		for (u64 i = 0; i < KVM_MAX_VCPUS; i++) {
-			struct ghost_vcpu *vcpu1 = vm1->vm_table_locked.vcpus[i];
-			struct ghost_vcpu *vcpu2 = vm2->vm_table_locked.vcpus[i];
-
-			if (vcpu1 && vcpu2)
-				ghost_diff_vcpu(node, i, vcpu1, vcpu2);
-			else if (vcpu1)
-				ghost_diff_attach(node, diff_pm(false, TGPRINT("vcpu %ld", vcpu1->vcpu_handle)));
-			else if (vcpu2)
-				ghost_diff_attach(node, diff_pm(true, TGPRINT("vcpu %ld", vcpu2->vcpu_handle)));
+		ghost_diff_enter_subfield(node, "vm_locked");
+		ghost_diff_field(node, "present", diff_pair(TBOOL(vm1->vm_locked.present), TU64(vm2->vm_locked.present)));
+		if (vm1->vm_locked.present && vm2->vm_locked.present) {
+			ghost_diff_pgtable(node, "vm_abstract_pgtable", &vm1->vm_locked.vm_abstract_pgtable, &vm2->vm_locked.vm_abstract_pgtable);
 		}
+		ghost_diff_pop_subfield(node);
+
+		ghost_diff_enter_subfield(node, "vm_table_locked");
+		ghost_diff_field(node, "present", diff_pair(TBOOL(vm1->vm_table_locked.present), TU64(vm2->vm_table_locked.present)));
+		if (vm1->vm_table_locked.present && vm2->vm_table_locked.present) {
+			ghost_diff_field(node, "nr_vcpus", diff_pair(TU64(vm1->vm_table_locked.nr_vcpus), TU64(vm2->vm_table_locked.nr_vcpus)));
+			ghost_diff_field(node, "nr_initialised_vcpus", diff_pair(TU64(vm1->vm_table_locked.nr_initialised_vcpus), TU64(vm2->vm_table_locked.nr_initialised_vcpus)));
+
+			for (u64 i = 0; i < KVM_MAX_VCPUS; i++) {
+				struct ghost_vcpu *vcpu1 = vm1->vm_table_locked.vcpus[i];
+				struct ghost_vcpu *vcpu2 = vm2->vm_table_locked.vcpus[i];
+
+				if (vcpu1 && vcpu2)
+					ghost_diff_vcpu(node, i, vcpu1, vcpu2);
+				else if (vcpu1)
+					ghost_diff_attach(node, diff_pm(false, TGPRINT("vcpu %ld", vcpu1->vcpu_handle)));
+				else if (vcpu2)
+					ghost_diff_attach(node, diff_pm(true, TGPRINT("vcpu %ld", vcpu2->vcpu_handle)));
+			}
+		}
+		ghost_diff_pop_subfield(node);
 	}
 	ghost_diff_pop_subfield(node);
 	GHOST_LOG_CONTEXT_EXIT();
