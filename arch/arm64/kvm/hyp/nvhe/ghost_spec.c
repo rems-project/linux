@@ -1351,6 +1351,7 @@ void ghost_post(struct kvm_cpu_context *ctxt)
 	bool new_state_computed = false;
 
 	struct ghost_state *gr_pre = this_cpu_ptr(&gs_recorded_pre);
+	struct ghost_running_state *gr_pre_cpu = this_cpu_ghost_run_state(gr_pre);
 	struct ghost_state *gr_post = this_cpu_ptr(&gs_recorded_post);
 	struct ghost_state *gc_post = this_cpu_ptr(&gs_computed_post);
 	struct ghost_call_data *call = this_cpu_ptr(&gs_call_data);
@@ -1370,9 +1371,9 @@ void ghost_post(struct kvm_cpu_context *ctxt)
 
 		// compute the new spec abstract state
 
-		// TODO: do this check on real or ghost? Probably ghost...
-		// if (gr_pre_cpu->guest_running)
-		if (cpu_run_state->guest_running)
+		// need to dispatch on the saved ghost pre
+		// as might have swapped from guest<->host during the implementation of the trap.
+		if (gr_pre_cpu->guest_running)
 			compute_new_abstract_state_handle_guest_trap(gc_post, gr_pre, call, &new_state_computed);
 		else
 			compute_new_abstract_state_handle_host_trap(gc_post, gr_pre, call, &new_state_computed);
