@@ -1550,6 +1550,8 @@ static void ghost_dump_vms(struct ghost_vms *vms)
 		return;
 	}
 
+	ghost_printf("vms:\n");
+
 	ghost_printf("    vm_table_data:\n");
 	ghost_printf("        present:%b\n", vms->table_data.present);
 	if (vms->table_data.present)
