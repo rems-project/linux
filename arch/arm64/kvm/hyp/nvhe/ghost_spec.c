@@ -1349,12 +1349,11 @@ void ghost_post(struct kvm_cpu_context *ctxt)
 		// (the pkvm, host, and vm components having been recorded at impl lock points)
 		ghost_lock_maplets();
 		record_abstraction_constants_post();
+		ghost_lock_vms();
 		record_abstraction_local_state_post(ctxt);
 		call->return_value = cpu_reg(ctxt, 1);
 
 		// compute the new spec abstract state
-		ghost_lock_vms();
-
 		// need to dispatch on the saved ghost pre
 		// as might have swapped from guest<->host during the implementation of the trap.
 		if (gr_pre_cpu->guest_running)
