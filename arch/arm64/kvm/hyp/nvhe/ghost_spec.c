@@ -458,13 +458,13 @@ void compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost_state 
 	 */
 	copy_abstraction_host(g1, g0);
 	copy_abstraction_pkvm(g1, g0);
-	// ghost_vm_clone_into_partial(g1_vm, g0_vm, VMS_VM_OWNED);
+	ghost_vm_clone_into_partial(g1_vm, g0_vm, VMS_VM_OWNED);
 
 	for (int d=0; d<call->memcache_donations.len; d++) {
 		u64 pfn = call->memcache_donations.pages[d];
 		phys_addr_t donated_phys = hyp_pfn_to_phys(pfn);
-		host_ipa_t host_page_ipa = host_ipa_of_phys(donated_phys);
-		hyp_va_t hyp_page_addr = (u64)ghost__hyp_va(g0, donated_phys);
+		host_ipa_t host_donated_page_ipa = host_ipa_of_phys(donated_phys);
+		hyp_va_t hyp_donated_page_addr = (u64)ghost__hyp_va(g0, donated_phys);
 
 		bool is_memory = ghost_addr_is_allowed_memory(g0, donated_phys);
 		struct maplet_attributes hyp_attrs = ghost_default_hyp_memory_attributes(is_memory, MAPLET_PAGE_STATE_PRIVATE_OWNED);
@@ -473,7 +473,7 @@ void compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost_state 
 		 * but the pages of the linked list are actually owned exclusively by the host,
 		 * and they are stolen by pKVM as needed.
 		 */
-		if (! is_owned_exclusively_by(g0, GHOST_HOST, host_page_ipa))
+		if (! is_owned_exclusively_by(g0, GHOST_HOST, host_donated_page_ipa))
 			ghost_spec_assert(false);
 
 		// Each memcache page that is donated must be put as owned in pKVM's tables,
@@ -483,12 +483,12 @@ void compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost_state 
 		mapping_update(
 			&g1->pkvm.pkvm_abstract_pgtable.mapping,
 			g1->pkvm.pkvm_abstract_pgtable.mapping,
-			MAP_INSERT_PAGE, GHOST_STAGE1, hyp_page_addr, 1, maplet_target_mapped_attrs(donated_phys, 1, hyp_attrs)
+			MAP_INSERT_PAGE, GHOST_STAGE1, hyp_donated_page_addr, 1, maplet_target_mapped_attrs(donated_phys, 1, hyp_attrs)
 		);
 		mapping_update(
 			&g1->host.host_abstract_pgtable_annot,
 			g1->host.host_abstract_pgtable_annot,
-			MAP_INSERT_PAGE, GHOST_STAGE2, host_page_ipa, 1, maplet_target_annot_ext(MAPLET_OWNER_ANNOT_OWNED_HYP)
+			MAP_INSERT_PAGE, GHOST_STAGE2, host_donated_page_ipa, 1, maplet_target_annot_ext(MAPLET_OWNER_ANNOT_OWNED_HYP)
 		);
 		// TODO: WRITE_ONCE()
 
@@ -567,7 +567,7 @@ void compute_new_abstract_state_handle___pkvm_vcpu_load(struct ghost_state *g1, 
 
 	// record in the ghost state of the vcpu 'vcpu_idx' that is has been loaded
 	struct ghost_vm *vm1 = ghost_vms_alloc(&g1->vms, vm->pkvm_handle);
-	ghost_vm_clone_into(vm1, vm);
+	ghost_vm_clone_into_partial(vm1, vm, VMS_VM_TABLE_OWNED);
 
 	// this vm's vcpu is now marked as loaded
 	ghost_assert(vm1->vm_table_locked.vcpus[vcpu_idx]);
@@ -608,7 +608,7 @@ void compute_new_abstract_state_handle___pkvm_vcpu_put(struct ghost_state *g1, s
 	struct ghost_vm *vm1 = ghost_vms_alloc(&g1->vms, vm_handle);
 	ghost_assert(vm0);
 	ghost_assert(vm1);
-	ghost_vm_clone_into(vm1, vm0);
+	ghost_vm_clone_into_partial(vm1, vm0, VMS_VM_TABLE_OWNED);
 
 	// the vm's vcpu is now marked as not loaded.
 	ghost_assert(vm1->vm_table_locked.vcpus[vcpu_idx]);

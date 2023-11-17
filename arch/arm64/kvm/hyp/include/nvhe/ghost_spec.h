@@ -341,11 +341,11 @@ void ghost_vms_free(struct ghost_vms *vms, pkvm_handle_t handle);
 bool ghost_vms_is_valid_handle(struct ghost_vms *vms, pkvm_handle_t handle);
 
 /**
- * ghost_vm_clone_into() - Copies all the fields (including mappings) from one VM slot to another
+ * ghost_vm_clone_into_partial() - Copies all the fields (including mappings) from one VM slot to another
  *
  * Must own the vm_table table lock, *and* both VMs locks
  */
-void ghost_vm_clone_into(struct ghost_vm *dest, struct ghost_vm *src);
+void ghost_vm_clone_into_partial(struct ghost_vm *dest, struct ghost_vm *src, enum vm_field_owner owner);
 
 /*
  * Lock order (in order to be taken): pKVM vm_table -> Host pgtable -> pKVM pgtable -> VM lock -> maplets -> ghost_vms
