@@ -342,8 +342,7 @@ void check_abstraction_equals_loaded_vcpu(struct ghost_loaded_vcpu *loaded_vcpu1
 	GHOST_LOG(loaded_vcpu2->present, bool);
 	ghost_assert(loaded_vcpu1->present && loaded_vcpu2->present);
 
-	GHOST_LOG(loaded_vcpu1->loaded, bool);
-	GHOST_LOG(loaded_vcpu2->loaded, bool);
+	GHOST_LOG(loaded_vcpu1->loaded, bool); GHOST_LOG(loaded_vcpu2->loaded, bool);
 	ghost_spec_assert(loaded_vcpu1->loaded == loaded_vcpu2->loaded);
 
 	if (loaded_vcpu1->loaded) {
@@ -1169,7 +1168,7 @@ void record_and_check_abstraction_local_state_pre(struct kvm_cpu_context *ctxt)
 	GHOST_LOG_CONTEXT_ENTER();
 	record_abstraction_local_state(g, ctxt);
 
-	if (this_cpu_ghost_register_state(&gs)->present) {
+	if (ghost_checked_last_call() && this_cpu_ghost_register_state(&gs)->present) {
 		GHOST_TRACE("g1->gr_pre");
 		GHOST_TRACE("g2->gs");
 		check_abstraction_equals_local_state(g, &gs);
@@ -1257,7 +1256,10 @@ void record_and_check_abstraction_pkvm_pre(void)
 	// ... but later on we'll have to do some this-thread-diff/trajectory tracking instead
 	if (!g->pkvm.present) {
 		record_abstraction_pkvm(g);
-		check_abstraction_equals_pkvm(&g->pkvm, &gs.pkvm);
+
+		if (ghost_checked_last_call()) {
+			check_abstraction_equals_pkvm(&g->pkvm, &gs.pkvm);
+		}
 	}
 	ghost_unlock_maplets();
 	GHOST_LOG_CONTEXT_EXIT();
@@ -1287,7 +1289,9 @@ void record_and_check_abstraction_host_pre(void)
 	// TODO: see comment in record_and_check_abstraction_pkvm_pre
 	if (!g->host.present) {
 		record_abstraction_host(g);
-		check_abstraction_equals_host(&g->host, &gs.host);
+		if (ghost_checked_last_call()) {
+			check_abstraction_equals_host(&g->host, &gs.host);
+		}
 	}
 	ghost_unlock_maplets();
 	GHOST_LOG_CONTEXT_EXIT();
@@ -1324,7 +1328,9 @@ void record_and_check_abstraction_vms_pre(void)
 	struct ghost_state *g = this_cpu_ptr(&gs_recorded_pre);
 	ghost_lock_vms();
 	record_abstraction_vms_partial(g, VMS_VM_TABLE_OWNED);
-	check_abstraction_vms_subseteq(&g->vms, &gs.vms);
+	if (ghost_checked_last_call()) {
+		check_abstraction_vms_subseteq(&g->vms, &gs.vms);
+	}
 	ghost_unlock_vms();
 	GHOST_LOG_CONTEXT_EXIT();
 }
@@ -1358,7 +1364,9 @@ void record_and_check_abstraction_vm_pre(struct pkvm_hyp_vm *vm)
 	// so on future locks we will do the check.
 	if (ghost_vms_is_valid_handle(&gs.vms, handle)) {
 		record_abstraction_vm_partial(g, vm, VMS_VM_OWNED);
-		check_abstraction_vm_in_vms_and_equal(handle, g, &gs.vms);
+		if (ghost_checked_last_call()) {
+			check_abstraction_vm_in_vms_and_equal(handle, g, &gs.vms);
+		}
 	}
 
 	ghost_unlock_vms();

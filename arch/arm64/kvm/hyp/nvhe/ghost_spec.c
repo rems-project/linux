@@ -27,13 +27,20 @@ bool ghost_pkvm_init_finalized;
 DEFINE_HYP_SPINLOCK(ghost_prot_finalized_lock);
 u64 ghost_prot_finalized_count;
 bool ghost_prot_finalized_all;
+
 DEFINE_PER_CPU(bool, ghost_check_this_hypercall);
+DEFINE_PER_CPU(bool, ghost_checked_previous_hypercall);
 
 DEFINE_PER_CPU(bool, ghost_print_this_hypercall);
 
 bool ghost_exec_enabled(void)
 {
 	return GHOST_EXEC_SPEC && __this_cpu_read(ghost_check_this_hypercall);
+}
+
+bool ghost_checked_last_call(void)
+{
+	return __this_cpu_read(ghost_checked_previous_hypercall);
 }
 
 void ghost_enable_this_cpu(void)
@@ -1456,5 +1463,7 @@ void ghost_post(struct kvm_cpu_context *ctxt)
 		ghost_unlock_vms();
 		ghost_unlock_maplets();
 	}
+
+	__this_cpu_write(ghost_checked_previous_hypercall, __this_cpu_read(ghost_check_this_hypercall));
 	GHOST_LOG_CONTEXT_EXIT();
 }
