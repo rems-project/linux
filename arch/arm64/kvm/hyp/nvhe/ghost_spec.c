@@ -1406,34 +1406,24 @@ static struct ghost_trap_data unknown_trap_data = {
 	.params = {0},
 };
 
-static struct ghost_trap_data invalid_trap = {
-	.valid = false,
-};
-
 static struct ghost_trap_data __tag_hcall(struct kvm_cpu_context *ctxt, bool from_guest)
 {
-	struct ghost_trap_data trap = invalid_trap;
 	u64 hcall_id = cpu_reg(ctxt, 0);
 
 	if (from_guest) {
 		for (int i = 0; i < NR_GUEST_HCALLS; i++)
 			if (guest_hcalls[i].ec == hcall_id)
-				trap = guest_hcalls[hcall_id];
+				return guest_hcalls[hcall_id];
 	}
 	else {
 		hcall_id -= KVM_HOST_SMCCC_ID(0);
 
 		for (int i = 0; i < NR_HOST_HCALLS; i++)
 			if (host_hcalls[i].ec == hcall_id)
-				trap = host_hcalls[hcall_id];
+				return host_hcalls[hcall_id];
 	}
 
-	if (trap.valid) {
-		return trap;
-	}
-	else {
-		return unknown_trap_data;
-	}
+	return unknown_trap_data;
 }
 
 static struct ghost_trap_data host_abort_trap_data = {
