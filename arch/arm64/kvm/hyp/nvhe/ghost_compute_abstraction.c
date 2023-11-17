@@ -410,7 +410,12 @@ void check_abstraction_refined_local_state(struct ghost_state *gc, struct ghost_
 	struct ghost_local_state *gr_pre_local = ghost_this_cpu_local_state(gr_pre);
 	struct ghost_local_state *gr_post_local = ghost_this_cpu_local_state(gr_post);
 
+	/* computed post and recorded post run and register states must be exactly equal */
+	check_abstraction_equals_reg(&gc_local->regs, &gr_post_local->regs, true);
+	check_abstraction_equals_run_state(&gc_local->cpu_state, &gr_post_local->cpu_state);
 
+	/* the others (loaded_vcpu and host_regs) may be not present on the computed state
+	 * in which case we check they didn't change if they were recorded in the pre. */
 	if (gc_local->loaded_hyp_vcpu.present && gr_post_local->loaded_hyp_vcpu.present) {
 		GHOST_INFO("loaded_vcpu1->gc");
 		GHOST_INFO("loaded_vcpu2->gr_post");
