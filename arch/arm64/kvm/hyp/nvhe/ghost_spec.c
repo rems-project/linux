@@ -4,6 +4,7 @@
 #include <hyp/ghost_alloc.h>
 #include <nvhe/ghost_misc.h>
 #include <nvhe/ghost_pgtable.h>
+#include <linux/arm-smccc.h>
 #pragma GCC diagnostic ignored "-Wdeclaration-after-statement"
 
 #include <nvhe/spinlock.h>   
@@ -648,6 +649,84 @@ out:
 	return true;
 }
 
+bool compute_new_abstract_state_handle___kvm_vcpu_run_begin(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call)
+{
+	struct ghost_loaded_vcpu *loaded_vcpu = this_cpu_ghost_loaded_vcpu(g0);
+	ghost_assert(loaded_vcpu->present);
+
+	// have to have done a previous vcpu_load
+	if (!loaded_vcpu->loaded) {
+		goto out;
+	}
+
+	pkvm_handle_t vm_handle = loaded_vcpu->vm_handle;
+	u64 vcpu_index = loaded_vcpu->vcpu_index;
+
+	/* must have existed to be able to load it */
+	struct ghost_vm *vm0 = ghost_vms_get(&g0->vms, vm_handle);
+	ghost_assert(vm0);
+
+	struct ghost_vcpu *vcpu0 = vm0->vm_table_locked.vcpus[vcpu_index];
+	ghost_assert(vcpu0);
+
+	/* save current register state into the host context */
+	copy_abstraction_regs(&ghost_this_cpu_local_state(g1)->host_regs.regs, &ghost_this_cpu_local_state(g0)->regs);
+
+	/* restore saved vcpu register state to the local regs */
+	copy_abstraction_regs(&ghost_this_cpu_local_state(g1)->regs, &vcpu0->regs);
+
+	/* mark as guest running */
+	ghost_this_cpu_local_state(g1)->cpu_state = (struct ghost_running_state){
+		.guest_running = true,
+		.vm_handle = vm_handle,
+		.vcpu_index = vcpu_index,
+	};
+
+out:
+	return true;
+}
+
+bool compute_new_abstract_state_handle___kvm_vcpu_run_end(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call)
+{
+	struct ghost_loaded_vcpu *loaded_vcpu = this_cpu_ghost_loaded_vcpu(g0);
+	ghost_assert(loaded_vcpu->present);
+
+	// have to have done a previous vcpu_load
+	if (!loaded_vcpu->loaded) {
+		goto out;
+	}
+
+	/* must have existed to be able to load it */
+	pkvm_handle_t vm_handle = loaded_vcpu->vm_handle;
+	u64 vcpu_index = loaded_vcpu->vcpu_index;
+
+	struct ghost_vm *vm0 = ghost_vms_get(&g0->vms, vm_handle);
+	struct ghost_vcpu *vcpu0 = vm0->vm_table_locked.vcpus[vcpu_index];
+
+	/* must have existed in the vms table to have loaded it */
+	struct ghost_vm *vm1 = ghost_vms_get(&g1->vms, vm_handle);
+	ghost_assert(vm1);
+
+	struct ghost_vcpu *vcpu1 = vm1->vm_table_locked.vcpus[vcpu_index];
+	ghost_assert(vcpu1);
+
+	/* save current register state into the vcpu context */
+	copy_abstraction_regs(&vcpu0->regs, &ghost_this_cpu_local_state(g1)->regs);
+
+	/* restore saved host register state to the local regs */
+	copy_abstraction_regs(&ghost_this_cpu_local_state(g0)->regs, &ghost_this_cpu_local_state(g1)->host_regs.regs);
+
+	/* mark as host running */
+	ghost_this_cpu_local_state(g1)->cpu_state = (struct ghost_running_state){
+		.guest_running = false,
+	};
+
+	/* TODO: vcpu_run return value */
+
+out:
+	return true;
+}
+
 //TODO: move somewhere else
 #define phys_of_host_va(X) X// TODO
 // performs the mapping checks of hyp_pin_shared_mem (from mem_protect.c)
@@ -1044,6 +1123,9 @@ bool compute_new_abstract_state_handle_host_hcall(struct ghost_state *g1, struct
 	case __KVM_HOST_SMCCC_FUNC___pkvm_vcpu_put:
 		new_state_computed =  compute_new_abstract_state_handle___pkvm_vcpu_put(g1, g0, call);
 		break;
+	case __KVM_HOST_SMCCC_FUNC___kvm_vcpu_run:
+		new_state_computed =  compute_new_abstract_state_handle___kvm_vcpu_run_begin(g1, g0, call);
+		break;
 	case __KVM_HOST_SMCCC_FUNC___pkvm_init_vm:
 		new_state_computed =  compute_new_abstract_state_handle___pkvm_init_vm(g1, g0, call);
 		break;
@@ -1158,16 +1240,69 @@ bool compute_new_abstract_state_handle_host_mem_abort(struct ghost_state *g1, st
 	return true;
 }
 
-bool compute_new_abstract_state_handle_host_trap(struct ghost_state *post, struct ghost_state *pre, struct ghost_call_data *call)
+/* Guest API */
+
+bool compute_new_abstract_state_pkvm_memshare(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call)
+{
+	return false;
+}
+
+bool compute_new_abstract_state_pkvm_memunshare(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call)
+{
+	return false;
+}
+
+bool compute_new_abstract_state_handle_guest_hcall(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call)
 {
 	bool new_state_computed = false;
 	GHOST_LOG_CONTEXT_ENTER();
 
-	// check *post was clear
-	GHOST_LOG(post->pkvm.present, bool);
-	GHOST_LOG(post->host.present, bool);
-	GHOST_LOG(this_cpu_ghost_register_state(post)->present, bool);
-	ghost_assert(!post->pkvm.present && !post->host.present && !this_cpu_ghost_register_state(post)->present);
+	u64 hcall_id = ghost_reg_gpr(g0, 0);
+
+	switch (hcall_id) {
+	case ARM_SMCCC_VENDOR_HYP_KVM_MEM_SHARE_FUNC_ID:
+		new_state_computed = compute_new_abstract_state_pkvm_memshare(g1, g0, call);
+		break;
+	case ARM_SMCCC_VENDOR_HYP_KVM_MEM_UNSHARE_FUNC_ID:
+		new_state_computed = compute_new_abstract_state_pkvm_memunshare(g1, g0, call);
+		break;
+
+	case ARM_SMCCC_VERSION_FUNC_ID:
+		/* TODO */
+		break;
+	case ARM_SMCCC_VENDOR_HYP_CALL_UID_FUNC_ID:
+		/* TODO */
+		break;
+	case ARM_SMCCC_VENDOR_HYP_KVM_FEATURES_FUNC_ID:
+		/* TODO */
+		break;
+	case ARM_SMCCC_VENDOR_HYP_KVM_HYP_MEMINFO_FUNC_ID:
+		/* TODO */
+		break;
+
+	default:
+		/* TODO */
+		//new_state_computed = compute_new_abstract_state_pkvm_handle_psci(hyp_vcpu);
+		break;
+	}
+
+	GHOST_LOG_CONTEXT_EXIT();
+	return new_state_computed;
+}
+
+
+bool compute_new_abstract_state_handle_guest_mem_abort(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call)
+{
+	/* guest mem abort = return back to, and then ERET from, vcpu_run */
+	return compute_new_abstract_state_handle___kvm_vcpu_run_end(g1, g0, call);
+}
+
+/* Top-level EL2 exception handler spec */
+
+bool compute_new_abstract_state_handle_trap(struct ghost_state *post, struct ghost_state *pre, struct ghost_call_data *call)
+{
+	bool new_state_computed = false;
+	GHOST_LOG_CONTEXT_ENTER();
 
 	// copy over the things that were supposed to be constant, and always present.
 	copy_abstraction_constants(post, pre);
@@ -1175,9 +1310,16 @@ bool compute_new_abstract_state_handle_host_trap(struct ghost_state *post, struc
 	// and all the thread-local state the cpu can always see
 	copy_abstraction_local_state(ghost_this_cpu_local_state(post), ghost_this_cpu_local_state(pre));
 
+	// figure out if coming from host or guest
+	struct ghost_running_state *gr_pre_cpu = this_cpu_ghost_run_state(pre);
+	bool ghost_thought_guest_was_running = gr_pre_cpu->guest_running;
+
 	switch (ESR_ELx_EC(ghost_reg_el2(pre,GHOST_ESR_EL2))) {
 	case ESR_ELx_EC_HVC64:
-		new_state_computed =  compute_new_abstract_state_handle_host_hcall(post, pre, call);
+		if (ghost_thought_guest_was_running)
+			new_state_computed =  compute_new_abstract_state_handle_guest_hcall(post, pre, call);
+		else
+			new_state_computed =  compute_new_abstract_state_handle_host_hcall(post, pre, call);
 		break;
 	case ESR_ELx_EC_SMC64:
 		//TODO compute_new_abstract_state_handle_host_smc(post,pre);
@@ -1188,7 +1330,10 @@ bool compute_new_abstract_state_handle_host_trap(struct ghost_state *post, struc
 		break;
 	case ESR_ELx_EC_IABT_LOW:
 	case ESR_ELx_EC_DABT_LOW:
-		new_state_computed =  compute_new_abstract_state_handle_host_mem_abort(post, pre, call);
+		if (ghost_thought_guest_was_running)
+			new_state_computed =  compute_new_abstract_state_handle_guest_mem_abort(post, pre, call);
+		else
+			new_state_computed =  compute_new_abstract_state_handle_host_mem_abort(post, pre, call);
 		break;
 	default:
 		ghost_assert(false);
@@ -1198,221 +1343,177 @@ bool compute_new_abstract_state_handle_host_trap(struct ghost_state *post, struc
 	return new_state_computed;
 }
 
-bool compute_new_abstract_state_handle_guest_trap(struct ghost_state *post, struct ghost_state *pre, struct ghost_call_data *call)
+
+/* Pretty-printing headers */
+struct ghost_trap_param {
+	const char *fmt_code;
+};
+
+struct ghost_trap_data {
+	bool valid;
+	u64 ec;
+	const char *name;
+	const char *params[5];
+};
+
+#define __HCALL(EC, NAME, R0, R1, R2, R3, R4) \
+	(struct ghost_trap_data){.valid=true, .ec=EC, .name=NAME, .params={R0,R1,R2,R3,R4}}
+
+#define HOST_HCALL(FN, R0, R1, R2, R3, R4) \
+	__HCALL(__KVM_HOST_SMCCC_FUNC_##FN, #FN, R0, R1, R2, R3, R4)
+
+#define GUEST_HCALL(SMCCC_FN, R0, R1, R2, R3, R4) \
+	__HCALL(SMCCC_FN, #SMCCC_FN, R0, R1, R2, R3, R4)
+
+static struct ghost_trap_data host_hcalls[] = {
+	HOST_HCALL(__kvm_get_mdcr_el2, "", "", "", "", ""),
+	HOST_HCALL(__pkvm_init, "", "", "", "", ""),
+	HOST_HCALL(__pkvm_create_private_mapping, "", "", "", "", ""),
+	HOST_HCALL(__pkvm_cpu_set_vector, "", "", "", "", ""),
+	HOST_HCALL(__kvm_enable_ssbs, "", "", "", "", ""),
+	HOST_HCALL(__vgic_v3_init_lrs, "", "", "", "", ""),
+	HOST_HCALL(__vgic_v3_get_gic_config, "", "", "", "", ""),
+	HOST_HCALL(__kvm_flush_vm_context, "", "", "", "", ""),
+	HOST_HCALL(__kvm_tlb_flush_vmid_ipa, "", "", "", "", ""),
+	HOST_HCALL(__kvm_tlb_flush_vmid, "", "", "", "", ""),
+	HOST_HCALL(__kvm_flush_cpu_context, "", "", "", "", ""),
+	HOST_HCALL(__pkvm_prot_finalize, "", "", "", "", ""),
+
+	HOST_HCALL(__pkvm_host_share_hyp, "", "pfn: %lx", "", "", ""),
+	HOST_HCALL(__pkvm_host_unshare_hyp, "", "pfn: %lx", "", "", ""),
+	HOST_HCALL(__pkvm_host_reclaim_page, "", "pfn: %lx", "", "", ""),
+	HOST_HCALL(__pkvm_host_map_guest, "", "pfn: %lx", "gfn: %lx", "", ""),
+	HOST_HCALL(__pkvm_vcpu_load, "", "vm_handle: %lx", "vcpu_index: %ld", "hcr_el2: %lx",""),
+	HOST_HCALL(__pkvm_vcpu_put, "", "", "", "", ""),
+	HOST_HCALL(__pkvm_init_vm, "", "host_kvm: %p", "vm_hva: %p", "pgd_hva: %p", "last_ran_hva: %p"),
+	HOST_HCALL(__pkvm_init_vcpu, "", "handle: %lx", "host_vcpu: %p", "vcpu_hva: %p", "")
+};
+#define NR_HOST_HCALLS (sizeof(host_hcalls)/sizeof(host_hcalls[0]))
+
+static struct ghost_trap_data guest_hcalls[] = {
+	GUEST_HCALL(ARM_SMCCC_VERSION_FUNC_ID, "", "", "", "", ""),
+	GUEST_HCALL(ARM_SMCCC_VENDOR_HYP_CALL_UID_FUNC_ID, "", "", "", "", ""),
+	GUEST_HCALL(ARM_SMCCC_VENDOR_HYP_KVM_FEATURES_FUNC_ID, "", "", "", "", ""),
+	GUEST_HCALL(ARM_SMCCC_VENDOR_HYP_KVM_HYP_MEMINFO_FUNC_ID, "", "", "", "", ""),
+	GUEST_HCALL(ARM_SMCCC_VENDOR_HYP_KVM_MEM_SHARE_FUNC_ID, "", "ipa: %p", "", "", ""),
+	GUEST_HCALL(ARM_SMCCC_VENDOR_HYP_KVM_MEM_UNSHARE_FUNC_ID, "", "", "", "", "")
+};
+#define NR_GUEST_HCALLS (sizeof(guest_hcalls)/sizeof(guest_hcalls[0]))
+
+static struct ghost_trap_data unknown_trap_data = {
+	.valid = true,
+	.name = "<unknown>",
+	.params = {0},
+};
+
+static struct ghost_trap_data invalid_trap = {
+	.valid = false,
+};
+
+static struct ghost_trap_data __tag_hcall(struct kvm_cpu_context *ctxt, bool from_guest)
 {
-	/* TODO */
-	return false;
-}
+	struct ghost_trap_data trap = invalid_trap;
+	u64 hcall_id = cpu_reg(ctxt, 0);
 
-static void tag_hcall_args(struct kvm_cpu_context *ctxt, u64 hcall_id)
-{
-	switch (hcall_id) {
-	case __KVM_HOST_SMCCC_FUNC___pkvm_host_share_hyp:
-		hyp_putsxnl("pfn", cpu_reg(ctxt, 1), 64);
-		break;
-
-	case __KVM_HOST_SMCCC_FUNC___pkvm_host_unshare_hyp:
-		hyp_putsxnl("pfn", cpu_reg(ctxt, 1), 64);
-		break;
-
-	case __KVM_HOST_SMCCC_FUNC___pkvm_host_reclaim_page:
-		hyp_putsxnl("pfn", cpu_reg(ctxt, 1), 64);
-		break;
-
-	case __KVM_HOST_SMCCC_FUNC___pkvm_host_map_guest:
-		hyp_putsxnl("pfn", cpu_reg(ctxt, 1), 64);
-		hyp_putsxnl("gfn", cpu_reg(ctxt, 2), 64);
-		break;
-
-	case __KVM_HOST_SMCCC_FUNC___pkvm_vcpu_load:
-		hyp_putsxnl("vm_handle", cpu_reg(ctxt, 1), 64);
-		hyp_putsxnl("vcpu_index", cpu_reg(ctxt, 2), 64);
-		hyp_putsxnl("hcr_el2", cpu_reg(ctxt, 3), 64);
-		break;
-
-	case __KVM_HOST_SMCCC_FUNC___pkvm_vcpu_put:
-		break;
-
-	case __KVM_HOST_SMCCC_FUNC___pkvm_init_vm:
-		hyp_putsxnl("host_kvm", cpu_reg(ctxt, 1), 64);
-		hyp_putsxnl("vm_hva", cpu_reg(ctxt, 2), 64);
-		hyp_putsxnl("pgd_hva", cpu_reg(ctxt, 3), 64);
-		hyp_putsxnl("last_ran_hva", cpu_reg(ctxt, 4), 64);
-		break;
-
-	case __KVM_HOST_SMCCC_FUNC___pkvm_init_vcpu:
-		hyp_putsxnl("handle", cpu_reg(ctxt, 1), 64);
-		hyp_putsxnl("host_vcpu", cpu_reg(ctxt, 2), 64);
-		hyp_putsxnl("vcpu_hva", cpu_reg(ctxt, 3), 64);
-		break;
-
-		// TODO: and their bodies, and all the other cases
-	default:
-		break;
+	if (from_guest) {
+		for (int i = 0; i < NR_GUEST_HCALLS; i++)
+			if (guest_hcalls[i].ec == hcall_id)
+				trap = guest_hcalls[hcall_id];
 	}
-}
-
-static bool this_trap_check_controlled(struct kvm_cpu_context *ctxt)
-{
-	u64 esr = read_sysreg_el2(SYS_ESR);
-	u64 ec = ESR_ELx_EC(esr);
-	u64 hcall_id;
-	char *name;
-	switch (ec) {
-	case ESR_ELx_EC_HVC64:
-		hcall_id = cpu_reg(ctxt, 0);
+	else {
 		hcall_id -= KVM_HOST_SMCCC_ID(0);
-		if (hcall_id <= __KVM_HOST_SMCCC_FUNC___pkvm_vcpu_sync_state)
-			name = (char *)ghost_host_hcall_names[hcall_id];
-		else
-			/* unknown HCALL */
-			name = NULL;
-		break;
-	case ESR_ELx_EC_SMC64:
-		name = NULL;
-		break;
-	case ESR_ELx_EC_FP_ASIMD:
-	case ESR_ELx_EC_SVE:
-		name = NULL;
-		break;
-	case ESR_ELx_EC_IABT_LOW:
-	case ESR_ELx_EC_DABT_LOW:
-		name = "handle_host_mem_abort";
-		break;
-	default:
-		/* unknown or unhandled EC */
-		name = NULL;
-		break;
+
+		for (int i = 0; i < NR_HOST_HCALLS; i++)
+			if (host_hcalls[i].ec == hcall_id)
+				trap = host_hcalls[hcall_id];
 	}
 
-	/* TODO: both cover more of the known traps,
-	 * but also give some specification on what happens if the trap isn't a known hypercall/etc */
-	if (name == NULL)
-		return false;
-
-	return !ghost_control_is_controlled(name) || ghost_control_check_enabled(name);
-}
-
-static bool this_trap_print_controlled(struct kvm_cpu_context *ctxt)
-{
-	struct ghost_running_state *cpu_run_state = this_cpu_ptr(&ghost_cpu_run_state);
-
-	if (cpu_run_state->guest_running)
-		return ghost_print_on("always"); // TODO: dispatch trap print control on guest traps.
-
-	u64 esr = read_sysreg_el2(SYS_ESR);
-	u64 ec = ESR_ELx_EC(esr);
-	u64 hcall_id;
-	char *name;
-	switch (ec) {
-	case ESR_ELx_EC_HVC64:
-		hcall_id = cpu_reg(ctxt, 0);
-		hcall_id -= KVM_HOST_SMCCC_ID(0);
-		if (hcall_id <= __KVM_HOST_SMCCC_FUNC___pkvm_vcpu_sync_state)
-			name = (char *)ghost_host_hcall_names[hcall_id];
-		else
-			/* unknown HCALL */
-			return true;
-		break;
-	case ESR_ELx_EC_SMC64:
-		name = NULL;
-		break;
-	case ESR_ELx_EC_FP_ASIMD:
-	case ESR_ELx_EC_SVE:
-		name = NULL;
-		break;
-	case ESR_ELx_EC_IABT_LOW:
-	case ESR_ELx_EC_DABT_LOW:
-		name = "handle_host_mem_abort";
-		break;
-	default:
-		BUG();
+	if (trap.valid) {
+		return trap;
 	}
-
-	if (name == NULL)
-		return false;
-
-	return ghost_print_on(name);
+	else {
+		return unknown_trap_data;
+	}
 }
 
-static void tag_guest_exception_entry(struct kvm_cpu_context *ctxt)
+static struct ghost_trap_data host_abort_trap_data = {
+	.valid = true,
+	.name = "handle_host_mem_abort"
+};
+
+static struct ghost_trap_data guest_abort_trap_data = {
+	.valid = true,
+	.name = "handle_guest_mem_abort"
+};
+
+
+static struct ghost_trap_data __tag_abt(struct kvm_cpu_context *ctxt, bool from_guest)
 {
-	ghost_printf(
-		GHOST_WHITE_ON_BLUE "guest entry" GHOST_NORMAL "\n"
-	);
+	if (from_guest)
+		return guest_abort_trap_data;
+	else
+		return host_abort_trap_data;
 }
 
-static void tag_host_exception_entry(struct kvm_cpu_context *ctxt)
+static struct ghost_trap_data compute_trap_state(struct kvm_cpu_context *ctxt, bool from_guest)
 {
+	struct ghost_trap_data trap;
+
 	u64 esr = read_sysreg_el2(SYS_ESR);
 	switch (ESR_ELx_EC(esr)) {
 	case ESR_ELx_EC_HVC64:
-		GHOST_INFO("HVC64");
-		u64 hcall_id;
-		char *hcall_name;
-		hcall_id = cpu_reg(ctxt, 0);
-		hcall_id -= KVM_HOST_SMCCC_ID(0);
-		if (hcall_id <= __KVM_HOST_SMCCC_FUNC___pkvm_vcpu_sync_state)
-			hcall_name = (char *)ghost_host_hcall_names[hcall_id];
-		else
-			hcall_name = "<unknown>";
-
-		GHOST_INFO(hcall_name);
-
-		ghost_printf(
-			GHOST_WHITE_ON_BLUE "handle_host_hcall %s" GHOST_NORMAL "\n",
-			hcall_name
-		);
-
-		tag_hcall_args(ctxt, hcall_id);
+		trap = __tag_hcall(ctxt, from_guest);
 		break;
 	case ESR_ELx_EC_SMC64:
-		GHOST_INFO("SMC64");
-		ghost_printf(GHOST_WHITE_ON_BLUE "handle_host_smc" GHOST_NORMAL "\n");
+		trap = unknown_trap_data;
 		break;
 	case ESR_ELx_EC_FP_ASIMD:
 	case ESR_ELx_EC_SVE:
-		GHOST_INFO("SVE");
-		ghost_printf(GHOST_WHITE_ON_BLUE "fmsimd_host_restore" GHOST_NORMAL "\n");
+		trap = unknown_trap_data;
 		break;
 	case ESR_ELx_EC_IABT_LOW:
 	case ESR_ELx_EC_DABT_LOW:
-		GHOST_INFO("IABT/DABT");
-		ghost_printf(GHOST_WHITE_ON_BLUE "handle_host_mem_abort" GHOST_NORMAL "\n");
-		break;
-	default:
-		ghost_printf(GHOST_WHITE_ON_BLUE "<unknown: %ld>" GHOST_NORMAL "\n", ESR_ELx_EC(esr));
+		trap = __tag_abt(ctxt, from_guest);
 		break;
 	}
+
+	return trap;
 }
 
 static void tag_exception_entry(struct kvm_cpu_context *ctxt)
 {
-	bool print_enabled;
 	ghost_print_enter();
 
-	// TODO: dispatch on ghost or cpu run state?
-	// struct ghost_state *gr_pre = this_cpu_ptr(&gs_recorded_pre);
-	// struct ghost_running_state *gr_pre_cpu = this_cpu_ghost_run_state(gr_pre);
+	// dispatch printing/checking on the implementation's understanding of the state
+	// since we (currently) trust that more.
 	struct ghost_running_state *cpu_run_state = this_cpu_ptr(&ghost_cpu_run_state);
+	bool from_guest = cpu_run_state->guest_running;
 
-	print_enabled = this_trap_print_controlled(ctxt);
-	__this_cpu_write(ghost_print_this_hypercall, print_enabled);
+	struct ghost_trap_data trap = compute_trap_state(ctxt, from_guest);
 
-	if (! print_enabled)
+	__this_cpu_write(ghost_print_this_hypercall, ghost_print_on(trap.name));
+	__this_cpu_write(ghost_check_this_hypercall, READ_ONCE(ghost_prot_finalized_all) && trap.valid && (!ghost_control_is_controlled(trap.name) || ghost_control_check_enabled(trap.name)));
+
+	if (! ghost_print_on(trap.name))
 		goto print_exit;
 
 	ghost_printf(
 		"\n"
-		GHOST_WHITE_ON_BLUE "****** TRAP ***************************************************************" GHOST_NORMAL "\n"
+		GHOST_WHITE_ON_BLUE "****** TRAP (from %s) *****************************************************" GHOST_NORMAL "\n"
+		GHOST_WHITE_ON_BLUE "%s" GHOST_NORMAL "\n",
+		from_guest ? "guest" : " host",
+		trap.name
 	);
 
-	if (cpu_run_state->guest_running)
-		tag_guest_exception_entry(ctxt);
-	else
-		tag_host_exception_entry(ctxt);
+	for (int i = 0; i < 5; i++) {
+		if (trap.params[i] && *trap.params[i]) {
+			ghost_printf("[r%d] ", i);
+			ghost_printf(trap.params[i], ctxt->regs.regs[i]);
+			ghost_printf("\n");
+		}
+	}
 
-	if (print_enabled && !ghost_exec_enabled())
+	if (!ghost_exec_enabled())
 		ghost_printf(GHOST_WHITE_ON_YELLOW "skipping exec check" GHOST_NORMAL "\n");
 
 print_exit:
@@ -1422,8 +1523,6 @@ print_exit:
 
 void ghost_record_pre(struct kvm_cpu_context *ctxt)
 {
-	__this_cpu_write(ghost_check_this_hypercall, READ_ONCE(ghost_prot_finalized_all) && this_trap_check_controlled(ctxt));
-
 	tag_exception_entry(ctxt);
 
 	GHOST_LOG_CONTEXT_ENTER();
@@ -1454,7 +1553,6 @@ void ghost_post(struct kvm_cpu_context *ctxt)
 	bool new_state_computed = false;
 
 	struct ghost_state *gr_pre = this_cpu_ptr(&gs_recorded_pre);
-	struct ghost_running_state *gr_pre_cpu = this_cpu_ghost_run_state(gr_pre);
 	struct ghost_state *gr_post = this_cpu_ptr(&gs_recorded_post);
 	struct ghost_state *gc_post = this_cpu_ptr(&gs_computed_post);
 	struct ghost_call_data *call = this_cpu_ptr(&gs_call_data);
@@ -1469,21 +1567,15 @@ void ghost_post(struct kvm_cpu_context *ctxt)
 		record_and_copy_abstraction_local_state_post(ctxt);
 		call->return_value = cpu_reg(ctxt, 1);
 
-		// compute the new spec abstract state
-		// need to dispatch on the saved ghost pre
-		// as might have swapped from guest<->host during the implementation of the trap.
-		if (gr_pre_cpu->guest_running)
-			new_state_computed = compute_new_abstract_state_handle_guest_trap(gc_post, gr_pre, call);
-		else
-			new_state_computed = compute_new_abstract_state_handle_host_trap(gc_post, gr_pre, call);
+		// actually compute the new state
+		new_state_computed = compute_new_abstract_state_handle_trap(gc_post, gr_pre, call);
 
 		// and check the two are equal on relevant components
 		if (new_state_computed) {
 			if (__this_cpu_read(ghost_print_this_hypercall)) {
 				ghost_printf(GHOST_WHITE_ON_BLUE "check abstraction" GHOST_NORMAL "\n");
-			}
+
 #ifdef CONFIG_NVHE_GHOST_SPEC_DUMP_STATE
-			if (this_trap_print_controlled(ctxt)) {
 				ghost_printf("ghost recorded pre (full):\n");
 				ghost_dump_state(gr_pre);
 				ghost_printf("\n");
