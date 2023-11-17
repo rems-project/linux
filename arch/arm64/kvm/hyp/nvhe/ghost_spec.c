@@ -1575,7 +1575,9 @@ void ghost_post(struct kvm_cpu_context *ctxt)
 		if (new_state_computed) {
 			if (__this_cpu_read(ghost_print_this_hypercall)) {
 				ghost_printf("---\n");
-				ghost_printf("[r0] ret:%lx\n", ctxt->regs.regs[0]);
+				ghost_printf("ret:\n");
+				ghost_printf("[r0] %lx\n", ctxt->regs.regs[0]);
+				ghost_printf("[r1] %lx\n", ctxt->regs.regs[1]);
 				ghost_printf(GHOST_WHITE_ON_BLUE "check abstraction" GHOST_NORMAL "\n");
 
 #ifdef CONFIG_NVHE_GHOST_SPEC_DUMP_STATE
