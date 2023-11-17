@@ -1413,14 +1413,14 @@ static struct ghost_trap_data __tag_hcall(struct kvm_cpu_context *ctxt, bool fro
 	if (from_guest) {
 		for (int i = 0; i < NR_GUEST_HCALLS; i++)
 			if (guest_hcalls[i].ec == hcall_id)
-				return guest_hcalls[hcall_id];
+				return guest_hcalls[i];
 	}
 	else {
 		hcall_id -= KVM_HOST_SMCCC_ID(0);
 
 		for (int i = 0; i < NR_HOST_HCALLS; i++)
 			if (host_hcalls[i].ec == hcall_id)
-				return host_hcalls[hcall_id];
+				return host_hcalls[i];
 	}
 
 	return unknown_trap_data;
