@@ -1392,7 +1392,11 @@ void ghost_record_pre(struct kvm_cpu_context *ctxt)
 		ghost_lock_maplets();
 		record_abstraction_constants_pre();
 		ghost_unlock_maplets();
+
+		/* need vms lock because loaded_vcpu might need to create that vm */
+		ghost_lock_vms();
 		record_and_check_abstraction_local_state_pre(ctxt);
+		ghost_unlock_vms();
 
 		ghost_clear_call_data();
 	}
