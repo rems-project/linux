@@ -1201,7 +1201,7 @@ static bool this_trap_check_controlled(struct kvm_cpu_context *ctxt)
 			name = (char *)ghost_host_hcall_names[hcall_id];
 		else
 			/* unknown HCALL */
-			return false;
+			name = NULL;
 		break;
 	case ESR_ELx_EC_SMC64:
 		name = NULL;
@@ -1216,9 +1216,12 @@ static bool this_trap_check_controlled(struct kvm_cpu_context *ctxt)
 		break;
 	default:
 		/* unknown or unhandled EC */
-		return true;
+		name = NULL;
+		break;
 	}
 
+	/* TODO: both cover more of the known traps,
+	 * but also give some specification on what happens if the trap isn't a known hypercall/etc */
 	if (name == NULL)
 		return false;
 
