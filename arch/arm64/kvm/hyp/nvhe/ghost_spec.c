@@ -1577,8 +1577,8 @@ void ghost_post(struct kvm_cpu_context *ctxt)
 				ghost_printf("ghost computed post (full):\n");
 				ghost_dump_state(gc_post);
 				ghost_printf("\n");
-			}
 #endif /* CONFIG_NVHE_GHOST_SPEC_DUMP_STATE */
+			}
 			check_abstraction_equals_all(gc_post, gr_post, gr_pre);
 		} else {
 			if (__this_cpu_read(ghost_print_this_hypercall)) {
