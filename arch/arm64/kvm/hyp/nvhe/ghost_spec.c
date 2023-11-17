@@ -245,6 +245,23 @@ static struct maplet_attributes ghost_default_vm_memory_attributes(bool is_memor
 	return ghost_memory_attributes(page_state, default_vm_prot, default_vm_memtype);
 }
 
+/**
+ * copy_registers_to_host() - Make the host's register context be the current local one.
+ */
+static void copy_registers_to_host(struct ghost_state *g)
+{
+	ghost_this_cpu_local_state(g)->host_regs.present = true;
+	copy_abstraction_regs(&ghost_this_cpu_local_state(g)->host_regs.regs, &ghost_this_cpu_local_state(g)->regs);
+}
+
+/**
+ * copy_registers_to_guest() - Make this guest vcpu's register context be the local one.
+ */
+static void copy_registers_to_guest(struct ghost_state *g, struct ghost_vcpu *vcpu)
+{
+	copy_abstraction_regs(&vcpu->regs, &ghost_this_cpu_local_state(g)->regs);
+}
+
 void compute_new_abstract_state_handle___pkvm_host_share_hyp(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call)
 {
 	u64 pfn = ghost_reg_gpr(g0, 1);
@@ -318,6 +335,9 @@ void compute_new_abstract_state_handle___pkvm_host_share_hyp(struct ghost_state 
 
 out:
 	ghost_reg_gpr(g1, 1) = ret;
+
+	/* these registers now become the host's run context */
+	copy_registers_to_host(g1);
 }
 
 
@@ -374,6 +394,9 @@ void compute_new_abstract_state_handle___pkvm_host_unshare_hyp(struct ghost_stat
 	);
 out:
 	ghost_reg_gpr(g1, 1) = ret;
+
+	/* these registers now become the host's run context */
+	copy_registers_to_host(g1);
 }
 
 /**
@@ -514,6 +537,9 @@ void compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost_state 
 
 out:
 	ghost_reg_gpr(g1, 1) = ret;
+
+	/* these registers now become the host's run context */
+	copy_registers_to_host(g1);
 }
 
 void compute_new_abstract_state_handle___pkvm_vcpu_load(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call) {
@@ -564,7 +590,9 @@ void compute_new_abstract_state_handle___pkvm_vcpu_load(struct ghost_state *g1, 
 		.vcpu_index = vcpu_idx,
 	};
 out:
-	/* NOTE: vcpu_load does not write back to any general purpose register */
+
+	/* NOTE: vcpu_load does not write back to any general purpose register other than the SMCCC errorno (X0) */
+	copy_registers_to_host(g1);
 	return;
 }
 
@@ -600,7 +628,9 @@ out:
 		.present = true,
 		.loaded = false,
 	};
-	/* NOTE: vcpu_put does not write back to any general purpose register */
+
+	/* NOTE: vcpu_put does not write back to any general purpose register other than the SMCCC errorno (X0) */
+	copy_registers_to_host(g1);
 	return;
 }
 
@@ -804,6 +834,9 @@ void compute_new_abstract_state_handle___pkvm_init_vm(struct ghost_state *g1, st
 	ret = handle;
 out:
 	ghost_reg_gpr(g1, 1) = ret;
+
+	/* these registers now become the host's run context */
+	copy_registers_to_host(g1);
 }
 
 /* Locking shape in the implementation:
@@ -890,6 +923,9 @@ void compute_new_abstract_state_handle___pkvm_init_vcpu(struct ghost_state *g1, 
 	vm->vm_table_locked.nr_initialised_vcpus++;
 out:
 	ghost_reg_gpr(g1, 1) = ret;
+
+	/* these registers now become the host's run context */
+	copy_registers_to_host(g1);
 }
 
 
@@ -945,6 +981,9 @@ void compute_new_abstract_state_handle___pkvm_teardown_vm(struct ghost_state *g1
 	ghost_vms_free(&g0->vms, vm_handle);
 out:
 	ghost_reg_gpr(g1, 1) = ret;
+
+	/* these registers now become the host's run context */
+	copy_registers_to_host(g1);
 }
 
 void compute_new_abstract_state_handle_host_hcall(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call, bool *new_state_computed)
@@ -958,6 +997,10 @@ void compute_new_abstract_state_handle_host_hcall(struct ghost_state *g1, struct
 	}
 
 	unsigned long id = ghost_reg_gpr(g0, 0) - KVM_HOST_SMCCC_ID(0);
+
+	/* set X0 first, so the individual functions can overwrite it. */
+	ghost_reg_gpr(g1, 0) = smccc_ret;
+
 	switch (id) {
 	case __KVM_HOST_SMCCC_FUNC___pkvm_host_share_hyp:
 		compute_new_abstract_state_handle___pkvm_host_share_hyp(g1, g0, call);
@@ -1006,7 +1049,6 @@ void compute_new_abstract_state_handle_host_hcall(struct ghost_state *g1, struct
 		smccc_ret = SMCCC_RET_NOT_SUPPORTED;
 		break;
 	}
-	ghost_reg_gpr(g1, 0) = smccc_ret;
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
