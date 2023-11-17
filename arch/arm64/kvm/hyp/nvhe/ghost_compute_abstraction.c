@@ -272,7 +272,7 @@ void check_abstract_pgtable_equal(abstract_pgtable *ap1, abstract_pgtable *ap2, 
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
-void check_abstraction_equals_reg(struct ghost_register_state *r1, struct ghost_register_state *r2)
+void check_abstraction_equals_reg(struct ghost_register_state *r1, struct ghost_register_state *r2, bool check_sysregs)
 {
 	GHOST_LOG_CONTEXT_ENTER();
 	u64 i;
@@ -286,27 +286,29 @@ void check_abstraction_equals_reg(struct ghost_register_state *r1, struct ghost_
 			ghost_spec_assert(false);
 		}
 	}
-	for (i=0; i<NR_SYS_REGS; i++) {
-		if (GHOST_SYSREG_EL1(r1, i) != GHOST_SYSREG_EL1(r2, i)) {
-			const char *name = GHOST_VCPU_SYSREG_NAMES[i];
-			GHOST_LOG(i, u64);
-			GHOST_LOG(name, str);
-			GHOST_LOG(GHOST_SYSREG_EL1(r1, i), u64);
-			GHOST_LOG(GHOST_SYSREG_EL1(r2, i), u64);
-			GHOST_WARN("EL1 sysreg register mismatch");
-			ghost_spec_assert(false);
+	if (check_sysregs) {
+		for (i=0; i<NR_SYS_REGS; i++) {
+			if (GHOST_SYSREG_EL1(r1, i) != GHOST_SYSREG_EL1(r2, i)) {
+				const char *name = GHOST_VCPU_SYSREG_NAMES[i];
+				GHOST_LOG(i, u64);
+				GHOST_LOG(name, str);
+				GHOST_LOG(GHOST_SYSREG_EL1(r1, i), u64);
+				GHOST_LOG(GHOST_SYSREG_EL1(r2, i), u64);
+				GHOST_WARN("EL1 sysreg register mismatch");
+				ghost_spec_assert(false);
+			}
 		}
-	}
-	for (i=0; i<sizeof(ghost_el2_regs)/sizeof(u64); i++) {
-		u64 r = ghost_el2_regs[i];
-		if (GHOST_SYSREG_EL2(r1, r) != GHOST_SYSREG_EL2(r2, r)) {
-			const char *name = GHOST_EL2_REG_NAMES[r];
-			GHOST_LOG(r, u64);
-			GHOST_LOG(name, str);
-			GHOST_LOG(GHOST_SYSREG_EL2(r1, r), u64);
-			GHOST_LOG(GHOST_SYSREG_EL2(r2, r), u64);
-			GHOST_WARN("el2_sysreg register mismatch");
-			ghost_spec_assert(false);
+		for (i=0; i<sizeof(ghost_el2_regs)/sizeof(u64); i++) {
+			u64 r = ghost_el2_regs[i];
+			if (GHOST_SYSREG_EL2(r1, r) != GHOST_SYSREG_EL2(r2, r)) {
+				const char *name = GHOST_EL2_REG_NAMES[r];
+				GHOST_LOG(r, u64);
+				GHOST_LOG(name, str);
+				GHOST_LOG(GHOST_SYSREG_EL2(r1, r), u64);
+				GHOST_LOG(GHOST_SYSREG_EL2(r2, r), u64);
+				GHOST_WARN("el2_sysreg register mismatch");
+				ghost_spec_assert(false);
+			}
 		}
 	}
 	// TODO other regs
@@ -385,7 +387,7 @@ void check_abstraction_equals_host_regs(struct ghost_host_regs *r1, struct ghost
 	GHOST_LOG_CONTEXT_ENTER();
 	ghost_assert(r1->present == r2->present);
 	if (r1->present && r2->present)
-		check_abstraction_equals_reg(&r1->regs, &r2->regs);
+		check_abstraction_equals_reg(&r1->regs, &r2->regs, false);
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
@@ -395,10 +397,9 @@ void check_abstraction_equals_local_state(struct ghost_state *g1, struct ghost_s
 	struct ghost_local_state *l1 = ghost_this_cpu_local_state(g1);
 	struct ghost_local_state *l2 = ghost_this_cpu_local_state(g2);
 
-	check_abstraction_equals_reg(&l1->regs, &l2->regs);
 	check_abstraction_equals_run_state(&l1->cpu_state, &l2->cpu_state);
 	check_abstraction_equals_loaded_vcpu(&l1->loaded_hyp_vcpu, &l2->loaded_hyp_vcpu);
-	check_abstraction_equals_host_regs(&l1->host_regs, &l2->host_regs);
+	/* regs not checked */
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
@@ -411,25 +412,29 @@ void check_abstraction_refined_local_state(struct ghost_state *gc, struct ghost_
 
 
 	if (gc_local->loaded_hyp_vcpu.present && gr_post_local->loaded_hyp_vcpu.present) {
+		GHOST_INFO("loaded_vcpu1->gc");
+		GHOST_INFO("loaded_vcpu2->gr_post");
 		check_abstraction_equals_loaded_vcpu(&gc_local->loaded_hyp_vcpu, &gr_post_local->loaded_hyp_vcpu);
 	}
 	else if (gc_local->loaded_hyp_vcpu.present && !gr_post_local->loaded_hyp_vcpu.present) {
 		ghost_assert(false);
 	}
 	else if (!gc_local->loaded_hyp_vcpu.present && gr_post_local->loaded_hyp_vcpu.present) {
+		GHOST_INFO("loaded_vcpu1->gr_post");
+		GHOST_INFO("loaded_vcpu2->gr_pre");
 		ghost_assert(gr_pre_local->loaded_hyp_vcpu.present);
 		check_abstraction_equals_loaded_vcpu(&gr_post_local->loaded_hyp_vcpu, &gr_pre_local->loaded_hyp_vcpu);
 	}
 
 	if (gc_local->host_regs.present && gr_post_local->host_regs.present) {
-		check_abstraction_equals_reg(&gc_local->host_regs.regs, &gr_post_local->host_regs.regs);
+		check_abstraction_equals_host_regs(&gc_local->host_regs, &gr_post_local->host_regs);
 	}
 	else if (gc_local->host_regs.present && !gr_post_local->host_regs.present) {
 		ghost_assert(false);
 	}
 	else if (!gc_local->host_regs.present && gr_post_local->host_regs.present) {
 		ghost_assert(gr_pre_local->host_regs.present);
-		check_abstraction_equals_reg(&gr_post_local->host_regs.regs, &gr_pre_local->host_regs.regs);
+		check_abstraction_equals_host_regs(&gr_post_local->host_regs, &gr_pre_local->host_regs);
 	}
 	GHOST_LOG_CONTEXT_EXIT();
 }
@@ -1161,10 +1166,15 @@ void record_abstraction_local_state(struct ghost_state *g, struct kvm_cpu_contex
 void record_and_check_abstraction_local_state_pre(struct kvm_cpu_context *ctxt)
 {
 	struct ghost_state *g = this_cpu_ptr(&gs_recorded_pre);
+	GHOST_LOG_CONTEXT_ENTER();
 	record_abstraction_local_state(g, ctxt);
 
-	if (this_cpu_ghost_register_state(&gs)->present)
+	if (this_cpu_ghost_register_state(&gs)->present) {
+		GHOST_TRACE("g1->gr_pre");
+		GHOST_TRACE("g2->gs");
 		check_abstraction_equals_local_state(g, &gs);
+	}
+	GHOST_LOG_CONTEXT_EXIT();
 }
 
 void record_and_copy_abstraction_local_state_post(struct kvm_cpu_context *ctxt)
