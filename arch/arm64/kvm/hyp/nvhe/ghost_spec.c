@@ -1353,50 +1353,57 @@ struct ghost_trap_data {
 	bool valid;
 	u64 ec;
 	const char *name;
-	const char *params[5];
+	const char *params[6];
 };
 
-#define __HCALL(EC, NAME, R0, R1, R2, R3, R4) \
-	(struct ghost_trap_data){.valid=true, .ec=EC, .name=NAME, .params={R0,R1,R2,R3,R4}}
+#define __HCALL(EC, NAME, R0, R1, R2, R3, R4, R5) \
+	(struct ghost_trap_data){.valid=true, .ec=EC, .name=NAME, .params={R0,R1,R2,R3,R4,R5}}
 
-#define HOST_HCALL(FN, R0, R1, R2, R3, R4) \
-	__HCALL(__KVM_HOST_SMCCC_FUNC_##FN, #FN, R0, R1, R2, R3, R4)
+#define HOST_HCALL(FN, R0, R1, R2, R3, R4, R5) \
+	__HCALL(__KVM_HOST_SMCCC_FUNC_##FN, #FN, R0, R1, R2, R3, R4, R5)
 
-#define GUEST_HCALL(SMCCC_FN, R0, R1, R2, R3, R4) \
-	__HCALL(SMCCC_FN, #SMCCC_FN, R0, R1, R2, R3, R4)
+#define GUEST_HCALL(SMCCC_FN, R0, R1, R2, R3, R4, R5) \
+	__HCALL(SMCCC_FN, #SMCCC_FN, R0, R1, R2, R3, R4, R5)
 
 static struct ghost_trap_data host_hcalls[] = {
-	HOST_HCALL(__kvm_get_mdcr_el2, "", "", "", "", ""),
-	HOST_HCALL(__pkvm_init, "", "", "", "", ""),
-	HOST_HCALL(__pkvm_create_private_mapping, "", "", "", "", ""),
-	HOST_HCALL(__pkvm_cpu_set_vector, "", "", "", "", ""),
-	HOST_HCALL(__kvm_enable_ssbs, "", "", "", "", ""),
-	HOST_HCALL(__vgic_v3_init_lrs, "", "", "", "", ""),
-	HOST_HCALL(__vgic_v3_get_gic_config, "", "", "", "", ""),
-	HOST_HCALL(__kvm_flush_vm_context, "", "", "", "", ""),
-	HOST_HCALL(__kvm_tlb_flush_vmid_ipa, "", "", "", "", ""),
-	HOST_HCALL(__kvm_tlb_flush_vmid, "", "", "", "", ""),
-	HOST_HCALL(__kvm_flush_cpu_context, "", "", "", "", ""),
-	HOST_HCALL(__pkvm_prot_finalize, "", "", "", "", ""),
+	HOST_HCALL(__kvm_get_mdcr_el2, "", "", "", "", "", ""),
+	HOST_HCALL(__pkvm_init, "", "phys", "size", "nr_cpus", "per_cpu_base", "hyp_va_bits"),
+	HOST_HCALL(__pkvm_create_private_mapping, "", "", "", "", "", ""),
+	HOST_HCALL(__pkvm_cpu_set_vector, "", "slot", "", "", "", ""),
+	HOST_HCALL(__kvm_enable_ssbs, "", "", "", "", "", ""),
+	HOST_HCALL(__vgic_v3_init_lrs, "", "", "", "", "", ""),
+	HOST_HCALL(__vgic_v3_get_gic_config, "", "", "", "", "", ""),
+	HOST_HCALL(__kvm_flush_vm_context, "", "", "", "", "", ""),
+	HOST_HCALL(__kvm_tlb_flush_vmid_ipa, "", "mmu", "ipa", "host_ctxt", "", ""),
+	HOST_HCALL(__kvm_tlb_flush_vmid, "", "mmu", "", "", "", ""),
+	HOST_HCALL(__kvm_flush_cpu_context, "", "mmu", "", "", "", ""),
+	HOST_HCALL(__pkvm_prot_finalize, "", "", "", "", "", ""),
 
-	HOST_HCALL(__pkvm_host_share_hyp, "", "pfn: %lx", "", "", ""),
-	HOST_HCALL(__pkvm_host_unshare_hyp, "", "pfn: %lx", "", "", ""),
-	HOST_HCALL(__pkvm_host_reclaim_page, "", "pfn: %lx", "", "", ""),
-	HOST_HCALL(__pkvm_host_map_guest, "", "pfn: %lx", "gfn: %lx", "", ""),
-	HOST_HCALL(__pkvm_vcpu_load, "", "vm_handle: %lx", "vcpu_index: %ld", "hcr_el2: %lx",""),
-	HOST_HCALL(__pkvm_vcpu_put, "", "", "", "", ""),
-	HOST_HCALL(__pkvm_init_vm, "", "host_kvm: %p", "vm_hva: %p", "pgd_hva: %p", "last_ran_hva: %p"),
-	HOST_HCALL(__pkvm_init_vcpu, "", "handle: %lx", "host_vcpu: %p", "vcpu_hva: %p", "")
+	HOST_HCALL(__pkvm_host_share_hyp, "", "pfn: %lx", "", "", "", ""),
+	HOST_HCALL(__pkvm_host_unshare_hyp, "", "pfn: %lx", "", "", "", ""),
+	HOST_HCALL(__pkvm_host_reclaim_page, "", "pfn: %lx", "", "", "", ""),
+	HOST_HCALL(__pkvm_host_map_guest, "", "pfn: %lx", "gfn: %lx", "", "", ""),
+	HOST_HCALL(__kvm_adjust_pc, "", "", "", "", "", ""),
+	HOST_HCALL(__kvm_vcpu_run, "", "", "", "", "", ""),
+	HOST_HCALL(__kvm_timer_set_cntvoff, "", "", "", "", "", ""),
+	HOST_HCALL(__vgic_v3_save_vmcr_aprs, "", "", "", "", "", ""),
+	HOST_HCALL(__vgic_v3_restore_vmcr_aprs, "", "", "", "", "", ""),
+	HOST_HCALL(__pkvm_init_vm, "", "host_kvm", "vm_hva", "pgd_hva", "last_ran_hva", ""),
+	HOST_HCALL(__pkvm_init_vcpu, "", "handle", "host_vcpu", "vcpu_hva", "", ""),
+	HOST_HCALL(__pkvm_teardown_vm, "", "handle", "", "", "", ""),
+	HOST_HCALL(__pkvm_vcpu_load, "", "handle", "vcpu_index", "hcr_el2", "", ""),
+	HOST_HCALL(__pkvm_vcpu_put, "", "", "", "", "", ""),
+	HOST_HCALL(__pkvm_vcpu_sync_state, "", "", "", "", "", ""),
 };
 #define NR_HOST_HCALLS (sizeof(host_hcalls)/sizeof(host_hcalls[0]))
 
 static struct ghost_trap_data guest_hcalls[] = {
-	GUEST_HCALL(ARM_SMCCC_VERSION_FUNC_ID, "", "", "", "", ""),
-	GUEST_HCALL(ARM_SMCCC_VENDOR_HYP_CALL_UID_FUNC_ID, "", "", "", "", ""),
-	GUEST_HCALL(ARM_SMCCC_VENDOR_HYP_KVM_FEATURES_FUNC_ID, "", "", "", "", ""),
-	GUEST_HCALL(ARM_SMCCC_VENDOR_HYP_KVM_HYP_MEMINFO_FUNC_ID, "", "", "", "", ""),
-	GUEST_HCALL(ARM_SMCCC_VENDOR_HYP_KVM_MEM_SHARE_FUNC_ID, "", "ipa: %p", "", "", ""),
-	GUEST_HCALL(ARM_SMCCC_VENDOR_HYP_KVM_MEM_UNSHARE_FUNC_ID, "", "", "", "", "")
+	GUEST_HCALL(ARM_SMCCC_VERSION_FUNC_ID, "", "", "", "", "", ""),
+	GUEST_HCALL(ARM_SMCCC_VENDOR_HYP_CALL_UID_FUNC_ID, "", "", "", "", "", ""),
+	GUEST_HCALL(ARM_SMCCC_VENDOR_HYP_KVM_FEATURES_FUNC_ID, "", "", "", "", "", ""),
+	GUEST_HCALL(ARM_SMCCC_VENDOR_HYP_KVM_HYP_MEMINFO_FUNC_ID, "", "", "", "", "", ""),
+	GUEST_HCALL(ARM_SMCCC_VENDOR_HYP_KVM_MEM_SHARE_FUNC_ID, "", "ipa: %p", "", "", "", ""),
+	GUEST_HCALL(ARM_SMCCC_VENDOR_HYP_KVM_MEM_UNSHARE_FUNC_ID, "", "", "", "", "", "")
 };
 #define NR_GUEST_HCALLS (sizeof(guest_hcalls)/sizeof(guest_hcalls[0]))
 
@@ -1488,7 +1495,7 @@ static void tag_exception_entry(struct kvm_cpu_context *ctxt)
 		trap.name
 	);
 
-	for (int i = 0; i < 5; i++) {
+	for (int i = 0; i < 6; i++) {
 		if (trap.params[i] && *trap.params[i]) {
 			ghost_printf("[r%d] ", i);
 			ghost_printf(trap.params[i], ctxt->regs.regs[i]);
@@ -1556,6 +1563,8 @@ void ghost_post(struct kvm_cpu_context *ctxt)
 		// and check the two are equal on relevant components
 		if (new_state_computed) {
 			if (__this_cpu_read(ghost_print_this_hypercall)) {
+				ghost_printf("---\n");
+				ghost_printf("[r0] ret:%lx\n", ctxt->regs.regs[0]);
 				ghost_printf(GHOST_WHITE_ON_BLUE "check abstraction" GHOST_NORMAL "\n");
 
 #ifdef CONFIG_NVHE_GHOST_SPEC_DUMP_STATE
