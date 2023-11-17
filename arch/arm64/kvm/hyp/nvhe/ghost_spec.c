@@ -262,7 +262,7 @@ static void copy_registers_to_guest(struct ghost_state *g, struct ghost_vcpu *vc
 	copy_abstraction_regs(&vcpu->regs, &ghost_this_cpu_local_state(g)->regs);
 }
 
-void compute_new_abstract_state_handle___pkvm_host_share_hyp(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call)
+bool compute_new_abstract_state_handle___pkvm_host_share_hyp(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call)
 {
 	u64 pfn = ghost_reg_gpr(g0, 1);
 	phys_addr_t phys = hyp_pfn_to_phys(pfn); // ((phys_addr_t)((pfn) << PAGE_SHIFT)) // pure
@@ -338,11 +338,14 @@ out:
 
 	/* these registers now become the host's run context */
 	copy_registers_to_host(g1);
+
+	/* check this spec */
+	return true;
 }
 
 
 /* pkvm_host_unshare_hyp(pfn) */
-void compute_new_abstract_state_handle___pkvm_host_unshare_hyp(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call)
+bool compute_new_abstract_state_handle___pkvm_host_unshare_hyp(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call)
 {
 	u64 pfn = ghost_reg_gpr(g0, 1);
 	phys_addr_t phys = hyp_pfn_to_phys(pfn); // ((phys_addr_t)((pfn) << PAGE_SHIFT)) // pure
@@ -397,12 +400,15 @@ out:
 
 	/* these registers now become the host's run context */
 	copy_registers_to_host(g1);
+
+	/* check this spec */
+	return true;
 }
 
 /**
  * compute the new abstract ghost_state from a struct ghost_call_data *call = pkvm_host_map_guest(host_pfn, guest_gfn)
  */
-void compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call) {
+bool compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call) {
 	int ret;
 
 	u64 pfn = ghost_reg_gpr(g0, 1);
@@ -539,9 +545,12 @@ out:
 
 	/* these registers now become the host's run context */
 	copy_registers_to_host(g1);
+
+	/* check this spec */
+	return true;
 }
 
-void compute_new_abstract_state_handle___pkvm_vcpu_load(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call) {
+bool compute_new_abstract_state_handle___pkvm_vcpu_load(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call) {
 	pkvm_handle_t vm_handle = ghost_reg_gpr(g0, 1);
 	unsigned int vcpu_idx = ghost_reg_gpr(g0, 2);
 
@@ -592,10 +601,12 @@ out:
 
 	/* NOTE: vcpu_load does not write back to any general purpose register other than the SMCCC errorno (X0) */
 	copy_registers_to_host(g1);
-	return;
+
+	/* check this spec */
+	return true;
 }
 
-void compute_new_abstract_state_handle___pkvm_vcpu_put(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call)
+bool compute_new_abstract_state_handle___pkvm_vcpu_put(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call)
 {
 	struct ghost_loaded_vcpu *loaded_vcpu = this_cpu_ghost_loaded_vcpu(g0);
 	ghost_assert(loaded_vcpu->present);
@@ -630,7 +641,9 @@ out:
 
 	/* NOTE: vcpu_put does not write back to any general purpose register other than the SMCCC errorno (X0) */
 	copy_registers_to_host(g1);
-	return;
+
+	/* check this spec */
+	return true;
 }
 
 //TODO: move somewhere else
@@ -707,7 +720,7 @@ static size_t ghost_pkvm_get_last_ran_size(struct ghost_state *g)
 	return array_size(hyp_nr_cpus, sizeof(int));
 }
 
-void compute_new_abstract_state_handle___pkvm_init_vm(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call) {
+bool compute_new_abstract_state_handle___pkvm_init_vm(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call) {
 	int ret;
 	size_t vm_size, pgd_size, last_ran_size;
 
@@ -837,6 +850,9 @@ out:
 
 	/* these registers now become the host's run context */
 	copy_registers_to_host(g1);
+
+	/* check this spec*/
+	return true;
 }
 
 /* Locking shape in the implementation:
@@ -847,7 +863,7 @@ out:
 		(3) (optional) [L_host L_hyp  hyp_pin_shared_mem(sve_state) U_hyp U_host]
 	U_vm_table]
  */
-void compute_new_abstract_state_handle___pkvm_init_vcpu(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call)
+bool compute_new_abstract_state_handle___pkvm_init_vcpu(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call)
 {
 	int ret = 0;
 	int vcpu_idx;
@@ -926,10 +942,13 @@ out:
 
 	/* these registers now become the host's run context */
 	copy_registers_to_host(g1);
+
+	/* check this spec*/
+	return true;
 }
 
 
-void compute_new_abstract_state_handle___pkvm_teardown_vm(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call)
+bool compute_new_abstract_state_handle___pkvm_teardown_vm(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call)
 {
 	int ret = 0;
 
@@ -984,17 +1003,21 @@ out:
 
 	/* these registers now become the host's run context */
 	copy_registers_to_host(g1);
+
+	/* check this spec*/
+	return true;
 }
 
-void compute_new_abstract_state_handle_host_hcall(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call, bool *new_state_computed)
+bool compute_new_abstract_state_handle_host_hcall(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call)
 {
+	bool new_state_computed = false;
 	GHOST_LOG_CONTEXT_ENTER();
 	int smccc_ret = SMCCC_RET_SUCCESS;
-	// allow any hcall to fail with ENOMEM, with an otherwise-identity abstract state
-	if (call->return_value == -ENOMEM) {
-		ghost_reg_gpr(g1, 1) = -ENOMEM;
-		return;
-	}
+	// // allow any hcall to fail with ENOMEM, with an otherwise-identity abstract state
+	// if (call->return_value == -ENOMEM) {
+	// 	ghost_reg_gpr(g1, 1) = -ENOMEM;
+	// 	return false;
+	// }
 
 	unsigned long id = ghost_reg_gpr(g0, 0) - KVM_HOST_SMCCC_ID(0);
 
@@ -1003,53 +1026,40 @@ void compute_new_abstract_state_handle_host_hcall(struct ghost_state *g1, struct
 
 	switch (id) {
 	case __KVM_HOST_SMCCC_FUNC___pkvm_host_share_hyp:
-		compute_new_abstract_state_handle___pkvm_host_share_hyp(g1, g0, call);
-		*new_state_computed = true;
+		new_state_computed =  compute_new_abstract_state_handle___pkvm_host_share_hyp(g1, g0, call);
 		break;
-
 	case __KVM_HOST_SMCCC_FUNC___pkvm_host_unshare_hyp:
-		compute_new_abstract_state_handle___pkvm_host_unshare_hyp(g1, g0, call);
-		*new_state_computed = true;
+		new_state_computed =  compute_new_abstract_state_handle___pkvm_host_unshare_hyp(g1, g0, call);
 		break;
-
 	case __KVM_HOST_SMCCC_FUNC___pkvm_host_reclaim_page:
 		break;
-
 	case __KVM_HOST_SMCCC_FUNC___pkvm_host_map_guest:
-		compute_new_abstract_state_handle___pkvm_host_map_guest(g1, g0, call);
-		*new_state_computed = true;
+		new_state_computed =  compute_new_abstract_state_handle___pkvm_host_map_guest(g1, g0, call);
 		break;
-
 	case __KVM_HOST_SMCCC_FUNC___pkvm_vcpu_load:
-		compute_new_abstract_state_handle___pkvm_vcpu_load(g1, g0, call);
-		*new_state_computed = true;
+		new_state_computed =  compute_new_abstract_state_handle___pkvm_vcpu_load(g1, g0, call);
 		break;
-
 	case __KVM_HOST_SMCCC_FUNC___pkvm_vcpu_put:
-		compute_new_abstract_state_handle___pkvm_vcpu_put(g1, g0, call);
-		*new_state_computed = true;
+		new_state_computed =  compute_new_abstract_state_handle___pkvm_vcpu_put(g1, g0, call);
 		break;
-
 	case __KVM_HOST_SMCCC_FUNC___pkvm_init_vm:
-		compute_new_abstract_state_handle___pkvm_init_vm(g1, g0, call);
-		*new_state_computed = true;
+		new_state_computed =  compute_new_abstract_state_handle___pkvm_init_vm(g1, g0, call);
 		break;
-
 	case __KVM_HOST_SMCCC_FUNC___pkvm_init_vcpu:
-		compute_new_abstract_state_handle___pkvm_init_vcpu(g1, g0, call);
-		*new_state_computed = true;
+		new_state_computed =  compute_new_abstract_state_handle___pkvm_init_vcpu(g1, g0, call);
 		break;
-
 	case __KVM_HOST_SMCCC_FUNC___pkvm_teardown_vm:
-		compute_new_abstract_state_handle___pkvm_teardown_vm(g1, g0, call);
+		new_state_computed =  compute_new_abstract_state_handle___pkvm_teardown_vm(g1, g0, call);
 		break;
-
 		// TODO: and their bodies, and all the other cases
 	default:
 		smccc_ret = SMCCC_RET_NOT_SUPPORTED;
+		ghost_reg_gpr(g1, 0) = smccc_ret;
 		break;
 	}
+
 	GHOST_LOG_CONTEXT_EXIT();
+	return new_state_computed;
 }
 
 u64 ghost_esr_ec_low_to_cur(u64 esr)
@@ -1111,7 +1121,7 @@ void ghost_inject_abort(struct ghost_state *g1, struct ghost_state *g0)
 // TODO: move this somewhere more sensible
 #define HPFAR_FIPA_SHIFT UL(4)
 
-void compute_new_abstract_state_handle_host_mem_abort(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call, bool *new_state_computed)
+bool compute_new_abstract_state_handle_host_mem_abort(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call)
 {
 	u64 esr = ghost_reg_el2(g0, GHOST_ESR_EL2);
 	u64 hpfar;
@@ -1138,14 +1148,17 @@ void compute_new_abstract_state_handle_host_mem_abort(struct ghost_state *g1, st
 	if (!is_owned_exclusively_by(g0, GHOST_HOST, addr))
 		ghost_inject_abort(g1, g0);
 
-	*new_state_computed = true;
 	/* TODO: modelling of host_stage2_adjust_range()
 		1. ==> non-deterministic -EGAIN (when the pte for addr is valid)
 	*/
+
+	/* check this spec */
+	return true;
 }
 
-void compute_new_abstract_state_handle_host_trap(struct ghost_state *post, struct ghost_state *pre, struct ghost_call_data *call, bool *new_state_computed)
+bool compute_new_abstract_state_handle_host_trap(struct ghost_state *post, struct ghost_state *pre, struct ghost_call_data *call)
 {
+	bool new_state_computed = false;
 	GHOST_LOG_CONTEXT_ENTER();
 
 	// check *post was clear
@@ -1162,7 +1175,7 @@ void compute_new_abstract_state_handle_host_trap(struct ghost_state *post, struc
 
 	switch (ESR_ELx_EC(ghost_reg_el2(pre,GHOST_ESR_EL2))) {
 	case ESR_ELx_EC_HVC64:
-		compute_new_abstract_state_handle_host_hcall(post,pre,call,new_state_computed);
+		new_state_computed =  compute_new_abstract_state_handle_host_hcall(post, pre, call);
 		break;
 	case ESR_ELx_EC_SMC64:
 		//TODO compute_new_abstract_state_handle_host_smc(post,pre);
@@ -1173,17 +1186,20 @@ void compute_new_abstract_state_handle_host_trap(struct ghost_state *post, struc
 		break;
 	case ESR_ELx_EC_IABT_LOW:
 	case ESR_ELx_EC_DABT_LOW:
-		compute_new_abstract_state_handle_host_mem_abort(post,pre,call,new_state_computed);
+		new_state_computed =  compute_new_abstract_state_handle_host_mem_abort(post, pre, call);
 		break;
 	default:
 		ghost_assert(false);
 	}
+
 	GHOST_LOG_CONTEXT_EXIT();
+	return new_state_computed;
 }
 
-void compute_new_abstract_state_handle_guest_trap(struct ghost_state *post, struct ghost_state *pre, struct ghost_call_data *call, bool *new_state_computed)
+bool compute_new_abstract_state_handle_guest_trap(struct ghost_state *post, struct ghost_state *pre, struct ghost_call_data *call)
 {
-	// TODO
+	/* TODO */
+	return false;
 }
 
 #ifdef CONFIG_NVHE_GHOST_SPEC_NOISY
@@ -1471,9 +1487,9 @@ void ghost_post(struct kvm_cpu_context *ctxt)
 		// need to dispatch on the saved ghost pre
 		// as might have swapped from guest<->host during the implementation of the trap.
 		if (gr_pre_cpu->guest_running)
-			compute_new_abstract_state_handle_guest_trap(gc_post, gr_pre, call, &new_state_computed);
+			new_state_computed = compute_new_abstract_state_handle_guest_trap(gc_post, gr_pre, call);
 		else
-			compute_new_abstract_state_handle_host_trap(gc_post, gr_pre, call, &new_state_computed);
+			new_state_computed = compute_new_abstract_state_handle_host_trap(gc_post, gr_pre, call);
 
 		// and check the two are equal on relevant components
 		if (new_state_computed) {
