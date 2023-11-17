@@ -1436,7 +1436,6 @@ static struct ghost_trap_data guest_abort_trap_data = {
 	.name = "handle_guest_mem_abort"
 };
 
-
 static struct ghost_trap_data __tag_abt(struct kvm_cpu_context *ctxt, bool from_guest)
 {
 	if (from_guest)
@@ -1447,27 +1446,21 @@ static struct ghost_trap_data __tag_abt(struct kvm_cpu_context *ctxt, bool from_
 
 static struct ghost_trap_data compute_trap_state(struct kvm_cpu_context *ctxt, bool from_guest)
 {
-	struct ghost_trap_data trap;
-
 	u64 esr = read_sysreg_el2(SYS_ESR);
 	switch (ESR_ELx_EC(esr)) {
 	case ESR_ELx_EC_HVC64:
-		trap = __tag_hcall(ctxt, from_guest);
-		break;
+		return __tag_hcall(ctxt, from_guest);
 	case ESR_ELx_EC_SMC64:
-		trap = unknown_trap_data;
-		break;
+		return unknown_trap_data;
 	case ESR_ELx_EC_FP_ASIMD:
 	case ESR_ELx_EC_SVE:
-		trap = unknown_trap_data;
-		break;
+		return unknown_trap_data;
 	case ESR_ELx_EC_IABT_LOW:
 	case ESR_ELx_EC_DABT_LOW:
-		trap = __tag_abt(ctxt, from_guest);
-		break;
+		return __tag_abt(ctxt, from_guest);
+	default:
+		return unknown_trap_data;
 	}
-
-	return trap;
 }
 
 static void tag_exception_entry(struct kvm_cpu_context *ctxt)
