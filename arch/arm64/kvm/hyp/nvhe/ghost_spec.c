@@ -469,33 +469,28 @@ void compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost_state 
 		bool is_memory = ghost_addr_is_allowed_memory(g0, donated_phys);
 		struct maplet_attributes hyp_attrs = ghost_default_hyp_memory_attributes(is_memory, MAPLET_PAGE_STATE_PRIVATE_OWNED);
 
-		// TODO: what if location was not shared with pKVM?
-		if (!(is_owned_and_shared_by(g0, GHOST_HOST, host_page_ipa) && is_borrowed_by(g0, GHOST_HYP, hyp_page_addr)))
+		/* The memcache HEAD pointer is in a page that is shared with pKVM,
+		 * but the pages of the linked list are actually owned exclusively by the host,
+		 * and they are stolen by pKVM as needed.
+		 */
+		if (! is_owned_exclusively_by(g0, GHOST_HOST, host_page_ipa))
 			ghost_spec_assert(false);
 
-		// Each memcache page that is donated must be swapped from shared to owned in pKVM's tables,
-		// removed from the host's shared mappings, and marked as owned by the hypervisor in the host's annotations.
+		// Each memcache page that is donated must be put as owned in pKVM's tables,
+		// removed from the host's mappings (i.e. added to annot) and marked as owned by the hypervisor in the annotations,
+		// and WRITE_ONCE written back to the HEAD to say it's happened.
 
-		mapping_move(
+		mapping_update(
 			&g1->pkvm.pkvm_abstract_pgtable.mapping,
-			mapping_plus(
-				mapping_minus(g1->pkvm.pkvm_abstract_pgtable.mapping, hyp_page_addr, 1),
-				mapping_singleton(GHOST_STAGE1, hyp_page_addr, 1, maplet_target_mapped_attrs(donated_phys, 1, hyp_attrs))
-			)
+			g1->pkvm.pkvm_abstract_pgtable.mapping,
+			MAP_INSERT_PAGE, GHOST_STAGE1, hyp_page_addr, 1, maplet_target_mapped_attrs(donated_phys, 1, hyp_attrs)
 		);
-
-		mapping_move(
-			&g1->host.host_abstract_pgtable_shared,
-			mapping_minus(g1->host.host_abstract_pgtable_shared, host_page_ipa, 1)
-		);
-
-		mapping_move(
+		mapping_update(
 			&g1->host.host_abstract_pgtable_annot,
-			mapping_plus(
-				g1->host.host_abstract_pgtable_annot,
-				mapping_singleton(GHOST_STAGE2, host_page_ipa, 1, maplet_target_annot_ext(MAPLET_OWNER_ANNOT_OWNED_HYP))
-			)
+			g1->host.host_abstract_pgtable_annot,
+			MAP_INSERT_PAGE, GHOST_STAGE2, host_page_ipa, 1, maplet_target_annot_ext(MAPLET_OWNER_ANNOT_OWNED_HYP)
 		);
+		// TODO: WRITE_ONCE()
 
 		// finally, we mark that this page as one potentially used for a pagetable for this guest.
 		ghost_pfn_set_insert(&g1_vm->vm_locked.vm_abstract_pgtable.table_pfns, pfn);
@@ -517,19 +512,19 @@ void compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost_state 
 	// TODO: other error cases
 
 	// Mark as owned by a VM as annotation in the host table
-	mapping_move(
+	mapping_update(
 		&g1->host.host_abstract_pgtable_annot,
-		mapping_plus(g1->host.host_abstract_pgtable_annot,
-		             mapping_singleton(GHOST_STAGE2, host_ipa, 1, maplet_target_annot_ext(MAPLET_OWNER_ANNOT_OWNED_GUEST)))
+		g1->host.host_abstract_pgtable_annot,
+		MAP_INSERT_PAGE, GHOST_STAGE2, host_ipa, 1, maplet_target_annot_ext(MAPLET_OWNER_ANNOT_OWNED_GUEST)
 	);
 
 	// Finally, add the mapping to the VM's pagetable.
 	bool is_memory = ghost_addr_is_allowed_memory(g0, phys);
 	struct maplet_attributes vm_attrs = ghost_default_vm_memory_attributes(is_memory, MAPLET_PAGE_STATE_PRIVATE_OWNED);
-	mapping_move(
+	mapping_update(
 		&g1_vm->vm_locked.vm_abstract_pgtable.mapping,
-		mapping_plus(g0_vm->vm_locked.vm_abstract_pgtable.mapping,
-			     mapping_singleton(GHOST_STAGE2, guest_ipa, 1, maplet_target_mapped_attrs(phys, 1, vm_attrs)))
+		g1_vm->vm_locked.vm_abstract_pgtable.mapping,
+		MAP_INSERT_PAGE, GHOST_STAGE2, guest_ipa, 1, maplet_target_mapped_attrs(phys, 1, vm_attrs)
 	);
 
 	// success.
