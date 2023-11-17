@@ -436,7 +436,9 @@ bool compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost_state 
 	ghost_assert(g1_vm != NULL);
 
 	if (! g0_vm->protected) {
-		// TODO: fail
+		/* don't check this spec */
+		GHOST_WARN("__pkvm_host_map_guest with non-protected VM");
+		return false;
 	}
 
 	// The call to pkvm_refill_memcache() may non-deterministically
