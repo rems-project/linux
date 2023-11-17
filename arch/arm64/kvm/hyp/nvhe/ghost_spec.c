@@ -1204,7 +1204,6 @@ bool compute_new_abstract_state_handle_guest_trap(struct ghost_state *post, stru
 	return false;
 }
 
-#ifdef CONFIG_NVHE_GHOST_SPEC_NOISY
 static void tag_hcall_args(struct kvm_cpu_context *ctxt, u64 hcall_id)
 {
 	switch (hcall_id) {
@@ -1252,7 +1251,6 @@ static void tag_hcall_args(struct kvm_cpu_context *ctxt, u64 hcall_id)
 		break;
 	}
 }
-#endif /* CONFIG_NVHE_GHOST_SPEC_NOISY */
 
 static bool this_trap_check_controlled(struct kvm_cpu_context *ctxt)
 {
@@ -1300,7 +1298,7 @@ static bool this_trap_print_controlled(struct kvm_cpu_context *ctxt)
 	struct ghost_running_state *cpu_run_state = this_cpu_ptr(&ghost_cpu_run_state);
 
 	if (cpu_run_state->guest_running)
-		return true; // TODO: dispatch trap print control on guest traps.
+		return ghost_print_on("always"); // TODO: dispatch trap print control on guest traps.
 
 	u64 esr = read_sysreg_el2(SYS_ESR);
 	u64 ec = ESR_ELx_EC(esr);
@@ -1350,7 +1348,6 @@ static void tag_host_exception_entry(struct kvm_cpu_context *ctxt)
 	switch (ESR_ELx_EC(esr)) {
 	case ESR_ELx_EC_HVC64:
 		GHOST_INFO("HVC64");
-#ifdef CONFIG_NVHE_GHOST_SPEC_NOISY
 		u64 hcall_id;
 		char *hcall_name;
 		hcall_id = cpu_reg(ctxt, 0);
@@ -1368,32 +1365,23 @@ static void tag_host_exception_entry(struct kvm_cpu_context *ctxt)
 		);
 
 		tag_hcall_args(ctxt, hcall_id);
-#endif /* CONFIG_NVHE_GHOST_SPEC_NOISY */
 		break;
 	case ESR_ELx_EC_SMC64:
 		GHOST_INFO("SMC64");
-#ifdef CONFIG_NVHE_GHOST_SPEC_NOISY
 		ghost_printf(GHOST_WHITE_ON_BLUE "handle_host_smc" GHOST_NORMAL "\n");
-#endif /* CONFIG_NVHE_GHOST_SPEC_NOISY */
 		break;
 	case ESR_ELx_EC_FP_ASIMD:
 	case ESR_ELx_EC_SVE:
 		GHOST_INFO("SVE");
-#ifdef CONFIG_NVHE_GHOST_SPEC_NOISY
 		ghost_printf(GHOST_WHITE_ON_BLUE "fmsimd_host_restore" GHOST_NORMAL "\n");
-#endif /* CONFIG_NVHE_GHOST_SPEC_NOISY */
 		break;
 	case ESR_ELx_EC_IABT_LOW:
 	case ESR_ELx_EC_DABT_LOW:
 		GHOST_INFO("IABT/DABT");
-#ifdef CONFIG_NVHE_GHOST_SPEC_NOISY
 		ghost_printf(GHOST_WHITE_ON_BLUE "handle_host_mem_abort" GHOST_NORMAL "\n");
-#endif /* CONFIG_NVHE_GHOST_SPEC_NOISY */
 		break;
 	default:
-#ifdef CONFIG_NVHE_GHOST_SPEC_NOISY
 		ghost_printf(GHOST_WHITE_ON_BLUE "<unknown: %ld>" GHOST_NORMAL "\n", ESR_ELx_EC(esr));
-#endif /* CONFIG_NVHE_GHOST_SPEC_NOISY */
 		break;
 	}
 }
@@ -1401,9 +1389,7 @@ static void tag_host_exception_entry(struct kvm_cpu_context *ctxt)
 static void tag_exception_entry(struct kvm_cpu_context *ctxt)
 {
 	bool print_enabled;
-#ifdef CONFIG_NVHE_GHOST_SPEC_NOISY
 	ghost_print_enter();
-#endif /* CONFIG_NVHE_GHOST_SPEC_NOISY */
 
 	// TODO: dispatch on ghost or cpu run state?
 	// struct ghost_state *gr_pre = this_cpu_ptr(&gs_recorded_pre);
@@ -1412,27 +1398,25 @@ static void tag_exception_entry(struct kvm_cpu_context *ctxt)
 
 	print_enabled = this_trap_print_controlled(ctxt);
 	__this_cpu_write(ghost_print_this_hypercall, print_enabled);
+
 	if (! print_enabled)
 		goto print_exit;
 
-#ifdef CONFIG_NVHE_GHOST_SPEC_NOISY
 	ghost_printf(
 		"\n"
 		GHOST_WHITE_ON_BLUE "****** TRAP ***************************************************************" GHOST_NORMAL "\n"
 	);
-#endif /* CONFIG_NVHE_GHOST_SPEC_NOISY */
 
 	if (cpu_run_state->guest_running)
 		tag_guest_exception_entry(ctxt);
 	else
 		tag_host_exception_entry(ctxt);
 
-	if (! ghost_exec_enabled())
+	if (print_enabled && !ghost_exec_enabled())
 		ghost_printf(GHOST_WHITE_ON_YELLOW "skipping exec check" GHOST_NORMAL "\n");
+
 print_exit:
-#ifdef CONFIG_NVHE_GHOST_SPEC_NOISY
 	ghost_print_exit();
-#endif /* CONFIG_NVHE_GHOST_SPEC_NOISY */
 }
 
 
@@ -1495,11 +1479,9 @@ void ghost_post(struct kvm_cpu_context *ctxt)
 
 		// and check the two are equal on relevant components
 		if (new_state_computed) {
-#ifdef CONFIG_NVHE_GHOST_SPEC_NOISY
 			if (__this_cpu_read(ghost_print_this_hypercall)) {
 				ghost_printf(GHOST_WHITE_ON_BLUE "check abstraction" GHOST_NORMAL "\n");
 			}
-#endif /* CONFIG_NVHE_GHOST_SPEC_NOISY */
 #ifdef CONFIG_NVHE_GHOST_SPEC_DUMP_STATE
 			if (this_trap_print_controlled(ctxt)) {
 				ghost_printf("ghost recorded pre (full):\n");
@@ -1517,11 +1499,9 @@ void ghost_post(struct kvm_cpu_context *ctxt)
 #endif /* CONFIG_NVHE_GHOST_SPEC_DUMP_STATE */
 			check_abstraction_equals_all(gc_post, gr_post, gr_pre);
 		} else {
-#ifdef CONFIG_NVHE_GHOST_SPEC_NOISY
 			if (__this_cpu_read(ghost_print_this_hypercall)) {
 				ghost_printf(GHOST_WHITE_ON_YELLOW "skipping spec check" GHOST_NORMAL "\n");
 			}
-#endif /* CONFIG_NVHE_GHOST_SPEC_NOISY */
 		}
 
 		ghost_unlock_vms();

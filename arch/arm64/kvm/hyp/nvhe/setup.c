@@ -401,12 +401,15 @@ void __noreturn __pkvm_init_finalise(void)
 	GHOST_LOG_CONTEXT_ENTER();
 	// register the debug output
 	ghost_extra_debug_initialised = true;
-	// dump some mappings
-	ghost_dump_setup();
-	//	if (static_branch_unlikely(&kvm_protected_mode_initialized)) {
-	ghost_hyp_put_mapping_reqs();
-	ghost_dump_pgtable(&pkvm_pgtable,"pkvm_pgtable", 0);
-	ghost_check_hyp_mapping_reqs(&pkvm_pgtable,false /*noisy*/);
+
+	if (ghost_print_on("setup")) {
+		// dump some mappings
+		ghost_dump_setup();
+		//	if (static_branch_unlikely(&kvm_protected_mode_initialized)) {
+		ghost_hyp_put_mapping_reqs();
+		ghost_dump_pgtable(&pkvm_pgtable,"pkvm_pgtable", 0);
+		ghost_check_hyp_mapping_reqs(&pkvm_pgtable,false /*noisy*/);
+	}
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 
 	/* Now that the vmemmap is backed, install the full-fledged allocator */
@@ -488,38 +491,40 @@ int __pkvm_init(phys_addr_t phys, unsigned long size, unsigned long nr_cpus,
 	u64 sm_size = PAGE_ALIGN(2 * sizeof(struct ghost_simplified_model_state));
 #endif
 
-	ghost_printf(
-		"\n"
-		"__pkvm_init:\n"
-		"    CPU:..................%d\n"
-		"\n"
-		"  arguments:\n"
-		"    phys:.................%p\n"
-		"    size:.................%lx\n"
-		"    nr_cpus:..............%d\n"
-		"    per_cpu_base:.........%p\n"
-		"    hyp_va_bits:..........%x\n"
-		"\n"
-		"  interesting globals:\n"
-		"    hyp_physvirt_offset:..%lx\n"
-		"\n"
+	if (ghost_print_on("setup")) {
+		ghost_printf(
+			"\n"
+			"__pkvm_init:\n"
+			"    CPU:..................%d\n"
+			"\n"
+			"  arguments:\n"
+			"    phys:.................%p\n"
+			"    size:.................%lx\n"
+			"    nr_cpus:..............%d\n"
+			"    per_cpu_base:.........%p\n"
+			"    hyp_va_bits:..........%x\n"
+			"\n"
+			"  interesting globals:\n"
+			"    hyp_physvirt_offset:..%lx\n"
+			"\n"
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-		"  simplified model:\n"
-		"    phys:.................%p\n"
-		"    virt:.................%p\n"
-		"    size:.................%lx\n"
-		"\n"
+			"  simplified model:\n"
+			"    phys:.................%p\n"
+			"    virt:.................%p\n"
+			"    size:.................%lx\n"
+			"\n"
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
-		,
-		hyp_smp_processor_id(), phys, size, nr_cpus,
-		per_cpu_base, hyp_va_bits, hyp_physvirt_offset
+			,
+			hyp_smp_processor_id(), phys, size, nr_cpus,
+			per_cpu_base, hyp_va_bits, hyp_physvirt_offset
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-		,
-		phys+size-sm_size,
-		virt+size-sm_size,
-		sm_size
+			,
+			phys+size-sm_size,
+			virt+size-sm_size,
+			sm_size
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
-	);
+		);
+	}
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 
 	BUG_ON(kvm_check_pvm_sysreg_table());

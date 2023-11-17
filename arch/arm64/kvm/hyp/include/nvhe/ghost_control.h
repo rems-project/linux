@@ -16,6 +16,5 @@ bool ghost_print_on(const char* context);
 void init_ghost_control(void);
 
 #define GHOST_EXEC_SPEC true
-#define GHOST_DUMP_CPU_STATE_ON_INIT true
 
 #endif // _GHOST_CONTROL_H

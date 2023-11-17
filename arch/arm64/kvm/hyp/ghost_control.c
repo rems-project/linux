@@ -15,9 +15,15 @@ struct ghost_control_item {
 };
 
 static struct ghost_control_item ghost_controls[] = {
+	(struct ghost_control_item){.name="always", .check=true, .print=true},
+	(struct ghost_control_item){.name="never", .check=false, .print=false},
+
 	// top-level enable of immediate ghost shadow stack printing
 	// even when false, still prints on error.
 	(struct ghost_control_item){.name="ghost_context", .check=true, .print=false},
+
+	/* whether to print out the ghost setup */
+	(struct ghost_control_item){.name="dump_setup", .check=true, .print=noisy_spec},
 
 	// printing simplified model (#define disables checking entirely);
 	(struct ghost_control_item){.name="ghost_simplified_model_step", .check=true, .print=noisy_sm},
@@ -90,5 +96,5 @@ bool ghost_control_check_enabled(const char* context)
 
 bool ghost_print_on(const char* context)
 {
-	return !ghost_control_is_controlled(context) || ghost_control_print_enabled(context);
+	return noisy_spec && (!ghost_control_is_controlled(context) || ghost_control_print_enabled(context));
 }
