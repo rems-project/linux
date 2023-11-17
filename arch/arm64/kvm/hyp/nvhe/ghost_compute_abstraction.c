@@ -403,7 +403,7 @@ void check_abstraction_equals_local_state(struct ghost_state *g1, struct ghost_s
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
-void check_abstraction_refined_local_state(struct ghost_state *gc, struct ghost_state *gr_pre, struct ghost_state *gr_post)
+void check_abstraction_refined_local_state(struct ghost_state *gc, struct ghost_state *gr_post, struct ghost_state *gr_pre)
 {
 	GHOST_LOG_CONTEXT_ENTER();
 	struct ghost_local_state *gc_local = ghost_this_cpu_local_state(gc);
