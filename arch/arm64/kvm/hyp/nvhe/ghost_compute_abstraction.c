@@ -255,7 +255,7 @@ void compute_abstraction_vm_partial(struct ghost_vm *dest, struct pkvm_hyp_vm *h
 				if (vcpu) {
 					g_vcpu->loaded = vcpu->loaded_hyp_vcpu ? true : false;
 					g_vcpu->regs.present = true;
-					memcpy(&g_vcpu->regs.ctxt, &vcpu->vcpu.arch.ctxt, sizeof(struct kvm_vcpu_arch));
+					memcpy(&g_vcpu->regs.ctxt, &vcpu->vcpu.arch.ctxt, sizeof(struct kvm_cpu_context));
 					// TODO: EL2 regs
 				}
 				dest->vm_table_locked.vcpus[vcpu_idx] = g_vcpu;
