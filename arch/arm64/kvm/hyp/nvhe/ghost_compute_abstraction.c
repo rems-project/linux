@@ -426,12 +426,16 @@ void check_abstraction_refined_local_state(struct ghost_state *gc, struct ghost_
 	}
 
 	if (gc_local->host_regs.present && gr_post_local->host_regs.present) {
+		GHOST_INFO("r1->gc");
+		GHOST_INFO("r2->gr_post");
 		check_abstraction_equals_host_regs(&gc_local->host_regs, &gr_post_local->host_regs);
 	}
 	else if (gc_local->host_regs.present && !gr_post_local->host_regs.present) {
 		ghost_assert(false);
 	}
 	else if (!gc_local->host_regs.present && gr_post_local->host_regs.present) {
+		GHOST_INFO("r1->gr_post");
+		GHOST_INFO("r2->gr_pre");
 		ghost_assert(gr_pre_local->host_regs.present);
 		check_abstraction_equals_host_regs(&gr_post_local->host_regs, &gr_pre_local->host_regs);
 	}
