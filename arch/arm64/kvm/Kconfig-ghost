@@ -65,6 +65,13 @@ config NVHE_GHOST_SIMPLIFIED_MODEL_DUMP_ON_TRANS
 	help
 	  Dumps the entire simplified model state to the UART on each simplified model transition (very noisy).
 
+config NVHE_GHOST_SIMPLIFIED_MODEL_NOISY_CONDENSED
+	bool "Condense simplified model state dumps&diffs to only invalid uncleans"
+	depends on NVHE_GHOST_SIMPLIFIED_MODEL_NOISY
+	default n
+	help
+	  Don't show entire state or full diffs, only show those that affected a location that was or became invalid unclean.
+
 menuconfig NVHE_GHOST_SPEC_NOISY
 	bool "Noisy ghost spec checking machinery"
 	depends on NVHE_GHOST_SPEC

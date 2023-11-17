@@ -24,6 +24,7 @@ static struct ghost_control_item ghost_controls[] = {
 	(struct ghost_control_item){.name="initialise_ghost_simplified_model", .check=true, .print=noisy_sm},
 	(struct ghost_control_item){.name="sm_dump_trans", .check=true, .print=IS_ENABLED(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL_DUMP_ON_TRANS)},
 	(struct ghost_control_item){.name="sm_diff_trans", .check=true, .print=IS_ENABLED(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL_DIFF_ON_TRANS)},
+	(struct ghost_control_item){.name="sm_condensed", .check=true, .print=IS_ENABLED(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL_NOISY_CONDENSED)},
 
 	// verbose logs from the pre/post checkers
 	(struct ghost_control_item){.name="ghost_record_pre", .check=true, .print=verbose_spec},
