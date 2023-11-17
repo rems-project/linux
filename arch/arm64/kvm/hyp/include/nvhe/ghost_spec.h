@@ -172,6 +172,7 @@ struct ghost_vm_locked_by_vm_table {
 
 /**
  * struct ghost_vm - A guest VM
+ * @protected: whether this is a Protected VM.
  * @pkvm_handle: the opaque pKVM-defined handle for this VM.
  * @lock: a reference to the underlying spinlock of the real hyp VM, for instrumentation purposes.
  * @vm_locked: fields owned by the internal VM lock
@@ -185,6 +186,7 @@ struct ghost_vm_locked_by_vm_table {
  * and these can be filled separately leading to partially initialised ghost VM structs.
  */
 struct ghost_vm {
+	bool protected;
 	pkvm_handle_t pkvm_handle;
 	hyp_spinlock_t *lock;
 	struct ghost_vm_locked_by_vm_lock vm_locked;

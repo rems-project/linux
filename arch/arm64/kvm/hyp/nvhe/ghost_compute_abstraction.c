@@ -223,6 +223,7 @@ bool ghost_vms_is_valid_handle(struct ghost_vms *vms, pkvm_handle_t handle)
 void compute_abstraction_vm_partial(struct ghost_vm *dest, struct pkvm_hyp_vm *hyp_vm, enum vm_field_owner owner) {
 	ghost_assert(hyp_vm);
 
+	dest->protected = hyp_vm->kvm.arch.pkvm.enabled;
 	dest->pkvm_handle = hyp_vm->kvm.arch.pkvm.handle;
 	dest->lock = &hyp_vm->lock;
 
@@ -894,6 +895,7 @@ void copy_abstraction_host(struct ghost_state *g_tgt, struct ghost_state *g_src)
 
 void ghost_vm_clone_into_partial(struct ghost_vm *dest, struct ghost_vm *src, enum vm_field_owner owner)
 {
+	dest->protected = src->protected;
 	dest->pkvm_handle = src->pkvm_handle;
 	dest->lock = src->lock;
 

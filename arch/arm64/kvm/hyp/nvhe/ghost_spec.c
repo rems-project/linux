@@ -429,6 +429,10 @@ void compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost_state 
 	ghost_assert(g0_vm != NULL);
 	ghost_assert(g1_vm != NULL);
 
+	if (! g0_vm->protected) {
+		// TODO: fail
+	}
+
 	// The call to pkvm_refill_memcache() may non-deterministically
 	// fail because we run out of memory. In this case the hypercall
 	// ends with that host mapping left unchanged.
@@ -812,6 +816,7 @@ void compute_new_abstract_state_handle___pkvm_init_vm(struct ghost_state *g1, st
 	vm1->vm_table_locked.nr_vcpus = nr_vcpus;
 	vm1->vm_table_locked.nr_initialised_vcpus = 0;
 	vm1->pkvm_handle = handle;
+	vm1->protected = GHOST_READ_ONCE(call, host_kvm_hyp_va->arch.pkvm.enabled);
 	for (int i = 0; i < nr_vcpus; i++) {
 		vm1->vm_table_locked.vcpus[i] = malloc_or_die(sizeof(struct ghost_vcpu));
 		vm1->vm_table_locked.vcpus[i]->vcpu_handle = i;
