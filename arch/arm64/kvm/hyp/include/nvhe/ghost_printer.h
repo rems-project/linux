@@ -22,9 +22,17 @@
  *      - maplet (pointer to)
  *      - maplet_target (pointer to)
  *      - ek (cast to u64)
+ *      - pfn_set
+ *      and for simplified model:
+ *      - sm_trans (struct ghost_simplified_model_transition*)
+ *      - sm_pte_state (struct sm_pte_state*)
+ *      - sm_loc (sm_location*)
+ *      - sm_blob (sm_location*)
+ *      - sm_state (struct ghost_simplified_model_state*)
  *  %g2(KIND) = ghost object (2 arg form, pointer then u64)
  *      - entry (u64, 2nd arg = level)
  *      - mapping (pointer to, 2nd arg = internal indent)
+ *      - pgtable
  *  (where %gL and %gI are aliases for %g2)
  *
  * Supported escapes:
