@@ -1017,7 +1017,15 @@ bool compute_new_abstract_state_handle___pkvm_init_vcpu(struct ghost_state *g1, 
 	vcpu->vcpu_handle = vcpu_idx;
 	vcpu->loaded = false;
 	vcpu->initialised = true;
-	vm->vm_table_locked.nr_initialised_vcpus++;
+
+	vcpu->regs.present = true;
+	for (int i=0; i<31; i++)
+		vcpu->regs.ctxt.regs.regs[i] = 0;
+	// TODO: set PC to 0?
+	// TODO: in the implementation MPIDR_EL1 = 0x80000000 (this is RES1 bit) and SCTLR_EL1 = 0xc50078
+
+	g1->vms.table_data.present = true; // TODO: check with Ben that we really need this here
+	vm1->vm_table_locked.nr_initialised_vcpus++;
 out:
 	ghost_reg_gpr(g1, 1) = ret;
 
