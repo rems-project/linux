@@ -956,24 +956,26 @@ bool compute_new_abstract_state_handle___pkvm_init_vcpu(struct ghost_state *g1, 
 	host_va_t vcpu_hva = ghost_reg_gpr(g0, 3);
 //	struct kvm_vcpu *host_vcpu_hyp_va = (struct kvm_vcpu *)hyp_va_of_host_va(g0, host_vcpu_hva);
 
-	struct ghost_vm *vm = ghost_vms_get(&g0->vms, vm_handle);
-	if (!vm) {
+	struct ghost_vm *vm0 = ghost_vms_get(&g0->vms, vm_handle);
+	if (!vm0) {
 		ret = -ENOENT;
 		goto out;
 	}
+	struct ghost_vm *vm1 = ghost_vms_alloc(&g1->vms, vm_handle);
+	ghost_assert(vm1);
+	ghost_vm_clone_into_partial(vm1, vm0, VMS_VM_TABLE_OWNED);
 
-	vcpu_idx = vm->vm_table_locked.nr_initialised_vcpus;
-	if (vcpu_idx >= vm->vm_table_locked.nr_vcpus) {
+	vcpu_idx = vm1->vm_table_locked.nr_initialised_vcpus;
+	if (vcpu_idx >= vm1->vm_table_locked.nr_vcpus) {
 		ret = -EINVAL;
 		goto out;
 	}
 	ghost_spec_assert(vcpu_idx < KVM_MAX_VCPUS);
-	vcpu = vm->vm_table_locked.vcpus[vcpu_idx];
+	vcpu = vm1->vm_table_locked.vcpus[vcpu_idx];
 	ghost_assert(vcpu);
 
 	copy_abstraction_host(g1, g0);
 	copy_abstraction_pkvm(g1, g0);
-	copy_abstraction_vms_partial(g1, g0, VMS_VM_TABLE_OWNED);
 
 	host_ipa_t vcpu_ipa = host_ipa_of_phys(phys_of_hyp_va(g0, hyp_va_of_host_va(g0, vcpu_hva)));
 	if (!ghost_map_donated_memory_checkonly(g1, vcpu_ipa, sizeof(struct pkvm_hyp_vcpu))) {
