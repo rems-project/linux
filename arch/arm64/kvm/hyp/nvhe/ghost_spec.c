@@ -196,7 +196,7 @@ static bool is_owned_and_shared_by(const struct ghost_state *g, enum ghost_host_
 
 // if id == GHOST_HOST, addr should be a host_ipa
 // if id == GHOST_HYP,  addr should be a hyp_va
-static bool is_borrowed_by(const struct ghost_state *g, enum ghost_host_or_hyp id, phys_addr_t addr)
+static bool is_borrowed_by(const struct ghost_state *g, enum ghost_host_or_hyp id, u64 addr)
 {
 	struct maplet_target t;
 	switch (id) {
