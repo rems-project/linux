@@ -738,7 +738,8 @@ void init_abstraction(struct ghost_state *g)
 	g->pkvm.present = false;
 	g->host.present = false;
 	g->vms.present = false;
-	ghost_this_cpu_local_state(g)->present = false;
+	for (int idx=0; idx<hyp_nr_cpus; idx++)
+		g->cpu_local_state[idx].present = false;
 }
 
 void init_abstraction_common(void)
