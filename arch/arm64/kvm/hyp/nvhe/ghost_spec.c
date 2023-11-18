@@ -848,6 +848,7 @@ bool compute_new_abstract_state_handle___pkvm_init_vm(struct ghost_state *g1, st
 	// otherwise, we have all the same vms as before, plus one more
 	copy_abstraction_vms_partial(g1, g0, VMS_VM_TABLE_OWNED);
 	struct ghost_vm *vm1 = ghost_vms_alloc(&g1->vms, handle);
+	g1->vms.table_data.present = true; // TODO: we probably want to change copy_abstraction_vms_partial() instead to set g1.vms.present to true (check with Ben)
 	g1->vms.table_data.nr_vms = g0->vms.table_data.nr_vms + 1;
 	ghost_assert(vm1);
 
