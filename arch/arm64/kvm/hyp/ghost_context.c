@@ -80,6 +80,8 @@ static const char *msg_open_for(enum ghost_log_level level)
 	switch (level) {
 	case GHOST_LOG_ERROR:
 		return "! " GHOST_WHITE_ON_RED;
+	case GHOST_LOG_WARN:
+	  return "! " GHOST_WHITE_ON_YELLOW;
 	default:
 		return "";
 	}
@@ -89,6 +91,7 @@ static const char *msg_close_for(enum ghost_log_level level)
 {
 	switch (level) {
 	case GHOST_LOG_ERROR:
+	case GHOST_LOG_WARN:
 		return GHOST_NORMAL;
 	default:
 		return "";

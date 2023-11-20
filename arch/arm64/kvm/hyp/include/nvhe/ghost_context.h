@@ -17,6 +17,7 @@ enum ghost_log_level {
 	GHOST_LOG_DEBUG = 0,
 	GHOST_LOG_TRACE,
 	GHOST_LOG_INFO,
+	GHOST_LOG_WARN,
 	GHOST_LOG_ERROR
 };
 
@@ -123,7 +124,7 @@ int gp_put_current_context_trace(gp_stream_t *out);
 	GHOST_LOG_P(NULL, (var), __GHOST_PRINTER(ty))
 
 #define GHOST_WARN(msg) \
-	ghost_log_context_log(msg, GHOST_LOG_ERROR)
+	ghost_log_context_log(msg, GHOST_LOG_WARN)
 
 #define GHOST_INFO(msg) \
 	ghost_log_context_log(msg, GHOST_LOG_INFO)
