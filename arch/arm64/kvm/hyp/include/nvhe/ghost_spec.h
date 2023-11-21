@@ -91,7 +91,7 @@ struct ghost_loaded_vcpu {
 };
 
 /**
- * struct ghost_register_state - per-CPU register state
+ * struct ghost_registers - per-CPU register state
  *
  * @present: whether the parent ghost state has some ghost register state for this CPU.
  * @ctxt: if present, the EL0/1 register values on entry/exit to the C.
@@ -102,7 +102,7 @@ struct ghost_loaded_vcpu {
  *
  * Context: thread-local, so not protected by any lock.
  */
-struct ghost_register_state {
+struct ghost_registers {
 	bool present;
 	struct kvm_cpu_context ctxt;
 	u64 el2_sysregs[GHOST_NR_SYSREGS];
@@ -126,7 +126,7 @@ struct ghost_vcpu {
 	u64 vcpu_handle; // really the index
 	bool loaded;
 	bool initialised;
-	struct ghost_register_state regs;
+	struct ghost_registers regs;
 };
 
 /**
@@ -200,7 +200,7 @@ struct ghost_vm {
  */
 struct ghost_host_regs {
 	bool present;
-	struct ghost_register_state regs;
+	struct ghost_registers regs;
 };
 
 /**
@@ -419,7 +419,7 @@ void ghost_cpu_running_state_copy(struct ghost_running_state *run_tgt, struct gh
  */
 struct ghost_local_state {
 	bool present;
-	struct ghost_register_state regs;
+	struct ghost_registers regs;
 	struct ghost_loaded_vcpu loaded_hyp_vcpu;
 	struct ghost_running_state cpu_state;
 	struct ghost_host_regs host_regs;
@@ -453,7 +453,7 @@ struct ghost_local_state *ghost_this_cpu_local_state(struct ghost_state *g);
  * this_cpu_read_ghost_loaded_vcpu() - Get the loaded_hyp_vcpu for this CPU
  */
 struct ghost_loaded_vcpu *this_cpu_ghost_loaded_vcpu(struct ghost_state *g);
-struct ghost_register_state *this_cpu_ghost_register_state(struct ghost_state *g);
+struct ghost_registers *this_cpu_ghost_registers(struct ghost_state *g);
 struct ghost_running_state *this_cpu_ghost_run_state(struct ghost_state *g);
 
 //
@@ -521,13 +521,13 @@ DECLARE_PER_CPU(struct ghost_running_state, ghost_cpu_run_state);
 
 // functions to make ghost register accesses more uniform
 #define ghost_reg_gpr(g, reg_index) \
-	GHOST_GPR(this_cpu_ghost_register_state(g), reg_index)
+	GHOST_GPR(this_cpu_ghost_registers(g), reg_index)
 
 #define ghost_reg_el2(g, reg_index) \
-	GHOST_SYSREG_EL2(this_cpu_ghost_register_state(g), reg_index)
+	GHOST_SYSREG_EL2(this_cpu_ghost_registers(g), reg_index)
 
 #define ghost_reg_el1(g, reg_index) \
-	GHOST_SYSREG_EL1(this_cpu_ghost_register_state(g), reg_index)
+	GHOST_SYSREG_EL1(this_cpu_ghost_registers(g), reg_index)
 
 #define ghost_reg_vcpu_gpr(vcpu, reg_index) \
 	GHOST_GPR(&vcpu->regs, reg_index)

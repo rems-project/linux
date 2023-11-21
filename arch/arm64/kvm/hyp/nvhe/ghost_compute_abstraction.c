@@ -280,7 +280,7 @@ void check_abstract_pgtable_equal(abstract_pgtable *ap1, abstract_pgtable *ap2, 
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
-void check_abstraction_equals_reg(struct ghost_register_state *r1, struct ghost_register_state *r2, bool check_sysregs)
+void check_abstraction_equals_reg(struct ghost_registers *r1, struct ghost_registers *r2, bool check_sysregs)
 {
 	GHOST_LOG_CONTEXT_ENTER();
 	u64 i;
@@ -791,7 +791,7 @@ void clear_abstraction_host(struct ghost_state *g)
 
 void clear_abstraction_regs(struct ghost_state *g)
 {
-	this_cpu_ghost_register_state(g)->present = false;
+	this_cpu_ghost_registers(g)->present = false;
 }
 
 static void ghost_vms_partial_vm_try_free_slot(struct ghost_state *g, struct ghost_vm *vm)
@@ -869,11 +869,11 @@ void clear_abstraction_thread_local(void)
 	ghost_unlock_maplets();
 }
 
-void copy_abstraction_regs(struct ghost_register_state *g_tgt, struct ghost_register_state *g_src)
+void copy_abstraction_regs(struct ghost_registers *g_tgt, struct ghost_registers *g_src)
 {
 	ghost_assert(g_tgt->present);
 	ghost_assert(g_src->present);
-	memcpy(g_tgt, g_src, sizeof(struct ghost_register_state));
+	memcpy(g_tgt, g_src, sizeof(struct ghost_registers));
 }
 
 void copy_abstraction_constants(struct ghost_state *g_tgt, struct ghost_state *g_src)
@@ -1130,7 +1130,7 @@ void record_abstraction_vms_and_check_none(struct ghost_state *g)
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
-void record_abstraction_regs(struct ghost_register_state *gr, struct kvm_cpu_context *ctxt)
+void record_abstraction_regs(struct ghost_registers *gr, struct kvm_cpu_context *ctxt)
 {
 	int i;
 	gr->present = true;
@@ -1181,7 +1181,7 @@ void record_and_check_abstraction_local_state_pre(struct kvm_cpu_context *ctxt)
 	GHOST_LOG_CONTEXT_ENTER();
 	record_abstraction_local_state(g, ctxt);
 
-	if (ghost_checked_last_call() && this_cpu_ghost_register_state(&gs)->present) {
+	if (ghost_checked_last_call() && this_cpu_ghost_registers(&gs)->present) {
 		GHOST_TRACE("g1->gr_pre");
 		GHOST_TRACE("g2->gs");
 		check_abstraction_equals_local_state(g, &gs);
@@ -1509,7 +1509,7 @@ struct ghost_loaded_vcpu *this_cpu_ghost_loaded_vcpu(struct ghost_state *g)
 {
 	return &ghost_this_cpu_local_state(g)->loaded_hyp_vcpu;
 }
-struct ghost_register_state *this_cpu_ghost_register_state(struct ghost_state *g)
+struct ghost_registers *this_cpu_ghost_registers(struct ghost_state *g)
 {
 	return &ghost_this_cpu_local_state(g)->regs;
 }
@@ -1656,7 +1656,7 @@ static void ghost_dump_globals(struct ghost_constant_globals *globals)
 	/* TODO: dump hyp memory */
 }
 
-static void ghost_dump_regs(struct ghost_register_state *regs, u64 i)
+static void ghost_dump_regs(struct ghost_registers *regs, u64 i)
 {
 	ghost_printf("%Iregs[cpu:%d]:<TODO>\n", i, hyp_smp_processor_id());
 }

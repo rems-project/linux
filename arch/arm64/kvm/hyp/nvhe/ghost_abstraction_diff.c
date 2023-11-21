@@ -400,7 +400,7 @@ static void ghost_diff_gpr(struct diff_container *container, u64 reg, struct gho
 /****************/
 // Differ!
 
-static void ghost_diff_registers(struct diff_container *node, struct ghost_register_state *r1, struct ghost_register_state *r2);
+static void ghost_diff_registers(struct diff_container *node, struct ghost_registers *r1, struct ghost_registers *r2);
 
 static void ghost_diff_pfns_array(struct diff_container *node, struct pfn_set *s1, struct pfn_set *s2)
 {
@@ -532,7 +532,7 @@ static void ghost_diff_host(struct diff_container *node, struct ghost_host *h1, 
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
-static void ghost_diff_registers(struct diff_container *node, struct ghost_register_state *r1, struct ghost_register_state *r2)
+static void ghost_diff_registers(struct diff_container *node, struct ghost_registers *r1, struct ghost_registers *r2)
 {
 	GHOST_LOG_CONTEXT_ENTER();
 	ghost_diff_enter_subfield(node, "regs");

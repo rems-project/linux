@@ -30,7 +30,7 @@ void record_and_copy_abstraction_vms_post(void);
 void record_and_copy_abstraction_vm_post(struct pkvm_hyp_vm *vm);
 
 // additional functions used only in ghost files
-void copy_abstraction_regs(struct ghost_register_state *g_tgt, struct ghost_register_state *g_src);
+void copy_abstraction_regs(struct ghost_registers *g_tgt, struct ghost_registers *g_src);
 void copy_abstraction_constants(struct ghost_state *g_tgt, struct ghost_state *g_src);
 void copy_abstraction_host(struct ghost_state *g_tgt, struct ghost_state *g_src);
 void copy_abstraction_pkvm(struct ghost_state *g_tgt, struct ghost_state *g_src);
@@ -50,7 +50,7 @@ void check_abstraction_pkvm_equals(
 	struct ghost_pkvm *rhs
 );
 
-void check_abstraction_equals_reg(struct ghost_register_state *r1, struct ghost_register_state *r2, bool check_sysregs);
+void check_abstraction_equals_reg(struct ghost_registers *r1, struct ghost_registers *r2, bool check_sysregs);
 void check_abstraction_equals_pkvm(struct ghost_pkvm *gp1, struct ghost_pkvm *gp2);
 void check_abstraction_equals_host(struct ghost_host *gh1, struct ghost_host *gh2);
 void check_abstraction_equals_loaded_vcpu(struct ghost_loaded_vcpu *loaded_vcpu1, struct ghost_loaded_vcpu *loaded_vcpu2);

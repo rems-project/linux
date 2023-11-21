@@ -1014,7 +1014,7 @@ bool compute_new_abstract_state_handle___pkvm_init_vcpu(struct ghost_state *g1, 
 
 */
 // struct ghost_vcpu {
-// 	struct ghost_register_state regs;
+// 	struct ghost_registers regs;
 // };
 
 	// TODO if ret != 0 ==> goto out
