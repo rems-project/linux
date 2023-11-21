@@ -77,17 +77,13 @@ predicate {bool exists} Cond_Zero_Page (pointer p) {
 }
 @*/
 
-/* FIXME: this spec is a lie, and omits entirely the pool ownership */
 /* FIXME: the bit about phys_virt_offset is probably a lie, and asserts that
    it is a true constant, rather than just constant after initialisation */
 /*@
-spec hyp_zalloc_hyp_page (pointer arg)
-  requires true
-  ensures
-    take P = Cond_Zero_Page (return);
-    (mod(((u64) return), 4096u64) == 0u64)
-
 function (u64) phys_virt_offset ()
+
+function (bool) valid_phys_virt_offset ()
+{ mod(phys_virt_offset (), 4096u64) == 0u64 }
 
 function (pointer) hyp_phys_to_virt (u64 phys)
 {
@@ -108,6 +104,21 @@ spec hyp_virt_to_phys (pointer virt)
   requires true
   ensures
     return == hyp_virt_to_phys (virt)
+@*/
+
+/* FIXME: this spec is a lie, and omits entirely the pool ownership */
+/*@
+function (bool) valid_hyp_virt_page (pointer p)
+{
+  (mod(((u64) p), 4096u64) == 0u64) &&
+  (hyp_virt_to_phys(p) < power(2u64, 48u64))
+}
+
+spec hyp_zalloc_hyp_page (pointer arg)
+  requires true
+  ensures
+    take P = Cond_Zero_Page (return);
+    valid_hyp_virt_page(return)
 @*/
 
 
@@ -445,11 +456,10 @@ static void kvm_clear_pte(kvm_pte_t *ptep)
 
 static void kvm_set_table_pte(kvm_pte_t *ptep, kvm_pte_t *childp,
 			      struct kvm_pgtable_mm_ops *mm_ops)
-/* bogus trusted. the cn_function approach can't work here, this function
-   isn't pure, it operates on a pte in-place. */
-/*@ trusted @*/
 /*@ requires take Ops = MM_Ops(mm_ops) @*/
 /*@ requires take pte_old = Owned<kvm_pte_t>(ptep) @*/
+/*@ requires valid_phys_virt_offset () @*/
+/*@ requires valid_hyp_virt_page(childp) @*/
 /*@ ensures take pte2 = Owned<kvm_pte_t>(ptep) @*/
 /*@ ensures take Ops2 = MM_Ops(mm_ops) @*/
 /*@ ensures Ops2 == Ops @*/
@@ -462,7 +472,10 @@ static void kvm_set_table_pte(kvm_pte_t *ptep, kvm_pte_t *childp,
 	pte |= KVM_PTE_VALID;
 
 	WARN_ON(kvm_pte_valid(old));
+	/*@ apply kvm_pte_to_phys_is_decode(pte); @*/
 	/*@ assert (decode_table_entry_pointer(pte) == childp); @*/
+	/*@ apply kvm_pte_table_is_table(pte, 0u32); @*/
+	/*@ assert (is_table_entry(pte)); @*/
 	smp_store_release(ptep, pte);
 }
 
@@ -526,6 +539,7 @@ static int kvm_pgtable_visitor_cb(struct kvm_pgtable_walk_data *data, u64 addr,
 				  enum kvm_pgtable_walk_flags flag)
 /*@ requires take Data = KVM_PgTable_Walk_Data (data) @*/
 /*@ requires valid_pgtable_level(level) @*/
+/*@ requires valid_phys_virt_offset () @*/
 /*@ requires take pte = Owned(ptep) @*/
 /*@ requires take IPT = Indirect_Page_Table_Entries (ptep, level + 1u32, pte) @*/
 /*@ requires take PgTableStruct = Owned<struct kvm_pgtable>(Data.pgt) @*/
@@ -553,6 +567,7 @@ static inline int __kvm_pgtable_visit(struct kvm_pgtable_walk_data *data,
 				      kvm_pte_t *ptep, u32 level)
 /*@ requires take Data = KVM_PgTable_Walk_Data (data) @*/
 /*@ requires valid_pgtable_level(level) @*/
+/*@ requires valid_phys_virt_offset () @*/
 /*@ requires take pte = Owned(ptep) @*/
 /*@ requires take IPT = Indirect_Page_Table_Entries (ptep, level + 1u32, pte) @*/
 /*@ requires take PgTableStruct = Owned<struct kvm_pgtable>(Data.pgt) @*/
@@ -617,6 +632,7 @@ static int __kvm_pgtable_walk(struct kvm_pgtable_walk_data *data,
 /*@ requires take PgTableStruct = Owned<struct kvm_pgtable>(Data.pgt) @*/
 /*@ requires take Ops = MM_Ops(PgTableStruct.mm_ops) @*/
 /*@ requires valid_pgtable_level(level) @*/
+/*@ requires valid_phys_virt_offset () @*/
 /*@ requires let orig_level = level @*/
 /*@ ensures take Data2 = KVM_PgTable_Walk_Data (data) @*/
 /*@ ensures Data2.end == Data.end @*/
@@ -673,6 +689,7 @@ static int _kvm_pgtable_walk(struct kvm_pgtable_walk_data *data)
    than the other ones, thus this function). */
 /*@ trusted @*/
 /*@ requires take Data = KVM_PgTable_Walk_Data (data) @*/
+/*@ requires valid_phys_virt_offset () @*/
 /*@ requires let orig_data = data @*/
 /*@ ensures take Data2 = KVM_PgTable_Walk_Data (data) @*/
 {
@@ -821,6 +838,7 @@ static inline void coerce_null_ptes_to_IPT(kvm_pte_t *ptep, u32 level)
 static int hyp_map_walker(u64 addr, u64 end, u32 level, kvm_pte_t *ptep,
 			  enum kvm_pgtable_walk_flags flag, void * const arg)
 /*@ requires valid_pgtable_level(level) @*/
+/*@ requires valid_phys_virt_offset () @*/
 /*@ requires take D = Hyp_Map_Data(arg) @*/
 /*@ requires take pte = Owned<kvm_pte_t>(ptep) @*/
 /*@ requires not(is_table_entry(pte)) @*/
