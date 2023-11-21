@@ -192,22 +192,33 @@ predicate {bool x} Indirect_Page_Table_Entries2 (pointer p, u32 level, u64 encod
   }
 }
 @*/
-/* FIXME: the number of concatenated entries in the toplevel PD is set to the
-   magic number 16 below. instead, this should be figured out from Data.start_level
-   and everything else made parametric in that. for now, just assumed to be 16,
-   the maximum. TODO */
-/* also FIXME, 12 * 4096 was allowed before, now it's 65536 */
+
 /*@
-predicate {pointer mm_ops} Pg_Table (pointer p, boolean with_entries) {
+function (boolean) aligned_u64 (u64 x, u64 n)
+  { shift_left (shift_right (x, n), n) == x }
+@*/
+
+/* Page tables are 4096 bytes in size (2 ^ 12), which is 512 entries on a
+ * 64-bit platform, resolving 9 bits, however, the top-level variant (called a
+ * page directory) resolves some excess bits and is a little bigger, thus the
+ * extra_bits output argument. A max-size 4-level page table resolves 48 bits,
+ * 9 less per level, leaving 12 bits (the page size) unresolved.
+ */
+/*@
+predicate {pointer mm_ops, u32 extra_bits} Pg_Table
+        (pointer p, boolean with_entries) {
   take Data = Owned<struct kvm_pgtable>(p);
   take Ops = MM_Ops(Data.mm_ops);
 
-  assert ((0u32 < Data.ia_bits) && (Data.ia_bits < 64u32));
-  assert (mod((u64) Data.pgd, 65536u64) == 0u64);
+  assert ((0u32 < Data.ia_bits) && (Data.ia_bits <= 52u32));
+  let pt_bits_resolved = 48u32 - (9u32 * Data.start_level);
+  let extra_bits = Data.ia_bits - pt_bits_resolved;
+  assert (extra_bits == 0u32 || extra_bits == 2u32 || extra_bits == 4u32);
+  assert (aligned_u64 ((u64) Data.pgd, 12u64 + ((u64) extra_bits)));
 
   take Entries = Pg_Table_Toplevel (Data.pgd, with_entries);
 
-  return {mm_ops: Data.mm_ops};
+  return {extra_bits: extra_bits, mm_ops: Data.mm_ops};
 }
 
 predicate (void) Pg_Table_Toplevel (pointer p, boolean exists) {
@@ -246,7 +257,7 @@ struct kvm_pgtable_walk_data {
 /*@ function (u64) kvm_granule_shift (u32 level) @*/
 
 /*@ cn_function kvm_granule_shift @*/
-/*@ requires valid_pgtable_level(level) @*/
+/*@ requires valid_pgtable_level(level) || level == (0u32 - 1u32) @*/
 /*@ ensures 0u64 <= return && return < 64u64 @*/
 /*@ ensures return == kvm_granule_shift(level) @*/
 /*@ requires valid_pgtable_level(level) @*/
