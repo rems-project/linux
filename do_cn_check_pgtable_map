@@ -41,7 +41,7 @@ then
 
 else
 
-  $CN
+  $CN $1
 
 fi
 
