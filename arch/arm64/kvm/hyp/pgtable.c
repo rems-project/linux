@@ -707,13 +707,14 @@ static int _kvm_pgtable_walk(struct kvm_pgtable *pgt, struct kvm_pgtable_walk_da
 int kvm_pgtable_walk(struct kvm_pgtable *pgt, u64 addr, u64 size,
 		     struct kvm_pgtable_walker *walker)
 /* bogus trusted attribute here to try out other functions */
-/* issues with sequencing in this struct initialiser */
 /*@ trusted @*/
 {
+	/* CN modification: align addr first, avoid self-referential init */
+	addr = ALIGN_DOWN(addr, PAGE_SIZE);
 	struct kvm_pgtable_walk_data walk_data = {
 		.start	= ALIGN_DOWN(addr, PAGE_SIZE),
-		.addr	= ALIGN_DOWN(addr, PAGE_SIZE),
-		.end	= PAGE_ALIGN(walk_data.addr + size),
+		.addr	= addr,
+		.end	= PAGE_ALIGN(addr + size),
 		.walker	= walker,
 	};
 	int r;
@@ -773,9 +774,7 @@ struct hyp_map_data {
 };
 
 static int hyp_set_prot_attr(enum kvm_pgtable_prot prot, kvm_pte_t *ptep)
-/* bogus trusted attribute here to try out other functions */
-/* too much bitwise maths in this function for now */
-/*@ trusted @*/
+/* not much to prove for (C) safety of this function */
 /*@ requires take P = Owned(ptep) @*/
 /*@ ensures take P2 = Owned(ptep) @*/
 {
