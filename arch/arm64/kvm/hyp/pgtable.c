@@ -291,10 +291,9 @@ static u32 kvm_pgtable_idx(struct kvm_pgtable_walk_data *data, u32 level)
 
 static u32 kvm_pgd_page_idx(struct kvm_pgtable *pgt, u64 addr)
 /* bitwise arithmetic, also revisit questions about pgd layout */
-/*@ trusted @*/
 /*@ requires take PgTableStruct = Owned<struct kvm_pgtable>(pgt) @*/
 /*@ requires ((0u32 < PgTableStruct.ia_bits) && (PgTableStruct.ia_bits < 64u32)) @*/
-/*@ ensures 0u32 <= return && return < 16u32 @*/
+/*@ requires valid_pgtable_level(PgTableStruct.start_level); PgTableStruct.start_level > 0u32 @*/
 /*@ ensures take PgTableStruct2 = Owned<struct kvm_pgtable>(pgt) @*/
 /*@ ensures PgTableStruct2 == PgTableStruct @*/
 {
@@ -307,8 +306,8 @@ static u32 kvm_pgd_page_idx(struct kvm_pgtable *pgt, u64 addr)
 /*@ requires take Data = KVM_PgTable_Walk_Data (data) @*/
 /*@ requires take PgTableStruct = Owned<struct kvm_pgtable>(Data.pgt) @*/
 /*@ requires ((0u32 < PgTableStruct.ia_bits) && (PgTableStruct.ia_bits < 64u32)) @*/
+/*@ requires valid_pgtable_level(PgTableStruct.start_level); PgTableStruct.start_level > 0u32 @*/
 /*@ ensures take Data2 = KVM_PgTable_Walk_Data (data) @*/
-/*@ ensures 0u32 <= return && return < 16u32 @*/
 /*@ ensures Data2 == Data @*/
 /*@ ensures take PgTableStruct2 = Owned<struct kvm_pgtable>(Data.pgt) @*/
 /*@ ensures PgTableStruct2 == PgTableStruct @*/
