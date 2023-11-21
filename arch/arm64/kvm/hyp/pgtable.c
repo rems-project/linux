@@ -272,15 +272,6 @@ static bool kvm_block_mapping_supported(const struct kvm_pgtable_visit_ctx *ctx,
 	return IS_ALIGNED(ctx->addr, granule);
 }
 
-/*@
-lemma bw_and_le(u32 x, u32 y)
-  requires
-    0u32 <= x; 0u32 <= y
-  ensures
-    0u32 <= bw_and_uf(x, y);
-    bw_and_uf(x, y) <= x;
-    bw_and_uf(x, y) <= y
-@*/
 
 static u32 kvm_pgtable_idx(struct kvm_pgtable_walk_data *data, u32 level)
 /*@ requires take Data = KVM_PgTable_Walk_Data (data) @*/
@@ -294,7 +285,6 @@ static u32 kvm_pgtable_idx(struct kvm_pgtable_walk_data *data, u32 level)
 
 	/* CN addition */
 	u32 shifted = data->addr >> shift;
-	/*@ apply bw_and_le(shifted, (u32) mask); @*/
 
 	return shifted & mask;
 }
