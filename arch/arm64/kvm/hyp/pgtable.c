@@ -264,8 +264,12 @@ static u64 kvm_granule_shift(u32 level)
 	return ARM64_HW_PGTABLE_LEVEL_SHIFT(level);
 }
 
+/*@ cn_function (u64) kvm_granule_size(u32 level) @*/
+
 static u64 kvm_granule_size(u32 level)
+/*@ cn_function kvm_granule_size @*/
 /*@ requires valid_pgtable_level(level) @*/
+/*@ ensures return == kvm_granule_size(level) @*/
 {
 	return BIT(kvm_granule_shift(level));
 }
