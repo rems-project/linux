@@ -260,7 +260,11 @@ struct kvm_pgtable_walk_data {
 /*@ requires valid_pgtable_level(level) || level == (0u32 - 1u32) @*/
 /*@ ensures 0u64 <= return && return < 64u64 @*/
 /*@ ensures return == kvm_granule_shift(level) @*/
+/*@ cn_function (u64) kvm_granule_size(u32 level) @*/
+
+/*@ cn_function kvm_granule_size @*/
 /*@ requires valid_pgtable_level(level) @*/
+/*@ ensures return == kvm_granule_size(level) @*/
 static bool kvm_phys_is_valid(u64 phys)
 {
 	return phys < BIT(id_aa64mmfr0_parange_to_phys_shift(ID_AA64MMFR0_EL1_PARANGE_MAX));
