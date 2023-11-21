@@ -123,6 +123,9 @@ int gp_put_current_context_trace(gp_stream_t *out);
 #define GHOST_ERROR_VAR(var, ty) \
 	GHOST_LOG_P(NULL, (var), __GHOST_PRINTER(ty))
 
+#define GHOST_ERROR(msg) \
+	ghost_log_context_log(msg, GHOST_LOG_ERROR)
+
 #define GHOST_WARN(msg) \
 	ghost_log_context_log(msg, GHOST_LOG_WARN)
 
