@@ -23,7 +23,7 @@ static struct ghost_control_item ghost_controls[] = {
 	(struct ghost_control_item){.name="ghost_context", .check=true, .print=false},
 
 	/* whether to print out the ghost setup */
-	(struct ghost_control_item){.name="dump_setup", .check=true, .print=noisy_spec},
+	(struct ghost_control_item){.name="setup", .check=true, .print=noisy_spec},
 
 	// printing simplified model (#define disables checking entirely);
 	(struct ghost_control_item){.name="ghost_simplified_model_step", .check=true, .print=noisy_sm},
