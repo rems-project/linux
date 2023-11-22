@@ -300,21 +300,38 @@ static bool kvm_block_mapping_supported(const struct kvm_pgtable_visit_ctx *ctx,
 }
 
 
+/*@
+cn_function (u32) purekvm_pgtable_idx(struct kvm_pgtable_walk_data data, u32 level) {
+  (u32) (bw_and_uf((u64) ((u32) shift_right (data.addr, kvm_granule_shift(level))), 511u64))
+}
+@*/
+
 static u32 kvm_pgtable_idx(struct kvm_pgtable_walk_data *data, u32 level)
 /*@ requires take Data = Owned (data) @*/
 /*@ requires valid_pgtable_level(level) @*/
 /*@ ensures take Data2 = Owned (data) @*/
 /*@ ensures 0u32 <= return && return < power(2u32, 12u32 - 3u32) @*/
 /*@ ensures Data2 == Data @*/
+/*@ ensures return == purekvm_pgtable_idx(Data, level) @*/
 {
 	u64 shift = kvm_granule_shift(level);
 	u64 mask = BIT(PAGE_SHIFT - 3) - 1;
 
 	/* CN addition */
 	u32 shifted = data->addr >> shift;
+        /*CHECK: u32 ret = shifted & mask;*/ /*/@ print(ret); /@*/
 
 	return shifted & mask;
 }
+
+/*@
+function (u32) pure__kvm_pgd_page_idx(struct kvm_pgtable pgt, u64 addr) {
+  (u32) shift_right (
+    bw_and_uf(addr, (shift_left(1u64, (u64)(pgt.ia_bits))) - 1u64),
+    kvm_granule_shift(pgt.start_level - 1u32)
+  )
+}
+@*/
 
 static u32 kvm_pgd_page_idx(struct kvm_pgtable *pgt, u64 addr)
 /* bitwise arithmetic, also revisit questions about pgd layout */
@@ -323,9 +340,13 @@ static u32 kvm_pgd_page_idx(struct kvm_pgtable *pgt, u64 addr)
 /*@ requires valid_pgtable_level(PgTableStruct.start_level); PgTableStruct.start_level > 0u32 @*/
 /*@ ensures take PgTableStruct2 = Owned<struct kvm_pgtable>(pgt) @*/
 /*@ ensures PgTableStruct2 == PgTableStruct @*/
+/*@ ensures return == pure__kvm_pgd_page_idx(PgTableStruct, addr) @*/
 {
 	u64 shift = kvm_granule_shift(pgt->start_level - 1); /* May underflow */
 	u64 mask = BIT(pgt->ia_bits) - 1;
+
+        /* u32 arg1 = pgt->start_level - 1; */ /*/@ print(arg1); /@*/
+        /* u32 ret = (addr & mask) >> shift; */ /*/@ print(ret); /@*/
 
 	return (addr & mask) >> shift;
 }
