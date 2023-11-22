@@ -301,9 +301,9 @@ static bool kvm_block_mapping_supported(const struct kvm_pgtable_visit_ctx *ctx,
 
 
 static u32 kvm_pgtable_idx(struct kvm_pgtable_walk_data *data, u32 level)
-/*@ requires take Data = KVM_PgTable_Walk_Data (data) @*/
+/*@ requires take Data = Owned (data) @*/
 /*@ requires valid_pgtable_level(level) @*/
-/*@ ensures take Data2 = KVM_PgTable_Walk_Data (data) @*/
+/*@ ensures take Data2 = Owned (data) @*/
 /*@ ensures 0u32 <= return && return < power(2u32, 12u32 - 3u32) @*/
 /*@ ensures Data2 == Data @*/
 {
