@@ -744,7 +744,7 @@ static void ghost_diff_state(struct diff_container *node, struct ghost_state *s1
 /************************************/
 // Simplified model diffing
 
-#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL_DIFF_ON_TRANS
 
 #define TSMLOC_TRACK(LOC) TGPRINT("track %g(sm_loc)", (LOC))
 
@@ -833,8 +833,7 @@ static void ghost_diff_sm_state(struct diff_container *node, struct ghost_simpli
 
 	ghost_diff_sm_mem(node, &s1->memory, &s2->memory);
 }
-
-#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL_DIFF_ON_TRANS */
 
 static struct diff_container container(void)
 {
