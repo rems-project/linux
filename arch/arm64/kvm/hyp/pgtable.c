@@ -205,14 +205,20 @@ function (boolean) aligned_u64 (u64 x, u64 n)
  * 9 less per level, leaving 12 bits (the page size) unresolved.
  */
 /*@
+function (u32) pgd_extra_bits(u32 ia_bits, u32 start_level)
+{
+  let pt_bits_resolved = 48u32 - (9u32 * start_level);
+  let extra_bits = ia_bits - pt_bits_resolved;
+  extra_bits
+}
+
 predicate {pointer mm_ops, u32 extra_bits} Pg_Table
         (pointer p, boolean with_entries) {
   take Data = Owned<struct kvm_pgtable>(p);
   take Ops = MM_Ops(Data.mm_ops);
 
   assert ((0u32 < Data.ia_bits) && (Data.ia_bits <= 52u32));
-  let pt_bits_resolved = 48u32 - (9u32 * Data.start_level);
-  let extra_bits = Data.ia_bits - pt_bits_resolved;
+  let extra_bits = pgd_extra_bits(Data.ia_bits, Data.start_level);
   assert (extra_bits == 0u32 || extra_bits == 2u32 || extra_bits == 4u32);
   assert (aligned_u64 ((u64) Data.pgd, 12u64 + ((u64) extra_bits)));
 
@@ -338,6 +344,9 @@ static u32 kvm_pgd_page_idx(struct kvm_pgtable *pgt, u64 addr)
 /*@ requires take PgTableStruct = Owned<struct kvm_pgtable>(pgt) @*/
 /*@ requires ((0u32 < PgTableStruct.ia_bits) && (PgTableStruct.ia_bits < 64u32)) @*/
 /*@ requires valid_pgtable_level(PgTableStruct.start_level) @*/
+/*@ requires let extra_bits = pgd_extra_bits(PgTableStruct.ia_bits, PgTableStruct.start_level) @*/
+/*@ requires 0u32 <= extra_bits; extra_bits <= 4u32 @*/
+/*@ ensures shift_right(return, extra_bits) == 0u32 @*/
 /*@ ensures take PgTableStruct2 = Owned<struct kvm_pgtable>(pgt) @*/
 /*@ ensures PgTableStruct2 == PgTableStruct @*/
 /*@ ensures return == pure__kvm_pgd_page_idx(PgTableStruct, addr) @*/
