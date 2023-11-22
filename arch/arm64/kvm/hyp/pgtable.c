@@ -221,6 +221,7 @@ predicate {pointer mm_ops, u32 extra_bits} Pg_Table
   let extra_bits = pgd_extra_bits(Data.ia_bits, Data.start_level);
   assert (extra_bits == 0u32 || extra_bits == 2u32 || extra_bits == 4u32);
   assert (aligned_u64 ((u64) Data.pgd, 12u64 + ((u64) extra_bits)));
+  assert (valid_pgtable_level(Data.start_level));
 
   take Entries = Pg_Table_Toplevel (Data.pgd, with_entries);
 
