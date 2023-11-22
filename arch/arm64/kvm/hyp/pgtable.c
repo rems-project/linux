@@ -186,7 +186,9 @@ static void kvm_clear_pte(kvm_pte_t *ptep)
 {
 	WRITE_ONCE(*ptep, 0);
 #if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
+#ifndef CONFIG_NVHE_GHOST_SPEC_INJECT_ERROR_kvm_clear_pte_MISSING_WRITE
 	ghost_simplified_model_step_write(WMO_plain, hyp_virt_to_phys(ptep), 0);
+#endif /* CONFIG_NVHE_GHOST_SPEC_INJECT_ERROR_kvm_clear_pte_MISSING_WRITE */
 #endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 }
 

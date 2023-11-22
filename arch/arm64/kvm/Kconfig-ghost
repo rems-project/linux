@@ -161,3 +161,9 @@ config NVHE_GHOST_SPEC_CHECK___pkvm_vcpu_put
 # 	bool "Check __pkvm_vcpu_sync_state"
 
 endmenu
+
+menu "Inject errors"
+	depends on NVHE_GHOST_SPEC
+
+source "arch/arm64/kvm/Kconfig-ghost-inject-errors"
+endmenu

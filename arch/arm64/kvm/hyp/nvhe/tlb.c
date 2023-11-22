@@ -183,7 +183,9 @@ void __kvm_tlb_flush_vmid_ipa(struct kvm_s2_mmu *mmu,
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	__tlbi(vmalle1is);
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+#ifndef CONFIG_NVHE_GHOST_SPEC_INJECT_ERROR___kvm_tlb_flush_vmid_ipa_MISSING_TLBI
 	ghost_simplified_model_step_tlbi1(TLBI_vmalle1is);
+#endif /* CONFIG_NVHE_GHOST_SPEC_INJECT_ERROR___kvm_tlb_flush_vmid_ipa_MISSING_TLBI */
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	dsb(ish);
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
