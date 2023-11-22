@@ -449,9 +449,8 @@ void __noreturn __pkvm_init_finalise(void)
 	pkvm_hyp_vm_table_init(vm_table_base);
 
 #ifdef CONFIG_NVHE_GHOST_SPEC
-	init_abstraction_common();
-	record_abstraction_common();
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	/* have to do the initial simplified model setup before recording the global pKVM pgtable state */
 	GHOST_LOG(pkvm_pgtable.start_level, u32);
 	u64 sm_size = PAGE_ALIGN(2 * sizeof(struct ghost_simplified_model_state));
 	unsigned long sm_virt;
@@ -459,6 +458,9 @@ void __noreturn __pkvm_init_finalise(void)
 	BUG_ON(__pkvm_create_private_mapping(ghost__pkvm_init_phys+ghost__pkvm_init_size-sm_size, sm_size, PAGE_HYP, &sm_virt, HYP_WORKSPACE));
 	initialise_ghost_simplified_model(ghost__pkvm_init_phys, ghost__pkvm_init_size, sm_virt, sm_size);
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
+
+	init_abstraction_common();
+	record_abstraction_common();
 	WRITE_ONCE(ghost_pkvm_init_finalized, true);
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 
