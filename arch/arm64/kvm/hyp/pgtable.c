@@ -364,10 +364,14 @@ static u32 kvm_pgd_page_idx(struct kvm_pgtable *pgt, u64 addr)
 /*@ requires take PgTableStruct = Owned<struct kvm_pgtable>(Data.pgt) @*/
 /*@ requires ((0u32 < PgTableStruct.ia_bits) && (PgTableStruct.ia_bits < 64u32)) @*/
 /*@ requires valid_pgtable_level(PgTableStruct.start_level) @*/
+/*@ requires let extra_bits = pgd_extra_bits(PgTableStruct.ia_bits, PgTableStruct.start_level) @*/
+/*@ requires 0u32 <= extra_bits; extra_bits <= 4u32 @*/
+/*@ ensures shift_right(return, extra_bits) == 0u32 @*/
 /*@ ensures take Data2 = KVM_PgTable_Walk_Data (data) @*/
 /*@ ensures Data2 == Data @*/
 /*@ ensures take PgTableStruct2 = Owned<struct kvm_pgtable>(Data.pgt) @*/
 /*@ ensures PgTableStruct2 == PgTableStruct @*/
+/*@ ensures return == pure__kvm_pgd_page_idx(PgTableStruct, Data.addr) @*/
 static u32 kvm_pgd_pages(u32 ia_bits, u32 start_level)
 {
 	struct kvm_pgtable pgt = {
