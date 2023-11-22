@@ -525,9 +525,11 @@ void ghost_check_hyp_mapping_reqs(struct kvm_pgtable *pg, bool noisy)
 {
 	ghost_lock_maplets();
 	hyp_puts("ghost_check_hyp_mappings (ignoring HYP_PVMFW)");
+	hyp_putc('\n');
 	//bool res;
 	if (pg==0) {
 		hyp_puts("ghost_check_hyp_mappings given pg==0");
+		hyp_putc('\n');
 		goto out;
 	}
 
