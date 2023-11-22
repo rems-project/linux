@@ -264,7 +264,7 @@ static u64 kvm_granule_shift(u32 level)
 	return ARM64_HW_PGTABLE_LEVEL_SHIFT(level);
 }
 
-/*@ cn_function (u64) kvm_granule_size(u32 level) @*/
+/*@ function (u64) kvm_granule_size(u32 level) @*/
 
 static u64 kvm_granule_size(u32 level)
 /*@ cn_function kvm_granule_size @*/
@@ -276,12 +276,20 @@ static u64 kvm_granule_size(u32 level)
 
 #define KVM_PHYS_INVALID (-1ULL)
 
+/*@ function (u8) kvm_phys_is_valid(u64 phys) @*/
+
 static bool kvm_phys_is_valid(u64 phys)
+/*@ cn_function kvm_phys_is_valid @*/
+/*@ ensures return == kvm_phys_is_valid(phys) @*/
 {
 	return phys < BIT(id_aa64mmfr0_parange_to_phys_shift(ID_AA64MMFR0_PARANGE_MAX));
 }
 
+/*@ function (u8) kvm_level_supports_block_mapping(u32 level) @*/
+
 static bool kvm_level_supports_block_mapping(u32 level)
+/*@ cn_function kvm_level_supports_block_mapping @*/
+/*@ ensures return == kvm_level_supports_block_mapping(level) @*/
 {
 	/*
 	 * Reject invalid block mappings and don't bother with 4TB mappings for
@@ -290,8 +298,12 @@ static bool kvm_level_supports_block_mapping(u32 level)
 	return !(level == 0 || (PAGE_SIZE != SZ_4K && level == 1));
 }
 
+/*@ function (u8) kvm_block_mapping_supported(u64 addr, u64 end, u64 phys, u32 level) @*/
+
 static bool kvm_block_mapping_supported(u64 addr, u64 end, u64 phys, u32 level)
+/*@ cn_function kvm_block_mapping_supported @*/
 /*@ requires valid_pgtable_level(level) @*/
+/*@ ensures return == kvm_block_mapping_supported(addr,end,phys,level) @*/
 {
 	u64 granule = kvm_granule_size(level);
 
