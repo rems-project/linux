@@ -260,18 +260,30 @@ struct kvm_pgtable_walk_data {
 /*@ requires valid_pgtable_level(level) || level == (0u32 - 1u32) @*/
 /*@ ensures 0u64 <= return && return < 64u64 @*/
 /*@ ensures return == kvm_granule_shift(level) @*/
-/*@ cn_function (u64) kvm_granule_size(u32 level) @*/
+/*@ function (u64) kvm_granule_size(u32 level) @*/
 
 /*@ cn_function kvm_granule_size @*/
 /*@ requires valid_pgtable_level(level) @*/
 /*@ ensures return == kvm_granule_size(level) @*/
+/*@ function (u8) kvm_phys_is_valid(u64 phys) @*/
+
 static bool kvm_phys_is_valid(u64 phys)
+/*@ cn_function kvm_phys_is_valid @*/
+/*@ ensures return == kvm_phys_is_valid(phys) @*/
 {
 	return phys < BIT(id_aa64mmfr0_parange_to_phys_shift(ID_AA64MMFR0_EL1_PARANGE_MAX));
 }
+/*@ function (u8) kvm_level_supports_block_mapping(u32 level) @*/
+
+/*@ cn_function kvm_level_supports_block_mapping @*/
+/*@ ensures return == kvm_level_supports_block_mapping(level) @*/
+
+/*@ function (u8) kvm_block_mapping_supported(u64 addr, u64 end, u64 phys, u32 level) @*/
 
 static bool kvm_block_mapping_supported(const struct kvm_pgtable_visit_ctx *ctx, u64 phys)
+/*@ cn_function kvm_block_mapping_supported @*/
 /*@ requires valid_pgtable_level(level) @*/
+/*@ ensures return == kvm_block_mapping_supported(addr,end,phys,level) @*/
 {
 	u64 granule = kvm_granule_size(ctx->level);
 
