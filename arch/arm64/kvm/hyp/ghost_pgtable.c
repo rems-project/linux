@@ -106,18 +106,18 @@ int gp_put_entry(gp_stream_t *out, kvm_pte_t pte, u8 level)
 }
 
 /* page-table: print table */
-void _dump_pgtable(u64 *pgd, u8 level)
+void _dump_pgtable(u64 *pgd, u8 level, u8 indent)
 {
 	u32 idx;
 	if (pgd) {
 		// dump this page
-		ghost_printf("level:%hhd table at virt:%p\n", level, pgd);
+		ghost_printf("%Ilevel:%hhd table at virt:%p\n", indent, level, pgd);
 
 		// dump each entry
 		for (idx = 0; idx < 512; idx++) {
 			kvm_pte_t pte = pgd[idx];
 			if (pte!=0) {
-				ghost_printf("level:%hhd table at virt:%p raw:%lx %gL(entry)\n", level, pgd+idx, pte, level);
+				ghost_printf("%Ilevel:%hhd table at virt:%p raw:%lx %gL(entry)\n", indent+2, level, pgd+idx, pte, level);
 			}
 		}
 
@@ -128,8 +128,8 @@ void _dump_pgtable(u64 *pgd, u8 level)
 				u64 next_level_phys_address, next_level_virt_address;
 				next_level_phys_address = pte & GENMASK(47,12);
 				next_level_virt_address = (u64)hyp_phys_to_virt((phys_addr_t)next_level_phys_address);
-				ghost_printf("in level:%hhd table at virt:%p phys:%p\n", level, next_level_virt_address, next_level_phys_address);
-				_dump_pgtable((kvm_pte_t *)next_level_virt_address, level+1);
+				ghost_printf("%Iin level:%hhd table at virt:%p phys:%p\n", indent+2, level, next_level_virt_address, next_level_phys_address);
+				_dump_pgtable((kvm_pte_t *)next_level_virt_address, level+1, indent+4);
 				ghost_printf("\n");
 			}
 		}
@@ -143,7 +143,7 @@ void _dump_pgtable(u64 *pgd, u8 level)
 void dump_pgtable(struct kvm_pgtable pg)
 {
 	ghost_printf("ia_bits:%x ia_start_level:%d\n", pg.ia_bits, pg.start_level);
-	_dump_pgtable(pg.pgd, pg.start_level);
+	_dump_pgtable(pg.pgd, pg.start_level, 0);
 	return;
 }
 
