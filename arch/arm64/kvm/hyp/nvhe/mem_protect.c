@@ -76,7 +76,7 @@ static void host_lock_component(void)
 #ifdef CONFIG_NVHE_GHOST_SPEC_DUMP_STATE_RAW_HOST
 	if (__this_cpu_read(ghost_print_this_hypercall)) {
 		ghost_printf("host pgtable pre (mapping):\n");
-		ghost_dump_pgtable(&host_mmu.pgt, "host_kvm.pgt", 0);
+		ghost_dump_pgtable(&host_mmu.pgt, "host_kvm.pgt", 2);
 		ghost_printf("\n");
 		ghost_printf("host pgtable pre (raw):\n");
 		dump_pgtable(host_mmu.pgt);
@@ -94,7 +94,7 @@ static void host_unlock_component(void)
 #ifdef CONFIG_NVHE_GHOST_SPEC_DUMP_STATE_RAW_HOST
 	if (__this_cpu_read(ghost_print_this_hypercall)) {
 		ghost_printf("host pgtable post (mapping):\n");
-		ghost_dump_pgtable(&host_mmu.pgt, "host_kvm.pgt", 0);
+		ghost_dump_pgtable(&host_mmu.pgt, "host_kvm.pgt", 2);
 		ghost_printf("\n");
 		ghost_printf("host pgtable post (raw):\n");
 		dump_pgtable(host_mmu.pgt);
