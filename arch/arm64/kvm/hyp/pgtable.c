@@ -234,17 +234,32 @@ predicate (void) Pg_Table_Toplevel (pointer p, u32 start_level, u32 extra_bits) 
   return;
 }
 
-predicate {u32 flags} KVM_PgTable_Walker (pointer p) {
-  take D = Owned<struct kvm_pgtable_walker>(p);
-  take X = Hyp_Walker_Cases (D.cb, D.arg, D.flags);
-  return {flags: D.flags};
+datatype possible_mm_ops {
+  No_MM_Ops {},
+  Has_MM_Ops {pointer mm_ops}
 }
 
-predicate {pointer pgt, u64 addr, u64 end, u32 flags}
+function (boolean) possible_mm_ops_agree (possible_mm_ops o, pointer m) {
+  match o {
+    No_MM_Ops {} => {true}
+    Has_MM_Ops {mm_ops: m2} => {m == m2}
+  }
+}
+
+predicate {u32 flags, pointer arg, possible_mm_ops ops} KVM_PgTable_Walker (pointer p) {
+  take D = Owned<struct kvm_pgtable_walker>(p);
+  take X = Hyp_Walker_Cases (D.cb, D.arg, D.flags);
+  return {flags: D.flags, arg: D.arg, ops: X.ops};
+}
+
+predicate {pointer pgt, u64 addr, u64 end, {pointer walker, pointer arg} walker,
+            possible_mm_ops ops, u32 flags}
     KVM_PgTable_Walk_Data (pointer p) {
   take D = Owned<struct kvm_pgtable_walk_data>(p);
   take Walker = KVM_PgTable_Walker(D.walker);
-  return {pgt: D.pgt, addr: D.addr, end: D.end, flags: Walker.flags};
+  let walker = {walker: D.walker, arg: Walker.arg};
+  return {pgt: D.pgt, addr: D.addr, end: D.end, walker: walker,
+        ops: Walker.ops, flags: Walker.flags};
 }
 @*/
 
@@ -490,7 +505,6 @@ static kvm_pte_t *kvm_pte_follow(kvm_pte_t pte, struct kvm_pgtable_mm_ops *mm_op
 /*@ requires good<kvm_pte_t *>(decode_table_entry_pointer (pte)) @*/
 /*@ requires take Ops = MM_Ops(mm_ops) @*/
 /*@ ensures take Ops2 = MM_Ops(mm_ops) @*/
-/*@ ensures Ops2 == Ops @*/
 /*@ ensures return == decode_table_entry_pointer (pte) @*/
 {
 	return mm_ops->phys_to_virt(kvm_pte_to_phys(pte));
@@ -509,7 +523,6 @@ static void kvm_set_table_pte(kvm_pte_t *ptep, kvm_pte_t *childp,
 /*@ requires valid_hyp_virt_page(childp) @*/
 /*@ ensures take pte2 = Owned<kvm_pte_t>(ptep) @*/
 /*@ ensures take Ops2 = MM_Ops(mm_ops) @*/
-/*@ ensures Ops2 == Ops @*/
 /*@ ensures is_table_entry(pte2) @*/
 /*@ ensures decode_table_entry_pointer(pte2) == childp @*/
 {
@@ -590,6 +603,8 @@ static int kvm_pgtable_visitor_cb(struct kvm_pgtable_walk_data *data, u64 addr,
 /*@ requires take pte = Owned(ptep) @*/
 /*@ requires take IPT = Indirect_Page_Table_Entries (ptep, level + 1u32, pte) @*/
 /*@ requires take PgTableStruct = Owned<struct kvm_pgtable>(Data.pgt) @*/
+/*@ requires take Ops = MM_Ops(PgTableStruct.mm_ops) @*/
+/*@ requires possible_mm_ops_agree(Data.ops, PgTableStruct.mm_ops) @*/
 /*@ requires flag_in_flags ((i32)flag, (i32) (Data.flags)) @*/
 /*@ requires (flag == (u32)KVM_PGTABLE_WALK_LEAF) ==
     (not(is_table_entry(pte))) @*/
@@ -599,10 +614,13 @@ static int kvm_pgtable_visitor_cb(struct kvm_pgtable_walk_data *data, u64 addr,
 /*@ ensures take IPT2 = Indirect_Page_Table_Entries (ptep, level + 1u32, pte2) @*/
 /*@ ensures take PgTableStruct2 = Owned<struct kvm_pgtable>(Data.pgt) @*/
 /*@ ensures PgTableStruct2 == PgTableStruct @*/
+/*@ ensures take Ops2 = MM_Ops(PgTableStruct.mm_ops) @*/
 /*@ ensures flag == ((u32)KVM_PGTABLE_WALK_TABLE_PRE)
     ? pte2 == pte : true @*/
 {
 	struct kvm_pgtable_walker *walker = data->walker;
+	/*@ assert (match (Data.ops) {Has_MM_Ops {mm_ops: _} => {true} No_MM_Ops => {false}}); @*/
+	/*@ assert (Data.ops == Has_MM_Ops {mm_ops: PgTableStruct.mm_ops}); @*/
 	return walker->cb(addr, data->end, level, ptep, flag, walker->arg);
 }
 
@@ -619,15 +637,17 @@ static inline int __kvm_pgtable_visit(struct kvm_pgtable_walk_data *data,
 /*@ requires take PgTableStruct = Owned<struct kvm_pgtable>(Data.pgt) @*/
 /*@ requires take Ops = MM_Ops(PgTableStruct.mm_ops) @*/
 /*@ requires Data.addr <= Data.end @*/
+/*@ requires possible_mm_ops_agree(Data.ops, PgTableStruct.mm_ops) @*/
 /*@ ensures take Data2 = KVM_PgTable_Walk_Data (data) @*/
 /*@ ensures Data2.end == Data.end @*/
 /*@ ensures Data2.pgt == Data.pgt @*/
+/*@ ensures Data2.walker == Data.walker @*/
+/*@ ensures Data2.ops == Data.ops @*/
 /*@ ensures take pte2 = Owned(ptep) @*/
 /*@ ensures take IPT2 = Indirect_Page_Table_Entries (ptep, level + 1u32, pte2) @*/
 /*@ ensures take PgTableStruct2 = Owned<struct kvm_pgtable>(Data.pgt) @*/
 /*@ ensures PgTableStruct2 == PgTableStruct @*/
 /*@ ensures take Ops2 = MM_Ops(PgTableStruct.mm_ops) @*/
-/*@ ensures Ops2 == Ops @*/
 /*@ ensures ((Data2.addr < Data2.end) && (return == 0i32)) ?
         (Data2.addr == (align_u64 (Data.addr, kvm_granule_shift(level)) +
             shift_left(1u64, kvm_granule_shift(level))))
@@ -689,14 +709,16 @@ static int __kvm_pgtable_walk(struct kvm_pgtable_walk_data *data,
 /*@ requires valid_pgtable_level(level) @*/
 /*@ requires valid_phys_virt_offset () @*/
 /*@ requires let orig_level = level @*/
+/*@ requires possible_mm_ops_agree(Data.ops, PgTableStruct.mm_ops) @*/
 /*@ ensures take Data2 = KVM_PgTable_Walk_Data (data) @*/
 /*@ ensures Data2.end == Data.end @*/
 /*@ ensures Data2.pgt == Data.pgt @*/
+/*@ ensures Data2.walker == Data.walker @*/
+/*@ ensures Data2.ops == Data.ops @*/
 /*@ ensures take PTEs2 = Page_Table_Entries (pgtable, level) @*/
 /*@ ensures take PgTableStruct2 = Owned<struct kvm_pgtable>(Data.pgt) @*/
 /*@ ensures PgTableStruct2 == PgTableStruct @*/
 /*@ ensures take Ops2 = MM_Ops(PgTableStruct.mm_ops) @*/
-/*@ ensures Ops2 == Ops @*/
 /*@ ensures ((Data2.addr < Data2.end) && (return == 0i32)) ?
     (Data2.addr == (align_u64 (Data.addr, kvm_granule_shift(level - 1u32)) +
         shift_left(1u64, kvm_granule_shift(level - 1u32))))
@@ -719,8 +741,10 @@ static int __kvm_pgtable_walk(struct kvm_pgtable_walk_data *data,
 	/*@ inv level == orig_level @*/
 	/*@ inv Data3.end == Data.end @*/
 	/*@ inv Data3.pgt == Data.pgt @*/
+	/*@ inv Data3.ops == Data.ops @*/
+	/*@ inv Data3.walker == Data.walker @*/
 	/*@ inv take PgTableStruct3 = Owned<struct kvm_pgtable>(Data.pgt) @*/
-	/*@ inv PgTableStruct3.mm_ops == PgTableStruct.mm_ops @*/
+	/*@ inv PgTableStruct3 == PgTableStruct @*/
 	/*@ inv take Ops3 = MM_Ops(PgTableStruct.mm_ops) @*/
 	/*@ inv Ops3 == Ops @*/
 	/*@ inv ((Data3.addr == Data.addr) && (idx == purekvm_pgtable_idx(Data.addr, level)))
@@ -754,11 +778,13 @@ static int _kvm_pgtable_walk(struct kvm_pgtable_walk_data *data)
 /*@ requires let orig_data = data @*/
 /*@ requires take Ops = MM_Ops(PT.data.mm_ops) @*/
 /*@ requires valid_phys_virt_offset () @*/
+/*@ requires possible_mm_ops_agree(Data.ops, PT.data.mm_ops) @*/
 /*@ ensures take Data2 = KVM_PgTable_Walk_Data (data) @*/
 /*@ ensures take PT2 = Pg_Table (Data.pgt) @*/
 /*@ ensures PT2 == PT @*/
 /*@ ensures take Ops2 = MM_Ops(PT.data.mm_ops) @*/
-/*@ ensures Ops2 == Ops @*/
+/*@ ensures Data2.walker == Data.walker @*/
+/*@ ensures Data2.pgt == Data.pgt @*/
 {
 	u32 idx;
 	int ret = 0;
@@ -782,6 +808,8 @@ static int _kvm_pgtable_walk(struct kvm_pgtable_walk_data *data)
 	/*@ inv Ops3 == Ops @*/
 	/*@ inv Data3.end == Data.end @*/
 	/*@ inv Data3.pgt == Data.pgt @*/
+	/*@ inv Data3.walker == Data.walker @*/
+	/*@ inv Data3.ops == Data.ops @*/
 	/*@ inv Data.end <= shift_left(1u64, (u64) PT.data.ia_bits) @*/
 	/*@ inv (! (Data3.addr < Data.end)) || (idx == pure__kvm_pgd_page_idx(PT.data.ia_bits,
 			PT.data.start_level, Data3.addr)) @*/
@@ -801,13 +829,15 @@ static int _kvm_pgtable_walk(struct kvm_pgtable_walk_data *data)
 int kvm_pgtable_walk(struct kvm_pgtable *pgt, u64 addr, u64 size,
 		     struct kvm_pgtable_walker *walker)
 /*@ requires take PT = Pg_Table (pgt) @*/
+/*@ requires take W = KVM_PgTable_Walker (walker) @*/
 /*@ requires take Ops = MM_Ops(PT.data.mm_ops) @*/
 /*@ requires valid_phys_virt_offset () @*/
+/*@ requires possible_mm_ops_agree(W.ops, PT.data.mm_ops) @*/
 /*@ ensures take PT2 = Pg_Table (pgt) @*/
 /*@ ensures PT2 == PT @*/
 /*@ ensures take Ops2 = MM_Ops(PT.data.mm_ops) @*/
-/*@ ensures Ops2 == Ops @*/
-
+/*@ ensures take W2 = KVM_PgTable_Walker (walker) @*/
+/*@ ensures W2.arg == W.arg @*/
 {
 	/* CN modification: align addr first, avoid self-referential init */
 	addr = ALIGN_DOWN(addr, PAGE_SIZE);
@@ -862,9 +892,8 @@ static int hyp_set_prot_attr(enum kvm_pgtable_prot prot, kvm_pte_t *ptep)
 
 /*@
 predicate {pointer mm_ops} Hyp_Map_Data (pointer p) {
-  assert (mod((u64)p, 32u64) == 0u64);
+  assert (good<struct hyp_map_data *>(p));
   take O = Owned<struct hyp_map_data>(p);
-  take Ops = MM_Ops(O.mm_ops);
   return {mm_ops: O.mm_ops};
 }
 @*/
@@ -922,9 +951,12 @@ static int hyp_map_walker(u64 addr, u64 end, u32 level, kvm_pte_t *ptep,
 /*@ requires take D = Hyp_Map_Data(arg) @*/
 /*@ requires take pte = Owned<kvm_pte_t>(ptep) @*/
 /*@ requires not(is_table_entry(pte)) @*/
+/*@ requires take Ops = MM_Ops(D.mm_ops) @*/
 /*@ ensures take D2 = Hyp_Map_Data(arg) @*/
 /*@ ensures take pte2 = Owned<kvm_pte_t>(ptep) @*/
 /*@ ensures take IPT2 = Indirect_Page_Table_Entries(ptep, level + 1u32, pte2) @*/
+/*@ ensures D2 == D @*/
+/*@ ensures take Ops2 = MM_Ops(D.mm_ops) @*/
 {
 	kvm_pte_t *childp;
 	struct hyp_map_data *data = arg;
@@ -949,16 +981,18 @@ static int hyp_map_walker(u64 addr, u64 end, u32 level, kvm_pte_t *ptep,
 }
 
 /*@
-predicate (void) Hyp_Map_Walker_Case (pointer f, pointer x, u32 flags) {
+predicate {possible_mm_ops ops} Hyp_Map_Walker_Case
+        (pointer f, pointer x, u32 flags) {
   assert (f == &hyp_map_walker);
   assert (flags == ((u32) KVM_PGTABLE_WALK_LEAF));
   take D = Hyp_Map_Data(x);
-  return;
+  return {ops: Has_MM_Ops {mm_ops: D.mm_ops}};
 }
 
-predicate (void) Hyp_Walker_Cases (pointer f, pointer x, u32 flags) {
+predicate {possible_mm_ops ops} Hyp_Walker_Cases
+        (pointer f, pointer x, u32 flags) {
   take X = Hyp_Map_Walker_Case (f, x, flags);
-  return;
+  return X;
 }
 
 @*/
@@ -971,7 +1005,6 @@ int kvm_pgtable_hyp_map(struct kvm_pgtable *pgt, u64 addr, u64 size, u64 phys,
 /*@ ensures take PT2 = Pg_Table(pgt) @*/
 /*@ ensures PT2 == PT @*/
 /*@ ensures take Ops2 = MM_Ops(PT.data.mm_ops) @*/
-/*@ ensures Ops2 == Ops @*/
 {
 	int ret;
 	struct hyp_map_data map_data = {
