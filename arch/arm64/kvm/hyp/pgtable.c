@@ -271,6 +271,10 @@ static inline int __kvm_pgtable_visit(struct kvm_pgtable_walk_data *data,
 {
 	enum kvm_pgtable_walk_flags flags = data->walker->flags;
 	kvm_pte_t *ptep = kvm_dereference_pteref(data->walker, pteref);
+#if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
+	/* might be different to the other READ_ONCE below, but this is a best-effort sanity check anyway */
+	ghost_simplified_model_step_read(hyp_virt_to_phys(ptep), READ_ONCE(*ptep));
+#endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 	struct kvm_pgtable_visit_ctx ctx = {
 		.ptep	= ptep,
 		.old	= READ_ONCE(*ptep),
@@ -311,6 +315,9 @@ static inline int __kvm_pgtable_visit(struct kvm_pgtable_walk_data *data,
 	 */
 	if (reload) {
 		ctx.old = READ_ONCE(*ptep);
+#if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
+	ghost_simplified_model_step_read(hyp_virt_to_phys(ctx.ptep), ctx.old);
+#endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 		table = kvm_pte_table(ctx.old, level);
 	}
 
