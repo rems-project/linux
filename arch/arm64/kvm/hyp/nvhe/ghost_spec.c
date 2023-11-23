@@ -898,7 +898,7 @@ bool compute_new_abstract_state_handle___pkvm_init_vm(struct ghost_state *g1, st
 	ghost_map_donated_memory_nocheck(g1, last_ran_host_ipa, last_ran_size);
 	ghost_map_donated_memory_nocheck(g1, pgd_host_ipa, pgd_size);
 
-	// Now setup the VM with the right initial state:
+	// Now set up the VM with the right initial state:
 	// an empty mapping with the right pool,
 	// and the first nr_vcpus un-initialised unloaded vcpus.
 	vm1->vm_locked.present = true;
@@ -921,7 +921,7 @@ bool compute_new_abstract_state_handle___pkvm_init_vm(struct ghost_state *g1, st
 	}
 
 	// in theory this is unsafe, as another thread could've swooped in between
-	// the release of all the locks  and this check,
+	// the release of all the locks and this check,
 	// and removed the VM.
 	//
 	// However, the chance of another thread removing this VV, before __pkvm_init_vm has even returned,
