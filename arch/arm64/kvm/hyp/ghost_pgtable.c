@@ -117,7 +117,7 @@ void _dump_pgtable(u64 *pgd, u8 level)
 		for (idx = 0; idx < 512; idx++) {
 			kvm_pte_t pte = pgd[idx];
 			if (pte!=0) {
-				ghost_printf("level:%hhd table at virt:%p raw:%lx %gL(pte)\n", level, pgd+idx, pte, level);
+				ghost_printf("level:%hhd table at virt:%p raw:%lx %gL(entry)\n", level, pgd+idx, pte, level);
 			}
 		}
 
