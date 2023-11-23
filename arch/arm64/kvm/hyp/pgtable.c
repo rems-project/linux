@@ -1011,10 +1011,12 @@ static bool stage2_try_break_pte(const struct kvm_pgtable_visit_ctx *ctx,
 	 * Perform the appropriate TLB invalidation based on the evicted pte
 	 * value (if any).
 	 */
+	#ifndef CONFIG_NVHE_GHOST_SPEC_INJECT_ERROR_stage2_try_break_pte_MISSING_TLBI
 	if (kvm_pte_table(ctx->old, ctx->level))
 		kvm_call_hyp(__kvm_tlb_flush_vmid, mmu);
 	else if (kvm_pte_valid(ctx->old))
 		kvm_call_hyp(__kvm_tlb_flush_vmid_ipa, mmu, ctx->addr, ctx->level);
+	#endif /* CONFIG_NVHE_GHOST_SPEC_INJECT_ERROR_stage2_try_break_pte_MISSING_TLBI */
 
 	if (stage2_pte_is_counted(ctx->old))
 		mm_ops->put_page(ctx->ptep);
@@ -1046,10 +1048,12 @@ static void stage2_put_pte(const struct kvm_pgtable_visit_ctx *ctx, struct kvm_s
 	 * Clear the existing PTE, and perform break-before-make with
 	 * TLB maintenance if it was valid.
 	 */
+	#ifndef CONFIG_NVHE_GHOST_SPEC_INJECT_ERROR_stage2_put_pte_MISSING_INVALIDATE
 	if (kvm_pte_valid(ctx->old)) {
 		kvm_clear_pte(ctx->ptep);
 		kvm_call_hyp(__kvm_tlb_flush_vmid_ipa, mmu, ctx->addr, ctx->level);
 	}
+	#endif /* CONFIG_NVHE_GHOST_SPEC_INJECT_ERROR_stage2_put_pte_MISSING_INVALIDATE */
 
 	mm_ops->put_page(ctx->ptep);
 }

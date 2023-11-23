@@ -9,3 +9,11 @@ config NVHE_GHOST_SPEC_INJECT_ERROR_kvm_clear_pte_MISSING_WRITE
 config NVHE_GHOST_SPEC_INJECT_ERROR_stage2_map_walker_try_leaf_MISSING_BREAK
 	bool "Inject an error (missing break) into stage2_map_walker_try_leaf"
 	depends on NVHE_GHOST_SIMPLIFIED_MODEL
+
+config NVHE_GHOST_SPEC_INJECT_ERROR_stage2_try_break_pte_MISSING_TLBI
+	bool "Inject an error (missing TLBI) into stage2_try_break_pte"
+	depends on NVHE_GHOST_SIMPLIFIED_MODEL
+
+config NVHE_GHOST_SPEC_INJECT_ERROR_stage2_put_pte_MISSING_INVALIDATE
+	bool "Inject an error (missing invalidate) into stage2_put_pte"
+	depends on NVHE_GHOST_SIMPLIFIED_MODEL
