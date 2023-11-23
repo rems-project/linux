@@ -238,23 +238,6 @@ int gp_put_current_context_trace(gp_stream_t *out)
 	return 0;
 }
 
-// we want to use the pkvm pgtable walker to check validity of the VAs before trying to print them
-extern int kvm_nvhe_sym(__hyp_check_page_state_range)(u64 addr, u64 size, enum pkvm_page_state state);
-
-/*
- * annoyingly, but understandably, we need to take the pkvm pgd lock
- * in order to do the page state checks in the pKVM pagetable.
- * But, this code may or may not be called from inside a pkvm pgd critical section
- * so we have to conditionally take the lock if this thread isn't already holding it...
- */
-extern hyp_spinlock_t kvm_nvhe_sym(pkvm_pgd_lock);
-
-static bool check_pkvm_locked(void)
-{
-	hyp_spinlock_t *pkvm_lock = &kvm_nvhe_sym(pkvm_pgd_lock);
-	return hyp_spin_is_locked(pkvm_lock);
-}
-
 void ghost_log_context_traceback(void)
 {
 	struct ghost_context *ctx;
@@ -272,29 +255,7 @@ void ghost_log_context_traceback(void)
 			struct ghost_context_data *data = &frame->data[d];
 
 			if (data->has_data) {
-				u64 va;
-				bool va_walked;
-				bool va_valid;
-				bool locked_pkvm;
-
-				va = (u64)data->data_ptr;
-
-				// Note: lock-order imposes pkvm->printer order
-				// so, if we can avoid it, but the printer lock may already have been taken...
-				// so we just check, and if pKVM isn't locked already
-				locked_pkvm = check_pkvm_locked();
-				// don't just dereference it, check if it's accessible first
-				// ... by actually doing a pgtable walk!
-				if (locked_pkvm) {
-					va_valid = !kvm_nvhe_sym(__hyp_check_page_state_range)(va, sizeof(void*), PKVM_PAGE_OWNED);
-					va_walked = true;
-				} else {
-					// called outside a pKVM lock context,
-					// so can't do the walk
-					// but this was a best-effort safety check, so go ahead anyway
-					va_valid = true;
-					va_walked = false;
-				}
+				u64 va = (u64)data->data_ptr;
 
 				// TODO: if context used %g() codes, we could do this in one...
 				ghost_printf("%I|%s%s:", i*4, msg_open_for(data->level), data->data_name);
@@ -303,14 +264,8 @@ void ghost_log_context_traceback(void)
 				if (! data->data_ptr) {
 					ghost_printf("<inacessible>@NULL");
 				// also check we can read it.
-				} else if (! va_valid) {
-					ghost_printf("<inaccessible>@%p", va);
-				// if we didn't do a walk, give a warning and try anyway
-				} else if (! va_walked) {
-					ghost_printf("<nowalk>@%p:", va);
-					data->fn(data->data_ptr);
-				// otherwise, was allowed to access and we checked, so just print away.
 				} else {
+					ghost_printf("[%p]=", va);
 					data->fn(data->data_ptr);
 				}
 				ghost_printf("%s\n", msg_close_for(data->level));
