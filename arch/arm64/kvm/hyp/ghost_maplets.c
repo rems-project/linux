@@ -1220,7 +1220,7 @@ bool mapping_in_domain(u64 virt, struct glist_head head)
 	return false;
 }
 
-bool mapping_lookup(u64 virt, struct glist_head head, struct maplet_target *tp)
+bool __mapping_lookup(u64 virt, struct glist_head head, struct maplet **p)
 {
 	struct glist_node *pos1;
 	struct maplet *m1;
@@ -1232,11 +1232,42 @@ bool mapping_lookup(u64 virt, struct glist_head head, struct maplet_target *tp)
 	glist_for_each(pos1, &head) {
 		m1 = glist_entry(pos1, struct maplet, list);
 		if (maplet_in_domain(virt, m1)) {
-			*tp = m1->target;
+			*p = m1;
 			return true;
 		}
 	}
 	return false;
+}
+
+bool mapping_lookup(u64 virt, struct glist_head head, struct maplet_target *tp)
+{
+	struct maplet *m1;
+	bool found = __mapping_lookup(virt, head, &m1);
+
+	if (found) {
+		*tp = m1->target;
+	}
+
+	return found;
+}
+
+bool mapping_oa(u64 ia, mapping map, u64 *out)
+{
+	struct maplet *m1;
+	bool found = __mapping_lookup(ia, map, &m1);
+
+	if (found) {
+		switch (m1->target.kind) {
+		case MAPLET_MAPPED:
+			/* index into OA range same as index into IA range */
+			*out = m1->target.map.oa_range_start + (ia - m1->ia_range_start);
+			return true;
+		default:
+			return false;
+		}
+	} else {
+		return false;
+	}
 }
 
 void mapping_move(mapping *map_out, mapping map)

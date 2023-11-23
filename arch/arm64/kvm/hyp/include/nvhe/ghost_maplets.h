@@ -273,6 +273,13 @@ bool mapping_disjoint(mapping map1, mapping map2, char *s, char *s1, char *s2, u
 bool mapping_in_domain(u64 virt, mapping map);
 bool mapping_lookup(u64 virt, mapping map, struct maplet_target *tp);
 
+/**
+ * mapping_oa() - Do a translation from an ia to an oa
+ *
+ * Returns false if not in domain of mapping, or if not mapped.
+ * Writes to out the OA if found.
+ */
+bool mapping_oa(u64 ia, mapping map, u64 *out);
 
 typedef enum {
 	MAP_INSERT_PAGE,
