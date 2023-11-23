@@ -1,8 +1,11 @@
-
 config NVHE_GHOST_SPEC_INJECT_ERROR___kvm_tlb_flush_vmid_ipa_MISSING_TLBI
 	bool "Inject an error (missing TLBI) into __kvm_tlb_flush_vmid_ipa"
 	depends on NVHE_GHOST_SIMPLIFIED_MODEL
 
 config NVHE_GHOST_SPEC_INJECT_ERROR_kvm_clear_pte_MISSING_WRITE
 	bool "Inject an error (missing write of 0) into kvm_clear_pte"
+	depends on NVHE_GHOST_SIMPLIFIED_MODEL
+
+config NVHE_GHOST_SPEC_INJECT_ERROR_stage2_map_walker_try_leaf_MISSING_BREAK
+	bool "Inject an error (missing break) into stage2_map_walker_try_leaf"
 	depends on NVHE_GHOST_SIMPLIFIED_MODEL
