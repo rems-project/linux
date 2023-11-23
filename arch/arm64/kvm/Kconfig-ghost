@@ -85,6 +85,11 @@ config NVHE_GHOST_SPEC_DUMP_STATE
 	depends on NVHE_GHOST_SPEC_NOISY
 	default n
 
+config NVHE_GHOST_SPEC_DUMP_STATE_RAW_HOST
+	bool "Dump raw pre/post host pgtable"
+	depends on NVHE_GHOST_SPEC_DUMP_STATE
+	default n
+
 config NVHE_GHOST_SPEC_VERBOSE
 	bool "Very noisy ghost spec checking machinery"
 	depends on NVHE_GHOST_SPEC_NOISY

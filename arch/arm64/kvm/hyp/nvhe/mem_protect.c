@@ -73,6 +73,16 @@ static void host_lock_component(void)
 {
 	hyp_spin_lock(&host_mmu.lock);
 #ifdef CONFIG_NVHE_GHOST_SPEC
+#ifdef CONFIG_NVHE_GHOST_SPEC_DUMP_STATE_RAW_HOST
+	if (__this_cpu_read(ghost_print_this_hypercall)) {
+		ghost_printf("host pgtable pre (mapping):\n");
+		ghost_dump_pgtable(&host_mmu.pgt, "host_kvm.pgt", 0);
+		ghost_printf("\n");
+		ghost_printf("host pgtable pre (raw):\n");
+		dump_pgtable(host_mmu.pgt);
+		ghost_printf("\n");
+	}
+#endif /* CONFIG_NVHE_GHOST_SPEC_DUMP_STATE_RAW_HOST */
 	if (ghost_exec_enabled())
 		record_and_check_abstraction_host_pre();
 #endif /* CONFIG_NVHE_GHOST_SPEC */
@@ -81,6 +91,16 @@ static void host_lock_component(void)
 static void host_unlock_component(void)
 {
 #ifdef CONFIG_NVHE_GHOST_SPEC
+#ifdef CONFIG_NVHE_GHOST_SPEC_DUMP_STATE_RAW_HOST
+	if (__this_cpu_read(ghost_print_this_hypercall)) {
+		ghost_printf("host pgtable post (mapping):\n");
+		ghost_dump_pgtable(&host_mmu.pgt, "host_kvm.pgt", 0);
+		ghost_printf("\n");
+		ghost_printf("host pgtable post (raw):\n");
+		dump_pgtable(host_mmu.pgt);
+		ghost_printf("\n");
+	}
+#endif /* CONFIG_NVHE_GHOST_SPEC_DUMP_STATE_RAW_HOST */
 	if (ghost_exec_enabled())
 		record_and_copy_abstraction_host_post();
 #endif /* CONFIG_NVHE_GHOST_SPEC */
