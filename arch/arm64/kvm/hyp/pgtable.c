@@ -1019,7 +1019,9 @@ static void stage2_make_pte(const struct kvm_pgtable_visit_ctx *ctx, kvm_pte_t n
 {
 	struct kvm_pgtable_mm_ops *mm_ops = ctx->mm_ops;
 
+	#ifndef CONFIG_NVHE_GHOST_SPEC_INJECT_ERROR_stage2_map_walker_try_leaf_MISSING_BREAK
 	WARN_ON(!stage2_pte_is_locked(*ctx->ptep));
+	#endif /* CONFIG_NVHE_GHOST_SPEC_INJECT_ERROR_stage2_map_walker_try_leaf_MISSING_BREAK */
 
 	if (stage2_pte_is_counted(new))
 		mm_ops->get_page(ctx->ptep);
