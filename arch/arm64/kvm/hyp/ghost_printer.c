@@ -12,6 +12,7 @@
 #include <nvhe/ghost_maplets.h>
 #include <nvhe/ghost_pgtable.h>
 #include <nvhe/ghost_pfn_set.h>
+#include <nvhe/ghost_status.h>
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
 #include <nvhe/ghost_simplified_model.h>
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
@@ -273,6 +274,7 @@ extern int gp_put_ek(gp_stream_t *out, enum entry_kind ek);
 extern int gp_put_entry(gp_stream_t *out, u64 pte, u8 level);
 extern int gp_print_pfn_set(gp_stream_t *out, struct pfn_set *set);
 extern int gp_put_abstract_pgtable(gp_stream_t *out, abstract_pgtable *ap, u64 indent);
+extern int gp_put_status(gp_stream_t *out, enum ghost_status s);
 extern int gp_put_current_context_trace(gp_stream_t *out);
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
 extern int kvm_nvhe_sym(gp_print_sm_trans)(gp_stream_t *out, struct ghost_simplified_model_transition *trans);
@@ -313,6 +315,8 @@ int put_ghost_obj(gp_stream_t *out, char **p, u64 arg0, u64 arg1)
 		return gp_print_pfn_set(out, (struct pfn_set*)arg0);
 	} else if (GP_CASE("pgtable")) {
 		return gp_put_abstract_pgtable(out, (abstract_pgtable *)arg0, arg1);
+	} else if (GP_CASE("status")) {
+		return gp_put_status(out, (enum ghost_status)arg0);
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
 	} else if (GP_CASE("sm_trans")) {
 		return kvm_nvhe_sym(gp_print_sm_trans)(out, (struct ghost_simplified_model_transition*)arg0);
