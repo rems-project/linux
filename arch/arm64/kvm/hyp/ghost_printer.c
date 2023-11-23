@@ -150,7 +150,7 @@ int __putxn(gp_stream_t *out, u64 x, u32 n)
 		/*
 		 * write leading 0s as .s
 		 */
-		if ((x >> (4 * i)) == 0)
+		if (i > 0 && (x >> (4 * i)) == 0)
 			TRY_PUT('.');
 		else
 			TRY(__putx(out, (x >> (4 * i)) & 0xf));
