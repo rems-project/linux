@@ -235,6 +235,16 @@ struct maplet_target maplet_target_annot_ext(enum maplet_owner_annotation owner_
 struct maplet_target maplet_target_memblock(enum memblock_flags flags);
 struct maplet_target maplet_target_absent(void);
 
+/*
+ * Destructing maplets:
+ *
+ * Out arguments are optional.
+ * Return true when the maplet target matches the variant.
+ */
+bool maplet_target_get_mapped(struct maplet_target *t, u64 *start, u64 *nr_pages, struct maplet_attributes *attrs);
+bool maplet_target_get_unmapped(struct maplet_target *t, enum maplet_owner_annotation *owner);
+bool maplet_target_get_memblock(struct maplet_target *t, enum memblock_flags *memblock);
+
 
 /* We'll set up a large pool of maplets in a global variable. This is
    an arbitrary hack - it's hard to know how big this should be, but
@@ -330,8 +340,3 @@ void hyp_put_maplet_target(struct maplet_target *target, u64 indent);
 void hyp_put_maplet(struct maplet *maplet, u64 indent);
 
 #endif  // _GHOST_MAPLETS_H
-
-
-
-
-

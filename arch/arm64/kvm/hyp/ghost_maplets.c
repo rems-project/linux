@@ -176,6 +176,42 @@ static bool is_oa_marked_shared(struct maplet_target t)
 	};
 }
 
+/* ****************** maplet target destructors ****************** */
+
+bool maplet_target_get_mapped(struct maplet_target *t, u64 *start, u64 *nr_pages, struct maplet_attributes *attrs)
+{
+	if (t->kind == MAPLET_MAPPED) {
+		if (start != NULL) *start = t->map.oa_range_start;
+		if (nr_pages != NULL) *nr_pages = t->map.oa_range_nr_pages;
+		if (attrs != NULL) *attrs = t->map.attrs;
+		return true;
+	}
+	return false;
+}
+
+bool maplet_target_get_unmapped(struct maplet_target *t, enum maplet_owner_annotation *owner)
+{
+	if (t->kind == MAPLET_UNMAPPED) {
+		if (owner != NULL) *owner = t->annot.owner;
+		return true;
+	}
+	return false;
+}
+
+bool maplet_target_get_memblock(struct maplet_target *t, enum memblock_flags *memblock)
+{
+	if (t->kind == MAPLET_MEMBLOCK) {
+		if (memblock != NULL)
+			*memblock = t->memblock;
+		return true;
+	}
+	return false;
+}
+
+bool maplet_target_get_unmapped(struct maplet_target *m, enum maplet_owner_annotation *owner);
+
+bool maplet_target_get_memblock(struct maplet_target *m, enum memblock_flags *memblock);
+
 /* ****************** maplet init, alloc, free ****************** */
 
 /* init: add all the maplets to the free list */
