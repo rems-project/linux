@@ -1256,7 +1256,104 @@ bool compute_new_abstract_state_handle_host_mem_abort(struct ghost_state *g1, st
 
 bool compute_new_abstract_state_pkvm_memshare(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call)
 {
-	return false;
+	int ret = 0;
+
+	// Get the VCPU loaded onto this physical core. It provides further indices.
+	struct ghost_loaded_vcpu *loaded_vcpu = this_cpu_ghost_loaded_vcpu(g0);
+	ghost_spec_assert(loaded_vcpu->present);
+	ghost_spec_assert(loaded_vcpu->loaded);
+
+	// Get the VM that this VCPU belongs to.
+	struct ghost_vm *g0_vm = ghost_vms_get(&g0->vms, loaded_vcpu->vm_handle);
+	ghost_spec_assert(g0_vm != NULL);
+	ghost_spec_assert(g0_vm->vm_locked.present);
+	ghost_spec_assert(g0_vm->vm_table_locked.present);
+
+	// Get the rest of the VCPU. We need the registers.
+	struct ghost_vcpu *vcpu0 = g0_vm->vm_table_locked.vcpus[loaded_vcpu->vcpu_index];
+	ghost_assert(vcpu0->regs.present);
+
+	// Pluck out the arguments.
+	guest_ipa_t guest_ipa_page = ALIGN_DOWN(ghost_reg_vcpu_gpr(vcpu0, 1), PAGE_SIZE);
+	u64 arg2 = ghost_reg_vcpu_gpr(vcpu0, 2);
+	u64 arg3 = ghost_reg_vcpu_gpr(vcpu0, 3);
+
+	// Initialise computed host + VM state. We need post-VCPU to return to the guest.
+
+	copy_abstraction_host(g1, g0);
+	struct ghost_vm *g1_vm = ghost_vms_alloc(&g1->vms, loaded_vcpu->vm_handle);
+	ghost_assert(g1_vm != NULL);
+	ghost_vm_clone_into_partial(g1_vm, g0_vm, VMS_VM_OWNED);
+	ghost_vm_clone_into_partial(g1_vm, g0_vm, VMS_VM_TABLE_OWNED);
+	struct ghost_vcpu *vcpu1 = g1_vm->vm_table_locked.vcpus[loaded_vcpu->vcpu_index];
+
+	if (arg2 || arg3)
+		goto out_guest_err;
+
+	struct maplet_target g0_vm_mapping;
+	if (!mapping_lookup(guest_ipa_page, g0_vm->vm_locked.vm_abstract_pgtable.mapping, &g0_vm_mapping)) {
+		// guest_get_page_state(guest_ipa_page) == PKVM_NOPAGE
+		ret = -EFAULT;
+		goto out_host;
+	}
+
+	struct maplet_attributes g0_vm_page_attrs;
+	if ( !maplet_target_get_mapped(&g0_vm_mapping, NULL, NULL, &g0_vm_page_attrs) ||
+	     g0_vm_page_attrs.provenance != MAPLET_PAGE_STATE_PRIVATE_OWNED) {
+		// guest_get_page_state(guest_ipa_pg) != PKVM_PAGE_OWNED
+		ret = -EPERM;
+		goto out_guest_err;
+	}
+
+	phys_addr_t phys;
+	mapping_oa(guest_ipa_page, g0_vm->vm_locked.vm_abstract_pgtable.mapping, &phys);
+
+	if (!ghost_addr_is_allowed_memory(g0, phys)) {
+		ret = -EINVAL;
+		goto out_guest_err;
+	}
+
+	// check_page_state_range?
+
+	host_ipa_t host_ipa = host_ipa_of_phys(phys);
+
+	struct maplet_target guest_map_delta =
+		maplet_target_mapped_ext(phys, 1, g0_vm_page_attrs.prot,
+			MAPLET_PAGE_STATE_SHARED_OWNED, g0_vm_page_attrs.memtype);
+
+	struct maplet_target host_map_delta =
+		maplet_target_mapped_attrs(phys, 1, ghost_default_host_memory_attributes(true, MAPLET_PAGE_STATE_SHARED_BORROWED));
+
+	g1_vm->vm_locked.vm_abstract_pgtable.mapping =
+		mapping_plus(g0_vm->vm_locked.vm_abstract_pgtable.mapping,
+			mapping_singleton(GHOST_STAGE2, guest_ipa_page, 1, guest_map_delta));
+
+	g1->host.host_abstract_pgtable_shared =
+		mapping_plus(g0->host.host_abstract_pgtable_shared,
+			mapping_singleton(GHOST_STAGE2, host_ipa, 1, host_map_delta));
+
+	g1->host.host_abstract_pgtable_annot =
+		mapping_minus(g0->host.host_abstract_pgtable_annot, host_ipa, 1);
+	
+out_host:
+
+	if (ret == -EFAULT) {
+		// XXX
+	}
+
+	// XXX HOW TO DENOTE RETURN TO HOST?
+	return true;
+
+out_guest_err:
+
+	// Return in guest registers.
+	ghost_reg_vcpu_gpr(vcpu1, 0) = SMCCC_RET_INVALID_PARAMETER;
+	ghost_reg_vcpu_gpr(vcpu1, 1) = 0;
+	ghost_reg_vcpu_gpr(vcpu1, 2) = 0;
+	ghost_reg_vcpu_gpr(vcpu1, 3) = 0;
+
+	// XXX HOW TO DENOTE RETURN TO GUEST?
+	return true;
 }
 
 bool compute_new_abstract_state_pkvm_memunshare(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call)
