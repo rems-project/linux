@@ -158,21 +158,32 @@ predicate (void) Page_Table_Entries (pointer p, u32 level) {
     {Indirect_Page_Table_Entries (p + (i * ((i32) (sizeof <kvm_pte_t>))), level + 1u32, ptes[i])};
   return;
 }
+@*/
 
-function (boolean) is_valid_pte_entry (u64 encoded)
+
+/* CN functions that will be converted from C functions below */
+/*@
+function (u8) kvm_pte_valid (kvm_pte_t pte)
+function (u64) kvm_pte_to_phys (kvm_pte_t pte)
+function (u8) kvm_pte_table (kvm_pte_t pte, u32 level)
+@*/
+
+
+/* more abstract CN counterparts */
+/*@
+function [rec] (boolean) is_valid_pte_entry (u64 encoded)
+  { kvm_pte_valid(encoded) == 1u8 }
+function [rec] (u64) decode_table_entry_phys (u64 encoded)
+  { kvm_pte_to_phys(encoded) }
+function [rec] (boolean) is_table_entry1 (u64 encoded)
+  { kvm_pte_table(encoded, 0u32) == 1u8 }
 function (boolean) is_table_entry (u64 encoded)
-function (u64) decode_table_entry_phys (u64 encoded)
+  { is_valid_pte_entry(encoded) && is_table_entry1(encoded) }
 
 function (pointer) decode_table_entry_pointer (u64 encoded)
 {
   hyp_phys_to_virt (decode_table_entry_phys (encoded))
 }
-
-lemma table_entry_is_valid (u64 encoded)
-  requires
-    good<kvm_pte_t>(encoded)
-  ensures
-    is_table_entry(encoded) ? is_valid_pte_entry(encoded) : true
 
 predicate {bool x} Indirect_Page_Table_Entries (pointer p, u32 level, u64 encoded) {
   assert (valid_pgtable_level(level) || not(is_table_entry (encoded)));
@@ -393,28 +404,9 @@ static u32 kvm_pgd_pages(u32 ia_bits, u32 start_level)
 
 	return kvm_pgd_page_idx(&pgt, -1ULL) + 1;
 }
-/*@
-function (u8) kvm_pte_valid (kvm_pte_t pte)
-
-lemma kvm_pte_valid_is_valid (kvm_pte_t pte)
-  requires true
-  ensures
-    is_valid_pte_entry(pte) == (kvm_pte_valid(pte) == 1u8)
-@*/
-
 /*@ cn_function kvm_pte_valid @*/
 /*@ ensures return == (is_valid_pte_entry(pte) ? 1u8 : 0u8) @*/
-	/*@ apply kvm_pte_valid_is_valid(pte); @*/
-
-/*@
-function (u8) kvm_pte_table (kvm_pte_t pte, u32 level)
-
-lemma kvm_pte_table_is_table (kvm_pte_t pte, u32 level)
-  requires
-    valid_pgtable_level(level + 1u32)
-  ensures
-    kvm_pte_table(pte, level) == (is_table_entry(pte) ? 1u8 : 0u8)
-@*/
+	/*@ unfold is_valid_pte_entry(pte); @*/
 
 static bool kvm_pte_table(kvm_pte_t pte, u32 level)
 /*@ cn_function kvm_pte_table @*/
@@ -424,9 +416,8 @@ static bool kvm_pte_table(kvm_pte_t pte, u32 level)
 	if (level == KVM_PGTABLE_MAX_LEVELS - 1)
 		return false;
 
-	/*@ apply table_entry_is_valid(pte); @*/
-	/*@ apply kvm_pte_valid_is_valid(pte); @*/
-	/*@ apply kvm_pte_table_is_table(pte, level); @*/
+	/*@ unfold is_table_entry1(pte); @*/
+	/*@ unfold is_valid_pte_entry(pte); @*/
 	if (!kvm_pte_valid(pte)) {
 		return false;
 	}
@@ -434,18 +425,9 @@ static bool kvm_pte_table(kvm_pte_t pte, u32 level)
 	return FIELD_GET(KVM_PTE_TYPE, pte) == KVM_PTE_TYPE_TABLE;
 }
 
-/*@ function (u64) kvm_pte_to_phys (kvm_pte_t pte)
-
-lemma kvm_pte_to_phys_is_decode (kvm_pte_t pte)
-  requires
-    true
-  ensures
-    kvm_pte_to_phys(pte) == decode_table_entry_phys(pte)
-@*/
-
 /*@ cn_function kvm_pte_to_phys @*/
 /*@ ensures return == decode_table_entry_phys (pte) @*/
-	/*@ apply kvm_pte_to_phys_is_decode(pte); @*/
+	/*@ unfold decode_table_entry_phys(pte); @*/
 /*@ function (kvm_pte_t) kvm_phys_to_pte(u64 pa) @*/
 
 /*@ cn_function kvm_phys_to_pte @*/
@@ -480,9 +462,10 @@ static kvm_pte_t kvm_init_table_pte(kvm_pte_t *childp, struct kvm_pgtable_mm_ops
 	pte |= FIELD_PREP(KVM_PTE_TYPE, KVM_PTE_TYPE_TABLE);
 	pte |= KVM_PTE_VALID;
 	return pte;
-	/*@ apply kvm_pte_to_phys_is_decode(pte); @*/
+	/*@ unfold decode_table_entry_phys(pte); @*/
 	/*@ assert (decode_table_entry_pointer(pte) == childp); @*/
-	/*@ apply kvm_pte_table_is_table(pte, 0u32); @*/
+	/*@ unfold is_table_entry1(pte); @*/
+	/*@ unfold is_valid_pte_entry(pte); @*/
 	/*@ assert (is_table_entry(pte)); @*/
 }
 
@@ -566,8 +549,6 @@ static int kvm_pgtable_visitor_cb(struct kvm_pgtable_walk_data *data,
     ? pte2 == pte : true @*/
 {
 	struct kvm_pgtable_walker *walker = data->walker;
-	/*@ assert (match (Data.ops) {Has_MM_Ops {mm_ops: _} => {true} No_MM_Ops => {false}}); @*/
-	/*@ assert (Data.ops == Has_MM_Ops {mm_ops: PgTableStruct.mm_ops}); @*/
 	WARN_ON_ONCE(kvm_pgtable_walk_shared(ctx) && !kvm_pgtable_walk_lock_held());
 	return walker->cb(ctx, visit);
 }
