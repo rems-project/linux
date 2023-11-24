@@ -6,7 +6,7 @@
 
 // assertion to check invariants of the ghost instrumentation, which should never fail
 #define ghost_assert(c) { \
-	if (!(c)) ghost_log_context_traceback(); \
+	if (!(c)) { GHOST_ERROR(#c); ghost_log_context_traceback(); } \
 	BUG_ON(!(c)); \
 }
 
