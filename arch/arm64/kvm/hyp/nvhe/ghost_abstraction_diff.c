@@ -500,6 +500,7 @@ static void ghost_diff_pgtable(struct diff_container *node, const char *name, ab
 
 	ghost_diff_pfns(node, &ap1->table_pfns, &ap2->table_pfns);
 	ghost_diff_mappings(node, "mapping", &ap1->mapping, &ap2->mapping);
+	ghost_diff_field(node, "root", diff_pair(TU64(ap1->root), TU64(ap2->root)));
 
 	ghost_diff_pop_subfield(node);
 	GHOST_LOG_CONTEXT_EXIT();

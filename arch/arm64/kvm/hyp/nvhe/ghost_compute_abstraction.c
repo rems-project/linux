@@ -272,6 +272,7 @@ void check_abstract_pgtable_equal(abstract_pgtable *ap1, abstract_pgtable *ap2, 
 	GHOST_LOG(ap2_name, str);
 	ghost_pfn_set_assert_equal(&ap1->table_pfns, &ap2->table_pfns);
 	check_mapping_equal(ap1->mapping, ap2->mapping);
+	ghost_assert(ap1->root == ap2->root);
 	GHOST_LOG_CONTEXT_EXIT();
 }
 

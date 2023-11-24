@@ -407,6 +407,7 @@ void ghost_record_pgtable_ap(abstract_pgtable *ap_out, struct kvm_pgtable *pgt, 
 {
 	ghost_pfn_set_init(&ap_out->table_pfns, pool_range_start, pool_range_end);
 	ap_out->mapping = ghost_record_pgtable(pgt, doc, i);
+	ap_out->root = hyp_virt_to_phys(pgt->pgd);
 }
 
 mapping ghost_record_pgtable_and_check(mapping map_old, struct kvm_pgtable *pgt, bool dump, char *doc, u64 i)
@@ -445,6 +446,7 @@ void abstract_pgtable_copy(abstract_pgtable *dst, abstract_pgtable *src)
 {
 	ghost_pfn_set_copy(&dst->table_pfns, &src->table_pfns);
 	dst->mapping = mapping_copy(src->mapping);
+	dst->root = src->root;
 }
 
 /// Dumping and diffing and stuff... TODO: CLEANUP
@@ -478,9 +480,11 @@ int gp_put_abstract_pgtable(gp_stream_t *out, abstract_pgtable *ap, u64 indent)
 	return ghost_sprintf(
 		out,
 		"%g(mapping)\n"
-		"%I%g(pfn_set)",
+		"%I%g(pfn_set)\n"
+		"%Iroot:%p",
 		&ap->mapping,
-		indent, &ap->table_pfns
+		indent, &ap->table_pfns,
+		indent, ap->root
 	);
 }
 

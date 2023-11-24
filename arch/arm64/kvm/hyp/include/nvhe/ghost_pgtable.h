@@ -217,6 +217,7 @@ struct maplet_target_mapped parse_mapped(ghost_stage_t stage, ghost_mair_t mair,
 #define DUMMY_ATTR 0
 
 struct abstract_pgtable_struct {
+	u64 root;
 	struct pfn_set table_pfns;
 	mapping mapping;
 };

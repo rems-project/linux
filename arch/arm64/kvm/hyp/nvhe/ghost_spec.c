@@ -902,11 +902,12 @@ bool compute_new_abstract_state_handle___pkvm_init_vm(struct ghost_state *g1, st
 	// an empty mapping with the right pool,
 	// and the first nr_vcpus un-initialised unloaded vcpus.
 	vm1->vm_locked.present = true;
+
+	// vm starts with empty pgtables, in the region given to vm_init as pgd_phys..+pgd_size
 	vm1->vm_locked.vm_abstract_pgtable.mapping = mapping_empty_();
-	// NOTE: we expect the VM's page table to be place at the beginning
-	// of the first page of the memory region donated by the host
-	// for that purpose
 	ghost_pfn_set_init(&vm1->vm_locked.vm_abstract_pgtable.table_pfns, pgd_phys, pgd_phys + pgd_size);
+	vm1->vm_locked.vm_abstract_pgtable.root = pgd_phys;
+
 	vm1->vm_table_locked.present = true;
 	vm1->vm_table_locked.nr_vcpus = nr_vcpus;
 	vm1->vm_table_locked.nr_initialised_vcpus = 0;
