@@ -529,6 +529,9 @@ DECLARE_PER_CPU(struct ghost_running_state, ghost_cpu_run_state);
 #define ghost_reg_el1(g, reg_index) \
 	GHOST_SYSREG_EL1(this_cpu_ghost_register_state(g), reg_index)
 
+#define ghost_reg_vcpu_gpr(vcpu, reg_index) \
+	GHOST_GPR(&vcpu->regs, reg_index)
+
 /**
  * ghost_record_pre() - Record the state on entry to pKVM
  * @ctxt: the context (saved registers) on entry to pKVM.
