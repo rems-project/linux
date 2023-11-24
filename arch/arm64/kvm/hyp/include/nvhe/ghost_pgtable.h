@@ -216,6 +216,12 @@ struct maplet_target_mapped parse_mapped(ghost_stage_t stage, ghost_mair_t mair,
 
 #define DUMMY_ATTR 0
 
+/**
+ * abstract_pgtable - Mappings correspodning to a tree of translation tables.
+ * @root: (for implementation refinement checks) the recorded root of the tree of translation tables.
+ * @table_pfns: (for implementation refinement checks) the range of the underlying pool and donated pages that could hold pagetable pages.
+ * @mapping: the mapping itself.
+ */
 struct abstract_pgtable_struct {
 	u64 root;
 	struct pfn_set table_pfns;

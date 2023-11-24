@@ -88,7 +88,6 @@ void compute_abstraction_host(struct ghost_host *dest)
 	u64 pool_range_start = (u64)hyp_virt_to_phys(host_s2_pgt_base);
 	u64 pool_range_end = pool_range_start + ghost_host_s2_pgt_size * PAGE_SIZE;
 	ghost_record_pgtable_ap(&dest->host_concrete_pgtable, &host_mmu.pgt, pool_range_start, pool_range_end, "host_mmu.pgt", i);
-	ghost_pfn_set_copy(&dest->host_pgtable_pages, &dest->host_concrete_pgtable.table_pfns);
 	dest->host_abstract_pgtable_annot = mapping_annot(dest->host_concrete_pgtable.mapping);
 	dest->host_abstract_pgtable_shared = mapping_shared(dest->host_concrete_pgtable.mapping);
 	dest->present = true;
@@ -270,9 +269,14 @@ void check_abstract_pgtable_equal(abstract_pgtable *ap1, abstract_pgtable *ap2, 
 	GHOST_LOG(cmp_name, str);
 	GHOST_LOG(ap1_name, str);
 	GHOST_LOG(ap2_name, str);
-	ghost_pfn_set_assert_equal(&ap1->table_pfns, &ap2->table_pfns);
+
+	// assert mathematical spec equivalence
 	check_mapping_equal(ap1->mapping, ap2->mapping);
+
+	// implementation refinement check
+	ghost_pfn_set_assert_equal(&ap1->table_pfns, &ap2->table_pfns);
 	ghost_assert(ap1->root == ap2->root);
+
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
@@ -333,9 +337,15 @@ void check_abstraction_equals_host(struct ghost_host *gh1, struct ghost_host *gh
 	GHOST_LOG(gh1->present, bool);
 	GHOST_LOG(gh2->present, bool);
 	ghost_assert(gh1->present && gh2->present);
-	ghost_pfn_set_assert_equal(&gh1->host_pgtable_pages, &gh2->host_pgtable_pages);
+
+	// equivalence of spec states
 	ghost_spec_assert(mapping_equal(gh1->host_abstract_pgtable_annot, gh2->host_abstract_pgtable_annot, "abstraction_equals_host", "gh1.host_mapping_annot", "gh2.host_mapping_annot", 4));
 	ghost_spec_assert(mapping_equal(gh1->host_abstract_pgtable_shared, gh2->host_abstract_pgtable_shared, "abstraction_equals_host", "gh1.host_mapping_shared", "gh2.host_mapping_shared", 4));
+
+	// refinement of implementation
+	ghost_pfn_set_assert_equal(&gh1->host_concrete_pgtable.table_pfns, &gh2->host_concrete_pgtable.table_pfns);
+	ghost_spec_assert(gh1->host_concrete_pgtable.root == gh2->host_concrete_pgtable.root);
+
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
@@ -772,7 +782,6 @@ void clear_abstraction_pkvm(struct ghost_state *g)
 void clear_abstraction_host(struct ghost_state *g)
 {
 	if (g->host.present) {
-		ghost_pfn_set_clear(&g->host.host_pgtable_pages);
 		free_mapping(g->host.host_abstract_pgtable_annot);
 		free_mapping(g->host.host_abstract_pgtable_shared);
 		clear_abstract_pgtable(&g->host.host_concrete_pgtable);
@@ -895,9 +904,7 @@ void copy_abstraction_host(struct ghost_state *g_tgt, struct ghost_state *g_src)
 
 	g_tgt->host.host_abstract_pgtable_annot = mapping_copy(g_src->host.host_abstract_pgtable_annot);
 	g_tgt->host.host_abstract_pgtable_shared = mapping_copy(g_src->host.host_abstract_pgtable_shared);
-	ghost_pfn_set_copy(&g_tgt->host.host_pgtable_pages, &g_src->host.host_pgtable_pages);
-
-	g_tgt->host.host_concrete_pgtable.mapping = mapping_copy(g_src->host.host_concrete_pgtable.mapping);
+	abstract_pgtable_copy(&g_tgt->host.host_concrete_pgtable, &g_src->host.host_concrete_pgtable);
 
 	g_tgt->host.present = g_src->host.present;
 }
@@ -1550,7 +1557,7 @@ static void ghost_dump_host(struct ghost_host *host)
 		"%I%g(pfn_set)\n",
 		4, &host->host_abstract_pgtable_annot, 4,
 		4, &host->host_abstract_pgtable_shared, 4,
-		4, &host->host_pgtable_pages
+		4, &host->host_concrete_pgtable.table_pfns
 	);
 }
 

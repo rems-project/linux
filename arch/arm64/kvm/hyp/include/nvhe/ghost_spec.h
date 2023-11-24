@@ -115,12 +115,12 @@ struct ghost_register_state {
 /**
  * struct ghost_vcpu - A single vcpu within a VM
  *
- * @loaded: whether this vcpu is currently loaded on a physical CPU
+ * @vcpu_handle: the 'handle' (or, really, index) of this vcpu in the VM.
+ * @initialised: whether this vcpu has been initialised by __pkvm_init_vcpu.
+ * @loaded: if initialised, whether this vcpu is currently loaded on a physical CPU.
+ * @regs: if initialised, the saved register state of this vcpu.
  *
- * the loaded field is redundant wrt the total set of (thread-local) loaded vcpus, but this matches pKVM's own data structures.
- * TODO: eventually this will also contain the register bank, if not running, which will be used by vcpu_run etc.
- *
- * Context: Protected by the parent VM's lock.
+ * Context: Protected by the vm_table lock.
  */
 struct ghost_vcpu {
 	u64 vcpu_handle; // really the index
@@ -143,7 +143,8 @@ enum vm_field_owner {
 /**
  * struct ghost_vm_locked_by_vm_lock - A guest VM (part protected by the internal VM lock)
  *
- * @vm_abstract_pgtable: an abstract mapping of the concrete guest pagetable
+ * @present: whether this portion of the VM is present in the ghost state.
+ * @vm_abstract_pgtable: an abstract mapping of the concrete guest pagetable.
  *
  * Context: Protected by the internal VM's lock,
  */
@@ -154,11 +155,10 @@ struct ghost_vm_locked_by_vm_lock {
 /**
  * struct ghost_vm_locked_by_vm_table - A guest VM (part protected by the VM table lock)
  *
- * @nr_vcpus: the number of VCPUs this VM has
- * @nr_initialised_vcpus: the number VCPUs that have been initialised
- * @vcpus: the table of ghost_vcpu objects, valid up to nr_vcpus
- * @pkvm_handle: the opaque pkvm-assigned handle corresponding to this guest
- * @lock: a reference to the internal VM lock in pkvm.
+ * @present: whether this portion of the VM is present in the ghost state.
+ * @nr_vcpus: if present, the number of vCPUs this VM was created with.
+ * @nr_initialised_vcpus: if present, the number vCPUs that have been initialised so far by __pkvm_init_vcpu.
+ * @vcpus: if present, the actual table of ghost_vcpu objects, valid up to nr_vcpus.
  *
  * Context: Protected by the VM table lock,
  *          the `lock` field should not be used to take the lock, only to check it for sanity checking of the spec machinery
@@ -174,7 +174,7 @@ struct ghost_vm_locked_by_vm_table {
  * struct ghost_vm - A guest VM
  * @protected: whether this is a Protected VM.
  * @pkvm_handle: the opaque pKVM-defined handle for this VM.
- * @lock: a reference to the underlying spinlock of the real hyp VM, for instrumentation purposes.
+ * @lock: (for ghost machinery checks) a reference to the underlying spinlock of the real hyp VM, for instrumentation purposes.
  * @vm_locked: fields owned by the internal VM lock
  * @vm_table_locked: fields protected by the pKVM vm_table lock
  *
@@ -209,7 +209,7 @@ struct ghost_host_regs {
  * @present: whether the parent ghost_state has some ghost host data
  * @host_abstract_pgtable_annot: if present, the annotated (invalid) parts of the host pgt with owner_id!=PKVM_ID_HOST
  * @host_abstract_pgtable_shared: if present, the valid parts of the host pgt with page state either PKVM_PAGE_SHARED_OWNED or PKVM_PAGE_SHARED_BORROWED
- * @host_pgtable_pages: if present, the (overapproximate) set of addresses of tables within the pagetable.
+ * @host_concrete_pgtable: (for implementation refinement checks) if present, the full concrete host pagetable.
  *
  * The host (intermediate-physical, although idmapped) address space is represented in two parts:
  *  - The annot mapping, which are all unmapped in the host, includes all parts of hyp_memory (all the non-device memory the kernel knows about) which are owned by pkvm or the guests and not shared with the host (all shared locations will always be mapped)
@@ -222,15 +222,7 @@ struct ghost_host {
 
 	mapping host_abstract_pgtable_annot;
 	mapping host_abstract_pgtable_shared;
-	struct pfn_set host_pgtable_pages;
 
-	/**
-	 * this isn't part of the ghost state, but part of the instrumentation
-	 * the previous elements (annot/shared/pages) are derived from this,
-	 * but there needs to be somewhere to store the original
-	 *
-	 * Also, we sometimes want to print it out.
-	 */
 	abstract_pgtable host_concrete_pgtable;
 };
 
@@ -266,6 +258,9 @@ struct ghost_vm_slot {
 
 /**
  * strcut ghost_vms_table_data - pKVM-owned data about the whole vm table state
+ *
+ * @present: whether the ghost state table of VMs has the pKVM vm_table data in it.
+ * @nr_vms: if present, the current number of VMs that pKVM has.
  *
  * Context: owned by pKVM's vm_table_lock.
  */

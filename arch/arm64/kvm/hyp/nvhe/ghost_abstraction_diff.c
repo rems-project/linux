@@ -523,7 +523,8 @@ static void ghost_diff_host(struct diff_container *node, struct ghost_host *h1, 
 	ghost_diff_enter_subfield(node, "host");
 	ghost_diff_field(node, "present", diff_pair(TBOOL(h1->present), TBOOL(h2->present)));
 	if (h1->present && h2->present) {
-		ghost_diff_pfns(node, &h1->host_pgtable_pages, &h2->host_pgtable_pages);
+		ghost_diff_field(node, "root", diff_pair(TU64(h1->host_concrete_pgtable.root), TU64(h2->host_concrete_pgtable.root)));
+		ghost_diff_pfns(node, &h1->host_concrete_pgtable.table_pfns, &h2->host_concrete_pgtable.table_pfns);
 		ghost_diff_mappings(node, "annot", &h1->host_abstract_pgtable_annot, &h2->host_abstract_pgtable_annot);
 		ghost_diff_mappings(node, "shared", &h1->host_abstract_pgtable_shared, &h2->host_abstract_pgtable_shared);
 	}
