@@ -14,4 +14,11 @@ void g_free(void *p);
 
 void *malloc_or_die(size_t s);
 
+struct ghost_alloc_bkt_n {
+	int order;
+	int buffers;
+};
+
+void g_malloc_stats(struct ghost_alloc_bkt_n *arr, size_t n);
+
 #endif

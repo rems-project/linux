@@ -141,3 +141,18 @@ void *malloc_or_die(size_t s) {
 	BUG_ON(!p);
 	return p;
 }
+
+void g_malloc_stats(struct ghost_alloc_bkt_n *arr, size_t n) {
+        int i = 0;
+        while (i < SLOTS && i < n) {
+          hdr *h = heap.mem[i];
+	  arr[i] = (struct ghost_alloc_bkt_n) { .order = i + GHOST_ALLOC_MIN_ORDER, .buffers = 0 };
+          while(h) {
+            h = h->nxt;
+	    arr[i].buffers++;
+          }
+          ++i;
+        }
+        while (i < n)
+		arr[i] = (struct ghost_alloc_bkt_n) { .order = -1, .buffers = -1 };
+}
