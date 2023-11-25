@@ -136,12 +136,6 @@ void g_free(void *p) {
 	hyp_spin_unlock(&lock);
 }
 
-void *malloc_or_die(size_t s) {
-	void *p = g_malloc(s);
-	BUG_ON(!p);
-	return p;
-}
-
 void g_malloc_stats(struct ghost_alloc_bkt_n *arr, size_t n) {
         int i = 0;
         while (i < SLOTS && i < n) {
@@ -155,4 +149,19 @@ void g_malloc_stats(struct ghost_alloc_bkt_n *arr, size_t n) {
         }
         while (i < n)
 		arr[i] = (struct ghost_alloc_bkt_n) { .order = -1, .buffers = -1 };
+}
+
+#include <nvhe/ghost_printer.h>
+
+void *malloc_or_die(size_t s) {
+	void *p = g_malloc(s);
+	if (!p) {
+		struct ghost_alloc_bkt_n stats[SLOTS];
+		ghost_printf("MALLOC FAILED (size: %d)\n  [", s);
+		for (int i = 0; i < SLOTS; i++)
+			ghost_printf("%d -> %d, ", stats[i].order, stats[i].buffers);
+		ghost_printf(" ]\n");
+		BUG();
+	}
+	return p;
 }
