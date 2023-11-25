@@ -1011,7 +1011,7 @@ static bool stage2_try_break_pte(const struct kvm_pgtable_visit_ctx *ctx,
 	 * Perform the appropriate TLB invalidation based on the evicted pte
 	 * value (if any).
 	 */
-	#ifndef CONFIG_NVHE_GHOST_SPEC_INJECT_ERROR_stage2_try_break_pte_MISSING_TLBI
+	#if !defined(__KVM_NVHE_HYPERVISOR__) || !defined(CONFIG_NVHE_GHOST_SPEC_INJECT_ERROR_stage2_try_break_pte_MISSING_TLBI)
 	if (kvm_pte_table(ctx->old, ctx->level))
 		kvm_call_hyp(__kvm_tlb_flush_vmid, mmu);
 	else if (kvm_pte_valid(ctx->old))
@@ -1048,7 +1048,7 @@ static void stage2_put_pte(const struct kvm_pgtable_visit_ctx *ctx, struct kvm_s
 	 * Clear the existing PTE, and perform break-before-make with
 	 * TLB maintenance if it was valid.
 	 */
-	#ifndef CONFIG_NVHE_GHOST_SPEC_INJECT_ERROR_stage2_put_pte_MISSING_INVALIDATE
+	#if !defined(__KVM_NVHE_HYPERVISOR__) || !defined(CONFIG_NVHE_GHOST_SPEC_INJECT_ERROR_stage2_put_pte_MISSING_INVALIDATE)
 	if (kvm_pte_valid(ctx->old)) {
 		kvm_clear_pte(ctx->ptep);
 		kvm_call_hyp(__kvm_tlb_flush_vmid_ipa, mmu, ctx->addr, ctx->level);
@@ -1143,7 +1143,7 @@ static int stage2_map_walker_try_leaf(const struct kvm_pgtable_visit_ctx *ctx,
 		return 0;
 	}
 
-	#ifndef CONFIG_NVHE_GHOST_SPEC_INJECT_ERROR_stage2_map_walker_try_leaf_MISSING_BREAK
+	#if !defined(__KVM_NVHE_HYPERVISOR__) || !defined(CONFIG_NVHE_GHOST_SPEC_INJECT_ERROR_stage2_map_walker_try_leaf_MISSING_BREAK)
 	if (!stage2_try_break_pte(ctx, data->mmu))
 		return -EAGAIN;
 	#endif /* CONFIG_NVHE_GHOST_SPEC_INJECT_ERROR_stage2_map_walker_try_leaf_MISSING_BREAK */
