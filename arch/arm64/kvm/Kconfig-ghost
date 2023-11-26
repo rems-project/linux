@@ -22,7 +22,7 @@ config NVHE_GHOST_SPEC_COLOURS
 	help
 	  When enabled, all ghost machinery prints ANSI colour codes.  Enables compilation of ghost code in nVHE sources.
 
-config NVHE_GHOST_MEM_LOG2_MB
+config NVHE_GHOST_MEM_LOG2
 	int "Ghost dynamic memory pool size (log_2)"
 	depends on NVHE_GHOST_SPEC
 	default 22
@@ -34,6 +34,13 @@ config NVHE_GHOST_MEM_LOG2_MB
 	  This number denotes log_2 of the memory pool size, in bytes. For instance,
 	  22 denotes 4 MB.
 
+config NVHE_GHOST_MEM_DUMP_STATS
+	bool "Dump allocator tables"
+	depends on NVHE_GHOST_SPEC
+	default n
+	help
+	  Print the internal allocator state when using it. Helps track issues
+	  with the allocator itself.
 
 menuconfig NVHE_GHOST_SIMPLIFIED_MODEL
 	bool "Runtime simplified model checking"

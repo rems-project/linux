@@ -2,6 +2,10 @@
 #include <hyp/ghost_alloc.h>
 #include <asm-generic/bug.h>
 
+#ifdef CONFIG_NVHE_GHOST_MEM_DUMP_STATS
+#include <nvhe/ghost_printer.h>
+#endif /* CONFIG_NVHE_GHOST_MEM_DUMP_STATS */
+
 /*
  * The allocator keeps an array of free lists, each one containing blocks with
  * capacity of successive powers of 2.
@@ -106,40 +110,16 @@ static void __g_free(void *p) {
 	*flist = nd;
 }
 
-/*
- * Heap is a single static pool, managing a single static chunk with size
- * 2^GHOST_ALLOC_MAX_ORDER.
- */
+/** Debug **/
 
-#define HEAP (1 << GHOST_ALLOC_MAX_ORDER)
+#ifdef CONFIG_NVHE_GHOST_MEM_DUMP_STATS
 
-static unsigned char reserved_for_heap[HEAP];
-static pool heap;
+struct ghost_alloc_bkt_n { int order; int buffers; };
 
-static DEFINE_HYP_SPINLOCK(lock);
-
-void *g_malloc(size_t size) {
-	void *p;
-	hyp_spin_lock(&lock);
-	if (!READ_ONCE(heap.initialised)) {
-		add_region(&heap, reserved_for_heap, HEAP);
-		WRITE_ONCE(heap.initialised, 1);
-	}
-	p = __g_malloc(&heap, size);
-	hyp_spin_unlock(&lock);
-	return p;
-}
-
-void g_free(void *p) {
-	hyp_spin_lock(&lock);
-	__g_free(p);
-	hyp_spin_unlock(&lock);
-}
-
-void g_malloc_stats(struct ghost_alloc_bkt_n *arr, size_t n) {
+static void __g_malloc_stats(pool *pool, struct ghost_alloc_bkt_n *arr, size_t n) {
         int i = 0;
         while (i < SLOTS && i < n) {
-          hdr *h = heap.mem[i];
+          hdr *h = pool->mem[i];
 	  arr[i] = (struct ghost_alloc_bkt_n) { .order = i + GHOST_ALLOC_MIN_ORDER, .buffers = 0 };
           while(h) {
             h = h->nxt;
@@ -151,17 +131,57 @@ void g_malloc_stats(struct ghost_alloc_bkt_n *arr, size_t n) {
 		arr[i] = (struct ghost_alloc_bkt_n) { .order = -1, .buffers = -1 };
 }
 
-#include <nvhe/ghost_printer.h>
+void __g_malloc_dump_stats(pool *pool) {
+	struct ghost_alloc_bkt_n stats[SLOTS];
+	__g_malloc_stats(pool, stats, SLOTS);
+	ghost_printf("(malloc):\t");
+	for (int i = 0; i < SLOTS; i++) {
+		if (i % 4 == 0)
+			ghost_printf("[%d] ", 2 << stats[i].order);
+		ghost_printf("%d, ", stats[i].buffers);
+	}
+	ghost_printf("\n");
+}
+
+#endif /* CONFIG_NVHE_GHOST_MEM_DUMP_STATS */
+
+/*
+ * Heap is a single static pool, managing a single static chunk with size
+ * 2^GHOST_ALLOC_MAX_ORDER.
+ */
+
+#define HEAP (1 << GHOST_ALLOC_MAX_ORDER)
+
+static unsigned char reserved_for_heap[HEAP];
+static pool heap;
+
+/** Public **/
+
+static DEFINE_HYP_SPINLOCK(lock);
+
+void *g_malloc(size_t size) {
+	void *p;
+	hyp_spin_lock(&lock);
+	if (!READ_ONCE(heap.initialised)) {
+		add_region(&heap, reserved_for_heap, HEAP);
+		WRITE_ONCE(heap.initialised, 1);
+	}
+#ifdef CONFIG_NVHE_GHOST_MEM_DUMP_STATS
+	__g_malloc_dump_stats(&heap);
+#endif /* CONFIG_NVHE_GHOST_MEM_DUMP_STATS */
+	p = __g_malloc(&heap, size);
+	hyp_spin_unlock(&lock);
+	return p;
+}
+
+void g_free(void *p) {
+	hyp_spin_lock(&lock);
+	__g_free(p);
+	hyp_spin_unlock(&lock);
+}
 
 void *malloc_or_die(size_t s) {
 	void *p = g_malloc(s);
-	if (!p) {
-		struct ghost_alloc_bkt_n stats[SLOTS];
-		ghost_printf("MALLOC FAILED (size: %d)\n  [", s);
-		for (int i = 0; i < SLOTS; i++)
-			ghost_printf("%d -> %d, ", stats[i].order, stats[i].buffers);
-		ghost_printf(" ]\n");
-		BUG();
-	}
+	BUG_ON(!p);
 	return p;
 }
