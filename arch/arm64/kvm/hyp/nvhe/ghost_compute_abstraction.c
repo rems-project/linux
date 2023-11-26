@@ -187,12 +187,15 @@ static void ghost_vm_clear_slot(struct ghost_vm_slot *slot)
 
 		if (slot->vm->vm_table_locked.present) {
 			for (int i = 0; i < KVM_MAX_VCPUS; i++) {
-				if (slot->vm->vm_table_locked.vcpus[i])
+				if (slot->vm->vm_table_locked.vcpus[i]) {
 					free(slot->vm->vm_table_locked.vcpus[i]);
+					slot->vm->vm_table_locked.vcpus[i] = NULL;
+				}
 			}
 		}
 
 		free(slot->vm);
+		slot->vm = NULL;
 	}
 }
 
@@ -206,6 +209,7 @@ void ghost_vms_free(struct ghost_vms *vms, pkvm_handle_t handle)
 	ghost_assert(!slot->vm->vm_locked.present);
 	ghost_assert(!slot->vm->vm_table_locked.present);
 	free(slot->vm);
+	slot->vm = NULL;
 
 	slot->exists = false;
 }
