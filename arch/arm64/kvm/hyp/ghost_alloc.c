@@ -175,6 +175,8 @@ void *g_malloc(size_t size) {
 }
 
 void g_free(void *p) {
+	if (!p)
+		return;
 	hyp_spin_lock(&lock);
 	__g_free(p);
 	hyp_spin_unlock(&lock);
