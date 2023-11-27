@@ -520,14 +520,20 @@ DECLARE_PER_CPU(struct ghost_running_state, ghost_cpu_run_state);
 //struct ghost_state spec_handle_trap(struct ghost_state *g);
 
 // functions to make ghost register accesses more uniform
-#define ghost_reg_gpr(g, reg_index) \
+#define ghost_read_gpr(g, reg_index) \
 	GHOST_GPR(this_cpu_ghost_registers(g), reg_index)
+#define ghost_write_gpr(g, reg_index, value) \
+	(GHOST_GPR(this_cpu_ghost_registers(g), reg_index) = value)
 
-#define ghost_reg_el2(g, reg_index) \
-	GHOST_SYSREG_EL2(this_cpu_ghost_registers(g), reg_index)
-
-#define ghost_reg_el1(g, reg_index) \
+#define ghost_read_el1_sysreg(g, reg_index) \
 	GHOST_SYSREG_EL1(this_cpu_ghost_registers(g), reg_index)
+#define ghost_write_el1_sysreg(g, reg_index, value) \
+	(GHOST_SYSREG_EL1(this_cpu_ghost_registers(g), reg_index) = value)
+
+#define ghost_read_el2_sysreg(g, reg_index) \
+	GHOST_SYSREG_EL2(this_cpu_ghost_registers(g), reg_index)
+#define ghost_write_el2_sysreg(g, reg_index, value) \
+	(GHOST_SYSREG_EL2(this_cpu_ghost_registers(g), reg_index) = value)
 
 #define ghost_reg_vcpu_gpr(vcpu, reg_index) \
 	GHOST_GPR(&vcpu->regs, reg_index)

@@ -265,7 +265,7 @@ static void copy_registers_to_guest(struct ghost_state *g, struct ghost_vcpu *vc
 
 bool compute_new_abstract_state_handle___pkvm_host_share_hyp(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call)
 {
-	u64 pfn = ghost_reg_gpr(g0, 1);
+	u64 pfn = ghost_read_gpr(g0, 1);
 	phys_addr_t phys = hyp_pfn_to_phys(pfn); // ((phys_addr_t)((pfn) << PAGE_SHIFT)) // pure
 	host_ipa_t host_addr = host_ipa_of_phys(phys);
 	hyp_va_t hyp_addr = hyp_va_of_phys(g0, phys);
@@ -335,7 +335,7 @@ bool compute_new_abstract_state_handle___pkvm_host_share_hyp(struct ghost_state 
 	);
 
 out:
-	ghost_reg_gpr(g1, 1) = ret;
+	ghost_write_gpr(g1, 1, ret);
 
 	/* these registers now become the host's run context */
 	copy_registers_to_host(g1);
@@ -348,7 +348,7 @@ out:
 /* pkvm_host_unshare_hyp(pfn) */
 bool compute_new_abstract_state_handle___pkvm_host_unshare_hyp(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call)
 {
-	u64 pfn = ghost_reg_gpr(g0, 1);
+	u64 pfn = ghost_read_gpr(g0, 1);
 	phys_addr_t phys = hyp_pfn_to_phys(pfn); // ((phys_addr_t)((pfn) << PAGE_SHIFT)) // pure
 	host_ipa_t host_addr = host_ipa_of_phys(phys);
 	hyp_va_t hyp_addr = hyp_va_of_phys(g0, phys);
@@ -397,7 +397,7 @@ bool compute_new_abstract_state_handle___pkvm_host_unshare_hyp(struct ghost_stat
 		mapping_minus(g0->pkvm.pkvm_abstract_pgtable.mapping, hyp_addr, 1)
 	);
 out:
-	ghost_reg_gpr(g1, 1) = ret;
+	ghost_write_gpr(g1, 1, ret);
 
 	/* these registers now become the host's run context */
 	copy_registers_to_host(g1);
@@ -412,8 +412,8 @@ out:
 bool compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call) {
 	int ret;
 
-	u64 pfn = ghost_reg_gpr(g0, 1);
-	u64 gfn = ghost_reg_gpr(g0, 2);
+	u64 pfn = ghost_read_gpr(g0, 1);
+	u64 gfn = ghost_read_gpr(g0, 2);
 
 	phys_addr_t phys = hyp_pfn_to_phys(pfn);
 	host_ipa_t host_ipa = host_ipa_of_phys(phys);
@@ -544,7 +544,7 @@ bool compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost_state 
 	ret = 0;
 
 out:
-	ghost_reg_gpr(g1, 1) = ret;
+	ghost_write_gpr(g1, 1, ret);
 
 	/* these registers now become the host's run context */
 	copy_registers_to_host(g1);
@@ -554,8 +554,8 @@ out:
 }
 
 bool compute_new_abstract_state_handle___pkvm_vcpu_load(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call) {
-	pkvm_handle_t vm_handle = ghost_reg_gpr(g0, 1);
-	unsigned int vcpu_idx = ghost_reg_gpr(g0, 2);
+	pkvm_handle_t vm_handle = ghost_read_gpr(g0, 1);
+	unsigned int vcpu_idx = ghost_read_gpr(g0, 2);
 
 	ghost_assert(this_cpu_ghost_loaded_vcpu(g0)->present);
 
@@ -805,10 +805,10 @@ bool compute_new_abstract_state_handle___pkvm_init_vm(struct ghost_state *g1, st
 	int ret;
 	size_t vm_size, pgd_size, last_ran_size;
 
-	GHOST_SPEC_DECLARE_REG(host_va_t, host_kvm_hva, g0, 1);
-	GHOST_SPEC_DECLARE_REG(host_va_t, vm_hva, g0, 2);
-	GHOST_SPEC_DECLARE_REG(host_va_t, pgd_hva, g0, 3);
-	GHOST_SPEC_DECLARE_REG(host_va_t, last_ran_hva, g0, 4);
+	host_va_t host_kvm_hva = ghost_read_gpr(g0, 1);
+	host_va_t vm_hva = ghost_read_gpr(g0, 2);
+	host_va_t pgd_hva = ghost_read_gpr(g0, 3);
+	host_va_t last_ran_hva = ghost_read_gpr(g0, 4);
 
 	struct kvm *host_kvm_hyp_va = (struct kvm*)hyp_va_of_host_va(g0, host_kvm_hva);
 	host_ipa_t vm_host_ipa = host_ipa_of_phys(phys_of_hyp_va(g0, hyp_va_of_host_va(g0, vm_hva)));
@@ -929,7 +929,7 @@ bool compute_new_abstract_state_handle___pkvm_init_vm(struct ghost_state *g1, st
 	vm1->lock = ghost_pointer_to_vm_lock(handle);
 	ret = handle;
 out:
-	ghost_reg_gpr(g1, 1) = ret;
+	ghost_write_gpr(g1, 1, ret);
 
 	/* these registers now become the host's run context */
 	copy_registers_to_host(g1);
@@ -952,9 +952,9 @@ bool compute_new_abstract_state_handle___pkvm_init_vcpu(struct ghost_state *g1, 
 	int vcpu_idx;
 	struct ghost_vcpu *vcpu;
 
-	pkvm_handle_t vm_handle = ghost_reg_gpr(g0, 1);
-	host_va_t host_vcpu_hva = ghost_reg_gpr(g0, 2);
-	host_va_t vcpu_hva = ghost_reg_gpr(g0, 3);
+	pkvm_handle_t vm_handle = ghost_read_gpr(g0, 1);
+	host_va_t host_vcpu_hva = ghost_read_gpr(g0, 2);
+	host_va_t vcpu_hva = ghost_read_gpr(g0, 3);
 //	struct kvm_vcpu *host_vcpu_hyp_va = (struct kvm_vcpu *)hyp_va_of_host_va(g0, host_vcpu_hva);
 
 	struct ghost_vm *vm0 = ghost_vms_get(&g0->vms, vm_handle);
@@ -1031,7 +1031,7 @@ bool compute_new_abstract_state_handle___pkvm_init_vcpu(struct ghost_state *g1, 
 	g1->vms.table_data.present = true; // TODO: check with Ben that we really need this here
 	vm1->vm_table_locked.nr_initialised_vcpus++;
 out:
-	ghost_reg_gpr(g1, 1) = ret;
+	ghost_write_gpr(g1, 1, ret);
 
 	/* these registers now become the host's run context */
 	copy_registers_to_host(g1);
@@ -1045,7 +1045,7 @@ bool compute_new_abstract_state_handle___pkvm_teardown_vm(struct ghost_state *g1
 {
 	int ret = 0;
 
-	pkvm_handle_t vm_handle = ghost_reg_gpr(g0, 1);
+	pkvm_handle_t vm_handle = ghost_read_gpr(g0, 1);
 	struct ghost_vm *vm = ghost_vms_get(&g0->vms, vm_handle);
 	if (!vm) {
 		ret = -ENOENT;
@@ -1092,7 +1092,7 @@ bool compute_new_abstract_state_handle___pkvm_teardown_vm(struct ghost_state *g1
 
 	ghost_vms_free(&g0->vms, vm_handle);
 out:
-	ghost_reg_gpr(g1, 1) = ret;
+	ghost_write_gpr(g1, 1, ret);
 
 	/* these registers now become the host's run context */
 	copy_registers_to_host(g1);
@@ -1108,14 +1108,14 @@ bool compute_new_abstract_state_handle_host_hcall(struct ghost_state *g1, struct
 	int smccc_ret = SMCCC_RET_SUCCESS;
 	// // allow any hcall to fail with ENOMEM, with an otherwise-identity abstract state
 	// if (call->return_value == -ENOMEM) {
-	// 	ghost_reg_gpr(g1, 1) = -ENOMEM;
+	// 	ghost_write_gpr(g1, 1, -ENOMEM);
 	// 	return false;
 	// }
 
-	unsigned long id = ghost_reg_gpr(g0, 0) - KVM_HOST_SMCCC_ID(0);
+	unsigned long id = ghost_read_gpr(g0, 0) - KVM_HOST_SMCCC_ID(0);
 
 	/* set X0 first, so the individual functions can overwrite it. */
-	ghost_reg_gpr(g1, 0) = smccc_ret;
+	ghost_write_gpr(g1, 0, smccc_ret);
 
 	switch (id) {
 	case __KVM_HOST_SMCCC_FUNC___pkvm_host_share_hyp:
@@ -1150,7 +1150,7 @@ bool compute_new_abstract_state_handle_host_hcall(struct ghost_state *g1, struct
 		// TODO: and their bodies, and all the other cases
 	default:
 		smccc_ret = SMCCC_RET_NOT_SUPPORTED;
-		ghost_reg_gpr(g1, 0) = smccc_ret;
+		ghost_write_gpr(g1, 0, smccc_ret);
 		break;
 	}
 
@@ -1183,8 +1183,8 @@ u64 ghost_esr_ec_low_to_cur(u64 esr)
 // and collect the set of register writes it does and use that as a kind of spec.
 void ghost_inject_abort(struct ghost_state *g1, struct ghost_state *g0)
 {
-	u64 spsr_el2 = ghost_reg_el2(g0, GHOST_SPSR_EL2);
-	u64 esr_el2 = ghost_reg_el2(g0, GHOST_ESR_EL2);
+	u64 spsr_el2 = ghost_read_el2_sysreg(g0, GHOST_SPSR_EL2);
+	u64 esr_el2 = ghost_read_el2_sysreg(g0, GHOST_ESR_EL2);
 
 	u64 esr_el1;
 
@@ -1200,17 +1200,17 @@ void ghost_inject_abort(struct ghost_state *g1, struct ghost_state *g0)
 	// userspace fault
 	esr_el1 |= ESR_ELx_S1PTW;
 
-	ghost_reg_el1(g1, ESR_EL1) = esr_el1;
-	ghost_reg_el1(g1, SPSR_EL1) = spsr_el2;
-	ghost_reg_el1(g1, ELR_EL1) = ghost_reg_el2(g0, GHOST_ELR_EL2);
-	ghost_reg_el1(g1, FAR_EL1) = ghost_reg_el2(g0, GHOST_FAR_EL2);
+	ghost_write_el1_sysreg(g1, ESR_EL1, esr_el1);
+	ghost_write_el1_sysreg(g1, SPSR_EL1, spsr_el2);
+	ghost_write_el1_sysreg(g1, ELR_EL1, ghost_read_el2_sysreg(g0, GHOST_ELR_EL2));
+	ghost_write_el1_sysreg(g1, FAR_EL1, ghost_read_el2_sysreg(g0, GHOST_FAR_EL2));
 
-	ghost_reg_el2(g1, GHOST_ELR_EL2) =
-		ghost_reg_el1(g0, VBAR_EL1) + get_except64_offset(spsr_el2, PSR_MODE_EL1h, except_type_sync);
+	ghost_write_el2_sysreg(g1, GHOST_ELR_EL2,
+		ghost_read_el1_sysreg(g0, VBAR_EL1) + get_except64_offset(spsr_el2, PSR_MODE_EL1h, except_type_sync));
 
 	spsr_el2 = get_except64_cpsr(spsr_el2, false/*TODO: we hardcode that the cpus do not support MTE */,
-				     ghost_reg_el1(g0, SCTLR_EL1), PSR_MODE_EL1h);
-	ghost_reg_el2(g1, GHOST_SPSR_EL2) = spsr_el2;
+				     ghost_read_el1_sysreg(g0, SCTLR_EL1), PSR_MODE_EL1h);
+	ghost_write_el2_sysreg(g1, GHOST_SPSR_EL2, spsr_el2);
 }
 
 
@@ -1219,12 +1219,12 @@ void ghost_inject_abort(struct ghost_state *g1, struct ghost_state *g0)
 
 bool compute_new_abstract_state_handle_host_mem_abort(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call)
 {
-	u64 esr = ghost_reg_el2(g0, GHOST_ESR_EL2);
+	u64 esr = ghost_read_el2_sysreg(g0, GHOST_ESR_EL2);
 	u64 hpfar;
 	host_ipa_t addr;
 
 	if (!(esr & ESR_ELx_S1PTW) && (esr & ESR_ELx_FSC_TYPE) == ESR_ELx_FSC_PERM) {
-		u64 far = ghost_reg_el2(g0, GHOST_FAR_EL2);
+		u64 far = ghost_read_el2_sysreg(g0, GHOST_FAR_EL2);
 		struct ghost_at_translation *at_status = ghost_at_translations_get(&call->at_translations, far);
 		if (at_status->success)
 			hpfar = at_status->ipa;
@@ -1233,7 +1233,7 @@ bool compute_new_abstract_state_handle_host_mem_abort(struct ghost_state *g1, st
 			// in this situation
 			ghost_spec_assert(false);
 	} else {
-		hpfar = ghost_reg_el2(g0, GHOST_HPFAR_EL2);
+		hpfar = ghost_read_el2_sysreg(g0, GHOST_HPFAR_EL2);
 	}
 
 	// the bits [51:12] of the faulting IPA are in bits [47:4] of the HPFAR_EL2 register
@@ -1484,7 +1484,7 @@ bool compute_new_abstract_state_handle_guest_hcall(struct ghost_state *g1, struc
 	bool new_state_computed = false;
 	GHOST_LOG_CONTEXT_ENTER();
 
-	u64 hcall_id = ghost_reg_gpr(g0, 0);
+	u64 hcall_id = ghost_read_gpr(g0, 0);
 
 	switch (hcall_id) {
 	case ARM_SMCCC_VENDOR_HYP_KVM_MEM_SHARE_FUNC_ID:
@@ -1541,7 +1541,7 @@ bool compute_new_abstract_state_handle_trap(struct ghost_state *post, struct gho
 	struct ghost_running_state *gr_pre_cpu = this_cpu_ghost_run_state(pre);
 	bool ghost_thought_guest_was_running = gr_pre_cpu->guest_running;
 
-	switch (ESR_ELx_EC(ghost_reg_el2(pre,GHOST_ESR_EL2))) {
+	switch (ESR_ELx_EC(ghost_read_el2_sysreg(pre,GHOST_ESR_EL2))) {
 	case ESR_ELx_EC_HVC64:
 		if (ghost_thought_guest_was_running)
 			new_state_computed =  compute_new_abstract_state_handle_guest_hcall(post, pre, call);
