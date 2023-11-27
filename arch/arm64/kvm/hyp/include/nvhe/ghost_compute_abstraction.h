@@ -11,6 +11,7 @@ void record_abstraction_shared_state(struct ghost_state *g);
 // NEW
 // functions exposed to non-ghost files
 void init_abstraction_common(void);
+void init_abstraction_thread_local(void);
 void record_abstraction_common(void);
 void clear_abstraction_thread_local(void);
 void record_and_check_abstraction_local_state_pre(struct kvm_cpu_context *ctxt);

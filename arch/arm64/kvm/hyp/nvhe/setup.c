@@ -460,6 +460,7 @@ void __noreturn __pkvm_init_finalise(void)
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 
 	init_abstraction_common();
+	init_abstraction_thread_local();
 	record_abstraction_common();
 	WRITE_ONCE(ghost_pkvm_init_finalized, true);
 #endif /* CONFIG_NVHE_GHOST_SPEC */

@@ -753,8 +753,11 @@ void init_abstraction(struct ghost_state *g)
 	g->pkvm.present = false;
 	g->host.present = false;
 	g->vms.present = false;
-	for (int idx=0; idx<hyp_nr_cpus; idx++)
-		g->cpu_local_state[idx].present = false;
+	for (int idx=0; idx<hyp_nr_cpus; idx++) {
+		struct ghost_local_state *st = malloc_or_die(sizeof(struct ghost_local_state));
+		st->present = false;
+		g->cpu_local_state[idx] = st;
+	}
 }
 
 void init_abstraction_common(void)
@@ -859,7 +862,9 @@ void clear_abstraction_all(struct ghost_state *g)
 	clear_abstraction_host(g);
 	clear_abstraction_regs(g);
 	clear_abstraction_vms(g);
-	ghost_this_cpu_local_state(g)->present = false;
+	struct ghost_local_state *st = ghost_this_cpu_local_state(g);
+	if (st)
+		st->present = false;
 }
 
 void clear_abstraction_thread_local(void)
@@ -1506,7 +1511,9 @@ struct ghost_at_translation *ghost_at_translations_get(struct ghost_at_translati
 // ghost per-cpu state helpers
 struct ghost_local_state *ghost_this_cpu_local_state(struct ghost_state *g)
 {
-	return &g->cpu_local_state[hyp_smp_processor_id()];
+	struct ghost_local_state *st = g->cpu_local_state[hyp_smp_processor_id()];
+	ghost_assert(st);
+	return st;
 }
 
 struct ghost_loaded_vcpu *this_cpu_ghost_loaded_vcpu(struct ghost_state *g)

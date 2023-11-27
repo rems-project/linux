@@ -443,7 +443,7 @@ struct ghost_state {
 	struct ghost_host host;
 	struct ghost_vms vms;
 	struct ghost_constant_globals globals;
-	struct ghost_local_state cpu_local_state[NR_CPUS];
+	struct ghost_local_state* cpu_local_state[NR_CPUS];
 };
 
 void ghost_dump_state(struct ghost_state *g);
