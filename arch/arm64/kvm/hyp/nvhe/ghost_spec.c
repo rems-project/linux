@@ -20,6 +20,42 @@
 #include <nvhe/ghost_control.h>
 
 
+u64 ghost_read_gpr_explicit(struct ghost_registers *st, int n)
+{
+	ghost_assert(0 <= n && n < 31);
+	ghost_spec_assert(st->gprs[n].status == GHOST_PRESENT); // TODO: check that we indeed want a spec-assert
+	return st->gprs[n].value;
+}
+void ghost_write_gpr_explicit(struct ghost_registers *st, int n, u64 value)
+{
+	ghost_assert(0 <= n && n < 31);
+	ghost_spec_assert(st->gprs[n].status == GHOST_PRESENT); // TODO: check that we indeed want a spec-assert
+	st->gprs[n].value = value;
+}
+u64 ghost_read_el1_sysreg_explicit(struct ghost_registers *st, int n)
+{
+	ghost_assert(0 <= n && n < NR_SYS_REGS);
+	ghost_spec_assert(st->el1_sysregs[n].status == GHOST_PRESENT); // TODO: check that we indeed want a spec-assert
+	return st->el1_sysregs[n].value;
+}
+void ghost_write_el1_sysreg_explicit(struct ghost_registers *st, int n, u64 value)
+{
+	ghost_assert(0 <= n && n < NR_SYS_REGS);
+	ghost_spec_assert(st->el1_sysregs[n].status == GHOST_PRESENT); // TODO: check that we indeed want a spec-assert
+	st->el1_sysregs[n].value = value;
+}
+u64 ghost_read_el2_sysreg_explicit(struct ghost_registers *st, int n)
+{
+	ghost_assert(0 <= n && n < GHOST_NR_SYSREGS);
+	ghost_spec_assert(st->el2_sysregs[n].status == GHOST_PRESENT); // TODO: check that we indeed want a spec-assert
+	return st->el2_sysregs[n].value;
+}
+void ghost_write_el2_sysreg_explicit(struct ghost_registers *st, int n, u64 value)
+{
+	ghost_assert(0 <= n && n < GHOST_NR_SYSREGS);
+	ghost_spec_assert(st->el2_sysregs[n].status == GHOST_PRESENT); // TODO: check that we indeed want a spec-assert
+	st->el2_sysregs[n].value = value;
+}
 
 /*
  * Init tracking
@@ -1023,9 +1059,21 @@ bool compute_new_abstract_state_handle___pkvm_init_vcpu(struct ghost_state *g1, 
 	vcpu->initialised = true;
 
 	vcpu->regs.present = true;
-	for (int i=0; i<31; i++)
-		vcpu->regs.ctxt.regs.regs[i] = 0;
-	// TODO: set PC to 0?
+	for (int i=0; i<31; i++) {
+		vcpu->regs.gprs[i].status = GHOST_PRESENT;
+		vcpu->regs.gprs[i].value = 0;
+	}
+	for (int i=0; i<NR_SYS_REGS; i++) {
+		vcpu->regs.el1_sysregs[i].status = GHOST_PRESENT;
+		vcpu->regs.el1_sysregs[i].value = 0;
+	}
+	for (int i=0; i<GHOST_NR_SYSREGS; i++) {
+		vcpu->regs.el2_sysregs[i].status = GHOST_PRESENT;
+		vcpu->regs.el2_sysregs[i].value = 0;
+	}
+	// TODO: if the vcpu is NOT protected ===> the vcpu it set to a ON_PENDING state and the reset values for x0 and pc are taken
+	//	 from the host_vcpu struct
+	// TOOD: for protected vcpu ===> x0 and pc (and everything else) is set to 0 (en the vcpu is set to OFF state)
 	// TODO: in the implementation MPIDR_EL1 = 0x80000000 (this is RES1 bit) and SCTLR_EL1 = 0xc50078
 
 	g1->vms.table_data.present = true; // TODO: check with Ben that we really need this here
@@ -1274,9 +1322,9 @@ bool compute_new_abstract_state_pkvm_memshare(struct ghost_state *g1, struct gho
 	ghost_assert(vcpu0->regs.present);
 
 	// Pluck out the arguments.
-	guest_ipa_t guest_ipa_page = ALIGN_DOWN(ghost_reg_vcpu_gpr(vcpu0, 1), PAGE_SIZE);
-	u64 arg2 = ghost_reg_vcpu_gpr(vcpu0, 2);
-	u64 arg3 = ghost_reg_vcpu_gpr(vcpu0, 3);
+	guest_ipa_t guest_ipa_page = ALIGN_DOWN(ghost_read_vcpu_gpr(vcpu0, 1), PAGE_SIZE);
+	u64 arg2 = ghost_read_vcpu_gpr(vcpu0, 2);
+	u64 arg3 = ghost_read_vcpu_gpr(vcpu0, 3);
 
 	// Initialise computed host + VM state. We need post-VCPU to return to the guest.
 
@@ -1357,10 +1405,10 @@ out_host:
 out_guest_err:
 
 	// Return in guest registers.
-	ghost_reg_vcpu_gpr(vcpu1, 0) = SMCCC_RET_INVALID_PARAMETER;
-	ghost_reg_vcpu_gpr(vcpu1, 1) = 0;
-	ghost_reg_vcpu_gpr(vcpu1, 2) = 0;
-	ghost_reg_vcpu_gpr(vcpu1, 3) = 0;
+	ghost_write_vcpu_gpr(vcpu1, 0, SMCCC_RET_INVALID_PARAMETER);
+	ghost_write_vcpu_gpr(vcpu1, 1, 0);
+	ghost_write_vcpu_gpr(vcpu1, 2, 0);
+	ghost_write_vcpu_gpr(vcpu1, 3, 0);
 
 	// XXX HOW TO DENOTE RETURN TO GUEST?
 	return true;
@@ -1386,9 +1434,9 @@ bool compute_new_abstract_state_pkvm_memunshare(struct ghost_state *g1, struct g
 	ghost_assert(vcpu0->regs.present);
 
 	// Pluck out the arguments.
-	guest_ipa_t guest_ipa_page = ALIGN_DOWN(ghost_reg_vcpu_gpr(vcpu0, 1), PAGE_SIZE);
-	u64 arg2 = ghost_reg_vcpu_gpr(vcpu0, 2);
-	u64 arg3 = ghost_reg_vcpu_gpr(vcpu0, 3);
+	guest_ipa_t guest_ipa_page = ALIGN_DOWN(ghost_read_vcpu_gpr(vcpu0, 1), PAGE_SIZE);
+	u64 arg2 = ghost_read_vcpu_gpr(vcpu0, 2);
+	u64 arg3 = ghost_read_vcpu_gpr(vcpu0, 3);
 
 	// Initialise computed host + VM state. We need post-VCPU to return to the guest.
 
@@ -1470,10 +1518,10 @@ out_host:
 out_guest_err:
 
 	// Return in guest registers.
-	ghost_reg_vcpu_gpr(vcpu1, 0) = SMCCC_RET_INVALID_PARAMETER;
-	ghost_reg_vcpu_gpr(vcpu1, 1) = 0;
-	ghost_reg_vcpu_gpr(vcpu1, 2) = 0;
-	ghost_reg_vcpu_gpr(vcpu1, 3) = 0;
+	ghost_write_vcpu_gpr(vcpu1, 0, SMCCC_RET_INVALID_PARAMETER);
+	ghost_write_vcpu_gpr(vcpu1, 1, 0);
+	ghost_write_vcpu_gpr(vcpu1, 2, 0);
+	ghost_write_vcpu_gpr(vcpu1, 3, 0);
 
 	// XXX HOW TO DENOTE RETURN TO GUEST?
 	return true;

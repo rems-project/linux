@@ -222,6 +222,98 @@ bool ghost_vms_is_valid_handle(struct ghost_vms *vms, pkvm_handle_t handle)
 	return vm != NULL;
 }
 
+inline void make_abstract_register(struct ghost_register *reg, u64 value)
+{
+	reg->status = GHOST_PRESENT;
+	reg->value = value;
+}
+void compute_abstract_registers(struct ghost_registers *regs, struct kvm_cpu_context *ctxt)
+{
+	regs->present = true;
+	make_abstract_register(&regs->pc, ctxt->regs.pc);
+	for (int i=0; i<31; i++)
+		make_abstract_register(&regs->gprs[i], ctxt->regs.regs[i]);
+	for (int i=0; i<NR_SYS_REGS; i++) 
+		make_abstract_register(&regs->el1_sysregs[i], ctxt->sys_regs[i]);
+	for (int i=0; i<GHOST_NR_SYSREGS; i++) {
+		// TODO: hack, redo this better
+		switch(i) {
+		// case GHOST_SP:
+		// 	make_abstract_register(&regs->el2_sysregs[i], ctxt->sys_regs[???]);
+		// 	break;
+		case GHOST_HCR_EL2:
+			make_abstract_register(&regs->el2_sysregs[i], ctxt->sys_regs[HCR_EL2]);
+			break;
+		case GHOST_MAIR_EL2:
+			make_abstract_register(&regs->el2_sysregs[i], ctxt->sys_regs[MAIR_EL2]);
+			break;
+		case GHOST_MDCR_EL2:
+			make_abstract_register(&regs->el2_sysregs[i], ctxt->sys_regs[MDCR_EL2]);
+			break;
+		// case GHOST_PSTATE_DAIF:
+		// 	make_abstract_register(&regs->el2_sysregs[i], ctxt->sys_regs[????]);
+		// 	break;
+		// case GHOST_PSTATE_CURRENTEL:
+		// 	make_abstract_register(&regs->el2_sysregs[i], ctxt->sys_regs[????]);
+		// 	break;
+		// case GHOST_PSTATE_SPSEL:
+		// 	make_abstract_register(&regs->el2_sysregs[i], ctxt->sys_regs[????]);
+		// 	break;
+		case GHOST_SCTLR_EL2:
+			make_abstract_register(&regs->el2_sysregs[i], ctxt->sys_regs[SCTLR_EL2]);
+			break;
+		case GHOST_TCR_EL2:
+			make_abstract_register(&regs->el2_sysregs[i], ctxt->sys_regs[TCR_EL2]);
+			break;
+		case GHOST_TPIDR_EL2:
+			make_abstract_register(&regs->el2_sysregs[i], ctxt->sys_regs[TPIDR_EL2]);
+			break;
+		case GHOST_VTCR_EL2:
+			make_abstract_register(&regs->el2_sysregs[i], ctxt->sys_regs[VTCR_EL2]);
+			break;
+		case GHOST_VTTBR_EL2:
+			make_abstract_register(&regs->el2_sysregs[i], ctxt->sys_regs[VTTBR_EL2]);
+			break;
+		case GHOST_TTBR0_EL2:
+			make_abstract_register(&regs->el2_sysregs[i], ctxt->sys_regs[TTBR0_EL2]);
+			break;
+		case GHOST_ELR_EL2:
+			make_abstract_register(&regs->el2_sysregs[i], ctxt->sys_regs[ELR_EL2]);
+			break;
+		case GHOST_ESR_EL2:
+			make_abstract_register(&regs->el2_sysregs[i], ctxt->sys_regs[ESR_EL2]);
+			break;
+		case GHOST_FAR_EL2:
+			make_abstract_register(&regs->el2_sysregs[i], ctxt->sys_regs[FAR_EL2]);
+			break;
+		case GHOST_HPFAR_EL2:
+			make_abstract_register(&regs->el2_sysregs[i], ctxt->sys_regs[HPFAR_EL2]);
+			break;
+		// case GHOST_ID_AA64AFR0_EL1:
+		// 	make_abstract_register(&regs->el2_sysregs[i], ctxt->sys_regs[[???]);]);
+		// 	break;
+		// case GHOST_ID_AA64AFR1_EL1:
+		// 	make_abstract_register(&regs->el2_sysregs[i], ctxt->sys_regs[[???]);]);
+		// 	break;
+		// case GHOST_ID_AA64PFR0_EL1:
+		// 	make_abstract_register(&regs->el2_sysregs[i], ctxt->sys_regs[[???]);]);
+		// 	break;
+		// case GHOST_ID_AA64PFR1_EL1:
+		// 	make_abstract_register(&regs->el2_sysregs[i], ctxt->sys_regs[[???]);]);
+		// 	break;
+		// case GHOST_ID_AA64DFR0_EL1:
+		// 	make_abstract_register(&regs->el2_sysregs[i], ctxt->sys_regs[???]);
+		// 	break;
+		// case GHOST_ID_AA64DFR1_EL1:
+		// 	make_abstract_register(&regs->el2_sysregs[i], ctxt->sys_regs[???]);
+		// 	break;
+
+		default:
+			regs->el2_sysregs[i].status = GHOST_ABSENT; // TODO: check this
+		}
+	}
+}
+
 /// from a vm_table index compute the abstract ghost VM
 void compute_abstraction_vm_partial(struct ghost_vm *dest, struct pkvm_hyp_vm *hyp_vm, enum vm_field_owner owner) {
 	ghost_assert(hyp_vm);
@@ -258,8 +350,7 @@ void compute_abstraction_vm_partial(struct ghost_vm *dest, struct pkvm_hyp_vm *h
 				if (vcpu) {
 					g_vcpu->loaded = vcpu->loaded_hyp_vcpu ? true : false;
 					g_vcpu->regs.present = true;
-					memcpy(&g_vcpu->regs.ctxt, &vcpu->vcpu.arch.ctxt, sizeof(struct kvm_cpu_context));
-					// TODO: EL2 regs
+					compute_abstract_registers(&g_vcpu->regs, &vcpu->vcpu.arch.ctxt);
 				}
 				dest->vm_table_locked.vcpus[vcpu_idx] = g_vcpu;
 			}
@@ -286,6 +377,7 @@ void check_abstract_pgtable_equal(abstract_pgtable *ap1, abstract_pgtable *ap2, 
 
 void check_abstraction_equals_reg(struct ghost_registers *r1, struct ghost_registers *r2, bool check_sysregs)
 {
+/*
 	GHOST_LOG_CONTEXT_ENTER();
 	u64 i;
 	u64 ghost_el2_regs[] = (u64[])GHOST_EL2_REGS;
@@ -325,6 +417,7 @@ void check_abstraction_equals_reg(struct ghost_registers *r1, struct ghost_regis
 	}
 	// TODO other regs
 	GHOST_LOG_CONTEXT_EXIT();
+*/
 }
 
 void check_abstraction_equals_pkvm(struct ghost_pkvm *gp1, struct ghost_pkvm *gp2)
@@ -1141,6 +1234,17 @@ void record_abstraction_vms_and_check_none(struct ghost_state *g)
 
 void record_abstraction_regs(struct ghost_registers *gr, struct kvm_cpu_context *ctxt)
 {
+// TODO this not yet right
+	gr->present = true;
+	struct kvm_cpu_context myctxt = *ctxt;
+	__sysreg_save_state_nvhe(&myctxt);
+	compute_abstract_registers(gr, /*ctxt*/&myctxt);
+	u64 buf[GHOST_NR_SYSREGS];
+	ghost_get_sysregs(buf);
+	for (int i=0; i<GHOST_NR_SYSREGS; i++) {
+		gr->el2_sysregs[i].value = buf[i];
+	}
+/*
 	int i;
 	gr->present = true;
 
@@ -1154,6 +1258,7 @@ void record_abstraction_regs(struct ghost_registers *gr, struct kvm_cpu_context 
 
 	// save EL1 registers comprising pKVM's view of the context
 	__sysreg_save_state_nvhe(&gr->ctxt);
+*/
 }
 
 void ghost_cpu_running_state_copy(struct ghost_running_state *run_tgt, struct ghost_running_state *g_src)

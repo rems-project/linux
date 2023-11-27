@@ -400,7 +400,7 @@ static void ghost_diff_gpr(struct diff_container *container, u64 reg, struct gho
 /****************/
 // Differ!
 
-static void ghost_diff_registers(struct diff_container *node, struct ghost_registers *r1, struct ghost_registers *r2);
+static void ghost_diff_registers(struct diff_container *node, struct ghost_registers *regs1, struct ghost_registers *regs2);
 
 static void ghost_diff_pfns_array(struct diff_container *node, struct pfn_set *s1, struct pfn_set *s2)
 {
@@ -532,31 +532,67 @@ static void ghost_diff_host(struct diff_container *node, struct ghost_host *h1, 
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
-static void ghost_diff_registers(struct diff_container *node, struct ghost_registers *r1, struct ghost_registers *r2)
+enum register_tag {
+	GPR_TAG,
+	SYSREG_TAG
+};
+
+static void ghost_diff_register(struct diff_container *node, enum register_tag tag, void* reg_info, struct ghost_register *r1, struct ghost_register *r2)
+{
+	GHOST_LOG_CONTEXT_ENTER();
+	char gpr[] = "r00";
+	char *str;
+	switch (tag) {
+	case GPR_TAG: {
+		int i = *(int*)reg_info;
+		ghost_assert(0 <= i && i < 31);
+		if (i<10) {
+			gpr[1] += i;
+			gpr[2] = '\0';
+		} else {
+			gpr[1] += i/10;
+			gpr[2] += i % 10;
+		}
+		str = gpr;
+		break;
+	};
+	case SYSREG_TAG:
+		str = reg_info;
+	}
+	ghost_diff_enter_subfield(node, str);
+	ghost_diff_field(node, "status", diff_pair(TGPRINT("%g(status)", (u64)r1->status), TGPRINT("%g(status)", (u64)r2->status)));
+	if (r1->status == GHOST_PRESENT && r2->status == GHOST_PRESENT) {
+		ghost_diff_field(node, "value", diff_pair(TU64(r1->value), TU64(r2->value)));
+	}
+	ghost_diff_pop_subfield(node);
+	GHOST_LOG_CONTEXT_EXIT();
+}
+
+static void ghost_diff_registers(struct diff_container *node, struct ghost_registers *regs1, struct ghost_registers *regs2)
 {
 	GHOST_LOG_CONTEXT_ENTER();
 	ghost_diff_enter_subfield(node, "regs");
-	ghost_diff_field(node, "present", diff_pair(TBOOL(r1->present), TBOOL(r2->present)));
-	if (r1->present && r2->present) {
+	ghost_diff_field(node, "present", diff_pair(TBOOL(regs1->present), TBOOL(regs2->present)));
+	if (regs1->present && regs2->present) {
 		int i;
 
 		u64 ghost_el2_regs[] = (u64[])GHOST_EL2_REGS;
-		for (i=0; i<=30; i++) {
+		for (i=0; i<31; i++) {
 			GHOST_LOG_CONTEXT_ENTER_INNER("loop gpr");
-			ghost_diff_gpr(node, i, diff_pair(TU64(r1->ctxt.regs.regs[i]), TU64(r2->ctxt.regs.regs[i])));
+			ghost_diff_register(node, GPR_TAG, &i, &regs1->gprs[i], &regs2->gprs[i]);
 			GHOST_LOG_CONTEXT_EXIT_INNER("loop gpr");
 		}
 		for (i=0; i<NR_SYS_REGS; i++) {
-			GHOST_LOG_CONTEXT_ENTER_INNER("loop sysreg");
+			GHOST_LOG_CONTEXT_ENTER_INNER("loop el1_sysreg");
 			const char *name = GHOST_VCPU_SYSREG_NAMES[i];
-			ghost_diff_field(node, (char *)name, diff_pair(TU64(r1->ctxt.sys_regs[i]), TU64(r2->ctxt.sys_regs[i])));
-			GHOST_LOG_CONTEXT_EXIT_INNER("loop sysreg");
+			ghost_diff_register(node, SYSREG_TAG, (void*)name, &regs1->el1_sysregs[i], &regs2->el1_sysregs[i]);
+			GHOST_LOG_CONTEXT_EXIT_INNER("loop el1_sysreg");
 		}
 		for (i=0; i<sizeof(ghost_el2_regs)/sizeof(u64); i++) {
 			GHOST_LOG_CONTEXT_ENTER_INNER("loop el2_regs");
 			u64 r = ghost_el2_regs[i];
 			const char *name = GHOST_EL2_REG_NAMES[r];
-			ghost_diff_field(node, (char *)name, diff_pair(TU64(r1->el2_sysregs[r]), TU64(r2->el2_sysregs[r])));
+			ghost_diff_register(node, SYSREG_TAG, (void*)name, &regs1->el2_sysregs[r], &regs2->el2_sysregs[r]);
 			GHOST_LOG_CONTEXT_EXIT_INNER("loop el2_regs");
 		}
 	}

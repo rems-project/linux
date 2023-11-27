@@ -17,6 +17,7 @@
 #include <nvhe/ghost_pfn_set.h>
 #include <nvhe/ghost_call_data.h>
 #include <nvhe/ghost_control.h>
+#include <nvhe/ghost_status.h>
 
 // top-level spec types
 
@@ -91,26 +92,43 @@ struct ghost_loaded_vcpu {
 };
 
 /**
- * struct ghost_registers - per-CPU register state
+ * struct ghost_registers - register state
  *
- * @present: whether the parent ghost state has some ghost register state for this CPU.
- * @ctxt: if present, the EL0/1 register values on entry/exit to the C.
+ * @status: whether the parent ghost (v)CPU state has a value for this register
+ * @pc: if present, the value of the register
+ */
+struct ghost_register {
+	enum ghost_status status;
+	u64 value;
+};
+
+/**
+ * struct ghost_registers - (v)CPU registers state
+ *
+ * @present: whether the parent ghost state has some ghost registers state for this (v)CPU
+ * @pc: if present, ghost copy of the program counter
+ * @gprs: if present, ghost copy of the general-purpose registers
+ * @el1_sysregs: if present, ghost copy of the current value of the EL1 system registers
  * @el2_sysregs: if present, ghost copy of the current value of the EL2 system registers.
  *
- * Not all the register values are present, but it's not explicitly marked which are,
- * although which are present should be constant for all present register states.
+ * Not all the register values are present, and are marked accordingly (see struct ghost_register).
  *
  * Context: thread-local, so not protected by any lock.
  */
 struct ghost_registers {
 	bool present;
-	struct kvm_cpu_context ctxt;
-	u64 el2_sysregs[GHOST_NR_SYSREGS];
+	struct ghost_register pc;
+	struct ghost_register gprs[31];
+	struct ghost_register el1_sysregs[NR_SYS_REGS];
+	struct ghost_register el2_sysregs[GHOST_NR_SYSREGS];
 };
 
-#define GHOST_GPR(GRS, N) (GRS)->ctxt.regs.regs[(N)]
-#define GHOST_SYSREG_EL1(GRS, N) (GRS)->ctxt.sys_regs[(N)]
-#define GHOST_SYSREG_EL2(GRS, N) (GRS)->el2_sysregs[(N)]
+u64 ghost_read_gpr_explicit(struct ghost_registers *st, int n);
+void ghost_write_gpr_explicit(struct ghost_registers *st, int n, u64 value);
+u64 ghost_read_el1_sysreg_explicit(struct ghost_registers *st, int n);
+void ghost_write_el1_sysreg_explicit(struct ghost_registers *st, int n, u64 value);
+u64 ghost_read_el2_sysreg_explicit(struct ghost_registers *st, int n);
+void ghost_write_el2_sysreg_explicit(struct ghost_registers *st, int n, u64 value);
 
 /**
  * struct ghost_vcpu - A single vcpu within a VM
@@ -521,22 +539,24 @@ DECLARE_PER_CPU(struct ghost_running_state, ghost_cpu_run_state);
 
 // functions to make ghost register accesses more uniform
 #define ghost_read_gpr(g, reg_index) \
-	GHOST_GPR(this_cpu_ghost_registers(g), reg_index)
+	ghost_read_gpr_explicit(this_cpu_ghost_registers(g), reg_index)
 #define ghost_write_gpr(g, reg_index, value) \
-	(GHOST_GPR(this_cpu_ghost_registers(g), reg_index) = value)
+	ghost_write_gpr_explicit(this_cpu_ghost_registers(g), reg_index, value)
 
 #define ghost_read_el1_sysreg(g, reg_index) \
-	GHOST_SYSREG_EL1(this_cpu_ghost_registers(g), reg_index)
+	ghost_read_el1_sysreg_explicit(this_cpu_ghost_registers(g), reg_index)
 #define ghost_write_el1_sysreg(g, reg_index, value) \
-	(GHOST_SYSREG_EL1(this_cpu_ghost_registers(g), reg_index) = value)
+	ghost_write_el1_sysreg_explicit(this_cpu_ghost_registers(g), reg_index, value)
 
 #define ghost_read_el2_sysreg(g, reg_index) \
-	GHOST_SYSREG_EL2(this_cpu_ghost_registers(g), reg_index)
+	ghost_read_el2_sysreg_explicit(this_cpu_ghost_registers(g), reg_index)
 #define ghost_write_el2_sysreg(g, reg_index, value) \
-	(GHOST_SYSREG_EL2(this_cpu_ghost_registers(g), reg_index) = value)
+	ghost_write_el2_sysreg_explicit(this_cpu_ghost_registers(g), reg_index, value)
 
-#define ghost_reg_vcpu_gpr(vcpu, reg_index) \
-	GHOST_GPR(&vcpu->regs, reg_index)
+#define ghost_read_vcpu_gpr(vcpu, reg_index) \
+	ghost_read_gpr_explicit(&vcpu->regs, reg_index)
+#define ghost_write_vcpu_gpr(vcpu, reg_index, value) \
+	ghost_write_gpr_explicit(&vcpu->regs, reg_index, value)
 
 /**
  * ghost_record_pre() - Record the state on entry to pKVM
