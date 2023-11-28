@@ -16,6 +16,8 @@
  * The pfn_set is split in two:
  * - the hyp_pool range, which are (by the spec) required to always be mapped and owned by pKVM and no other.
  * - an arbitrary set of other pages, once owned by the host, now stolen by pKVM for purposes of storing pagetables.
+ *
+ * NOTE: ghost_pfn_set_remove_external() only removes the first occurence of an external pfn
  */
 struct pfn_set {
 	u64 pool_range_start;
@@ -28,6 +30,7 @@ void ghost_pfn_set_init(struct pfn_set *set, u64 pool_range_start, u64 pool_rang
 void ghost_pfn_set_clear(struct pfn_set *set);
 void ghost_pfn_set_insert(struct pfn_set *set, u64 pfn);
 bool ghost_pfn_set_contains(struct pfn_set *set, u64 pfn);
+bool ghost_pfn_set_remove_external(struct pfn_set *set, u64 pfn);
 void ghost_pfn_set_copy(struct pfn_set *dst, struct pfn_set *src);
 
 void ghost_pfn_set_assert_equal(struct pfn_set *lhs, struct pfn_set *rhs);

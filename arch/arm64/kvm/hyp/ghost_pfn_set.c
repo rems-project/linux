@@ -34,6 +34,28 @@ bool ghost_pfn_set_contains(struct pfn_set *set, u64 pfn)
 	return false;
 }
 
+bool ghost_pfn_set_remove_external(struct pfn_set *set, u64 pfn)
+{
+	bool found = false;
+	int idx=0;
+	ghost_assert(set->len < GHOST_MAX_PFN_SET_LEN);
+	for (; idx < set->len; idx++) {
+		if (set->external_pfns[idx] == pfn) {
+			found = true;
+			break;
+		}
+	}
+	if (found) {
+		ghost_assert(set->len > 0);
+		for (; idx < set->len - 1; idx++) {
+			set->external_pfns[idx] = set->external_pfns[idx+1];
+		}
+		set->len--;
+	}
+	return found;
+}
+
+
 int gp_print_pfn_set(gp_stream_t *out, struct pfn_set *set)
 {
 	int ret;
