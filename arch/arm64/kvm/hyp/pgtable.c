@@ -64,6 +64,17 @@ extern void *hyp_zalloc_hyp_page(void *arg);
 extern void *hyp_phys_to_virt(phys_addr_t phys);
 extern phys_addr_t hyp_virt_to_phys(void *virt);
 
+/* CN specification for the allocator.
+
+   FIXME: For now, we assume an unrealistic, over-simplified allocator
+   specification. For instance, the following assumes that the offset
+   used in the hyp/phys is effectively a compile-time constant (does
+   not change and does not require resource ownership to be accessed.
+   We also entirely omit the ownership of the allocator pool in the
+   specification. Instead, we have to connect this verification to our
+   previous buddy allocator verification.
+*/
+
 /*@
 predicate {bool exists} Cond_Zero_Page (pointer p) {
   if (p == NULL) {
@@ -79,8 +90,6 @@ predicate {bool exists} Cond_Zero_Page (pointer p) {
 }
 @*/
 
-/* FIXME: the bit about phys_virt_offset is probably a lie, and asserts that
-   it is a true constant, rather than just constant after initialisation */
 /*@
 function (u64) phys_virt_offset ()
 
@@ -108,7 +117,6 @@ spec hyp_virt_to_phys (pointer virt)
     return == hyp_virt_to_phys (virt)
 @*/
 
-/* FIXME: this spec is a lie, and omits entirely the pool ownership */
 /*@
 function (bool) valid_hyp_virt_page (pointer p)
 {
@@ -347,11 +355,7 @@ static u32 kvm_pgtable_idx(struct kvm_pgtable_walk_data *data, u32 level)
 	u64 shift = kvm_granule_shift(level);
 	u64 mask = BIT(PAGE_SHIFT - 3) - 1;
 
-	/* CN addition */
-	u32 shifted = data->addr >> shift;
-        /*CHECK: u32 ret = shifted & mask;*/ /*/@ print(ret); /@*/
-
-	return shifted & mask;
+	return (data->addr >> shift) & mask;
 }
 
 /*@
@@ -376,9 +380,6 @@ static u32 kvm_pgd_page_idx(struct kvm_pgtable *pgt, u64 addr)
 {
 	u64 shift = kvm_granule_shift(pgt->start_level - 1); /* May underflow */
 	u64 mask = BIT(pgt->ia_bits) - 1;
-
-        /* u32 arg1 = pgt->start_level - 1; */ /*/@ print(arg1); /@*/
-        /* u32 ret = (addr & mask) >> shift; */ /*/@ print(ret); /@*/
 
 	return (addr & mask) >> shift;
 }
