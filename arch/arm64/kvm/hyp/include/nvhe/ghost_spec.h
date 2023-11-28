@@ -18,6 +18,7 @@
 #include <nvhe/ghost_call_data.h>
 #include <nvhe/ghost_control.h>
 #include <nvhe/ghost_status.h>
+#include <nvhe/ghost_registers.h>
 
 // top-level spec types
 
@@ -108,7 +109,7 @@ struct ghost_register {
  * @present: whether the parent ghost state has some ghost registers state for this (v)CPU
  * @pc: if present, ghost copy of the program counter
  * @gprs: if present, ghost copy of the general-purpose registers
- * @el1_sysregs: if present, ghost copy of the current value of the EL1 system registers
+ * @sysregs: if present, ghost copy of the current value of the EL0/EL1 system registers
  * @el2_sysregs: if present, ghost copy of the current value of the EL2 system registers.
  *
  * Not all the register values are present, and are marked accordingly (see struct ghost_register).
@@ -119,14 +120,14 @@ struct ghost_registers {
 	bool present;
 	struct ghost_register pc;
 	struct ghost_register gprs[31];
-	struct ghost_register el1_sysregs[NR_SYS_REGS];
-	struct ghost_register el2_sysregs[GHOST_NR_SYSREGS];
+	struct ghost_register sysregs[NR_GHOST_SYSREGS];
+	struct ghost_register el2_sysregs[NR_GHOST_EL2_SYSREGS];
 };
 
 u64 ghost_read_gpr_explicit(struct ghost_registers *st, int n);
 void ghost_write_gpr_explicit(struct ghost_registers *st, int n, u64 value);
-u64 ghost_read_el1_sysreg_explicit(struct ghost_registers *st, int n);
-void ghost_write_el1_sysreg_explicit(struct ghost_registers *st, int n, u64 value);
+u64 ghost_read_sysreg_explicit(struct ghost_registers *st, int n);
+void ghost_write_sysreg_explicit(struct ghost_registers *st, int n, u64 value);
 u64 ghost_read_el2_sysreg_explicit(struct ghost_registers *st, int n);
 void ghost_write_el2_sysreg_explicit(struct ghost_registers *st, int n, u64 value);
 
@@ -545,10 +546,10 @@ DECLARE_PER_CPU(struct ghost_running_state, ghost_cpu_run_state);
 #define ghost_write_gpr(g, reg_index, value) \
 	ghost_write_gpr_explicit(this_cpu_ghost_registers(g), reg_index, value)
 
-#define ghost_read_el1_sysreg(g, reg_index) \
-	ghost_read_el1_sysreg_explicit(this_cpu_ghost_registers(g), reg_index)
-#define ghost_write_el1_sysreg(g, reg_index, value) \
-	ghost_write_el1_sysreg_explicit(this_cpu_ghost_registers(g), reg_index, value)
+#define ghost_read_sysreg(g, reg_index) \
+	ghost_read_sysreg_explicit(this_cpu_ghost_registers(g), reg_index)
+#define ghost_write_sysreg(g, reg_index, value) \
+	ghost_write_sysreg_explicit(this_cpu_ghost_registers(g), reg_index, value)
 
 #define ghost_read_el2_sysreg(g, reg_index) \
 	ghost_read_el2_sysreg_explicit(this_cpu_ghost_registers(g), reg_index)

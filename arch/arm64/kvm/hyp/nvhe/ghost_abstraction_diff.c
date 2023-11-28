@@ -19,8 +19,6 @@
 #include <hyp/ghost_extra_debug-pl011.h>
 #include <nvhe/ghost_pgtable.h>
 #include <nvhe/ghost_spec.h>
-#include <nvhe/ghost_asm.h>
-#include <nvhe/ghost_asm_ids.h>
 
 #include <nvhe/ghost_abstraction_diff.h>
 
@@ -576,23 +574,25 @@ static void ghost_diff_registers(struct diff_container *node, struct ghost_regis
 	if (regs1->present && regs2->present) {
 		int i;
 
-		u64 ghost_el2_regs[] = (u64[])GHOST_EL2_REGS;
 		for (i=0; i<31; i++) {
 			GHOST_LOG_CONTEXT_ENTER_INNER("loop gpr");
 			ghost_diff_register(node, GPR_TAG, &i, &regs1->gprs[i], &regs2->gprs[i]);
 			GHOST_LOG_CONTEXT_EXIT_INNER("loop gpr");
 		}
-		for (i=0; i<NR_SYS_REGS; i++) {
-			GHOST_LOG_CONTEXT_ENTER_INNER("loop el1_sysreg");
-			const char *name = GHOST_VCPU_SYSREG_NAMES[i];
-			ghost_diff_register(node, SYSREG_TAG, (void*)name, &regs1->el1_sysregs[i], &regs2->el1_sysregs[i]);
-			GHOST_LOG_CONTEXT_EXIT_INNER("loop el1_sysreg");
+		for (i=0; i<NR_GHOST_SYSREGS; i++) {
+			GHOST_LOG_CONTEXT_ENTER_INNER("loop sysreg");
+			const char *name = GHOST_SYSREGS_NAMES[i];
+			if (!name)
+				ghost_printf("FOUND NULL NAME FOR EL1_SYSREG(%d)\n", i);
+			ghost_diff_register(node, SYSREG_TAG, (void*)name, &regs1->sysregs[i], &regs2->sysregs[i]);
+			GHOST_LOG_CONTEXT_EXIT_INNER("loop sysreg");
 		}
-		for (i=0; i<sizeof(ghost_el2_regs)/sizeof(u64); i++) {
+		for (i=0; i<NR_GHOST_EL2_SYSREGS; i++) {
 			GHOST_LOG_CONTEXT_ENTER_INNER("loop el2_regs");
-			u64 r = ghost_el2_regs[i];
-			const char *name = GHOST_EL2_REG_NAMES[r];
-			ghost_diff_register(node, SYSREG_TAG, (void*)name, &regs1->el2_sysregs[r], &regs2->el2_sysregs[r]);
+			const char *name = GHOST_EL2_SYSREGS_NAMES[i];
+			if (!name)
+				ghost_printf("FOUND NULL NAME FOR EL2_SYSREG(%d)\n", i);
+			ghost_diff_register(node, SYSREG_TAG, (void*)name, &regs1->el2_sysregs[i], &regs2->el2_sysregs[i]);
 			GHOST_LOG_CONTEXT_EXIT_INNER("loop el2_regs");
 		}
 	}

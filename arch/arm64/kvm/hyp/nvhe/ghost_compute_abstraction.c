@@ -47,6 +47,7 @@
 
 #include <hyp/ghost_alloc.h>
 
+#include <nvhe/ghost_registers.h>
 #include <nvhe/ghost_spec.h>
 #include <nvhe/ghost_compute_abstraction.h>
 
@@ -227,91 +228,43 @@ inline void make_abstract_register(struct ghost_register *reg, u64 value)
 	reg->status = GHOST_PRESENT;
 	reg->value = value;
 }
-void compute_abstract_registers(struct ghost_registers *regs, struct kvm_cpu_context *ctxt)
+
+void ghost_registers_copy_sysregs_from_context(const struct kvm_cpu_context* ctxt, struct ghost_register out_sysregs[NR_GHOST_SYSREGS])
+{
+	for (int i=__INVALID_SYSREG__ + 1; i<NR_SYS_REGS; i++) {
+		u32 idx = ghost_registers_mapping[i];
+		if (!(BIT(31) & idx)) {
+			ghost_assert(idx < NR_GHOST_SYSREGS);
+			make_abstract_register(&out_sysregs[idx], ctxt->sys_regs[i]);
+		}
+	}
+}
+
+void ghost_registers_copy_el2_sysregs_from_context(const struct kvm_cpu_context* ctxt, struct ghost_register out_el2_sysregs[NR_GHOST_EL2_SYSREGS])
+{
+	for (int i=__INVALID_SYSREG__ + 1; i<NR_SYS_REGS; i++) {
+		u32 idx = ghost_registers_mapping[i];
+		if (BIT(31) & idx) {
+			ghost_assert(~idx < NR_GHOST_EL2_SYSREGS);
+			make_abstract_register(&out_el2_sysregs[~idx], ctxt->sys_regs[i]);
+		}
+	}
+}
+
+void compute_abstract_registers(struct ghost_registers *regs, struct kvm_cpu_context *ctxt, bool copy_el2_sysregs)
 {
 	regs->present = true;
 	make_abstract_register(&regs->pc, ctxt->regs.pc);
+
 	for (int i=0; i<31; i++)
 		make_abstract_register(&regs->gprs[i], ctxt->regs.regs[i]);
-	for (int i=0; i<NR_SYS_REGS; i++) 
-		make_abstract_register(&regs->el1_sysregs[i], ctxt->sys_regs[i]);
-	for (int i=0; i<GHOST_NR_SYSREGS; i++) {
-		// TODO: hack, redo this better
-		switch(i) {
-		// case GHOST_SP:
-		// 	make_abstract_register(&regs->el2_sysregs[i], ctxt->sys_regs[???]);
-		// 	break;
-		case GHOST_HCR_EL2:
-			make_abstract_register(&regs->el2_sysregs[i], ctxt->sys_regs[HCR_EL2]);
-			break;
-		case GHOST_MAIR_EL2:
-			make_abstract_register(&regs->el2_sysregs[i], ctxt->sys_regs[MAIR_EL2]);
-			break;
-		case GHOST_MDCR_EL2:
-			make_abstract_register(&regs->el2_sysregs[i], ctxt->sys_regs[MDCR_EL2]);
-			break;
-		// case GHOST_PSTATE_DAIF:
-		// 	make_abstract_register(&regs->el2_sysregs[i], ctxt->sys_regs[????]);
-		// 	break;
-		// case GHOST_PSTATE_CURRENTEL:
-		// 	make_abstract_register(&regs->el2_sysregs[i], ctxt->sys_regs[????]);
-		// 	break;
-		// case GHOST_PSTATE_SPSEL:
-		// 	make_abstract_register(&regs->el2_sysregs[i], ctxt->sys_regs[????]);
-		// 	break;
-		case GHOST_SCTLR_EL2:
-			make_abstract_register(&regs->el2_sysregs[i], ctxt->sys_regs[SCTLR_EL2]);
-			break;
-		case GHOST_TCR_EL2:
-			make_abstract_register(&regs->el2_sysregs[i], ctxt->sys_regs[TCR_EL2]);
-			break;
-		case GHOST_TPIDR_EL2:
-			make_abstract_register(&regs->el2_sysregs[i], ctxt->sys_regs[TPIDR_EL2]);
-			break;
-		case GHOST_VTCR_EL2:
-			make_abstract_register(&regs->el2_sysregs[i], ctxt->sys_regs[VTCR_EL2]);
-			break;
-		case GHOST_VTTBR_EL2:
-			make_abstract_register(&regs->el2_sysregs[i], ctxt->sys_regs[VTTBR_EL2]);
-			break;
-		case GHOST_TTBR0_EL2:
-			make_abstract_register(&regs->el2_sysregs[i], ctxt->sys_regs[TTBR0_EL2]);
-			break;
-		case GHOST_ELR_EL2:
-			make_abstract_register(&regs->el2_sysregs[i], ctxt->sys_regs[ELR_EL2]);
-			break;
-		case GHOST_ESR_EL2:
-			make_abstract_register(&regs->el2_sysregs[i], ctxt->sys_regs[ESR_EL2]);
-			break;
-		case GHOST_FAR_EL2:
-			make_abstract_register(&regs->el2_sysregs[i], ctxt->sys_regs[FAR_EL2]);
-			break;
-		case GHOST_HPFAR_EL2:
-			make_abstract_register(&regs->el2_sysregs[i], ctxt->sys_regs[HPFAR_EL2]);
-			break;
-		// case GHOST_ID_AA64AFR0_EL1:
-		// 	make_abstract_register(&regs->el2_sysregs[i], ctxt->sys_regs[[???]);]);
-		// 	break;
-		// case GHOST_ID_AA64AFR1_EL1:
-		// 	make_abstract_register(&regs->el2_sysregs[i], ctxt->sys_regs[[???]);]);
-		// 	break;
-		// case GHOST_ID_AA64PFR0_EL1:
-		// 	make_abstract_register(&regs->el2_sysregs[i], ctxt->sys_regs[[???]);]);
-		// 	break;
-		// case GHOST_ID_AA64PFR1_EL1:
-		// 	make_abstract_register(&regs->el2_sysregs[i], ctxt->sys_regs[[???]);]);
-		// 	break;
-		// case GHOST_ID_AA64DFR0_EL1:
-		// 	make_abstract_register(&regs->el2_sysregs[i], ctxt->sys_regs[???]);
-		// 	break;
-		// case GHOST_ID_AA64DFR1_EL1:
-		// 	make_abstract_register(&regs->el2_sysregs[i], ctxt->sys_regs[???]);
-		// 	break;
 
-		default:
-			regs->el2_sysregs[i].status = GHOST_ABSENT; // TODO: check this
-		}
-	}
+	ghost_registers_copy_sysregs_from_context(ctxt, regs->sysregs);
+
+	if (copy_el2_sysregs)
+		ghost_registers_copy_el2_sysregs_from_context(ctxt, regs->sysregs);
+	else for (int i=0; i<NR_GHOST_EL2_SYSREGS; i++)
+		regs->el2_sysregs[i].status = GHOST_ABSENT;
 }
 
 /// from a vm_table index compute the abstract ghost VM
@@ -350,7 +303,7 @@ void compute_abstraction_vm_partial(struct ghost_vm *dest, struct pkvm_hyp_vm *h
 				if (vcpu) {
 					g_vcpu->loaded = vcpu->loaded_hyp_vcpu ? true : false;
 					g_vcpu->regs.present = true;
-					compute_abstract_registers(&g_vcpu->regs, &vcpu->vcpu.arch.ctxt);
+					compute_abstract_registers(&g_vcpu->regs, &vcpu->vcpu.arch.ctxt, true/*we also copy EL2 sysregs*/);
 				}
 				dest->vm_table_locked.vcpus[vcpu_idx] = g_vcpu;
 			}
@@ -1232,33 +1185,68 @@ void record_abstraction_vms_and_check_none(struct ghost_state *g)
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
+
+#define RECORD_EL2_SYSREG(R, NAME) \
+	make_abstract_register(&R[TO_GHOST_SYSREG(NAME)], read_sysreg(NAME))
+void record_abstraction_el2_sysregs(struct ghost_registers *gr)
+{
+	for (int i=0; i<NR_GHOST_EL2_SYSREGS; i++)
+		gr->el2_sysregs[i].status = GHOST_ABSENT;
+
+	RECORD_EL2_SYSREG(gr->el2_sysregs, CNTVOFF_EL2);
+	RECORD_EL2_SYSREG(gr->el2_sysregs, DACR32_EL2);
+	RECORD_EL2_SYSREG(gr->el2_sysregs, IFSR32_EL2);
+	RECORD_EL2_SYSREG(gr->el2_sysregs, DBGVCR32_EL2);
+	RECORD_EL2_SYSREG(gr->el2_sysregs, VPIDR_EL2);
+	RECORD_EL2_SYSREG(gr->el2_sysregs, VMPIDR_EL2);
+	RECORD_EL2_SYSREG(gr->el2_sysregs, SCTLR_EL2);
+	RECORD_EL2_SYSREG(gr->el2_sysregs, ACTLR_EL2);
+	RECORD_EL2_SYSREG(gr->el2_sysregs, HCR_EL2);
+	RECORD_EL2_SYSREG(gr->el2_sysregs, MDCR_EL2);
+	RECORD_EL2_SYSREG(gr->el2_sysregs, CPTR_EL2);
+	RECORD_EL2_SYSREG(gr->el2_sysregs, HSTR_EL2);
+	RECORD_EL2_SYSREG(gr->el2_sysregs, HACR_EL2);
+	RECORD_EL2_SYSREG(gr->el2_sysregs, TTBR0_EL2);
+	RECORD_EL2_SYSREG(gr->el2_sysregs, TCR_EL2);
+	RECORD_EL2_SYSREG(gr->el2_sysregs, VTTBR_EL2);
+	RECORD_EL2_SYSREG(gr->el2_sysregs, VTCR_EL2);
+	RECORD_EL2_SYSREG(gr->el2_sysregs, SPSR_EL2);
+	RECORD_EL2_SYSREG(gr->el2_sysregs, ELR_EL2);
+	RECORD_EL2_SYSREG(gr->el2_sysregs, AFSR0_EL2);
+	RECORD_EL2_SYSREG(gr->el2_sysregs, AFSR1_EL2);
+	RECORD_EL2_SYSREG(gr->el2_sysregs, ESR_EL2);
+	RECORD_EL2_SYSREG(gr->el2_sysregs, FAR_EL2);
+	RECORD_EL2_SYSREG(gr->el2_sysregs, HPFAR_EL2);
+	RECORD_EL2_SYSREG(gr->el2_sysregs, MAIR_EL2);
+	RECORD_EL2_SYSREG(gr->el2_sysregs, AMAIR_EL2);
+	RECORD_EL2_SYSREG(gr->el2_sysregs, VBAR_EL2);
+	RECORD_EL2_SYSREG(gr->el2_sysregs, RVBAR_EL2);
+	RECORD_EL2_SYSREG(gr->el2_sysregs, TPIDR_EL2);
+	RECORD_EL2_SYSREG(gr->el2_sysregs, CNTHCTL_EL2);
+	RECORD_EL2_SYSREG(gr->el2_sysregs, CNTHP_CTL_EL2);
+	RECORD_EL2_SYSREG(gr->el2_sysregs, CNTHP_CVAL_EL2);
+
+	// TODO: reading this sysreg gives a "Trapped access to SVE, Advanced SIMD or floating point"
+	// RECORD_EL2_SYSREG(gr->el2_sysregs, FPEXC32_EL2);
+
+	// TODO: these are not permitted by the compiler
+	// RECORD_EL2_SYSREG(gr->el2_sysregs, TTBR1_EL2);
+	// RECORD_EL2_SYSREG(gr->el2_sysregs, CONTEXTIDR_EL2);
+	// RECORD_EL2_SYSREG(gr->el2_sysregs, CNTHV_CTL_EL2);
+	// RECORD_EL2_SYSREG(gr->el2_sysregs, CNTHV_CVAL_EL2);
+
+	// RECORD_EL2_SYSREG(gr->el2_sysregs, SP_EL2);
+}
+
 void record_abstraction_regs(struct ghost_registers *gr, struct kvm_cpu_context *ctxt)
 {
-// TODO this not yet right
 	gr->present = true;
+	// TODO: this is blowing up the stack
 	struct kvm_cpu_context myctxt = *ctxt;
 	__sysreg_save_state_nvhe(&myctxt);
-	compute_abstract_registers(gr, /*ctxt*/&myctxt);
-	u64 buf[GHOST_NR_SYSREGS];
-	ghost_get_sysregs(buf);
-	for (int i=0; i<GHOST_NR_SYSREGS; i++) {
-		gr->el2_sysregs[i].value = buf[i];
-	}
-/*
-	int i;
-	gr->present = true;
+	compute_abstract_registers(gr, &myctxt, false/*we do not copy the EL2 sysregs*/);
 
-	// copy GPR values from the ctxt saved by the exception vector
-	for (i=0; i<=30; i++) {
-		GHOST_GPR(gr, i) = ctxt->regs.regs[i];
-	}
-
-	// save EL2 registers
-	ghost_get_sysregs(gr->el2_sysregs);
-
-	// save EL1 registers comprising pKVM's view of the context
-	__sysreg_save_state_nvhe(&gr->ctxt);
-*/
+	record_abstraction_el2_sysregs(gr);
 }
 
 void ghost_cpu_running_state_copy(struct ghost_running_state *run_tgt, struct ghost_running_state *g_src)

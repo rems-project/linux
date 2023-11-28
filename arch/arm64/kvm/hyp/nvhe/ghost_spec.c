@@ -29,31 +29,33 @@ u64 ghost_read_gpr_explicit(struct ghost_registers *st, int n)
 void ghost_write_gpr_explicit(struct ghost_registers *st, int n, u64 value)
 {
 	ghost_assert(0 <= n && n < 31);
-	ghost_spec_assert(st->gprs[n].status == GHOST_PRESENT); // TODO: check that we indeed want a spec-assert
+	st->gprs[n].status = GHOST_PRESENT;
 	st->gprs[n].value = value;
 }
-u64 ghost_read_el1_sysreg_explicit(struct ghost_registers *st, int n)
+u64 ghost_read_sysreg_explicit(struct ghost_registers *st, int n)
 {
-	ghost_assert(0 <= n && n < NR_SYS_REGS);
-	ghost_spec_assert(st->el1_sysregs[n].status == GHOST_PRESENT); // TODO: check that we indeed want a spec-assert
-	return st->el1_sysregs[n].value;
+	ghost_assert(0 <= n && n < NR_GHOST_SYSREGS);
+	ghost_spec_assert(st->sysregs[n].status == GHOST_PRESENT); // TODO: check that we indeed want a spec-assert
+	return st->sysregs[n].value;
 }
-void ghost_write_el1_sysreg_explicit(struct ghost_registers *st, int n, u64 value)
+void ghost_write_sysreg_explicit(struct ghost_registers *st, int n, u64 value)
 {
-	ghost_assert(0 <= n && n < NR_SYS_REGS);
-	ghost_spec_assert(st->el1_sysregs[n].status == GHOST_PRESENT); // TODO: check that we indeed want a spec-assert
-	st->el1_sysregs[n].value = value;
+	ghost_assert(0 <= n && n < NR_GHOST_SYSREGS);
+	st->sysregs[n].status = GHOST_PRESENT;
+	st->sysregs[n].value = value;
 }
 u64 ghost_read_el2_sysreg_explicit(struct ghost_registers *st, int n)
 {
-	ghost_assert(0 <= n && n < GHOST_NR_SYSREGS);
+	ghost_assert(0 <= n && n < NR_GHOST_EL2_SYSREGS);
+	if (st->el2_sysregs[n].status != GHOST_PRESENT)
+		ghost_printf("TRYING TO READ EL2_SYSREG ==> %d\n", n);
 	ghost_spec_assert(st->el2_sysregs[n].status == GHOST_PRESENT); // TODO: check that we indeed want a spec-assert
 	return st->el2_sysregs[n].value;
 }
 void ghost_write_el2_sysreg_explicit(struct ghost_registers *st, int n, u64 value)
 {
-	ghost_assert(0 <= n && n < GHOST_NR_SYSREGS);
-	ghost_spec_assert(st->el2_sysregs[n].status == GHOST_PRESENT); // TODO: check that we indeed want a spec-assert
+	ghost_assert(0 <= n && n < NR_GHOST_EL2_SYSREGS);
+	st->el2_sysregs[n].status = GHOST_PRESENT;
 	st->el2_sysregs[n].value = value;
 }
 
@@ -1113,13 +1115,15 @@ bool compute_new_abstract_state_handle___pkvm_init_vcpu(struct ghost_state *g1, 
 		vcpu->regs.gprs[i].status = GHOST_PRESENT;
 		vcpu->regs.gprs[i].value = 0;
 	}
-	for (int i=0; i<NR_SYS_REGS; i++) {
-		vcpu->regs.el1_sysregs[i].status = GHOST_PRESENT;
-		vcpu->regs.el1_sysregs[i].value = 0;
+	for (int i=0; i<NR_GHOST_SYSREGS; i++) {
+		ghost_write_sysreg_explicit(&vcpu->regs, i, 0);
+		// vcpu->regs.el1_sysregs[i].status = GHOST_PRESENT;
+		// vcpu->regs.el1_sysregs[i].value = 0;
 	}
-	for (int i=0; i<GHOST_NR_SYSREGS; i++) {
-		vcpu->regs.el2_sysregs[i].status = GHOST_PRESENT;
-		vcpu->regs.el2_sysregs[i].value = 0;
+	for (int i=0; i<NR_GHOST_EL2_SYSREGS; i++) {
+		ghost_write_el2_sysreg_explicit(&vcpu->regs, i, 0);
+		// vcpu->regs.el2_sysregs[i].status = GHOST_PRESENT;
+		// vcpu->regs.el2_sysregs[i].value = 0;
 	}
 	// TODO: if the vcpu is NOT protected ===> the vcpu it set to a ON_PENDING state and the reset values for x0 and pc are taken
 	//	 from the host_vcpu struct
@@ -1299,16 +1303,16 @@ void ghost_inject_abort(struct ghost_state *g1, struct ghost_state *g0)
 	// userspace fault
 	esr_el1 |= ESR_ELx_S1PTW;
 
-	ghost_write_el1_sysreg(g1, ESR_EL1, esr_el1);
-	ghost_write_el1_sysreg(g1, SPSR_EL1, spsr_el2);
-	ghost_write_el1_sysreg(g1, ELR_EL1, ghost_read_el2_sysreg(g0, GHOST_ELR_EL2));
-	ghost_write_el1_sysreg(g1, FAR_EL1, ghost_read_el2_sysreg(g0, GHOST_FAR_EL2));
+	ghost_write_sysreg(g1, ESR_EL1, esr_el1);
+	ghost_write_sysreg(g1, SPSR_EL1, spsr_el2);
+	ghost_write_sysreg(g1, ELR_EL1, ghost_read_el2_sysreg(g0, GHOST_ELR_EL2));
+	ghost_write_sysreg(g1, FAR_EL1, ghost_read_el2_sysreg(g0, GHOST_FAR_EL2));
 
 	ghost_write_el2_sysreg(g1, GHOST_ELR_EL2,
-		ghost_read_el1_sysreg(g0, VBAR_EL1) + get_except64_offset(spsr_el2, PSR_MODE_EL1h, except_type_sync));
+		ghost_read_sysreg(g0, VBAR_EL1) + get_except64_offset(spsr_el2, PSR_MODE_EL1h, except_type_sync));
 
 	spsr_el2 = get_except64_cpsr(spsr_el2, false/*TODO: we hardcode that the cpus do not support MTE */,
-				     ghost_read_el1_sysreg(g0, SCTLR_EL1), PSR_MODE_EL1h);
+				     ghost_read_sysreg(g0, SCTLR_EL1), PSR_MODE_EL1h);
 	ghost_write_el2_sysreg(g1, GHOST_SPSR_EL2, spsr_el2);
 }
 
