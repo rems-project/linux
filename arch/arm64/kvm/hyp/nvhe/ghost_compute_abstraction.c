@@ -262,7 +262,7 @@ void compute_abstract_registers(struct ghost_registers *regs, struct kvm_cpu_con
 	ghost_registers_copy_sysregs_from_context(ctxt, regs->sysregs);
 
 	if (copy_el2_sysregs)
-		ghost_registers_copy_el2_sysregs_from_context(ctxt, regs->sysregs);
+		ghost_registers_copy_el2_sysregs_from_context(ctxt, regs->el2_sysregs);
 	else for (int i=0; i<NR_GHOST_EL2_SYSREGS; i++)
 		regs->el2_sysregs[i].status = GHOST_ABSENT;
 }
