@@ -1916,6 +1916,14 @@ void ghost_post(struct kvm_cpu_context *ctxt)
 
 	GHOST_LOG_CONTEXT_ENTER();
 	if (ghost_exec_enabled()) {
+		/* print out the return error codes */
+		if (__this_cpu_read(ghost_print_this_hypercall)) {
+			ghost_printf("---\n");
+			ghost_printf("ret:\n");
+			ghost_printf("[r0] %lx\n", ctxt->regs.regs[0]);
+			ghost_printf("[r1] %lx\n", ctxt->regs.regs[1]);
+		}
+
 		// record the remaining parts of the new impl abstract state
 		// (the pkvm, host, and vm components having been recorded at impl lock points)
 		ghost_lock_maplets();
@@ -1930,10 +1938,6 @@ void ghost_post(struct kvm_cpu_context *ctxt)
 		// and check the two are equal on relevant components
 		if (new_state_computed) {
 			if (__this_cpu_read(ghost_print_this_hypercall)) {
-				ghost_printf("---\n");
-				ghost_printf("ret:\n");
-				ghost_printf("[r0] %lx\n", ctxt->regs.regs[0]);
-				ghost_printf("[r1] %lx\n", ctxt->regs.regs[1]);
 				ghost_printf(GHOST_WHITE_ON_BLUE "check abstraction" GHOST_NORMAL "\n");
 
 #ifdef CONFIG_NVHE_GHOST_SPEC_DUMP_STATE
