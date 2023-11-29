@@ -126,10 +126,10 @@ struct ghost_registers {
 
 u64 ghost_read_gpr_explicit(struct ghost_registers *st, int n);
 void ghost_write_gpr_explicit(struct ghost_registers *st, int n, u64 value);
-u64 ghost_read_sysreg_explicit(struct ghost_registers *st, int n);
-void ghost_write_sysreg_explicit(struct ghost_registers *st, int n, u64 value);
-u64 ghost_read_el2_sysreg_explicit(struct ghost_registers *st, int n);
-void ghost_write_el2_sysreg_explicit(struct ghost_registers *st, int n, u64 value);
+u64 ghost_read_sysreg_explicit(struct ghost_registers *st, enum ghost_sysreg n);
+void ghost_write_sysreg_explicit(struct ghost_registers *st, enum ghost_sysreg n, u64 value);
+u64 ghost_read_el2_sysreg_explicit(struct ghost_registers *st, enum ghost_el2_sysreg n);
+void ghost_write_el2_sysreg_explicit(struct ghost_registers *st, enum ghost_el2_sysreg n, u64 value);
 
 /**
  * struct ghost_vcpu - A single vcpu within a VM
@@ -546,15 +546,15 @@ DECLARE_PER_CPU(struct ghost_running_state, ghost_cpu_run_state);
 #define ghost_write_gpr(g, reg_index, value) \
 	ghost_write_gpr_explicit(this_cpu_ghost_registers(g), reg_index, value)
 
-#define ghost_read_sysreg(g, reg_index) \
-	ghost_read_sysreg_explicit(this_cpu_ghost_registers(g), reg_index)
-#define ghost_write_sysreg(g, reg_index, value) \
-	ghost_write_sysreg_explicit(this_cpu_ghost_registers(g), reg_index, value)
+#define ghost_read_sysreg(g, reg_name) \
+	ghost_read_sysreg_explicit(this_cpu_ghost_registers(g), GHOST_SYSREG(reg_name))
+#define ghost_write_sysreg(g, reg_name, value) \
+	ghost_write_sysreg_explicit(this_cpu_ghost_registers(g), GHOST_SYSREG(reg_name), value)
 
-#define ghost_read_el2_sysreg(g, reg_index) \
-	ghost_read_el2_sysreg_explicit(this_cpu_ghost_registers(g), reg_index)
-#define ghost_write_el2_sysreg(g, reg_index, value) \
-	ghost_write_el2_sysreg_explicit(this_cpu_ghost_registers(g), reg_index, value)
+#define ghost_read_el2_sysreg(g, reg_name) \
+	ghost_read_el2_sysreg_explicit(this_cpu_ghost_registers(g), GHOST_SYSREG(reg_name))
+#define ghost_write_el2_sysreg(g, reg_name, value) \
+	ghost_write_el2_sysreg_explicit(this_cpu_ghost_registers(g), GHOST_SYSREG(reg_name), value)
 
 #define ghost_read_vcpu_gpr(vcpu, reg_index) \
 	ghost_read_gpr_explicit(&vcpu->regs, reg_index)

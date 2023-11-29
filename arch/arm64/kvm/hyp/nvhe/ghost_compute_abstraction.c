@@ -1187,7 +1187,7 @@ void record_abstraction_vms_and_check_none(struct ghost_state *g)
 
 
 #define RECORD_EL2_SYSREG(R, NAME) \
-	make_abstract_register(&R[TO_GHOST_SYSREG(NAME)], read_sysreg(NAME))
+	make_abstract_register(&R[GHOST_SYSREG(NAME)], read_sysreg(NAME))
 void record_abstraction_el2_sysregs(struct ghost_registers *gr)
 {
 	for (int i=0; i<NR_GHOST_EL2_SYSREGS; i++)
