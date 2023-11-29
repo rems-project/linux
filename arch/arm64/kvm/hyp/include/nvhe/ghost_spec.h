@@ -46,6 +46,11 @@ extern u64 ghost_prot_finalized_count;
 extern bool ghost_prot_finalized_all;
 DECLARE_PER_CPU(bool, ghost_check_this_hypercall);
 
+/**
+ * ghost_this_trap - The name of the current trap.
+ */
+DECLARE_PER_CPU(const char *, ghost_this_trap);
+
 /*
  * We shouldn't try check the recorded state against the previously recorded state on the start of a trap
  * if the previous hypercall on this CPU wasn't checked.

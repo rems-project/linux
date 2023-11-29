@@ -1755,6 +1755,8 @@ struct ghost_trap_data {
 	const char *params[6];
 };
 
+DEFINE_PER_CPU(const char *, ghost_this_trap);
+
 #define __HCALL(EC, NAME, R0, R1, R2, R3, R4, R5) \
 	(struct ghost_trap_data){.valid=true, .ec=EC, .name=NAME, .params={R0,R1,R2,R3,R4,R5}}
 
@@ -1880,6 +1882,7 @@ static void tag_exception_entry(struct kvm_cpu_context *ctxt)
 
 	struct ghost_trap_data trap = compute_trap_state(ctxt, from_guest);
 
+	__this_cpu_write(ghost_this_trap, trap.name);
 	__this_cpu_write(ghost_print_this_hypercall, ghost_print_on(trap.name));
 	__this_cpu_write(ghost_check_this_hypercall, READ_ONCE(ghost_prot_finalized_all) && trap.valid && (!ghost_control_is_controlled(trap.name) || ghost_control_check_enabled(trap.name)));
 

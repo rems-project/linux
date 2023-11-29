@@ -1480,14 +1480,11 @@ void record_and_check_abstraction_vm_pre(struct pkvm_hyp_vm *vm)
 	struct ghost_state *g = this_cpu_ptr(&gs_recorded_pre);
 	pkvm_handle_t handle = vm->kvm.arch.pkvm.handle;
 
-	record_abstraction_vm_partial(g, vm, VMS_VM_OWNED);
+	// If this is __init_vm, then the lock was taken after a vm was partially initialised
+	// and we shouldn't try record it.
+	if (strcmp(__this_cpu_read(ghost_this_trap), "__pkvm_init_vm")) {
+		record_abstraction_vm_partial(g, vm, VMS_VM_OWNED);
 
-	// Edge case: it might be that this is actually the very first time we take the vm lock
-	// just after creating the vm, therefore it wont exist in gs.vms yet!
-	// so only do the check if it was really there before we started.
-	// NOTE: this is ok, because at the unlock we will put this vm in there,
-	// so on future locks we will do the check.
-	if (ghost_vms_is_valid_handle(&gs.vms, handle)) {
 		if (ghost_checked_last_call()) {
 			check_abstraction_vm_in_vms_and_equal(handle, g, &gs.vms);
 		}
