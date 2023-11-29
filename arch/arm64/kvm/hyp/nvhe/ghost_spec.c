@@ -7,7 +7,7 @@
 #include <linux/arm-smccc.h>
 #pragma GCC diagnostic ignored "-Wdeclaration-after-statement"
 
-#include <nvhe/spinlock.h>   
+#include <nvhe/spinlock.h>
 #include <nvhe/trap_handler.h>   // for DECLARE_REG
 #include <nvhe/mem_protect.h>   // for DECLARE_REG
 #include <asm/kvm_asm.h>    // for __KVM_HOST_SMCCC_FUNC___pkvm_host_share_hyp etc
