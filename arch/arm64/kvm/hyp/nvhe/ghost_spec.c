@@ -1417,7 +1417,6 @@ static void ghost_restore_host_context(struct ghost_state *g1, struct ghost_stat
 
 bool compute_new_abstract_state_pkvm_memshare(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call)
 {
-	int host_ret = ARM_EXCEPTION_TRAP;
 	int ret = 0;
 
 	// Get the VCPU loaded onto this physical core. It provides further indices.
@@ -1522,7 +1521,7 @@ out_host:
 	ghost_restore_host_context(g1, g0);
 
 	/* ... but R0 will have been updated with the error code */
-	ghost_write_gpr(g1, 0, host_ret);
+	ghost_write_gpr(g1, 0, ARM_EXCEPTION_TRAP);
 
 	return true;
 
@@ -1534,7 +1533,6 @@ out_guest_err:
 	ghost_write_vcpu_gpr(vcpu1, 2, 0);
 	ghost_write_vcpu_gpr(vcpu1, 3, 0);
 
-	// XXX HOW TO DENOTE RETURN TO GUEST?
 	return true;
 }
 
@@ -1570,7 +1568,7 @@ bool compute_new_abstract_state_pkvm_memunshare(struct ghost_state *g1, struct g
 	ghost_vm_clone_into_partial(g1_vm, g0_vm, VMS_VM_OWNED);
 	ghost_vm_clone_into_partial(g1_vm, g0_vm, VMS_VM_TABLE_OWNED);
 	struct ghost_vcpu *vcpu1 = g1_vm->vm_table_locked.vcpus[loaded_vcpu->vcpu_index];
-	*vcpu1 = *vcpu0;
+	ghost_vcpu_clone_into(vcpu1, vcpu0);
 
 	if (arg2 || arg3)
 		goto out_guest_err;
@@ -1624,30 +1622,30 @@ bool compute_new_abstract_state_pkvm_memunshare(struct ghost_state *g1, struct g
 		mapping_minus(g0->host.host_abstract_pgtable_shared, host_ipa, 1);
 
 	g1->host.host_abstract_pgtable_annot =
-		mapping_plus(g0->host.host_abstract_pgtable_shared,
+		mapping_plus(g0->host.host_abstract_pgtable_annot,
 			mapping_singleton(GHOST_STAGE2, host_ipa, 1,
-				maplet_target_mapped_attrs(phys, 1,
-					ghost_default_host_memory_attributes(true,
-						MAPLET_PAGE_STATE_PRIVATE_OWNED))));
-	
+				maplet_target_annot_ext(MAPLET_OWNER_ANNOT_OWNED_GUEST)));
+
 out_host:
 
 	if (ret == -EFAULT) {
-		// XXX
+		// See compute_new_abstract_state_pkvm_memshare
 	}
 
-	// XXX HOW TO DENOTE RETURN TO HOST?
+	ghost_save_guest_context(vcpu1, g0);
+	ghost_restore_host_context(g1, g0);
+
+	ghost_write_gpr(g1, 0, ARM_EXCEPTION_TRAP);
+
 	return true;
 
 out_guest_err:
 
-	// Return in guest registers.
 	ghost_write_vcpu_gpr(vcpu1, 0, SMCCC_RET_INVALID_PARAMETER);
 	ghost_write_vcpu_gpr(vcpu1, 1, 0);
 	ghost_write_vcpu_gpr(vcpu1, 2, 0);
 	ghost_write_vcpu_gpr(vcpu1, 3, 0);
 
-	// XXX HOW TO DENOTE RETURN TO GUEST?
 	return true;
 }
 
@@ -1804,7 +1802,7 @@ static struct ghost_trap_data guest_hcalls[] = {
 	GUEST_HCALL(ARM_SMCCC_VENDOR_HYP_KVM_FEATURES_FUNC_ID, "", "", "", "", "", ""),
 	GUEST_HCALL(ARM_SMCCC_VENDOR_HYP_KVM_HYP_MEMINFO_FUNC_ID, "", "", "", "", "", ""),
 	GUEST_HCALL(ARM_SMCCC_VENDOR_HYP_KVM_MEM_SHARE_FUNC_ID, "", "ipa: %p", "(arg2):%lx", "(arg3):%lx", "", ""),
-	GUEST_HCALL(ARM_SMCCC_VENDOR_HYP_KVM_MEM_UNSHARE_FUNC_ID, "", "", "", "", "", "")
+	GUEST_HCALL(ARM_SMCCC_VENDOR_HYP_KVM_MEM_UNSHARE_FUNC_ID, "", "ipa: %p", "(arg2):%lx", "(arg3):%lx", "", ""),
 };
 #define NR_GUEST_HCALLS (sizeof(guest_hcalls)/sizeof(guest_hcalls[0]))
 
