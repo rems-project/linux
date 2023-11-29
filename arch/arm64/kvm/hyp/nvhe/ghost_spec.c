@@ -20,10 +20,13 @@
 #include <nvhe/ghost_control.h>
 
 
+/*
+ * Functions to make ghost registers accesses more uniform
+ */
 u64 ghost_read_gpr_explicit(struct ghost_registers *st, int n)
 {
 	ghost_assert(0 <= n && n < 31);
-	ghost_spec_assert(st->gprs[n].status == GHOST_PRESENT); // TODO: check that we indeed want a spec-assert
+	ghost_spec_assert(st->gprs[n].status == GHOST_PRESENT);
 	return st->gprs[n].value;
 }
 
@@ -37,7 +40,7 @@ void ghost_write_gpr_explicit(struct ghost_registers *st, int n, u64 value)
 u64 ghost_read_sysreg_explicit(struct ghost_registers *st, enum ghost_sysreg n)
 {
 	ghost_assert(0 <= n && n < NR_GHOST_SYSREGS);
-	ghost_spec_assert(st->sysregs[n].status == GHOST_PRESENT); // TODO: check that we indeed want a spec-assert
+	ghost_spec_assert(st->sysregs[n].status == GHOST_PRESENT);
 	return st->sysregs[n].value;
 }
 
@@ -51,9 +54,7 @@ void ghost_write_sysreg_explicit(struct ghost_registers *st, enum ghost_sysreg n
 u64 ghost_read_el2_sysreg_explicit(struct ghost_registers *st, enum ghost_el2_sysreg n)
 {
 	ghost_assert(0 <= n && n < NR_GHOST_EL2_SYSREGS);
-	if (st->el2_sysregs[n].status != GHOST_PRESENT)
-		ghost_printf("TRYING TO READ EL2_SYSREG ==> %d\n", n);
-	ghost_spec_assert(st->el2_sysregs[n].status == GHOST_PRESENT); // TODO: check that we indeed want a spec-assert
+	ghost_spec_assert(st->el2_sysregs[n].status == GHOST_PRESENT);
 	return st->el2_sysregs[n].value;
 }
 
@@ -63,6 +64,26 @@ void ghost_write_el2_sysreg_explicit(struct ghost_registers *st, enum ghost_el2_
 	st->el2_sysregs[n].status = GHOST_PRESENT;
 	st->el2_sysregs[n].value = value;
 }
+
+#define ghost_read_gpr(g, reg_index) \
+	ghost_read_gpr_explicit(this_cpu_ghost_registers(g), reg_index)
+#define ghost_write_gpr(g, reg_index, value) \
+	ghost_write_gpr_explicit(this_cpu_ghost_registers(g), reg_index, value)
+
+#define ghost_read_sysreg(g, reg_name) \
+	ghost_read_sysreg_explicit(this_cpu_ghost_registers(g), GHOST_SYSREG(reg_name))
+#define ghost_write_sysreg(g, reg_name, value) \
+	ghost_write_sysreg_explicit(this_cpu_ghost_registers(g), GHOST_SYSREG(reg_name), value)
+
+#define ghost_read_el2_sysreg(g, reg_name) \
+	ghost_read_el2_sysreg_explicit(this_cpu_ghost_registers(g), GHOST_SYSREG(reg_name))
+#define ghost_write_el2_sysreg(g, reg_name, value) \
+	ghost_write_el2_sysreg_explicit(this_cpu_ghost_registers(g), GHOST_SYSREG(reg_name), value)
+
+#define ghost_read_vcpu_gpr(vcpu, reg_index) \
+	ghost_read_gpr_explicit(&vcpu->regs, reg_index)
+#define ghost_write_vcpu_gpr(vcpu, reg_index, value) \
+	ghost_write_gpr_explicit(&vcpu->regs, reg_index, value)
 
 /*
  * Init tracking
