@@ -662,10 +662,8 @@ static void ghost_diff_vms(struct diff_container *node, struct ghost_vms *vms1, 
 
 	ghost_diff_enter_subfield(node, "vm_table_data");
 	ghost_diff_field(node, "present", diff_pair(TBOOL(vms1->table_data.present), TBOOL(vms2->table_data.present)));
-	if (!vms1->table_data.present || !vms1->table_data.present)
-		goto cleanup_table_data;
-
-	ghost_diff_field(node, "nr_vms", diff_pair(TU64(vms1->table_data.nr_vms), TU64(vms2->table_data.nr_vms)));
+	if (vms1->table_data.present && vms1->table_data.present)
+		ghost_diff_field(node, "nr_vms", diff_pair(TU64(vms1->table_data.nr_vms), TU64(vms2->table_data.nr_vms)));
 	ghost_diff_pop_subfield(node);
 
 	ghost_diff_enter_subfield(node, "vm_table");
@@ -706,10 +704,7 @@ static void ghost_diff_vms(struct diff_container *node, struct ghost_vms *vms1, 
 		}
 	}
 	ghost_diff_pop_subfield(node);
-	goto cleanup_and_exit;
 
-cleanup_table_data:
-	ghost_diff_pop_subfield(node);
 cleanup_and_exit:
 	ghost_diff_pop_subfield(node);
 	GHOST_LOG_CONTEXT_EXIT();
