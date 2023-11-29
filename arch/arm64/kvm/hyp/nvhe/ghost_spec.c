@@ -185,6 +185,12 @@ static inline hyp_va_t hyp_va_of_host_va(const struct ghost_state *g, host_va_t 
 	return (host_va & va_mask) | (g->globals.tag_val << g->globals.tag_lsb);
 }
 
+static inline phys_addr_t phys_of_host_va(const struct ghost_state *g, host_va_t host_va)
+{
+	return phys_of_hyp_va(g, hyp_va_of_host_va(g, host_va));
+}
+
+
 // adapted from mem_protect.c to use the hyp_memory map
 bool ghost_addr_is_memory(struct ghost_state *g, phys_addr_t phys)
 {
@@ -849,19 +855,16 @@ out:
 	return true;
 }
 
-//TODO: move somewhere else
-#define phys_of_host_va(X) X// TODO
 // performs the mapping checks of hyp_pin_shared_mem (from mem_protect.c)
 // @from and @to are host_va
 bool ghost_hyp_check_host_shared_mem(struct ghost_state *g, host_va_t from, host_va_t to)
 {
 	u64 start = ALIGN_DOWN((u64)from, PAGE_SIZE);
 	u64 end = PAGE_ALIGN((u64)to);
-	u64 size = end - start;
-	for (host_va_t addr=start; addr < size * PAGE_SIZE; addr += PAGE_SIZE) {
-		if (!is_owned_and_shared_by(g, GHOST_HOST, phys_of_host_va(addr)))
+	for (host_va_t addr=start; addr < end; addr += PAGE_SIZE) {
+		if (!is_owned_and_shared_by(g, GHOST_HOST, phys_of_host_va(g, addr)))
 			return false;
-		if (!is_borrowed_by(g, GHOST_HYP, phys_of_host_va(addr)))
+		if (!is_borrowed_by(g, GHOST_HYP, hyp_va_of_host_va(g, addr)))
 			return false;
 	}
 	return true;
