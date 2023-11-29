@@ -11,9 +11,9 @@ def eprint(*args, then_exit=True, **kwargs):
 
 def extract_command(path):
     with open(path) as f:
-        command = f.readline().strip('\n').split(':=')[1]
+        command = f.readline().strip('\n').split(':=')[1].strip()
         if command.endswith('.c'):
-            return command.strip()
+            return command
 
 def extract_filename(cmd):
     return cmd.split()[-1]
