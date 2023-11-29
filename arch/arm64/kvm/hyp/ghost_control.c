@@ -53,6 +53,10 @@ static struct ghost_control_item ghost_controls[] = {
 	(struct ghost_control_item){.name="__pkvm_host_unshare_hyp", .check=IS_ENABLED(CONFIG_NVHE_GHOST_SPEC_CHECK___pkvm_host_unshare_hyp), .print=noisy_spec},
 	(struct ghost_control_item){.name="handle_host_mem_abort", .check=IS_ENABLED(CONFIG_NVHE_GHOST_SPEC_CHECK_handle_host_mem_abort), .print=IS_ENABLED(CONFIG_NVHE_GHOST_SPEC_NOISY_handle_host_mem_abort)},
 
+	// guest hypercalls
+	(struct ghost_control_item){.name="ARM_SMCCC_VENDOR_HYP_KVM_MEM_SHARE_FUNC_ID", .check=IS_ENABLED(CONFIG_NVHE_GHOST_SPEC_CHECK___pkvm_guest_share_host), .print=noisy_spec},
+	(struct ghost_control_item){.name="ARM_SMCCC_VENDOR_HYP_KVM_MEM_UNSHARE_FUNC_ID", .check=IS_ENABLED(CONFIG_NVHE_GHOST_SPEC_CHECK___pkvm_guest_unshare_host), .print=noisy_spec},
+
 	// old
 	(struct ghost_control_item){.name="handle_trap", .check=true, .print=verbose_spec},
 	(struct ghost_control_item){.name="___kvm_pgtable_walk", .check=false, .print=verbose_spec},

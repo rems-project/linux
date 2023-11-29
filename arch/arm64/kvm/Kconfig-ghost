@@ -172,6 +172,11 @@ config NVHE_GHOST_SPEC_CHECK___pkvm_vcpu_put
 # config NVHE_GHOST_SPEC_CHECK___pkvm_vcpu_sync_state
 # 	bool "Check __pkvm_vcpu_sync_state"
 
+config NVHE_GHOST_SPEC_CHECK___pkvm_guest_share_host
+	bool "Check __pkvm_guest_share_host"
+config NVHE_GHOST_SPEC_CHECK___pkvm_guest_unshare_host
+	bool "Check __pkvm_guest_unshare_host"
+
 endmenu
 
 menu "Inject errors"
