@@ -454,20 +454,29 @@ bool compute_new_abstract_state_handle___pkvm_host_reclaim_page(struct ghost_sta
 	int ret = 0;
 	u64 pfn = ghost_read_gpr(g0, 1);
 	phys_addr_t addr = hyp_pfn_to_phys(pfn);
+	host_ipa_t host_ipa = host_ipa_of_phys(addr);
 
 	// locking host (it looks like the .flags fields in the vmemmap are owned by the host lock)
 	// TODO: do we really want that?
 	ghost_spec_assert(g0->host.present); // TODO: not sure
 
+	copy_abstraction_host(g1, g0);
+
 	// get leaf for addr in the host s2 page table
 	// IF this causes an error, return it
 	// TODO: was does kvm_pgtable_get_leaf() return if not mapped ?
+
 	// IF the page of addr is exclusively owned by host, then return 0
-	
+	if (is_owned_exclusively_by(g0, GHOST_HOST, addr)) {
+		ret = 0;
+		goto out;
+	}
+
 	// let page: hyp_page = hyp_hyps_to_page(addr);
 	// if !page.pending_reclaim then return -EPERM
 	// else if page.need_poisoning then TODO: hyp_zero_page(addr) (which can fail, and error is returned)
 	//         and unset page.pending_reclaim
+
 	if (!ghost_pfn_set_contains(&g0->host.reclaimable_pfn_sets, pfn)) {
 		ret = -EPERM;
 		goto out;
@@ -475,27 +484,32 @@ bool compute_new_abstract_state_handle___pkvm_host_reclaim_page(struct ghost_sta
 
 	if (ghost_pfn_set_contains(&g0->host.need_poisoning_pfn_sets, pfn)) {
 		// TODO: how to model the zeroing? Do we want to?
-		ghost_pfn_set_remove_external(&g0->host.need_poisoning_pfn_sets, pfn);
-
+		ghost_pfn_set_remove_external(&g1->host.need_poisoning_pfn_sets, pfn);
 	}
 
-	// TODO: host_stage2_set_owner_locked(addr, PAGE_SIZE, PKVM_ID_HOST);
+	/* BS: spec should never get into a state where a reclaimable pfn
+	 * was shared with or given back to the host before it was reclaimed ?
+	 */
+	ghost_assert(!mapping_in_domain(host_ipa, g0->host.host_abstract_pgtable_shared));
+	ghost_assert(mapping_in_domain(host_ipa, g0->host.host_abstract_pgtable_annot));
+
+	/* was marked as owned by pKVM in annot, remove it. */
+	mapping_update(
+		&g1->host.host_abstract_pgtable_annot,
+		g0->host.host_abstract_pgtable_annot,
+		MAP_REMOVE_PAGE, GHOST_STAGE2, host_ipa, 1,  MAPLET_NONE
+	);
 
 	// unset page.pending_reclaim
+	ghost_pfn_set_remove_external(&g1->host.reclaimable_pfn_sets, pfn);
 
-	/// ---- IF not (addr IN host_annot) && host_shared(addr) = PKVM_PAGE_OWNED then return 0
-	struct maplet_target t;
-	host_ipa_t host_ipa = host_ipa_of_phys(addr);
-	if (!mapping_lookup(host_ipa, g0->host.host_abstract_pgtable_shared, &t))
-		return false;
+	// success.
+	ret = 0;
 
-	if (is_owned_exclusively_by(g0, GHOST_HOST, addr)) {
-		ret = 0;
-		goto out;
-	}
-	ghost_pfn_set_remove_external(&g0->host.reclaimable_pfn_sets, pfn);
 out:
 	ghost_write_gpr(g1, 1, ret);
+
+	/* check this spec */
 	return true;
 }
 
