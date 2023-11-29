@@ -693,7 +693,7 @@ static int host_stage2_idmap(u64 addr)
 		// sketch of the postcondition - punting on sundry cases
 		// some of this is common with pgtable.c stage2 postconditions and should be abstracted out when we know better what they all are
 		ghost_lock_maplets();
-		mapping_post = ghost_record_pgtable(&host_mmu.pgt, "host_stage2_idmap post", i+2);
+		mapping_post = ghost_record_pgtable(&host_mmu.pgt, NULL, "host_stage2_idmap post", i+2);
 		ghost_dump_pgtable_locked(&host_mmu.pgt,"after: host_mmu.pgt", i);
 		// the atomicity is interesting here: after the host_unlock_component(), what remains guaranteed?
 

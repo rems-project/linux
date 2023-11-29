@@ -235,7 +235,7 @@ void hyp_put_ek(enum entry_kind ek);
 void hyp_put_entry(kvm_pte_t pte, u8 level);
 void hyp_put_abstract_pgtable(abstract_pgtable *ap, u64 indent);
 
-mapping ghost_record_pgtable(struct kvm_pgtable *pgt, char *doc, u64 i);
+mapping ghost_record_pgtable(struct kvm_pgtable *pgt, struct pfn_set *out_pfns, char *doc, u64 i);
 mapping ghost_record_pgtable_and_check(mapping map_old, struct kvm_pgtable *pg, bool dump, char *doc, u64 i);
 
 // start from an arbitrary point down in the walk

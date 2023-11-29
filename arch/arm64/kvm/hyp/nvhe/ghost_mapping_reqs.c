@@ -533,7 +533,7 @@ void ghost_check_hyp_mapping_reqs(struct kvm_pgtable *pg, bool noisy)
 		goto out;
 	}
 
-	mapping mapping_pkvm = ghost_record_pgtable(pg, "check_hyp_mapping_reqs pgd", 2);
+	mapping mapping_pkvm = ghost_record_pgtable(pg, NULL, "check_hyp_mapping_reqs pgd", 2);
 	mapping mapping_reqs = interpret_mapping_reqs();
 	mapping_equal(mapping_reqs, mapping_pkvm, "check_hyp_mapping_reqs", "mapping_reqs", "mapping_pkvm",2);
 	free_mapping(mapping_pkvm);

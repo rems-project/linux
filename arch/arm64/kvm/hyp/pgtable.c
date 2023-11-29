@@ -1284,7 +1284,7 @@ int kvm_pgtable_stage2_map(struct kvm_pgtable *pgt, u64 addr, u64 size,
 		hyp_put_mapping(mapping_requested, i+2);
 
 		// record mapping on entry
-		mapping_pre = ghost_record_pgtable(pgt, "kvm_pgtable_stage2_map pre", i+2);
+		mapping_pre = ghost_record_pgtable(pgt, NULL, "kvm_pgtable_stage2_map pre", i+2);
 	}
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 
@@ -1328,7 +1328,7 @@ out:
 	if (ghost_check) {
 		// sketch of the postcondition - punting on sundry rounding and error/edge cases
 		ghost_lock_maplets();
-		mapping_post = ghost_record_pgtable(pgt, "kvm_pgtable_stage2_map post", i+2);
+		mapping_post = ghost_record_pgtable(pgt, NULL, "kvm_pgtable_stage2_map post", i+2);
 		// postcondition: mapping_requested included in mapping_post
 		mapping_submapping(mapping_requested, mapping_post, "kvm_pgtable_stage2_map post", "mapping_requested", "mapping_post", i+2);
 		// postcondition: mapping_post included in mapping_pre + mapping_requested

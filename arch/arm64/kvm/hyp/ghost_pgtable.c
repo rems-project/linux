@@ -388,7 +388,7 @@ void ghost_record_pgtable_into(mapping *out, struct kvm_pgtable *pg, struct pfn_
 		_interpret_pgtable(out, pg->pgd, out_pfns, stage, mair, 0, 0, aal, false);
 }
 
-mapping ghost_record_pgtable(struct kvm_pgtable *pgt, char *doc, u64 i)
+mapping ghost_record_pgtable(struct kvm_pgtable *pgt, struct pfn_set *out_pfns, char *doc, u64 i)
 {
 	mapping map;
 	bool is_s2 = pgt->mmu != NULL;
@@ -398,7 +398,7 @@ mapping ghost_record_pgtable(struct kvm_pgtable *pgt, char *doc, u64 i)
 	if (pgt->pgd == 0)
 		map = mapping_empty_();
 	else
-		ghost_record_pgtable_into(&map, pgt, NULL, stage, mair, i);
+		ghost_record_pgtable_into(&map, pgt, out_pfns, stage, mair, i);
 
 	return map;
 }
@@ -406,7 +406,7 @@ mapping ghost_record_pgtable(struct kvm_pgtable *pgt, char *doc, u64 i)
 void ghost_record_pgtable_ap(abstract_pgtable *ap_out, struct kvm_pgtable *pgt, u64 pool_range_start, u64 pool_range_end, char *doc, u64 i)
 {
 	ghost_pfn_set_init(&ap_out->table_pfns, pool_range_start, pool_range_end);
-	ap_out->mapping = ghost_record_pgtable(pgt, doc, i);
+	ap_out->mapping = ghost_record_pgtable(pgt, &ap_out->table_pfns, doc, i);
 	ap_out->root = hyp_virt_to_phys(pgt->pgd);
 }
 
@@ -415,7 +415,7 @@ mapping ghost_record_pgtable_and_check(mapping map_old, struct kvm_pgtable *pgt,
 	//hyp_puts("pgtable diff ");
 	//hyp_puts(doc);
 	//hyp_putc('\n');
-	mapping map = ghost_record_pgtable(pgt, NULL, i);
+	mapping map = ghost_record_pgtable(pgt, NULL, NULL, i);
 	if (dump) {
 		hyp_putspi(doc,i+2);
 		hyp_put_mapping(map, i+4);
@@ -460,7 +460,7 @@ void ghost_dump_pgtable_locked(struct kvm_pgtable *pg, char *doc, u64 i)
 		hyp_puts("empty");
 		return;
 	}
-	mapping map = ghost_record_pgtable(pg, NULL, 0);
+	mapping map = ghost_record_pgtable(pg, NULL, NULL, 0);
 	//hyp_puts("ghost_dump_pgtable post interpret_pgtable()\n");
 	hyp_put_mapping(map, i+2);
 	// dump_pgtable(*pg); // to look at the raw pgtable - verbosely!
