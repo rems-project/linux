@@ -1486,25 +1486,23 @@ bool compute_new_abstract_state_pkvm_memshare(struct ghost_state *g1, struct gho
 	}
 
 	// work in: do_share() -> __do_share()
-
+	
 	// Mark the guest page as PKVM_PAGE_SHARED_OWNED
-	g1_vm->vm_locked.vm_abstract_pgtable.mapping =
-		mapping_plus(g0_vm->vm_locked.vm_abstract_pgtable.mapping,
-			mapping_singleton(GHOST_STAGE2, guest_ipa_page, 1, 
-				maplet_target_mapped_ext(phys, 1, g0_vm_page_attrs.prot,
-					MAPLET_PAGE_STATE_SHARED_OWNED, g0_vm_page_attrs.memtype)));
+	mapping_update(&g1_vm->vm_locked.vm_abstract_pgtable.mapping,
+			g0_vm->vm_locked.vm_abstract_pgtable.mapping,
+			MAP_UPDATE_PAGE, GHOST_STAGE2, guest_ipa_page, 1, 
+			maplet_target_mapped_ext(phys, 1, g0_vm_page_attrs.prot, MAPLET_PAGE_STATE_SHARED_OWNED, g0_vm_page_attrs.memtype));
 
 	// Flip the page from PKVM_NOPAGE to PKVM_PAGE_SHARED_BORROWED
 
-	g1->host.host_abstract_pgtable_shared =
-		mapping_plus(g0->host.host_abstract_pgtable_shared,
-			mapping_singleton(GHOST_STAGE2, host_ipa, 1, 
-				maplet_target_mapped_attrs(phys, 1,
-					ghost_default_host_memory_attributes(true,
-						MAPLET_PAGE_STATE_SHARED_BORROWED))));
+	mapping_update(&g1->host.host_abstract_pgtable_shared,
+			g0->host.host_abstract_pgtable_shared,
+			MAP_INSERT_PAGE, GHOST_STAGE2, host_ipa, 1,
+			maplet_target_mapped_attrs(phys, 1, ghost_default_host_memory_attributes(true, MAPLET_PAGE_STATE_SHARED_BORROWED)));
 
-	g1->host.host_abstract_pgtable_annot =
-		mapping_minus(g0->host.host_abstract_pgtable_annot, host_ipa, 1);
+	mapping_update(&g1->host.host_abstract_pgtable_annot,
+			g0->host.host_abstract_pgtable_annot,
+			MAP_REMOVE_PAGE, GHOST_STAGE2, host_ipa, 1, maplet_target_absent());
 
 out_host:
 	if (ret == -EFAULT) {
@@ -1610,21 +1608,21 @@ bool compute_new_abstract_state_pkvm_memunshare(struct ghost_state *g1, struct g
 	// work in: do_share() -> __do_share()
 
 	// Mark the guest page as PKVM_PAGE_OWNED
-	g1_vm->vm_locked.vm_abstract_pgtable.mapping =
-		mapping_plus(g0_vm->vm_locked.vm_abstract_pgtable.mapping,
-			mapping_singleton(GHOST_STAGE2, guest_ipa_page, 1, 
-				maplet_target_mapped_ext(phys, 1, g0_vm_page_attrs.prot,
-					MAPLET_PAGE_STATE_PRIVATE_OWNED, g0_vm_page_attrs.memtype)));
+	mapping_update(&g1_vm->vm_locked.vm_abstract_pgtable.mapping,
+			g0_vm->vm_locked.vm_abstract_pgtable.mapping,
+			MAP_UPDATE_PAGE, GHOST_STAGE2, guest_ipa_page, 1,
+			maplet_target_mapped_ext(phys, 1, g0_vm_page_attrs.prot, MAPLET_PAGE_STATE_PRIVATE_OWNED, g0_vm_page_attrs.memtype));
 
 	// Flip the page from PKVM_PAGE_SHARED_BORROWED to PKVM_NOPAGE
 
-	g1->host.host_abstract_pgtable_shared =
-		mapping_minus(g0->host.host_abstract_pgtable_shared, host_ipa, 1);
+	mapping_update(&g1->host.host_abstract_pgtable_shared,
+			g0->host.host_abstract_pgtable_shared,
+			MAP_REMOVE_PAGE, GHOST_STAGE2, host_ipa, 1, maplet_target_absent());
 
-	g1->host.host_abstract_pgtable_annot =
-		mapping_plus(g0->host.host_abstract_pgtable_annot,
-			mapping_singleton(GHOST_STAGE2, host_ipa, 1,
-				maplet_target_annot_ext(MAPLET_OWNER_ANNOT_OWNED_GUEST)));
+	mapping_update(&g1->host.host_abstract_pgtable_annot,
+			g0->host.host_abstract_pgtable_annot,
+			MAP_INSERT_PAGE, GHOST_STAGE2, host_ipa, 1,
+			maplet_target_annot_ext(MAPLET_OWNER_ANNOT_OWNED_GUEST));
 
 out_host:
 
