@@ -39,6 +39,8 @@ void copy_abstraction_vms(struct ghost_state *g_tgt, struct ghost_state *g_src);
 void copy_abstraction_vms_partial(struct ghost_state *g_tgt, struct ghost_state *g_src, enum vm_field_owner owner);
 void copy_abstraction_vm_partial(struct ghost_state *g_tgt, struct ghost_state *g_src, pkvm_handle_t handle, enum vm_field_owner owner);
 void copy_abstraction_local_state(struct ghost_local_state *l_tgt, struct ghost_local_state *l_src);
+void ghost_vcpu_clone_into(struct ghost_vcpu *dest, struct ghost_vcpu *src);
+
 
 void check_abstraction_equals_all(
 	struct ghost_state *gc,

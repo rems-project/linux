@@ -964,6 +964,14 @@ void copy_abstraction_host(struct ghost_state *g_tgt, struct ghost_state *g_src)
 	g_tgt->host.present = g_src->host.present;
 }
 
+void ghost_vcpu_clone_into(struct ghost_vcpu *dest, struct ghost_vcpu *src)
+{
+	dest->initialised = src->initialised;
+	dest->loaded = src->loaded;
+	dest->vcpu_handle = src->vcpu_handle;
+	dest->regs = src->regs;
+}
+
 void ghost_vm_clone_into_partial(struct ghost_vm *dest, struct ghost_vm *src, enum vm_field_owner owner)
 {
 	dest->protected = src->protected;

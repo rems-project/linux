@@ -1394,8 +1394,30 @@ bool compute_new_abstract_state_handle_host_mem_abort(struct ghost_state *g1, st
 
 /* Guest API */
 
+/**
+ * ghost_save_guest_context() - Save guest registers into vcpu context.
+ */
+static void ghost_save_guest_context(struct ghost_vcpu *vcpu1, struct ghost_state *g0)
+{
+	/* copy local registers into saved guest context registers */
+	copy_abstraction_regs(&vcpu1->regs, &ghost_this_cpu_local_state(g0)->regs);
+}
+
+/**
+ * ghost_restore_host_context() - Update ghost state to denote returning back to the host.
+ */
+static void ghost_restore_host_context(struct ghost_state *g1, struct ghost_state *g0)
+{
+	/* mark guest as no longer running locally */
+	ghost_this_cpu_local_state(g1)->cpu_state.guest_running = false;
+
+	/* restore old host context registers into the local state */
+	copy_abstraction_regs(&ghost_this_cpu_local_state(g1)->regs, &ghost_this_cpu_local_state(g0)->host_regs.regs);
+}
+
 bool compute_new_abstract_state_pkvm_memshare(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call)
 {
+	int host_ret = ARM_EXCEPTION_TRAP;
 	int ret = 0;
 
 	// Get the VCPU loaded onto this physical core. It provides further indices.
@@ -1426,7 +1448,7 @@ bool compute_new_abstract_state_pkvm_memshare(struct ghost_state *g1, struct gho
 	ghost_vm_clone_into_partial(g1_vm, g0_vm, VMS_VM_OWNED);
 	ghost_vm_clone_into_partial(g1_vm, g0_vm, VMS_VM_TABLE_OWNED);
 	struct ghost_vcpu *vcpu1 = g1_vm->vm_table_locked.vcpus[loaded_vcpu->vcpu_index];
-	*vcpu1 = *vcpu0;
+	ghost_vcpu_clone_into(vcpu1, vcpu0);
 
 	if (arg2 || arg3)
 		goto out_guest_err;
@@ -1484,14 +1506,24 @@ bool compute_new_abstract_state_pkvm_memshare(struct ghost_state *g1, struct gho
 
 	g1->host.host_abstract_pgtable_annot =
 		mapping_minus(g0->host.host_abstract_pgtable_annot, host_ipa, 1);
-	
-out_host:
 
+out_host:
 	if (ret == -EFAULT) {
-		// XXX
+		/*
+		 * TODO: this means the guest tried to share an address that it didn't have mapped yet,
+		 * then pKVM sets the PC to restart the guest back at the HVC (by `ELR -= 4`) and returns to host
+		 * telling it that this happened by setting some data on the *host* vcpu struct
+		 * so need WRITE_ONCE()s here.
+		 */
 	}
 
-	// XXX HOW TO DENOTE RETURN TO HOST?
+	/* guest no longer running */
+	ghost_save_guest_context(vcpu1, g0);
+	ghost_restore_host_context(g1, g0);
+
+	/* ... but R0 will have been updated with the error code */
+	ghost_write_gpr(g1, 0, host_ret);
+
 	return true;
 
 out_guest_err:
@@ -1769,7 +1801,7 @@ static struct ghost_trap_data guest_hcalls[] = {
 	GUEST_HCALL(ARM_SMCCC_VENDOR_HYP_CALL_UID_FUNC_ID, "", "", "", "", "", ""),
 	GUEST_HCALL(ARM_SMCCC_VENDOR_HYP_KVM_FEATURES_FUNC_ID, "", "", "", "", "", ""),
 	GUEST_HCALL(ARM_SMCCC_VENDOR_HYP_KVM_HYP_MEMINFO_FUNC_ID, "", "", "", "", "", ""),
-	GUEST_HCALL(ARM_SMCCC_VENDOR_HYP_KVM_MEM_SHARE_FUNC_ID, "", "ipa: %p", "", "", "", ""),
+	GUEST_HCALL(ARM_SMCCC_VENDOR_HYP_KVM_MEM_SHARE_FUNC_ID, "", "ipa: %p", "(arg2):%lx", "(arg3):%lx", "", ""),
 	GUEST_HCALL(ARM_SMCCC_VENDOR_HYP_KVM_MEM_UNSHARE_FUNC_ID, "", "", "", "", "", "")
 };
 #define NR_GUEST_HCALLS (sizeof(guest_hcalls)/sizeof(guest_hcalls[0]))
