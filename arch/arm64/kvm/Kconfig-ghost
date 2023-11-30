@@ -176,6 +176,11 @@ config NVHE_GHOST_SPEC_CHECK___pkvm_guest_share_host
 	bool "Check __pkvm_guest_share_host"
 config NVHE_GHOST_SPEC_CHECK___pkvm_guest_unshare_host
 	bool "Check __pkvm_guest_unshare_host"
+config NVHE_GHOST_SPEC_CHECK_handle_guest_mem_abort
+	bool "Check handle_guest_mem_abort"
+config NVHE_GHOST_SPEC_NOISY_handle_guest_mem_abort
+	depends on NVHE_GHOST_SPEC_NOISY
+	bool "Noisy handle_guest_mem_abort"
 
 endmenu
 

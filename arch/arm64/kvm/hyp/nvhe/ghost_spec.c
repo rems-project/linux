@@ -1956,8 +1956,20 @@ static struct ghost_trap_data guest_hcalls[] = {
 };
 #define NR_GUEST_HCALLS (sizeof(guest_hcalls)/sizeof(guest_hcalls[0]))
 
+static struct ghost_trap_data guest_psci_hcall_trap_data = {
+	.valid = false, /* don't check */
+	.name = "PSCI",
+	.params = {"fn: %lx", "(arg1):%lx", "(arg2):%lx", "(arg3):%lx", "", ""},
+};
+
+static struct ghost_trap_data unknown_hcall_trap_data = {
+	.valid = false, /* don't check */
+	.name = "<unknown HVC>",
+	.params = {0},
+};
+
 static struct ghost_trap_data unknown_trap_data = {
-	.valid = true,
+	.valid = false, /* don't check */
 	.name = "<unknown>",
 	.params = {0},
 };
@@ -1970,6 +1982,9 @@ static struct ghost_trap_data __tag_hcall(struct kvm_cpu_context *ctxt, bool fro
 		for (int i = 0; i < NR_GUEST_HCALLS; i++)
 			if (guest_hcalls[i].ec == hcall_id)
 				return guest_hcalls[i];
+
+		/* any other is a PSCI function */
+		return guest_psci_hcall_trap_data;
 	}
 	else {
 		hcall_id -= KVM_HOST_SMCCC_ID(0);
@@ -1979,7 +1994,7 @@ static struct ghost_trap_data __tag_hcall(struct kvm_cpu_context *ctxt, bool fro
 				return host_hcalls[i];
 	}
 
-	return unknown_trap_data;
+	return unknown_hcall_trap_data;
 }
 
 static struct ghost_trap_data host_abort_trap_data = {
@@ -2000,17 +2015,29 @@ static struct ghost_trap_data __tag_abt(struct kvm_cpu_context *ctxt, bool from_
 		return host_abort_trap_data;
 }
 
+static struct ghost_trap_data smc_trap_data = {
+	.valid = false,
+	.name = "smc64"
+};
+
+static struct ghost_trap_data sve_trap_data = {
+	.valid = false,
+	.name = "sve"
+};
+
 static struct ghost_trap_data compute_trap_state(struct kvm_cpu_context *ctxt, bool from_guest)
 {
+	// TODO: detect IRQs and other interrupts.
+
 	u64 esr = read_sysreg_el2(SYS_ESR);
 	switch (ESR_ELx_EC(esr)) {
 	case ESR_ELx_EC_HVC64:
 		return __tag_hcall(ctxt, from_guest);
 	case ESR_ELx_EC_SMC64:
-		return unknown_trap_data;
+		return smc_trap_data;
 	case ESR_ELx_EC_FP_ASIMD:
 	case ESR_ELx_EC_SVE:
-		return unknown_trap_data;
+		return sve_trap_data;
 	case ESR_ELx_EC_IABT_LOW:
 	case ESR_ELx_EC_DABT_LOW:
 		return __tag_abt(ctxt, from_guest);
