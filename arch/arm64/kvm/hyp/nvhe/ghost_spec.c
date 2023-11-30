@@ -399,10 +399,10 @@ static void copy_registers_to_host(struct ghost_state *g)
 /**
  * copy_registers_to_guest() - Make this guest vcpu's register context be the local one.
  */
-static void copy_registers_to_guest(struct ghost_state *g, struct ghost_vcpu *vcpu)
-{
-	copy_abstraction_regs(&vcpu->regs, &ghost_this_cpu_local_state(g)->regs);
-}
+// static void copy_registers_to_guest(struct ghost_state *g, struct ghost_vcpu *vcpu)
+// {
+// 	copy_abstraction_regs(&vcpu->regs, &ghost_this_cpu_local_state(g)->regs);
+// }
 
 bool compute_new_abstract_state_handle___pkvm_host_share_hyp(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call)
 {
@@ -1187,11 +1187,6 @@ bool compute_new_abstract_state_handle___pkvm_init_vcpu(struct ghost_state *g1, 
 	}
 	ghost_map_donated_memory_nocheck(g1, vcpu_ipa, sizeof(struct pkvm_hyp_vcpu));
 
-	// TODO: if the vcpu is NOT protected the spec should not care about the sysregs stuff and skip
-
-
-	// TODO ret = init_pkvm_hyp_vcpu(hyp_vcpu, hyp_vm, host_vcpu, idx);
-
 	// TODO: this can't be in the spec at the moment because the load of host_vcpu->vcpu_idx is not READ_ONCE()
 	// if (host_vcpu->vcpu_idx != vcpu_idx) {
 	// 	ret = -EINVAL;
@@ -1203,23 +1198,8 @@ bool compute_new_abstract_state_handle___pkvm_init_vcpu(struct ghost_state *g1, 
 		goto out;
 	}
 
-
 	// TODO -> hyp_pin_shared_mem(host_vcpu, host_vcpu + 1)
-/*
 
-	hyp_vcpu->vcpu.vcpu_id = READ_ONCE_GHOST_RECORD(host_vcpu->vcpu_id);
-	hyp_vcpu->vcpu.vcpu_idx = vcpu_idx;
-
-	hyp_vcpu->vcpu.arch.hw_mmu = &hyp_vm->kvm.arch.mmu;
-	hyp_vcpu->vcpu.arch.cflags = READ_ONCE(host_vcpu->arch.cflags);
-	hyp_vcpu->vcpu.arch.mp_state.mp_state = KVM_MP_STATE_STOPPED;
-
-*/
-// struct ghost_vcpu {
-// 	struct ghost_registers regs;
-// };
-
-	// TODO if ret != 0 ==> goto out
 	vcpu->vcpu_handle = vcpu_idx;
 	vcpu->loaded = false;
 	vcpu->initialised = true;
