@@ -304,6 +304,10 @@ void compute_abstraction_vm_partial(struct ghost_vm *dest, struct pkvm_hyp_vm *h
 					g_vcpu->loaded = vcpu->loaded_hyp_vcpu ? true : false;
 					g_vcpu->regs.present = true;
 					compute_abstract_registers(&g_vcpu->regs, &vcpu->vcpu.arch.ctxt, true/*we also copy EL2 sysregs*/);
+					// TODO(check): guest trap registers seem to be stored in separated fields
+					make_abstract_register(&g_vcpu->regs.el2_sysregs[GHOST_SYSREG(HCR_EL2)], vcpu->vcpu.arch.hcr_el2);
+					make_abstract_register(&g_vcpu->regs.el2_sysregs[GHOST_SYSREG(MDCR_EL2)], vcpu->vcpu.arch.mdcr_el2);
+					make_abstract_register(&g_vcpu->regs.el2_sysregs[GHOST_SYSREG(CPTR_EL2)], vcpu->vcpu.arch.cptr_el2);
 				}
 				dest->vm_table_locked.vcpus[vcpu_idx] = g_vcpu;
 			}
