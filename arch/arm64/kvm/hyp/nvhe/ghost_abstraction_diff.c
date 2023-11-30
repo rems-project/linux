@@ -557,12 +557,14 @@ static void ghost_diff_register(struct diff_container *node, enum register_tag t
 	case SYSREG_TAG:
 		str = reg_info;
 	}
-	ghost_diff_enter_subfield(node, str);
-	ghost_diff_field(node, "status", diff_pair(TGPRINT("%g(status)", (u64)r1->status), TGPRINT("%g(status)", (u64)r2->status)));
-	if (r1->status == GHOST_PRESENT && r2->status == GHOST_PRESENT) {
-		ghost_diff_field(node, "value", diff_pair(TU64(r1->value), TU64(r2->value)));
+	if (r2->status != GHOST_NOT_CHECKED) {
+		ghost_diff_enter_subfield(node, str);
+		ghost_diff_field(node, "status", diff_pair(TGPRINT("%g(status)", (u64)r1->status), TGPRINT("%g(status)", (u64)r2->status)));
+		if (r1->status == GHOST_PRESENT && r2->status == GHOST_PRESENT) {
+			ghost_diff_field(node, "value", diff_pair(TU64(r1->value), TU64(r2->value)));
+		}
+		ghost_diff_pop_subfield(node);
 	}
-	ghost_diff_pop_subfield(node);
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
