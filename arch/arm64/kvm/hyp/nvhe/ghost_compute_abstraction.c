@@ -332,49 +332,104 @@ void check_abstract_pgtable_equal(abstract_pgtable *ap1, abstract_pgtable *ap2, 
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
+bool check_abstraction_equals_register(struct ghost_register *r1, struct ghost_register *r2, bool todo_warnonly)
+{
+	bool ret = true;
+	GHOST_LOG_CONTEXT_ENTER();
+	ghost_assert(r1->status == GHOST_PRESENT && r2->status == GHOST_PRESENT);
+	if (todo_warnonly) {
+		if (r1->value != r2->value)
+			ret = false;
+	} else {
+		ghost_spec_assert(r1->value == r2->value);
+	}
+	GHOST_LOG_CONTEXT_EXIT();
+	return ret;
+}
+
+void check_abstraction_refined_register(int idx, struct ghost_register *gc_reg, struct ghost_register *gr_post_reg, struct ghost_register *gr_pre_reg)
+{
+	GHOST_LOG_CONTEXT_ENTER();
+
+	//TODO: GHOST_LOG(gc_reg->status, enum ghost_status);
+	//TODO: GHOST_LOG(gr_post_reg->status, enum ghost_status);
+
+	if (gr_post_reg->status == GHOST_PRESENT && gc_reg->status == GHOST_PRESENT) {
+		GHOST_LOG(idx, u32);
+		GHOST_INFO("gc_reg");
+		GHOST_INFO("gr_post_pre");
+		if(!check_abstraction_equals_register(gc_reg, gr_post_reg, /*TODO*/true))
+			ghost_printf("\x1b[30;41mWARNING register X%d mismatch ==> computed: %lx -- post: %lx\x1b[0m\n", idx, gc_reg->value, gr_post_reg->value);
+	}
+	else if (gr_post_reg->status == GHOST_ABSENT && gc_reg->status == GHOST_PRESENT) {
+		ghost_assert(false);
+	}
+	else if (gr_post_reg->status == GHOST_PRESENT && gc_reg->status == GHOST_ABSENT) {
+		GHOST_LOG(idx, u32);
+		GHOST_INFO("gr_pre_reg");
+		GHOST_INFO("gr_post_reg");
+		ghost_assert(gr_pre_reg->status == GHOST_PRESENT);
+		check_abstraction_equals_register(gr_pre_reg, gr_post_reg, false);
+	}
+
+	GHOST_LOG_CONTEXT_EXIT();
+}
+
+void check_abstraction_refined_registers(struct ghost_registers *gc_regs, struct ghost_registers *gr_post_regs, struct ghost_registers *gr_pre_regs)
+{
+	GHOST_LOG_CONTEXT_ENTER();
+	
+	GHOST_INFO("gprs");
+	for (int i=0; i<31; i++) {
+		check_abstraction_refined_register(i, &gc_regs->gprs[i], &gr_post_regs->gprs[i], &gr_pre_regs->gprs[i]);
+	}
+
+	// TODO EL0/1 and EL2 sysregs
+
+	GHOST_LOG_CONTEXT_EXIT();
+}
+
 void check_abstraction_equals_reg(struct ghost_registers *r1, struct ghost_registers *r2, bool check_sysregs)
 {
-/*
 	GHOST_LOG_CONTEXT_ENTER();
-	u64 i;
-	u64 ghost_el2_regs[] = (u64[])GHOST_EL2_REGS;
-	for (i=0; i<=30; i++) {
-		if (GHOST_GPR(r1, i) != GHOST_GPR(r2, i)) {
+	for (int i=0; i<31; i++) {
+		u64 value1 = r1->gprs[i].value;
+		u64 value2 = r2->gprs[i].value;
+		if (r1->gprs[i].status != r2->gprs[i].status || value1 != value2) {
 			GHOST_LOG(i, u64);
-			GHOST_LOG(GHOST_GPR(r1, i), u64);
-			GHOST_LOG(GHOST_GPR(r2, i), u64);
+			GHOST_LOG(value1, u64);
+			GHOST_LOG(value2, u64);
 			GHOST_WARN("gpr register mismatch");
 			ghost_spec_assert(false);
 		}
 	}
 	if (check_sysregs) {
-		for (i=0; i<NR_SYS_REGS; i++) {
-			if (GHOST_SYSREG_EL1(r1, i) != GHOST_SYSREG_EL1(r2, i)) {
-				const char *name = GHOST_VCPU_SYSREG_NAMES[i];
+		for (int i=0; i<NR_GHOST_SYSREGS; i++) {
+			u64 value1 = r1->sysregs[i].value;
+			u64 value2 = r2->sysregs[i].value;
+			if (r1->sysregs[i].status != r2->sysregs[i].status || value1 != value2) {
 				GHOST_LOG(i, u64);
-				GHOST_LOG(name, str);
-				GHOST_LOG(GHOST_SYSREG_EL1(r1, i), u64);
-				GHOST_LOG(GHOST_SYSREG_EL1(r2, i), u64);
-				GHOST_WARN("EL1 sysreg register mismatch");
+				GHOST_LOG(GHOST_SYSREGS_NAMES[i], str);
+				GHOST_LOG(value1, u64);
+				GHOST_LOG(value2, u64);
+				GHOST_WARN("EL0/1 sysreg register mismatch");
 				ghost_spec_assert(false);
 			}
 		}
-		for (i=0; i<sizeof(ghost_el2_regs)/sizeof(u64); i++) {
-			u64 r = ghost_el2_regs[i];
-			if (GHOST_SYSREG_EL2(r1, r) != GHOST_SYSREG_EL2(r2, r)) {
-				const char *name = GHOST_EL2_REG_NAMES[r];
-				GHOST_LOG(r, u64);
-				GHOST_LOG(name, str);
-				GHOST_LOG(GHOST_SYSREG_EL2(r1, r), u64);
-				GHOST_LOG(GHOST_SYSREG_EL2(r2, r), u64);
-				GHOST_WARN("el2_sysreg register mismatch");
+		for (int i=0; i<NR_GHOST_EL2_SYSREGS; i++) {
+			u64 value1 = r1->sysregs[i].value;
+			u64 value2 = r2->sysregs[i].value;
+			if (r1->sysregs[i].status != r2->sysregs[i].status || value1 != value2) {
+				GHOST_LOG(i, u64);
+				GHOST_LOG(GHOST_EL2_SYSREGS_NAMES[i], str);
+				GHOST_LOG(value1, u64);
+				GHOST_LOG(value2, u64);
+				GHOST_WARN("EL2 sysreg register mismatch");
 				ghost_spec_assert(false);
 			}
 		}
 	}
-	// TODO other regs
 	GHOST_LOG_CONTEXT_EXIT();
-*/
 }
 
 void check_abstraction_equals_pkvm(struct ghost_pkvm *gp1, struct ghost_pkvm *gp2)
@@ -477,8 +532,8 @@ void check_abstraction_refined_local_state(struct ghost_state *gc, struct ghost_
 	struct ghost_local_state *gr_pre_local = ghost_this_cpu_local_state(gr_pre);
 	struct ghost_local_state *gr_post_local = ghost_this_cpu_local_state(gr_post);
 
-	/* computed post and recorded post run and register states must be exactly equal */
-	check_abstraction_equals_reg(&gc_local->regs, &gr_post_local->regs, true);
+	/* computed post and recorded post run and register states must be exactly equal (modulo status) */
+	check_abstraction_refined_registers(&gc_local->regs, &gr_post_local->regs, &gr_pre_local->regs);
 	check_abstraction_equals_run_state(&gc_local->cpu_state, &gr_post_local->cpu_state);
 
 	/* the others (loaded_vcpu and host_regs) may be not present on the computed state
@@ -501,7 +556,7 @@ void check_abstraction_refined_local_state(struct ghost_state *gc, struct ghost_
 	if (gc_local->host_regs.present && gr_post_local->host_regs.present) {
 		GHOST_INFO("r1->gc");
 		GHOST_INFO("r2->gr_post");
-		check_abstraction_equals_host_regs(&gc_local->host_regs, &gr_post_local->host_regs);
+		check_abstraction_refined_registers(&gc_local->host_regs.regs, &gr_post_local->host_regs.regs, &gr_pre_local->host_regs.regs);
 	}
 	else if (gc_local->host_regs.present && !gr_post_local->host_regs.present) {
 		ghost_assert(false);
