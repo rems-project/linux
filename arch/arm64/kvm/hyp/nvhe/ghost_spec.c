@@ -316,6 +316,77 @@ static struct maplet_attributes ghost_default_vm_memory_attributes(bool is_memor
 	return ghost_memory_attributes(page_state, default_vm_prot, default_vm_memtype);
 }
 
+
+// Copied from arch/arm64/kvm/sys_regs.h::calculate_mpidr()
+static inline u64 calculate_reset_mpidr(int vcpu_id)
+{
+	u64 mpidr;
+	mpidr = (vcpu_id & 0x0f) << MPIDR_LEVEL_SHIFT(0);
+	mpidr |= ((vcpu_id >> 4) & 0xff) << MPIDR_LEVEL_SHIFT(1);
+	mpidr |= ((vcpu_id >> 12) & 0xff) << MPIDR_LEVEL_SHIFT(2);
+	mpidr |= (1ULL << 31);
+	return mpidr;
+}
+
+// TODO: pointer authentication, SVE regs
+void init_vcpu_sysregs(struct ghost_state *g, int vcpu_idx, struct ghost_registers *regs, bool is_protected)
+{
+	ghost_write_el2_sysreg_explicit(regs, GHOST_SYSREG(CPTR_EL2), CPTR_EL2_DEFAULT);
+	ghost_write_el2_sysreg_explicit(regs, GHOST_SYSREG(MDCR_EL2), 0);
+
+	if (is_protected) {
+		u64 hcr_el2 = HCR_GUEST_FLAGS | HCR_TID3 | HCR_TACR | HCR_TIDCP | HCR_TID1;
+
+		// TODO
+		/* IF CPU implements FEAT_RAS THEN
+		*   hcr_el2 |= HCR_TEA;
+		*   hcr_el2 |= HCR_TERR;
+		* ENDIF
+		*
+		* IF CPU implements FEAT_S2FWB THEN
+		*   hcr_el2 |= HCR_FWB;
+		* ENDIF
+		*
+		* IF (cpus_have_const_cap(ARM64_MISMATCHED_CACHE_TYPE)) THEN
+		* 	hcr_el2 |= HCR_TID2;
+		* ENDIF
+		*/
+		ghost_write_el2_sysreg_explicit(regs, GHOST_SYSREG(HCR_EL2), hcr_el2);
+
+		// TODO: pvm_init_traps_aa64pfr0(&hyp_vcpu->vcpu);
+		// TODO: pvm_init_traps_aa64pfr1(&hyp_vcpu->vcpu);
+		// TODO: pvm_init_traps_aa64dfr0(&hyp_vcpu->vcpu);
+		// TODO: pvm_init_traps_aa64mmfr0(&hyp_vcpu->vcpu);
+		// TODO: pvm_init_traps_aa64mmfr1(&hyp_vcpu->vcpu);
+	} else {
+		// TODO: "READ FROM_HOST" | HCR_GUEST_FLAGS;
+		regs->el2_sysregs[GHOST_SYSREG(HCR_EL2)].status = GHOST_NOT_CHECKED;
+	}
+
+	ghost_write_sysreg_explicit(regs, GHOST_SYSREG(MPIDR_EL1), calculate_reset_mpidr(vcpu_idx));
+	ghost_write_sysreg_explicit(regs, GHOST_SYSREG(SCTLR_EL1), 0x00C50078);
+	ghost_write_sysreg_explicit(regs, GHOST_SYSREG(ACTLR_EL1), ghost_read_sysreg(g, ACTLR_EL1));
+	ghost_write_sysreg_explicit(regs, GHOST_SYSREG(CPACR_EL1), 0);
+	ghost_write_sysreg_explicit(regs, GHOST_SYSREG(ZCR_EL1), 0);
+	ghost_write_sysreg_explicit(regs, GHOST_SYSREG(TCR_EL1), 0);
+	ghost_write_sysreg_explicit(regs, GHOST_SYSREG(VBAR_EL1), 0);
+	ghost_write_sysreg_explicit(regs, GHOST_SYSREG(CONTEXTIDR_EL1), 0);
+	ghost_write_sysreg_explicit(regs, GHOST_SYSREG(AMAIR_EL1), ghost_read_sysreg(g, AMAIR_EL1));
+	ghost_write_sysreg_explicit(regs, GHOST_SYSREG(CNTKCTL_EL1), 0);
+	ghost_write_sysreg_explicit(regs, GHOST_SYSREG(MDSCR_EL1), 0);
+	ghost_write_sysreg_explicit(regs, GHOST_SYSREG(MDCCINT_EL1), 0);
+	ghost_write_sysreg_explicit(regs, GHOST_SYSREG(DISR_EL1), 0);
+	ghost_write_sysreg_explicit(regs, GHOST_SYSREG(PMCCFILTR_EL0), 0);
+	ghost_write_sysreg_explicit(regs, GHOST_SYSREG(PMUSERENR_EL0), 0);
+
+	if (!is_protected) {
+		// TODO: "READ FROM_HOST"
+		regs->pc.status = GHOST_NOT_CHECKED;
+		regs->gprs[0].status = GHOST_NOT_CHECKED;
+	}
+}
+
+
 /**
  * copy_registers_to_host() - Make the host's register context be the current local one.
  */
@@ -1086,7 +1157,7 @@ bool compute_new_abstract_state_handle___pkvm_init_vcpu(struct ghost_state *g1, 
 	pkvm_handle_t vm_handle = ghost_read_gpr(g0, 1);
 	host_va_t host_vcpu_hva = ghost_read_gpr(g0, 2);
 	host_va_t vcpu_hva = ghost_read_gpr(g0, 3);
-//	struct kvm_vcpu *host_vcpu_hyp_va = (struct kvm_vcpu *)hyp_va_of_host_va(g0, host_vcpu_hva);
+	struct kvm_vcpu *host_vcpu_hyp_va = (struct kvm_vcpu *)hyp_va_of_host_va(g0, host_vcpu_hva);
 
 	struct ghost_vm *vm0 = ghost_vms_get(&g0->vms, vm_handle);
 	if (!vm0) {
@@ -1155,23 +1226,17 @@ bool compute_new_abstract_state_handle___pkvm_init_vcpu(struct ghost_state *g1, 
 
 	vcpu->regs.present = true;
 	for (int i=0; i<31; i++) {
-		vcpu->regs.gprs[i].status = GHOST_PRESENT;
-		vcpu->regs.gprs[i].value = 0;
+		ghost_write_vcpu_gpr(vcpu, i, 0);
 	}
 	for (int i=0; i<NR_GHOST_SYSREGS; i++) {
 		ghost_write_sysreg_explicit(&vcpu->regs, i, 0);
-		// vcpu->regs.el1_sysregs[i].status = GHOST_PRESENT;
-		// vcpu->regs.el1_sysregs[i].value = 0;
+
 	}
 	for (int i=0; i<NR_GHOST_EL2_SYSREGS; i++) {
 		ghost_write_el2_sysreg_explicit(&vcpu->regs, i, 0);
-		// vcpu->regs.el2_sysregs[i].status = GHOST_PRESENT;
-		// vcpu->regs.el2_sysregs[i].value = 0;
 	}
-	// TODO: if the vcpu is NOT protected ===> the vcpu it set to a ON_PENDING state and the reset values for x0 and pc are taken
-	//	 from the host_vcpu struct
-	// TOOD: for protected vcpu ===> x0 and pc (and everything else) is set to 0 (en the vcpu is set to OFF state)
-	// TODO: in the implementation MPIDR_EL1 = 0x80000000 (this is RES1 bit) and SCTLR_EL1 = 0xc50078
+	u64 vcpu_id = GHOST_READ_ONCE(call, host_vcpu_hyp_va->vcpu_id);
+	init_vcpu_sysregs(g1, vcpu_id, &vcpu->regs, vm1->protected);
 
 	g1->vms.table_data.present = true; // TODO: check with Ben that we really need this here
 	vm1->vm_table_locked.nr_initialised_vcpus++;
