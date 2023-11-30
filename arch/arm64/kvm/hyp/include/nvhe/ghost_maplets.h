@@ -270,10 +270,12 @@ bool interpret_equals(mapping map1, mapping map2, u64 indent);
 mapping mapping_empty_(void); // the extra _ is to avoid a nameclash with the unrelated include/linux/pagemap.h
 mapping mapping_singleton(ghost_stage_t stage, u64 virt, u64 nr_pages, struct maplet_target t);
 mapping mapping_plus(mapping map1, mapping map2);
+mapping mapping_sub(mapping map1, mapping map2);
 mapping mapping_minus(mapping map1, u64 virt, u64 nr_pages);
 mapping mapping_copy(mapping map);
 mapping mapping_annot(mapping map);
 mapping mapping_shared(mapping map);
+mapping mapping_mapped_owned(mapping map);
 mapping mapping_nonannot(mapping map);
 
 bool mapping_submapping(mapping map1, mapping map2, char *s, char *s1, char *s2, u64 indent);

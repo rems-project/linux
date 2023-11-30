@@ -1007,16 +1007,29 @@ bool compute_new_abstract_state_handle___pkvm_init_vm(struct ghost_state *g1, st
 	int ret;
 	size_t vm_size, pgd_size, last_ran_size;
 
+	/* arguments are all host VAs, so read from ghost registers */
 	host_va_t host_kvm_hva = ghost_read_gpr(g0, 1);
 	host_va_t vm_hva = ghost_read_gpr(g0, 2);
 	host_va_t pgd_hva = ghost_read_gpr(g0, 3);
 	host_va_t last_ran_hva = ghost_read_gpr(g0, 4);
 
-	struct kvm *host_kvm_hyp_va = (struct kvm*)hyp_va_of_host_va(g0, host_kvm_hva);
-	host_ipa_t vm_host_ipa = host_ipa_of_phys(phys_of_hyp_va(g0, hyp_va_of_host_va(g0, vm_hva)));
-	phys_addr_t pgd_phys = phys_of_hyp_va(g0, hyp_va_of_host_va(g0, pgd_hva));
+	/* then convert to phys and all the other IAs we might need */
+	hyp_va_t host_kvm_hyp_va = hyp_va_of_host_va(g0, host_kvm_hva);
+	struct kvm *host_kvm = (struct kvm*)host_kvm_hyp_va;
+
+	hyp_va_t vm_hyp_va = hyp_va_of_host_va(g0, vm_hva);
+	hyp_va_t pgd_hyp_va = hyp_va_of_host_va(g0, pgd_hva);
+	hyp_va_t last_ran_hyp_va = hyp_va_of_host_va(g0, last_ran_hva);
+
+	// phys_addr_t host_kvm_phys = phys_of_host_va(g0, host_kvm_hyp_va);
+	phys_addr_t vm_phys = phys_of_host_va(g0, vm_hyp_va);
+	phys_addr_t pgd_phys = phys_of_host_va(g0, pgd_hyp_va);
+	phys_addr_t last_ran_phys = phys_of_host_va(g0, last_ran_hyp_va);
+
+	// host_ipa_t host_kvm_host_ipa = host_ipa_of_phys(host_kvm_phys);
+	host_ipa_t vm_host_ipa = host_ipa_of_phys(vm_phys);
 	host_ipa_t pgd_host_ipa = host_ipa_of_phys(pgd_phys);
-	host_ipa_t last_ran_host_ipa = host_ipa_of_phys(phys_of_hyp_va(g0, hyp_va_of_host_va(g0, last_ran_hva)));
+	host_ipa_t last_ran_host_ipa = host_ipa_of_phys(last_ran_phys);
 
 	copy_abstraction_host(g1, g0);
 	copy_abstraction_pkvm(g1, g0);
@@ -1060,7 +1073,7 @@ bool compute_new_abstract_state_handle___pkvm_init_vm(struct ghost_state *g1, st
 	// actually happening.
 	ghost_spec_assert(call->return_value != -ENOMEM);
 
-	u64 nr_vcpus = GHOST_READ_ONCE(call, host_kvm_hyp_va->created_vcpus);
+	u64 nr_vcpus = GHOST_READ_ONCE(call, host_kvm->created_vcpus);
 	if (nr_vcpus < 1) {
 		ret = -EINVAL;
 		goto out;
@@ -1114,13 +1127,17 @@ bool compute_new_abstract_state_handle___pkvm_init_vm(struct ghost_state *g1, st
 	vm1->vm_table_locked.nr_vcpus = nr_vcpus;
 	vm1->vm_table_locked.nr_initialised_vcpus = 0;
 	vm1->pkvm_handle = handle;
-	vm1->protected = GHOST_READ_ONCE(call, host_kvm_hyp_va->arch.pkvm.enabled);
+	vm1->protected = GHOST_READ_ONCE(call, host_kvm->arch.pkvm.enabled);
 	for (int i = 0; i < nr_vcpus; i++) {
 		vm1->vm_table_locked.vcpus[i] = malloc_or_die(sizeof(struct ghost_vcpu));
 		vm1->vm_table_locked.vcpus[i]->vcpu_handle = i;
 		vm1->vm_table_locked.vcpus[i]->loaded = false;
 		vm1->vm_table_locked.vcpus[i]->initialised = false;
 	}
+
+	vm1->vm_teardown_data.host_mc = phys_of_hyp_va(g0, (hyp_va_t)&host_kvm->arch.pkvm.teardown_mc);
+	vm1->vm_teardown_data.hyp_vm_struct_addr = vm_phys;
+	vm1->vm_teardown_data.last_ran_addr = last_ran_phys;
 
 	// in theory this is unsafe, as another thread could've swooped in between
 	// the release of all the locks and this check,
@@ -1234,21 +1251,24 @@ out:
 bool compute_new_abstract_state_handle___pkvm_teardown_vm(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call)
 {
 	int ret = 0;
-
 	pkvm_handle_t vm_handle = ghost_read_gpr(g0, 1);
+
+	// if no locks taken during impl, must have been wrong.
+	ghost_spec_assert(g0->vms.present);
+
 	struct ghost_vm *vm = ghost_vms_get(&g0->vms, vm_handle);
+
+	// if there was no known vm with that handle,
+	// can't tear it down,
+	// so return -ENOENT
 	if (!vm) {
 		ret = -ENOENT;
 		goto out;
 	}
 
-	// TODO(doc): we can have an ND EBUSY, because of hyp_page_count() > 0
-	// TODO: this is if the vm has loaded vcpu
-	// if (call->return_value == -EBUSY) {
-	// 	ret = -EBUSY;
-	// 	goto out;
-	// }
-	// TODO: more abstract version of the previous
+	// if any vCPU is currently loaded,
+	// can't tear down VM,
+	// so return -EBUSY
 	for (int i=0; i<KVM_MAX_VCPUS; i++) {
 		if (vm->vm_table_locked.vcpus[i]->loaded) {
 			ret = -EBUSY;
@@ -1256,38 +1276,119 @@ bool compute_new_abstract_state_handle___pkvm_teardown_vm(struct ghost_state *g1
 		}
 	}
 
-	// TODO: copy the pfs from vm->vm_abstract_pgtable.table_pfns;
-	// into a some "reclaimable_pfn_sets" list in ghost_state
-	// and mark them as "need_poisoning" or "pending_reclaim" depending on their state
+	copy_abstraction_host(g1, g0);
+	copy_abstraction_pkvm(g1, g0);
+	copy_abstraction_vms_partial(g1, g0, VMS_VM_TABLE_OWNED);
 
-	/* TODO: reclaim_guest_pages(hyp_vm, mc);
-	 * this does:
-	 *	1. mark all leaves of the page table as
-			- HOST_PAGE_NEED_POISONING (if exclusively owned by guest)
-			- HOST_PAGE_PENDING_RECLAIM (if shared borrowed/owned)
-	 *	2. destroy the guest pgtable (free the tables and ???)
-	 *	3. sets the guest stage 2 pgtable root phys_addr to 0 (the kvm mmu struct)
-	 */
+	// give back the metadata that was donated on __pkvm_init_vm
+	host_ipa_t vm_host_ipa = host_ipa_of_phys(vm->vm_teardown_data.hyp_vm_struct_addr);
+	hyp_va_t vm_hyp_va = hyp_va_of_phys(g0, vm->vm_teardown_data.hyp_vm_struct_addr);
 
-	// TODO: unpin_host_vcpus(hyp_vm->vcpus, hyp_vm->nr_vcpus);
+	host_ipa_t last_ran_host_ipa = host_ipa_of_phys(vm->vm_teardown_data.last_ran_addr);
+	hyp_va_t last_ran_hyp_va = hyp_va_of_phys(g0, vm->vm_teardown_data.last_ran_addr);
 
-	// TODO: for each vcpu, move pages from vcpu_memcache to hyp_memcast
-	//	 AND unmap_donated_memory_noclear()
-	//	 AND teardown_donated_memory(mc, hyp_vcpu, sizeof(*hyp_vcpu));
+	u64 vm_size = ghost_pkvm_get_hyp_vm_size(vm->vm_table_locked.nr_vcpus);
+	u64 last_ran_size = ghost_pkvm_get_last_ran_size(g0);
+	u64 pgd_size = kvm_pgtable_stage2_pgd_size(host_mmu.arch.vtcr);
 
-	// TODO: teardown_donated_memory() for last_vcpu_ran
+	mapping_update(
+		&g1->host.host_abstract_pgtable_annot,
+		g1->host.host_abstract_pgtable_annot,
+		MAP_REMOVE_PAGE, GHOST_STAGE2, vm_host_ipa, vm_size, MAPLET_NONE
+	);
+	mapping_update(
+		&g1->pkvm.pkvm_abstract_pgtable.mapping,
+		g1->pkvm.pkvm_abstract_pgtable.mapping,
+		MAP_REMOVE_PAGE, GHOST_STAGE1, vm_hyp_va, vm_size, MAPLET_NONE
+	);
+	/* TODO: and add to vm->vm_teardown_data.host_mc */
 
-	// TODO: teardown_donated_memory() for hyp_vm
-	// TODO: hyp_unpin_shared_mem() from hyp_vm
+	mapping_update(
+		&g1->host.host_abstract_pgtable_annot,
+		g1->host.host_abstract_pgtable_annot,
+		MAP_REMOVE_PAGE, GHOST_STAGE2, last_ran_host_ipa, last_ran_size, MAPLET_NONE
+	);
+	mapping_update(
+		&g1->pkvm.pkvm_abstract_pgtable.mapping,
+		g1->pkvm.pkvm_abstract_pgtable.mapping,
+		MAP_REMOVE_PAGE, GHOST_STAGE1, last_ran_hyp_va, last_ran_size, MAPLET_NONE
+	);
+	/* TODO: and add to vm->vm_teardown_data.host_mc */
 
+	// give back pagetables
+	host_ipa_t pgd_host_ipa = host_ipa_of_phys(vm->vm_locked.vm_abstract_pgtable.table_pfns.pool_range_start);
+	hyp_va_t pgd_hyp_va = hyp_va_of_phys(g0, vm->vm_locked.vm_abstract_pgtable.table_pfns.pool_range_start);
+	ghost_spec_assert(PAGE_ALIGNED(vm->vm_locked.vm_abstract_pgtable.table_pfns.pool_range_start));
+	mapping_update(
+		&g1->host.host_abstract_pgtable_annot,
+		g1->host.host_abstract_pgtable_annot,
+		MAP_REMOVE_PAGE, GHOST_STAGE2, pgd_host_ipa, pgd_size, MAPLET_NONE
+	);
+	mapping_update(
+		&g1->pkvm.pkvm_abstract_pgtable.mapping,
+		g1->pkvm.pkvm_abstract_pgtable.mapping,
+		MAP_REMOVE_PAGE, GHOST_STAGE1, pgd_hyp_va, pgd_size, MAPLET_NONE
+	);
+	for (int i = 0; i < g0->pkvm.pkvm_abstract_pgtable.table_pfns.len; i++) {
+		u64 pfn = vm->vm_locked.vm_abstract_pgtable.table_pfns.external_pfns[i];
+		host_ipa_t pgt_host_ipa = host_ipa_of_phys(hyp_pfn_to_phys(pfn));
+		hyp_va_t pgt_hyp_va = hyp_va_of_phys(g0, hyp_pfn_to_phys(pfn));
+		mapping_update(
+			&g1->host.host_abstract_pgtable_annot,
+			g1->host.host_abstract_pgtable_annot,
+			MAP_REMOVE_PAGE, GHOST_STAGE2, pgt_host_ipa, 1, MAPLET_NONE
+		);
+		mapping_update(
+			&g1->pkvm.pkvm_abstract_pgtable.mapping,
+			g1->pkvm.pkvm_abstract_pgtable.mapping,
+			MAP_REMOVE_PAGE, GHOST_STAGE1, pgt_hyp_va, 1, MAPLET_NONE
+		);
+	}
+	/* TODO: and add to vm->vm_teardown_data.host_mc */
+
+
+	// for all locations mapped in the guest
+	// mark them as reclaimable, but don't give them back to host yet.
+	// but do take them away from the hyp.
+	struct glist_node *pos;
+	struct maplet *m;
+	glist_for_each(pos, &vm->vm_locked.vm_abstract_pgtable.mapping) {
+		m = glist_entry(pos, struct maplet, list);
+		for (int i = 0; i < m->ia_range_nr_pages; i++) {
+			ghost_assert(m->target.kind == MAPLET_MAPPED);
+			phys_addr_t addr = m->target.map.oa_range_start + i*PAGE_SIZE;
+
+			u64 pfn = hyp_phys_to_pfn(addr);
+			ghost_pfn_set_insert(&g1->host.reclaimable_pfn_sets, pfn);
+			if (m->target.map.attrs.provenance == MAPLET_PAGE_STATE_PRIVATE_OWNED) {
+				// if page was donated to the guest rather than just shared,
+				// then mark it as needing to be cleared
+				ghost_pfn_set_insert(&g1->host.need_poisoning_pfn_sets, pfn);
+			}
+
+			hyp_va_t addr_hyp_va = hyp_va_of_phys(g0, addr);
+			mapping_update(
+				&g1->pkvm.pkvm_abstract_pgtable.mapping,
+				g1->pkvm.pkvm_abstract_pgtable.mapping,
+				MAP_REMOVE_PAGE, GHOST_STAGE1, addr_hyp_va, 1, MAPLET_NONE
+			);
+		}
+	}
+
+
+	// finally, remove the VM.
 	ghost_vms_free(&g0->vms, vm_handle);
+
+	// success
+	ret = 0;
+
 out:
 	ghost_write_gpr(g1, 1, ret);
 
 	/* these registers now become the host's run context */
 	copy_registers_to_host(g1);
 
-	/* check this spec*/
+	/* check this spec */
 	return true;
 }
 

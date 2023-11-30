@@ -620,8 +620,15 @@ static void ghost_diff_vm(struct diff_container *node, pkvm_handle_t handle, str
 {
 	GHOST_LOG_CONTEXT_ENTER();
 	ghost_diff_enter_subfield_val(node, TGPRINT("vm %lx", (u64)handle));
-	// in theory: handle should be the same...
+
 	ghost_diff_field(node, "handle", diff_pair(TU64((u64)vm1->pkvm_handle), TU64((u64)vm2->pkvm_handle)));
+
+	ghost_diff_enter_subfield(node, "vm_teardown_data");
+	ghost_diff_field(node, "host_mc", diff_pair(TU64((u64)vm1->vm_teardown_data.host_mc), TU64((u64)vm2->vm_teardown_data.host_mc)));
+	ghost_diff_field(node, "hyp_vm_struct_addr", diff_pair(TU64((u64)vm1->vm_teardown_data.hyp_vm_struct_addr), TU64((u64)vm2->vm_teardown_data.hyp_vm_struct_addr)));
+	ghost_diff_field(node, "last_ran_addr", diff_pair(TU64((u64)vm1->vm_teardown_data.last_ran_addr), TU64((u64)vm2->vm_teardown_data.last_ran_addr)));
+	ghost_diff_pop_subfield(node);
+
 	if (vm1->pkvm_handle == vm2->pkvm_handle) {
 		ghost_diff_enter_subfield(node, "vm_locked");
 		ghost_diff_field(node, "present", diff_pair(TBOOL(vm1->vm_locked.present), TBOOL(vm2->vm_locked.present)));

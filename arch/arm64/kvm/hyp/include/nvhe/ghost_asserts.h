@@ -31,10 +31,9 @@
 #define GHOST_SPEC_ASSERT_VAR_EQ(var1, var2, ty) { \
 	GHOST_LOG(var1, ty); \
 	GHOST_LOG(var2, ty); \
-	if ((var1) != (var2)) { \
+	if ((var1) != (var2)) \
 		GHOST_WARN(#var1 " did not match " #var2); \
-		ghost_spec_assert(false); \
-	} \
+	ghost_spec_assert((var1) == (var2)); \
 }
 
 

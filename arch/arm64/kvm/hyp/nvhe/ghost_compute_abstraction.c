@@ -273,6 +273,11 @@ void compute_abstraction_vm_partial(struct ghost_vm *dest, struct pkvm_hyp_vm *h
 
 	dest->protected = hyp_vm->kvm.arch.pkvm.enabled;
 	dest->pkvm_handle = hyp_vm->kvm.arch.pkvm.handle;
+
+	dest->vm_teardown_data.host_mc = hyp_virt_to_phys(&hyp_vm->host_kvm->arch.pkvm.teardown_mc);
+	dest->vm_teardown_data.hyp_vm_struct_addr = hyp_virt_to_phys(hyp_vm);
+	dest->vm_teardown_data.last_ran_addr = hyp_virt_to_phys(hyp_vm->kvm.arch.mmu.last_vcpu_ran);
+
 	dest->lock = &hyp_vm->lock;
 
 	if (owner & VMS_VM_OWNED) {
@@ -600,6 +605,11 @@ void check_abstraction_equals_vm(struct ghost_vm *vm1, struct ghost_vm *vm2)
 	GHOST_LOG(vm1->pkvm_handle, u32);
 	GHOST_LOG(vm2->pkvm_handle, u32);
 	ghost_spec_assert(vm1->pkvm_handle == vm2->pkvm_handle);
+
+	GHOST_SPEC_ASSERT_VAR_EQ(vm1->vm_teardown_data.host_mc, vm2->vm_teardown_data.host_mc, u64);
+	GHOST_SPEC_ASSERT_VAR_EQ(vm1->vm_teardown_data.hyp_vm_struct_addr, vm2->vm_teardown_data.hyp_vm_struct_addr, u64);
+	GHOST_SPEC_ASSERT_VAR_EQ(vm1->vm_teardown_data.last_ran_addr, vm2->vm_teardown_data.last_ran_addr, u64);
+
 	ghost_safety_check(vm1->lock == vm2->lock);
 
 	if (vm1->vm_table_locked.present) {
@@ -1035,6 +1045,9 @@ void ghost_vm_clone_into_partial(struct ghost_vm *dest, struct ghost_vm *src, en
 {
 	dest->protected = src->protected;
 	dest->pkvm_handle = src->pkvm_handle;
+	dest->vm_teardown_data.host_mc = src->vm_teardown_data.host_mc;
+	dest->vm_teardown_data.hyp_vm_struct_addr = src->vm_teardown_data.hyp_vm_struct_addr;
+	dest->vm_teardown_data.last_ran_addr = src->vm_teardown_data.last_ran_addr;
 	dest->lock = src->lock;
 
 	/* no need to check we actually own any locks

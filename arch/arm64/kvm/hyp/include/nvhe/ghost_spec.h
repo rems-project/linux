@@ -188,12 +188,27 @@ struct ghost_vm_locked_by_vm_table {
 };
 
 /**
+ * struct ghost_vm_teardown_data - Memory taken to hold VM metadata
+ * @host_mc: location of shared host memcache.
+ * @hyp_vm_struct_addr: location of the `pkvm_hyp_vm` struct itself, donated during __pkvm_init_vm.
+ * @last_ran_addr: location of the last_vcpu_ran array, donated during __pkvm_init_vm.
+ *
+ * NOTE: number of donated pages not saved here, but computed as part of spec.
+ */
+struct ghost_vm_teardown_data {
+	phys_addr_t host_mc;
+	phys_addr_t hyp_vm_struct_addr;
+	phys_addr_t last_ran_addr;
+};
+
+/**
  * struct ghost_vm - A guest VM
  * @protected: whether this is a Protected VM.
  * @pkvm_handle: the opaque pKVM-defined handle for this VM.
  * @lock: (for ghost machinery checks) a reference to the underlying spinlock of the real hyp VM, for instrumentation purposes.
  * @vm_locked: fields owned by the internal VM lock
  * @vm_table_locked: fields protected by the pKVM vm_table lock
+ * @vm_teardown_data: pages donated to pKVM for holding VM metadata, to be given back on teardown.
  *
  * The VM is split into two parts: the pgtable (owned by the VM's own internal lock)
  * and the other metadata which is collectively owned by the VM struct itself,
@@ -208,6 +223,7 @@ struct ghost_vm {
 	hyp_spinlock_t *lock;
 	struct ghost_vm_locked_by_vm_lock vm_locked;
 	struct ghost_vm_locked_by_vm_table vm_table_locked;
+	struct ghost_vm_teardown_data vm_teardown_data;
 };
 
 /**

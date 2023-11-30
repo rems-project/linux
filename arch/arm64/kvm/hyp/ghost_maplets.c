@@ -968,6 +968,28 @@ struct glist_head mapping_shared(struct glist_head head)
 	return res;
 }
 
+// compute the owned part
+struct glist_head mapping_mapped_owned(struct glist_head head)
+{
+	struct glist_node *pos2;
+	struct maplet *m2;
+
+	struct glist_head res = mapping_empty_();
+
+	ghost_assert_maplets_locked();
+
+	if (glist_empty(&head)) // nothing in head
+		return res;
+
+	glist_for_each(pos2, &head) {
+		m2 = glist_entry(pos2, struct maplet, list);
+		if (m2->target.kind == MAPLET_MAPPED && !is_oa_marked_shared(m2->target))
+			extend_mapping_coalesce(&res, m2->stage, m2->ia_range_start, m2->ia_range_nr_pages, m2->target);
+	}
+
+	return res;
+}
+
 
 // compute the non-annotated submapping of ms2 and put it in ms1, allocating as needed
 struct glist_head mapping_nonannot(struct glist_head head)
@@ -1122,6 +1144,29 @@ struct glist_head mapping_minus(struct glist_head head2, u64 virt, u64 nr_pages)
 	return tmp2;
 }
 
+mapping mapping_sub(mapping map1, mapping map2)
+{
+	struct glist_node *pos2;
+	struct maplet *m2;
+	struct glist_head sub;
+
+	struct glist_head absent = mapping_empty_();
+
+	ghost_assert_maplets_locked();
+
+	if (glist_empty(&map2))
+		return mapping_copy(map1);
+
+	glist_for_each(pos2, &map2) {
+		m2 = glist_entry(pos2, struct maplet, list);
+		if (m2->target.kind == MAPLET_MAPPED)
+			extend_mapping_coalesce(&absent, m2->stage, m2->ia_range_start, m2->ia_range_nr_pages, MAPLET_NONE);
+	}
+
+	sub = mapping_plus(map1, absent);
+	free_mapping(absent);
+	return sub;
+}
 
 // check that head1 and head2 have disjoint domains
 bool mapping_disjoint(struct glist_head head1, struct glist_head head2, char *s, char *s1, char *s2, u64 i)
