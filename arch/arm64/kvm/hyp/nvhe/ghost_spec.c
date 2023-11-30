@@ -891,47 +891,6 @@ out:
 	return true;
 }
 
-bool compute_new_abstract_state_handle___kvm_vcpu_run_end(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call)
-{
-	struct ghost_loaded_vcpu *loaded_vcpu = this_cpu_ghost_loaded_vcpu(g0);
-	ghost_assert(loaded_vcpu->present);
-
-	// have to have done a previous vcpu_load
-	if (!loaded_vcpu->loaded) {
-		goto out;
-	}
-
-	/* must have existed to be able to load it */
-	pkvm_handle_t vm_handle = loaded_vcpu->vm_handle;
-	u64 vcpu_index = loaded_vcpu->vcpu_index;
-
-	struct ghost_vm *vm0 = ghost_vms_get(&g0->vms, vm_handle);
-	struct ghost_vcpu *vcpu0 = vm0->vm_table_locked.vcpus[vcpu_index];
-
-	/* must have existed in the vms table to have loaded it */
-	struct ghost_vm *vm1 = ghost_vms_get(&g1->vms, vm_handle);
-	ghost_assert(vm1);
-
-	struct ghost_vcpu *vcpu1 = vm1->vm_table_locked.vcpus[vcpu_index];
-	ghost_assert(vcpu1);
-
-	/* save current register state into the vcpu context */
-	copy_abstraction_regs(&vcpu0->regs, &ghost_this_cpu_local_state(g1)->regs);
-
-	/* restore saved host register state to the local regs */
-	copy_abstraction_regs(&ghost_this_cpu_local_state(g0)->regs, &ghost_this_cpu_local_state(g1)->host_regs.regs);
-
-	/* mark as host running */
-	ghost_this_cpu_local_state(g1)->cpu_state = (struct ghost_running_state){
-		.guest_running = false,
-	};
-
-	/* TODO: vcpu_run return value */
-
-out:
-	return true;
-}
-
 // performs the mapping checks of hyp_pin_shared_mem (from mem_protect.c)
 // @from and @to are host_va
 bool ghost_hyp_check_host_shared_mem(struct ghost_state *g, host_va_t from, host_va_t to)
@@ -1841,7 +1800,35 @@ bool compute_new_abstract_state_handle_guest_hcall(struct ghost_state *g1, struc
 bool compute_new_abstract_state_handle_guest_mem_abort(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call)
 {
 	/* guest mem abort = return back to, and then ERET from, vcpu_run */
-	return compute_new_abstract_state_handle___kvm_vcpu_run_end(g1, g0, call);
+	struct ghost_loaded_vcpu *loaded_vcpu = this_cpu_ghost_loaded_vcpu(g0);
+	ghost_assert(loaded_vcpu->present);
+
+	// have to have done a previous vcpu_load
+	if (!loaded_vcpu->loaded) {
+		goto out;
+	}
+
+	pkvm_handle_t vm_handle = loaded_vcpu->vm_handle;
+	u64 vcpu_index = loaded_vcpu->vcpu_index;
+
+	struct ghost_vm *vm0 = ghost_vms_get(&g0->vms, vm_handle);
+	struct ghost_vm *vm1 = ghost_vms_alloc(&g1->vms, vm_handle);
+	ghost_vm_clone_into_partial(vm1, vm0, VMS_VM_TABLE_OWNED);
+
+	struct ghost_vcpu *vcpu1 = vm1->vm_table_locked.vcpus[vcpu_index];
+	ghost_assert(vcpu1);
+
+	// go back to host
+	ghost_save_guest_context(vcpu1, g0);
+	ghost_restore_host_context(g1, g0);
+
+	// return error code = TRAP for mem aborts
+	ghost_write_gpr(g1, 0, ARM_EXCEPTION_TRAP);
+
+	// TODO: some WRITE_ONCE()s back to the host_vcpu to give esr/far etc.
+
+out:
+	return true;
 }
 
 /* Top-level EL2 exception handler spec */
