@@ -711,6 +711,12 @@ bool compute_new_abstract_state_handle___pkvm_vcpu_load(struct ghost_state *g1, 
 
 	// record in the ghost state of the vcpu 'vcpu_idx' that is has been loaded
 	struct ghost_vm *vm1 = ghost_vms_alloc(&g1->vms, vm->pkvm_handle);
+	if (vm1->protected) {
+		u64 hcr_el2 = ghost_read_el2_sysreg_explicit(&vcpu->regs, GHOST_SYSREG(HCR_EL2));
+		hcr_el2 &= ~(HCR_TWE | HCR_TWI | HCR_API | HCR_APK);
+		hcr_el2 |= hcr_el2 & (HCR_TWE | HCR_TWI);
+		ghost_write_el2_sysreg_explicit(&vcpu->regs, GHOST_SYSREG(HCR_EL2), hcr_el2);
+	}
 	ghost_vm_clone_into_partial(vm1, vm, VMS_VM_TABLE_OWNED);
 
 	// this vm's vcpu is now marked as loaded
