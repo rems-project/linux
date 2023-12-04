@@ -251,6 +251,7 @@ SYM_FUNC_START(__pkvm_init_switch_pgd)
 	isb
 
 	tlbi	alle2
+	dsb nsh
 
 	/* Install the new pgtables */
 	ldr	x3, [x0, #NVHE_INIT_PGD_PA]
@@ -259,6 +260,7 @@ alternative_if ARM64_HAS_CNP
 	orr	x4, x4, #TTBR_CNP_BIT
 alternative_else_nop_endif
 	msr	ttbr0_el2, x4
+	isb
 
 	/* Set the new stack pointer */
 	ldr	x0, [x0, #NVHE_INIT_STACK_HYP_VA]
