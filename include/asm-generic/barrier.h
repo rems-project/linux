@@ -169,7 +169,11 @@ do {									\
 #endif
 
 #ifndef smp_store_release
+#ifdef CONFIG_TEMP_PROOF_SIMPLIFICATION
+#define smp_store_release(p, v) __smp_store_release(p, v);
+#else
 #define smp_store_release(p, v) do { kcsan_release(); __smp_store_release(p, v); } while (0)
+#endif
 #endif
 
 #ifndef smp_load_acquire

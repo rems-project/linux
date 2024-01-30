@@ -44,11 +44,15 @@
 #define __READ_ONCE(x)	(*(const volatile __unqual_scalar_typeof(x) *)&(x))
 #endif
 
+#ifdef CONFIG_TEMP_PROOF_SIMPLIFICATION
+#define READ_ONCE(x)  x
+#else
 #define READ_ONCE(x)							\
 ({									\
 	compiletime_assert_rwonce_type(x);				\
 	__READ_ONCE(x);							\
 })
+#endif
 
 #define __WRITE_ONCE(x, val)						\
 do {									\
