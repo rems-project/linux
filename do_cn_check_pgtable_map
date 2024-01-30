@@ -24,6 +24,9 @@ pushd $CARVE_DIR
 
 cp $LINUX_DIR/cerb_work_around.h .
 
+# hacks
+touch ./include/linux/compiler-version.h
+
 if [[ $1 == '-i' ]]
 then
 
