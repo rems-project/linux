@@ -5,7 +5,7 @@ set -x
 FILENAME=arch/arm64/kvm/hyp/pgtable.c
 ROOTNAME=kvm_pgtable_hyp_map,verification_deps
 
-CARVE_DIR=$(c-tree-carve -r $ROOTNAME -p . $FILENAME)
+CARVE_DIR=$(c-tree-carve --extra-arg-before=-D__cerb__ -r $ROOTNAME -p . $FILENAME)
 
 if [[ -z "$CARVE_DIR" ]]
 then
