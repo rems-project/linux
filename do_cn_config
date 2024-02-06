@@ -4,10 +4,13 @@ if [[ -x $(which $CC) ]]
 then
   echo "Using c-compiler $CC"
 else
-  echo "$0: requires env var CC to point at an executable"
-  echo "  current target \$CC='$CC' is not an executable"
-  echo "  set this to a compiler binary (ideally clang-r458507)"
-  exit 1
+  if [[ -x $(which clang-12) ]]
+  then
+    export CC=clang-12
+  else
+    echo "$0: requires clang-12 or env var CC to be executable"
+    exit 1
+  fi
 fi
 
 set -ex
