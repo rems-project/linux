@@ -678,7 +678,7 @@ static int hyp_map_walker(const struct kvm_pgtable_visit_ctx *ctx,
 	if (!childp)
 		return -ENOMEM;
 #if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
-	ghost_simplified_model_step_hint(GHOST_HINT_SET_OWNER_ROOT, (u64)childp, (u64)pkvm_pgtable.pgd);
+	ghost_simplified_model_step_hint(GHOST_HINT_SET_OWNER_ROOT, hyp_virt_to_phys(childp), hyp_virt_to_phys(pkvm_pgtable.pgd));
 #endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 
 	new = kvm_init_table_pte(childp, mm_ops);
@@ -1215,7 +1215,7 @@ static int stage2_map_walk_leaf(const struct kvm_pgtable_visit_ctx *ctx,
 	if (!childp)
 		return -ENOMEM;
 #if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
-	ghost_simplified_model_step_hint(GHOST_HINT_SET_OWNER_ROOT, (u64)childp, (u64)data->mmu->pgt->pgd);
+	ghost_simplified_model_step_hint(GHOST_HINT_SET_OWNER_ROOT, hyp_virt_to_phys(childp), hyp_virt_to_phys(data->mmu->pgt->pgd));
 #endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 
 	if (!stage2_try_break_pte(ctx, data->mmu)) {
