@@ -98,6 +98,11 @@ struct stage2_map_data {
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 
 #if defined(CONFIG_NVHE_GHOST_SPEC) && defined(__KVM_NVHE_HYPERVISOR__)
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+/* include external for simplified model hints */
+extern struct kvm_pgtable pkvm_pgtable;
+#endif
+
 bool is_stage2_map_walker(struct kvm_pgtable_walk_data *data);
 
 void ghost_dump_kvm_pgtable(struct kvm_pgtable *pgt, u64 i)
@@ -672,6 +677,9 @@ static int hyp_map_walker(const struct kvm_pgtable_visit_ctx *ctx,
 	childp = (kvm_pte_t *)mm_ops->zalloc_page(NULL);
 	if (!childp)
 		return -ENOMEM;
+#if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
+	ghost_simplified_model_step_hint(GHOST_HINT_SET_OWNER_ROOT, (u64)childp, (u64)pkvm_pgtable.pgd);
+#endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 
 	new = kvm_init_table_pte(childp, mm_ops);
 	mm_ops->get_page(ctx->ptep);
@@ -1206,6 +1214,9 @@ static int stage2_map_walk_leaf(const struct kvm_pgtable_visit_ctx *ctx,
 	childp = mm_ops->zalloc_page(data->memcache);
 	if (!childp)
 		return -ENOMEM;
+#if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
+	ghost_simplified_model_step_hint(GHOST_HINT_SET_OWNER_ROOT, (u64)childp, (u64)data->mmu->pgt->pgd);
+#endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 
 	if (!stage2_try_break_pte(ctx, data->mmu)) {
 		mm_ops->put_page(childp);
