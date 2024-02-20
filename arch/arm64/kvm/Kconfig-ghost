@@ -189,3 +189,9 @@ menu "Inject errors"
 
 source "arch/arm64/kvm/Kconfig-ghost-inject-errors"
 endmenu
+
+menu "Inject fixes"
+	depends on NVHE_GHOST_SPEC
+
+source "arch/arm64/kvm/Kconfig-ghost-inject-fixes"
+endmenu

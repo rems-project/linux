@@ -1003,6 +1003,10 @@ static bool stage2_try_break_pte(const struct kvm_pgtable_visit_ctx *ctx,
 {
 	struct kvm_pgtable_mm_ops *mm_ops = ctx->mm_ops;
 
+#if defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) && defined(NVHE_GHOST_SPEC_INJECT_FIX_stage2_try_break_pte_MISSING_DSB)
+	dsb(ish);
+#endif
+
 	if (stage2_pte_is_locked(ctx->old)) {
 		/*
 		 * Should never occur if this walker has exclusive access to the
