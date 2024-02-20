@@ -31,6 +31,11 @@ static void enter_vmid_context(struct kvm_s2_mmu *mmu,
 	vcpu = host_ctxt->__hyp_running_vcpu;
 	cxt->mmu = NULL;
 
+#if defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) && defined(CONFIG_NVHE_GHOST_SPEC_INJECT_FIX_stage2_try_break_pte_MISSING_DSB)
+	dsb(ish);
+	ghost_simplified_model_step_dsb(DSB_ish);
+#endif
+
 	/*
 	 * If we're already in the desired context, then there's nothing
 	 * to do.
