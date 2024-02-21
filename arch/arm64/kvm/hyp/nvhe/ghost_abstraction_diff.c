@@ -225,7 +225,7 @@ static void __put_dirty_string(char *s, bool *dirty, bool negate)
 		if (!d)
 			ghost_printf("%c", c);
 		else if (negate)
-			ghost_printf("%s%c%s", GHOST_WHITE_ON_RED, c, GHOST_NORMAL);
+			ghost_printf("%s%c%s", GHOST_WHITE_ON_MAGENTA, c, GHOST_NORMAL);
 		else
 			ghost_printf("%s%c%s", GHOST_WHITE_ON_GREEN, c, GHOST_NORMAL);
 	}
