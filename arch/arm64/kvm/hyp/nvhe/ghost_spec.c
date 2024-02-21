@@ -949,13 +949,13 @@ static void ghost_map_donated_memory_nocheck(struct ghost_state *g, host_ipa_t h
 }
 
 // TODO: duplicating pkvm_get_hyp_vm_size() because it is static (in arch/arm64/kvm/hyp/nvhe/pkvm.c)
-static size_t ghost_pkvm_get_hyp_vm_size(unsigned int nr_vcpus)
+static size_t ghost_pkvm_get_hyp_vm_size_in_bytes(unsigned int nr_vcpus)
 {
 	return size_add(sizeof(struct pkvm_hyp_vm),
 		  size_mul(sizeof(struct pkvm_hyp_vcpu *), nr_vcpus));
 }
 
-static size_t ghost_pkvm_get_last_ran_size(struct ghost_state *g)
+static size_t ghost_pkvm_get_last_ran_size_in_bytes(struct ghost_state *g)
 {
 	// TODO: this directly using the hyp_nr_cpus global from setup.c
 	// we need to have a copy in the ghost_state instead
@@ -1038,8 +1038,8 @@ bool compute_new_abstract_state_handle___pkvm_init_vm(struct ghost_state *g1, st
 		goto out;
 	}
 
-	vm_size = ghost_pkvm_get_hyp_vm_size(nr_vcpus);
-	last_ran_size = ghost_pkvm_get_last_ran_size(g0);
+	vm_size = ghost_pkvm_get_hyp_vm_size_in_bytes(nr_vcpus);
+	last_ran_size = ghost_pkvm_get_last_ran_size_in_bytes(g0);
 	pgd_size = kvm_pgtable_stage2_pgd_size(host_mmu.arch.vtcr);
 
 	if (   !PAGE_ALIGNED(vm_host_ipa)
@@ -1246,31 +1246,31 @@ bool compute_new_abstract_state_handle___pkvm_teardown_vm(struct ghost_state *g1
 	host_ipa_t last_ran_host_ipa = host_ipa_of_phys(vm->vm_teardown_data.last_ran_addr);
 	hyp_va_t last_ran_hyp_va = hyp_va_of_phys(g0, vm->vm_teardown_data.last_ran_addr);
 
-	u64 vm_size = ghost_pkvm_get_hyp_vm_size(vm->vm_table_locked.nr_vcpus);
-	u64 last_ran_size = ghost_pkvm_get_last_ran_size(g0);
-	u64 pgd_size = kvm_pgtable_stage2_pgd_size(host_mmu.arch.vtcr);
+	u64 vm_nr_pages = PAGE_ALIGN((u64)ghost_pkvm_get_hyp_vm_size_in_bytes(vm->vm_table_locked.nr_vcpus)) >> PAGE_SHIFT;
+	u64 last_ran_nr_pages = PAGE_ALIGN((u64)ghost_pkvm_get_last_ran_size_in_bytes(g0)) >> PAGE_SHIFT;
+	u64 pgd_nr_pages = PAGE_ALIGN((u64)kvm_pgtable_stage2_pgd_size(host_mmu.arch.vtcr)) >> PAGE_SHIFT;
 
 	mapping_update(
 		&g1->host.host_abstract_pgtable_annot,
 		g1->host.host_abstract_pgtable_annot,
-		MAP_REMOVE_PAGE, GHOST_STAGE2, vm_host_ipa, vm_size, MAPLET_NONE
+		MAP_REMOVE_PAGE, GHOST_STAGE2, vm_host_ipa, vm_nr_pages, MAPLET_NONE
 	);
 	mapping_update(
 		&g1->pkvm.pkvm_abstract_pgtable.mapping,
 		g1->pkvm.pkvm_abstract_pgtable.mapping,
-		MAP_REMOVE_PAGE, GHOST_STAGE1, vm_hyp_va, vm_size, MAPLET_NONE
+		MAP_REMOVE_PAGE, GHOST_STAGE1, vm_hyp_va, vm_nr_pages, MAPLET_NONE
 	);
 	/* TODO: and add to vm->vm_teardown_data.host_mc */
 
 	mapping_update(
 		&g1->host.host_abstract_pgtable_annot,
 		g1->host.host_abstract_pgtable_annot,
-		MAP_REMOVE_PAGE, GHOST_STAGE2, last_ran_host_ipa, last_ran_size, MAPLET_NONE
+		MAP_REMOVE_PAGE, GHOST_STAGE2, last_ran_host_ipa, last_ran_nr_pages, MAPLET_NONE
 	);
 	mapping_update(
 		&g1->pkvm.pkvm_abstract_pgtable.mapping,
 		g1->pkvm.pkvm_abstract_pgtable.mapping,
-		MAP_REMOVE_PAGE, GHOST_STAGE1, last_ran_hyp_va, last_ran_size, MAPLET_NONE
+		MAP_REMOVE_PAGE, GHOST_STAGE1, last_ran_hyp_va, last_ran_nr_pages, MAPLET_NONE
 	);
 	/* TODO: and add to vm->vm_teardown_data.host_mc */
 
@@ -1281,12 +1281,12 @@ bool compute_new_abstract_state_handle___pkvm_teardown_vm(struct ghost_state *g1
 	mapping_update(
 		&g1->host.host_abstract_pgtable_annot,
 		g1->host.host_abstract_pgtable_annot,
-		MAP_REMOVE_PAGE, GHOST_STAGE2, pgd_host_ipa, pgd_size, MAPLET_NONE
+		MAP_REMOVE_PAGE, GHOST_STAGE2, pgd_host_ipa, pgd_nr_pages, MAPLET_NONE
 	);
 	mapping_update(
 		&g1->pkvm.pkvm_abstract_pgtable.mapping,
 		g1->pkvm.pkvm_abstract_pgtable.mapping,
-		MAP_REMOVE_PAGE, GHOST_STAGE1, pgd_hyp_va, pgd_size, MAPLET_NONE
+		MAP_REMOVE_PAGE, GHOST_STAGE1, pgd_hyp_va, pgd_nr_pages, MAPLET_NONE
 	);
 	for (int i = 0; i < g0->pkvm.pkvm_abstract_pgtable.table_pfns.len; i++) {
 		u64 pfn = vm->vm_locked.vm_abstract_pgtable.table_pfns.external_pfns[i];
