@@ -359,7 +359,7 @@ hyp_spinlock_t *ghost_pointer_to_vm_lock(pkvm_handle_t handle);
 struct ghost_vm *ghost_vms_alloc(struct ghost_vms *vms, pkvm_handle_t );
 
 /**
- * ghost_vms_free() - Remove a VM from the table
+ * ghost_vms_free() - Remove a previously emptied VM from the table
  *
  * @vms: ghost vm table
  * @handle: opaque pkvm-defined handle for the VM to remove
