@@ -80,7 +80,8 @@ void __init kvm_hyp_reserve(void)
 	hyp_mem_pages += hyp_vm_table_pages();
 	hyp_mem_pages += hyp_vmemmap_pages(STRUCT_HYP_PAGE_SIZE);
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-	hyp_mem_pages += 0x40100;
+	/* simplified model memory is ~600MiB, and we need space for 2 of them. */
+	hyp_mem_pages += 0x50000;
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 
 	/*
