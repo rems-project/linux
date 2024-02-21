@@ -29,6 +29,7 @@
  *      - sm_loc (sm_location*)
  *      - sm_blob (sm_location*)
  *      - sm_state (struct ghost_simplified_model_state*)
+ *      - sm_tlbi (struct sm_tlbi_op*)
  *  %g2(KIND) = ghost object (2 arg form, pointer then u64)
  *      - entry (u64, 2nd arg = level)
  *      - mapping (pointer to, 2nd arg = internal indent)
