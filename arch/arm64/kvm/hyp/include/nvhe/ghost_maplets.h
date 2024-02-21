@@ -183,13 +183,13 @@ struct maplet_target {
 };
 
 typedef enum mapping_stage {
-	GHOST_STAGE2,
-	GHOST_STAGE1,
+	GHOST_STAGE2 = 2,
+	GHOST_STAGE1 = 1,
 
 	/**
 	 * @GHOST_STAGE_NONE: for memblocks and other non-pgtable mappings.
 	 */
-	GHOST_STAGE_NONE,
+	GHOST_STAGE_NONE = 0,
 } ghost_stage_t;
 
 /**
