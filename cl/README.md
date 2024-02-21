@@ -101,3 +101,9 @@ Then in another, run:
 GDB will start up, read a script (cl/pkvm.gdb) and read some symbols from the image.
 pKVM will start to boot, then pause at a clean point (once the alternatives have been applied).
 At this point one can add more breakpoints in GDB, or have it continue, and otherwise drive GDB as normal.
+
+Configuration scripts
+---------------------
+
+There are a number of scripts for automatically configuring the Linux build for ghost checking.
+See [./scripts/config/README.md](./scripts/config/README.md) for details.
