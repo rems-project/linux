@@ -327,11 +327,11 @@ int kvm_guest_prepare_stage2(struct pkvm_hyp_vm *vm, void *pgd)
 	};
 
 	guest_lock_component(vm);
+	ret = __kvm_pgtable_stage2_init(mmu->pgt, mmu, &vm->mm_ops, 0,
+					guest_stage2_force_pte_cb);
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
 	ghost_simplified_model_step_hint(GHOST_HINT_SET_ROOT_LOCK, hyp_virt_to_phys(mmu->pgt->pgd), (u64)&vm->lock);
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
-	ret = __kvm_pgtable_stage2_init(mmu->pgt, mmu, &vm->mm_ops, 0,
-					guest_stage2_force_pte_cb);
 	guest_unlock_component(vm);
 	if (ret)
 		return ret;
