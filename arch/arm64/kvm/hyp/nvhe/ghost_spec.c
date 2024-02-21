@@ -1339,7 +1339,8 @@ bool compute_new_abstract_state_handle___pkvm_teardown_vm(struct ghost_state *g1
 
 
 	// finally, remove the VM.
-	ghost_vms_free(&g0->vms, vm_handle);
+	clear_abstraction_vm_partial(g1, vm_handle, VMS_VM_TABLE_OWNED | VMS_VM_OWNED);
+	g1->vms.table_data.nr_vms = 0;
 
 	// success
 	ret = 0;
