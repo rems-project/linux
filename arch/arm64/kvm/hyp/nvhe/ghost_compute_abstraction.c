@@ -590,7 +590,7 @@ void check_abstraction_equals_vcpu(struct ghost_vcpu *vcpu1, struct ghost_vcpu *
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
-void check_abstraction_equals_vm(struct ghost_vm *vm1, struct ghost_vm *vm2)
+void check_abstraction_equals_vm(struct ghost_vm *vm1, struct ghost_vm *vm2, enum vm_field_owner owner)
 {
 	GHOST_LOG_CONTEXT_ENTER();
 	// NOTE: we can't have this check on the lock here because some calls
@@ -612,7 +612,7 @@ void check_abstraction_equals_vm(struct ghost_vm *vm1, struct ghost_vm *vm2)
 
 	ghost_safety_check(vm1->lock == vm2->lock);
 
-	if (vm1->vm_table_locked.present) {
+	if ((owner & VMS_VM_TABLE_OWNED) && vm1->vm_table_locked.present) {
 		if (!vm2->vm_table_locked.present)
 			GHOST_SPEC_FAIL("vm2->vm_table_locked missing");
 
@@ -633,7 +633,7 @@ void check_abstraction_equals_vm(struct ghost_vm *vm1, struct ghost_vm *vm2)
 		}
 	}
 
-	if (vm1->vm_locked.present) {
+	if ((owner & VMS_VM_OWNED) && vm1->vm_locked.present) {
 		if (!vm2->vm_locked.present)
 			GHOST_SPEC_FAIL("vm2->vm_locked missing");
 
@@ -644,7 +644,7 @@ void check_abstraction_equals_vm(struct ghost_vm *vm1, struct ghost_vm *vm2)
 }
 
 /// Check that `vm` is found in `vms` and that the two ghost vms are equal
-void check_abstraction_vm_in_vms_and_equal(pkvm_handle_t vm_handle, struct ghost_state *g, struct ghost_vms *vms) {
+void check_abstraction_vm_in_vms_and_equal(pkvm_handle_t vm_handle, struct ghost_state *g, struct ghost_vms *vms, enum vm_field_owner owner) {
 	int i;
 	GHOST_LOG_CONTEXT_ENTER();
 	GHOST_LOG(vm_handle, u32);
@@ -655,15 +655,15 @@ void check_abstraction_vm_in_vms_and_equal(pkvm_handle_t vm_handle, struct ghost
 	ghost_assert(g_vm != NULL);
 	ghost_spec_assert(found_vm);
 
-	check_abstraction_equals_vm(g_vm, found_vm);
+	check_abstraction_equals_vm(g_vm, found_vm, owner);
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
-void __check_abstraction_vm_contained_in(struct ghost_vm *vm, struct ghost_vms *vms) {
+void __check_abstraction_vm_contained_in(struct ghost_vm *vm, struct ghost_vms *vms, enum vm_field_owner owner) {
 	struct ghost_vm *vm2 = ghost_vms_get(vms, vm->pkvm_handle);
 
 	if (vm2) {
-		check_abstraction_equals_vm(vm, vm2);
+		check_abstraction_equals_vm(vm, vm2, owner);
 	} else {
 		ghost_spec_assert(false);
 	}
@@ -676,7 +676,7 @@ void __check_abstraction_vm_all_contained_in(struct ghost_vms *vms1, struct ghos
 	for (i=0; i<KVM_MAX_PVMS; i++) {
 		struct ghost_vm_slot *slot = &vms1->table[i];
 		if (slot->exists) {
-			__check_abstraction_vm_contained_in(slot->vm, vms2);
+			__check_abstraction_vm_contained_in(slot->vm, vms2, VMS_VM_TABLE_OWNED | VMS_VM_OWNED);
 		}
 	}
 }
@@ -1554,11 +1554,15 @@ void record_and_check_abstraction_vm_pre(struct pkvm_hyp_vm *vm)
 
 	// If this is __init_vm, then the lock was taken after a vm was partially initialised
 	// and we shouldn't try record it.
-	if (strcmp(__this_cpu_read(ghost_this_trap), "__pkvm_init_vm")) {
+	if (!THIS_HCALL_IS("__pkvm_init_vm")) {
 		record_abstraction_vm_partial(g, vm, VMS_VM_OWNED);
 
 		if (ghost_checked_last_call()) {
-			check_abstraction_vm_in_vms_and_equal(handle, g, &gs.vms);
+			enum vm_field_owner owner =
+				// If this is __teardown_vm, then we only check the vm locked part
+				THIS_HCALL_IS("__pkvm_teardown_vm")
+				? VMS_VM_OWNED : (VMS_VM_TABLE_OWNED | VMS_VM_OWNED);
+			check_abstraction_vm_in_vms_and_equal(handle, g, &gs.vms, owner);
 		}
 	}
 

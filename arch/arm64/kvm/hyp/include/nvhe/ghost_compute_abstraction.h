@@ -14,6 +14,7 @@ void init_abstraction_common(void);
 void init_abstraction_thread_local(void);
 void record_abstraction_common(void);
 void clear_abstraction_thread_local(void);
+void clear_abstraction_vm_partial(struct ghost_state *g, pkvm_handle_t handle, enum vm_field_owner owner);
 void record_and_check_abstraction_local_state_pre(struct kvm_cpu_context *ctxt);
 void record_and_copy_abstraction_local_state_post(struct kvm_cpu_context *ctxt);
 void record_abstraction_constants_pre(void);
@@ -59,7 +60,7 @@ void check_abstraction_equals_host(struct ghost_host *gh1, struct ghost_host *gh
 void check_abstraction_equals_loaded_vcpu(struct ghost_loaded_vcpu *loaded_vcpu1, struct ghost_loaded_vcpu *loaded_vcpu2);
 void check_abstraction_equals_loaded_vcpus(struct ghost_state *g1, struct ghost_state *g2);
 void check_abstraction_equals_vcpu(struct ghost_vcpu *vcpu1, struct ghost_vcpu *vcpu2);
-void check_abstraction_equals_vm(struct ghost_vm *vm1, struct ghost_vm *vm2);
+void check_abstraction_equals_vm(struct ghost_vm *vm1, struct ghost_vm *vm2, enum vm_field_owner owner);
 void check_abstraction_vms_subseteq(struct ghost_vms *gc, struct ghost_vms *gr_post);
 void check_abstract_pgtable_equal(
 	abstract_pgtable *pgt1,
