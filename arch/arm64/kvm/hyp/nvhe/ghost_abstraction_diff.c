@@ -270,7 +270,7 @@ static void __ghost_print_diff(struct diff_container *node, struct ghost_diff *d
 		if (diff->pm.add)
 			ghost_printf(GHOST_WHITE_ON_GREEN "+");
 		else
-			ghost_printf(GHOST_WHITE_ON_RED "-");
+			ghost_printf(GHOST_WHITE_ON_MAGENTA "-");
 
 		__put_val(diff->pm.val, 0);
 
