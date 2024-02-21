@@ -52,6 +52,11 @@ DECLARE_PER_CPU(bool, ghost_check_this_hypercall);
 DECLARE_PER_CPU(const char *, ghost_this_trap);
 
 /*
+ * THIS_HCALL_IS(X) - Macro evaluating to 1 iff the name of current hcall is equal to the string X
+ */
+#define THIS_HCALL_IS(X) (0 == strcmp(__this_cpu_read(ghost_this_trap), (X)))
+
+/*
  * We shouldn't try check the recorded state against the previously recorded state on the start of a trap
  * if the previous hypercall on this CPU wasn't checked.
  *
