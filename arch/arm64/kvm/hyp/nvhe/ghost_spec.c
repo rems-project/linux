@@ -1340,7 +1340,7 @@ bool compute_new_abstract_state_handle___pkvm_teardown_vm(struct ghost_state *g1
 
 	// finally, remove the VM.
 	clear_abstraction_vm_partial(g1, vm_handle, VMS_VM_TABLE_OWNED | VMS_VM_OWNED);
-	g1->vms.table_data.nr_vms = 0;
+	g1->vms.table_data.nr_vms--;
 
 	// TODO: we need to also undonate (HYP -> HOST) the vcpu stuff
 
