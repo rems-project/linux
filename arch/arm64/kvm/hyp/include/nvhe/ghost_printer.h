@@ -11,7 +11,9 @@
  *  %c = char
  *  %b = boolean
  *  %s = string
- *  %p = pointer (as 0x1122334455667788)
+ *  %p = raw pointer (as 0x1122334455667788)
+ *  %pK = kernel pointer (as 0x.......RAW...../0x......PHYS......)
+ *  %pP = phys pointer (as 0x.......RAW...../0x.....HYP_VA.....)
  *  %d = decimal (u8, u16, and u32)
  *  %x = hex (u8, u16, and u32)
  *  %ld = long decimal (u64)

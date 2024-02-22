@@ -238,10 +238,28 @@ int put_hex(gp_stream_t *out, char **p, u64 width, enum arg_length len, u64 x)
 	return __putxn(out, x, len);
 }
 
-int put_ptr(gp_stream_t *out, char **p, void *arg)
+int put_raw_ptr(gp_stream_t *out, char **p, void *arg)
 {
 	u64 x = (u64)arg;
 	return __putxn(out, x, 64);
+}
+
+int put_kern_ptr(gp_stream_t *out, char **p, void *arg)
+{
+	u64 x = (u64)arg;
+	// kernel pointers are printed as RAW/HYP_VA
+	TRY(__putxn(out, x, 64));
+	TRY(__putc(out, '/'));
+	return __putxn(out, hyp_virt_to_phys(arg), 64);
+}
+
+int put_phys_ptr(gp_stream_t *out, char **p, void *arg)
+{
+	u64 x = (u64)arg;
+	// kernel pointers are printed as RAW/HYP_VA
+	TRY(__putxn(out, x, 64));
+	TRY(__putc(out, '/'));
+	return __putxn(out, (u64)hyp_phys_to_virt(x), 64);
 }
 
 int put_indent(gp_stream_t *out, char **p, u64 arg)
@@ -466,7 +484,19 @@ int ghost_vsprintf(gp_stream_t *out, const char *fmt, va_list ap)
 				TRY(put_hex(out, &p, width, len, VA_INT_ARG(ap)));
 				break;
 			case 'p':
-				TRY(put_ptr(out, &p, va_arg(ap, void*)));
+				switch (*(p+1)) {
+				case 'K':
+					++p;
+					TRY(put_kern_ptr(out, &p, va_arg(ap, void*)));
+					break;
+				case 'P':
+					++p;
+					TRY(put_phys_ptr(out, &p, va_arg(ap, void*)));
+					break;
+				default:
+					TRY(put_raw_ptr(out, &p, va_arg(ap, void*)));
+					break;
+				}
 				break;
 			case 'I':
 				TRY(put_indent(out, &p, va_arg(ap, u64)));
