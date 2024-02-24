@@ -1372,7 +1372,7 @@ void mapping_update(mapping *out, mapping in, mapping_update_kind_t kind, ghost_
 				ghost_assert(false);
 			}
 		}
-		copy = mapping_minus(copy, ia, 1);
+		copy = mapping_minus(copy, ia, nr_pages);
 		break;
 	case MAP_INSERT_PAGE:
 		for (u64 p = 0; p < nr_pages; p++) {
