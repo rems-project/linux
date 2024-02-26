@@ -114,7 +114,7 @@ void ghost_pfn_set_assert_subseteq(struct pfn_set *lhs, struct pfn_set *rhs)
 	GHOST_LOG_P(__func__, rhs, print_set);
 
 	ghost_spec_assert(range_equal(lhs, rhs));
-	ghost_spec_assert(lhs->len == rhs->len);
+	ghost_spec_assert(lhs->len <= rhs->len);
 
 	for (int i=0; i<lhs->len; i++) {
 		ghost_spec_assert(ghost_pfn_set_contains(rhs, lhs->external_pfns[i]));
