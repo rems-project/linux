@@ -15,6 +15,4 @@ bool ghost_print_on(const char* context);
 
 void init_ghost_control(void);
 
-#define GHOST_EXEC_SPEC true
-
 #endif // _GHOST_CONTROL_H

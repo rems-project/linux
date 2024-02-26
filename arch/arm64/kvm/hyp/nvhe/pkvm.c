@@ -259,14 +259,12 @@ static DEFINE_HYP_SPINLOCK(vm_table_lock);
 static void vm_table_lock_component(void)
 {
 	hyp_spin_lock(&vm_table_lock);
-	if (ghost_exec_enabled())
-		record_and_check_abstraction_vms_pre();
+	record_and_check_abstraction_vms_pre();
 }
 
 static void vm_table_unlock_component(void)
 {
-	if (ghost_exec_enabled())
-		record_and_copy_abstraction_vms_post();
+	record_and_copy_abstraction_vms_post();
 	hyp_spin_unlock(&vm_table_lock);
 }
 #endif /* CONFIG_NVHE_GHOST_SPEC */

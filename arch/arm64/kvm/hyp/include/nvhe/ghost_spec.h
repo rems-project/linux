@@ -57,15 +57,6 @@ DECLARE_PER_CPU(const char *, ghost_this_trap);
 #define THIS_HCALL_IS(X) (0 == strcmp(__this_cpu_read(ghost_this_trap), (X)))
 
 /*
- * We shouldn't try check the recorded state against the previously recorded state on the start of a trap
- * if the previous hypercall on this CPU wasn't checked.
- *
- * TODO: we may still want to run the machinery to collect states and make sure they haven't changed _between_ hypercalls...
- */
-DECLARE_PER_CPU(bool, ghost_checked_previous_hypercall);
-bool ghost_checked_last_call(void);
-
-/*
  * The noisy printing is controlled separately,
  * A call can be checked but silently,
  * or printed noisly with diffs but not checked.

@@ -94,18 +94,11 @@ u64 ghost_prot_finalized_count;
 bool ghost_prot_finalized_all;
 
 DEFINE_PER_CPU(bool, ghost_check_this_hypercall);
-DEFINE_PER_CPU(bool, ghost_checked_previous_hypercall);
-
 DEFINE_PER_CPU(bool, ghost_print_this_hypercall);
 
 bool ghost_exec_enabled(void)
 {
-	return GHOST_EXEC_SPEC && __this_cpu_read(ghost_check_this_hypercall);
-}
-
-bool ghost_checked_last_call(void)
-{
-	return __this_cpu_read(ghost_checked_previous_hypercall);
+	return __this_cpu_read(ghost_check_this_hypercall);
 }
 
 void ghost_enable_this_cpu(void)
@@ -2243,8 +2236,6 @@ void ghost_record_pre(struct kvm_cpu_context *ctxt, u64 guest_exit_code)
 	tag_exception_entry(ctxt, guest_exit_code);
 
 	GHOST_LOG_CONTEXT_ENTER();
-	if (! GHOST_EXEC_SPEC)
-		goto exit_context;
 
 	if (__this_cpu_read(ghost_check_this_hypercall)) {
 		clear_abstraction_thread_local();
@@ -2261,7 +2252,6 @@ void ghost_record_pre(struct kvm_cpu_context *ctxt, u64 guest_exit_code)
 		ghost_clear_call_data();
 	}
 
-exit_context:
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
@@ -2325,7 +2315,5 @@ void ghost_post(struct kvm_cpu_context *ctxt)
 		ghost_unlock_vms();
 		ghost_unlock_maplets();
 	}
-
-	__this_cpu_write(ghost_checked_previous_hypercall, __this_cpu_read(ghost_check_this_hypercall));
 	GHOST_LOG_CONTEXT_EXIT();
 }

@@ -1377,7 +1377,7 @@ void record_and_check_abstraction_local_state_pre(struct kvm_cpu_context *ctxt)
 	GHOST_LOG_CONTEXT_ENTER();
 	record_abstraction_local_state(g, ctxt);
 
-	if (ghost_checked_last_call() && this_cpu_ghost_registers(&gs)->present) {
+	if (this_cpu_ghost_registers(&gs)->present) {
 		GHOST_TRACE("g1->gr_pre");
 		GHOST_TRACE("g2->gs");
 		check_abstraction_equals_local_state(g, &gs);
@@ -1465,10 +1465,7 @@ void record_and_check_abstraction_pkvm_pre(void)
 	// ... but later on we'll have to do some this-thread-diff/trajectory tracking instead
 	if (!g->pkvm.present) {
 		record_abstraction_pkvm(g);
-
-		if (ghost_checked_last_call()) {
-			check_abstraction_equals_pkvm(&g->pkvm, &gs.pkvm);
-		}
+		check_abstraction_equals_pkvm(&g->pkvm, &gs.pkvm);
 	}
 	ghost_unlock_maplets();
 	GHOST_LOG_CONTEXT_EXIT();
@@ -1498,9 +1495,7 @@ void record_and_check_abstraction_host_pre(void)
 	// TODO: see comment in record_and_check_abstraction_pkvm_pre
 	if (!g->host.present) {
 		record_abstraction_host(g);
-		if (ghost_checked_last_call()) {
-			check_abstraction_equals_host(&g->host, &gs.host);
-		}
+		check_abstraction_equals_host(&g->host, &gs.host);
 	}
 	ghost_unlock_maplets();
 	GHOST_LOG_CONTEXT_EXIT();
@@ -1537,9 +1532,7 @@ void record_and_check_abstraction_vms_pre(void)
 	struct ghost_state *g = this_cpu_ptr(&gs_recorded_pre);
 	ghost_lock_vms();
 	record_abstraction_vms_partial(g, VMS_VM_TABLE_OWNED);
-	if (ghost_checked_last_call()) {
-		check_abstraction_vms_subseteq(&g->vms, &gs.vms);
-	}
+	check_abstraction_vms_subseteq(&g->vms, &gs.vms);
 	ghost_unlock_vms();
 	GHOST_LOG_CONTEXT_EXIT();
 }
@@ -1570,14 +1563,16 @@ void record_and_check_abstraction_vm_pre(struct pkvm_hyp_vm *vm)
 	// and we shouldn't try record it.
 	if (!THIS_HCALL_IS("__pkvm_init_vm")) {
 		record_abstraction_vm_partial(g, vm, VMS_VM_OWNED);
+		enum vm_field_owner owner = VMS_VM_OWNED | VMS_VM_TABLE_OWNED;
 
-		if (ghost_checked_last_call()) {
-			enum vm_field_owner owner =
-				// If this is __teardown_vm, then we only check the vm locked part
-				THIS_HCALL_IS("__pkvm_teardown_vm")
-				? VMS_VM_OWNED : (VMS_VM_TABLE_OWNED | VMS_VM_OWNED);
-			check_abstraction_vm_in_vms_and_equal(handle, g, &gs.vms, owner);
+		if (THIS_HCALL_IS("__pkvm_teardown_vm")) {
+			// If this is __pkvm_teardown_vm, then
+			// the VM has already been removed from the table
+			// so we only record the VM_OWNED part.
+			owner ^= VMS_VM_TABLE_OWNED;
 		}
+
+		check_abstraction_vm_in_vms_and_equal(handle, g, &gs.vms, owner);
 	}
 
 	ghost_unlock_vms();
