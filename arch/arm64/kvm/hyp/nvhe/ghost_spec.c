@@ -1961,6 +1961,45 @@ bool compute_new_abstract_state_for_exception(struct ghost_state *post, struct g
 	return new_state_computed;
 }
 
+/* Pretty-printing the thread-local call data
+ */
+static void ghost_print_call_data(void)
+{
+	struct ghost_call_data *call = this_cpu_ptr(&gs_call_data);
+
+	if (call->at_translations.len) {
+		ghost_printf("[at_translations]");
+		for (int i = 0; i < call->at_translations.len; i++) {
+			struct ghost_at_translation *t = &call->at_translations.translations[i];
+			ghost_printf(" <va:%p ipa:%p success:%b>", t->va, t->ipa, t->success);
+			if (i < call->at_translations.len - 1)
+				ghost_printf(",");
+		}
+		ghost_printf("\n");
+	}
+
+	if (call->memcache_donations.len) {
+		ghost_printf("[memcache_donations]");
+		for (int i = 0; i < call->memcache_donations.len; i++) {
+			ghost_printf(" %p", call->memcache_donations.pages[i]);
+			if (i < call->memcache_donations.len - 1)
+				ghost_printf(",");
+		}
+		ghost_printf("\n");
+	}
+
+	if (call->relaxed_reads.len) {
+		ghost_printf("[relaxed_reads]");
+		for (int i = 0; i < call->relaxed_reads.len; i++) {
+			struct ghost_read *r = &call->relaxed_reads.read_slots[i];
+			ghost_printf(" <addr:%p value:%lx width:%ld>", r->phys_addr, r->value, r->width);
+			if (i < call->memcache_donations.len - 1)
+				ghost_printf(",");
+		}
+		ghost_printf("\n");
+	}
+}
+
 /* Pretty-printing headers */
 struct ghost_trap_param {
 	const char *fmt_code;
@@ -2240,6 +2279,7 @@ void ghost_post(struct kvm_cpu_context *ctxt)
 		/* print out the return error codes */
 		if (__this_cpu_read(ghost_print_this_hypercall)) {
 			ghost_printf("---\n");
+			ghost_print_call_data();
 			ghost_printf("ret:\n");
 			ghost_printf("[r0] %lx\n", ctxt->regs.regs[0]);
 			ghost_printf("[r1] %lx\n", ctxt->regs.regs[1]);
