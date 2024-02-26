@@ -757,6 +757,7 @@ static void ghost_diff_running_state(struct diff_container *node, struct ghost_r
 	if (r1->guest_running && r2->guest_running) {
 		ghost_diff_field(node, "vm_handle", diff_pair(TU64((u64)r1->vm_handle), TU64((u64)r2->vm_handle)));
 		ghost_diff_field(node, "vcpu_index", diff_pair(TU64(r1->vcpu_index), TU64(r2->vcpu_index)));
+		ghost_diff_field(node, "exit_code", diff_pair(TU64(r1->guest_exit_code), TU64(r2->guest_exit_code)));
 	}
 	ghost_diff_pop_subfield(node);
 	GHOST_LOG_CONTEXT_EXIT();

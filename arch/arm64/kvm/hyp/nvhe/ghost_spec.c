@@ -1839,16 +1839,10 @@ out:
 
 /* Top-level EL2 exception handler spec */
 
-bool compute_new_abstract_state_handle_trap(struct ghost_state *post, struct ghost_state *pre, struct ghost_call_data *call)
+static bool compute_new_abstract_state_handle_trap(struct ghost_state *post, struct ghost_state *pre, struct ghost_call_data *call)
 {
 	bool new_state_computed = false;
 	GHOST_LOG_CONTEXT_ENTER();
-
-	// copy over the things that were supposed to be constant, and always present.
-	copy_abstraction_constants(post, pre);
-
-	// and all the thread-local state the cpu can always see
-	copy_abstraction_local_state(ghost_this_cpu_local_state(post), ghost_this_cpu_local_state(pre));
 
 	// figure out if coming from host or guest
 	struct ghost_running_state *gr_pre_cpu = this_cpu_ghost_run_state(pre);
@@ -1876,13 +1870,79 @@ bool compute_new_abstract_state_handle_trap(struct ghost_state *post, struct gho
 			new_state_computed =  compute_new_abstract_state_handle_host_mem_abort(post, pre, call);
 		break;
 	default:
-		ghost_assert(false);
+		BUG(); // unreachable?
 	}
 
 	GHOST_LOG_CONTEXT_EXIT();
 	return new_state_computed;
 }
 
+static bool compute_new_abstract_state_irq(struct ghost_state *post, struct ghost_state *pre, struct ghost_call_data *call)
+{
+	/* expect only IRQ for guest */
+	ghost_assert(ghost_this_cpu_local_state(pre)->cpu_state.guest_running);
+
+	/* don't check this spec */
+	return false;
+}
+
+static bool compute_new_abstract_state_serror(struct ghost_state *post, struct ghost_state *pre, struct ghost_call_data *call)
+{
+	/* expect no SError (for now) */
+	ghost_spec_assert(false);
+
+	/* don't check this spec */
+	return false;
+}
+
+static bool compute_new_abstract_state_il(struct ghost_state *post, struct ghost_state *pre, struct ghost_call_data *call)
+{
+	/* expect no illegal-exception-returns (for now) */
+	ghost_spec_assert(false);
+
+	/* don't check this spec */
+	return false;
+}
+
+bool compute_new_abstract_state_for_exception(struct ghost_state *post, struct ghost_state *pre, struct ghost_call_data *call)
+{
+	bool new_state_computed = false;
+	GHOST_LOG_CONTEXT_ENTER();
+
+	// copy over the things that were supposed to be constant, and always present.
+	copy_abstraction_constants(post, pre);
+
+	// and all the thread-local state the cpu can always see
+	copy_abstraction_local_state(ghost_this_cpu_local_state(post), ghost_this_cpu_local_state(pre));
+
+	// figure out if coming from host or guest
+	struct ghost_running_state *gr_pre_cpu = this_cpu_ghost_run_state(pre);
+	bool ghost_thought_guest_was_running = gr_pre_cpu->guest_running;
+
+	if (ghost_thought_guest_was_running) {
+		switch (gr_pre_cpu->guest_exit_code) {
+		case ARM_EXCEPTION_TRAP:
+			new_state_computed = compute_new_abstract_state_handle_trap(post, pre, call);
+			break;
+		case ARM_EXCEPTION_IRQ:
+			new_state_computed = compute_new_abstract_state_irq(post, pre, call);
+			break;
+		case ARM_EXCEPTION_EL1_SERROR:
+			new_state_computed = compute_new_abstract_state_serror(post, pre, call);
+			break;
+		case ARM_EXCEPTION_IL:
+			new_state_computed = compute_new_abstract_state_il(post, pre, call);
+			break;
+		default:
+			BUG(); // unreachable?
+		}
+	} else {
+		new_state_computed = compute_new_abstract_state_handle_trap(post, pre, call);
+	}
+
+	GHOST_LOG_CONTEXT_EXIT();
+	return new_state_computed;
+}
 
 /* Pretty-printing headers */
 struct ghost_trap_param {
@@ -2177,7 +2237,7 @@ void ghost_post(struct kvm_cpu_context *ctxt)
 		call->return_value = cpu_reg(ctxt, 1);
 
 		// actually compute the new state
-		new_state_computed = compute_new_abstract_state_handle_trap(gc_post, gr_pre, call);
+		new_state_computed = compute_new_abstract_state_for_exception(gc_post, gr_pre, call);
 
 		// and check the two are equal on relevant components
 		if (new_state_computed) {

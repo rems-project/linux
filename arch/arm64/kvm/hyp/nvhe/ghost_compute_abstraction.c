@@ -1334,6 +1334,7 @@ void ghost_cpu_running_state_copy(struct ghost_running_state *run_tgt, struct gh
 	run_tgt->guest_running = g_src->guest_running;
 	run_tgt->vm_handle = g_src->vm_handle;
 	run_tgt->vcpu_index = g_src->vcpu_index;
+	run_tgt->guest_exit_code = g_src->guest_exit_code;
 }
 
 DECLARE_PER_CPU(struct pkvm_hyp_vcpu *, loaded_hyp_vcpu);
@@ -1867,7 +1868,7 @@ static void ghost_dump_running_state(struct ghost_running_state *run, u64 i)
 	if (!run->guest_running) {
 		ghost_printf("<host running>\n");
 	} else {
-		ghost_printf("<VM running, vm_handle:%x vcpu_index:ld>\n", run->vm_handle, run->vcpu_index);
+		ghost_printf("<VM running, vm_handle:%x vcpu_index:%ld exit_code:%ld>\n", run->vm_handle, run->vcpu_index, run->guest_exit_code);
 	}
 }
 

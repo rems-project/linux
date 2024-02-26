@@ -440,11 +440,13 @@ struct ghost_constant_globals {
  * @guest_running: whether the current exception was from a guest, otherwise was from host.
  * @vm_handle: if guest_running, the opaque pKVM handle of the VM that was running.
  * @vcpu_index: if guest_running, the index of the vcpu in the VM with vm_handle which was running.
+ * @guest_exit_code: if guest_running, the pKVM-computed exit code for this guest exception.
  */
 struct ghost_running_state {
 	bool guest_running;
 	pkvm_handle_t vm_handle;
 	u64 vcpu_index;
+	u64 guest_exit_code;
 };
 
 void ghost_cpu_running_state_copy(struct ghost_running_state *run_tgt, struct ghost_running_state *g_src);
