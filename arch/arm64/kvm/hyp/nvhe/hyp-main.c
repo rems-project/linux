@@ -1222,7 +1222,7 @@ void handle_trap(struct kvm_cpu_context *host_ctxt)
 	GHOST_LOG_CONTEXT_ENTER();
 	GHOST_LOG(cpu, u64);
 
-	ghost_record_pre(host_ctxt);
+	ghost_record_pre(host_ctxt, 0);
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 
 	u64 esr = read_sysreg_el2(SYS_ESR);

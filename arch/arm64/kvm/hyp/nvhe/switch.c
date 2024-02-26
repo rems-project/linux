@@ -331,7 +331,7 @@ int __kvm_vcpu_run(struct kvm_vcpu *vcpu)
 		exit_code = __guest_enter(vcpu);
 
 #ifdef CONFIG_NVHE_GHOST_SPEC
-		ghost_record_pre(&vcpu->arch.ctxt);
+		ghost_record_pre(&vcpu->arch.ctxt, exit_code);
 #endif  /* CONFIG_NVHE_GHOST_SPEC */
 
 		/* And we're baaack! */

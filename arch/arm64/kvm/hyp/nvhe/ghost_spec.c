@@ -2020,8 +2020,6 @@ static struct ghost_trap_data sve_trap_data = {
 
 static struct ghost_trap_data compute_trap_state(struct kvm_cpu_context *ctxt, bool from_guest)
 {
-	// TODO: detect IRQs and other interrupts.
-
 	u64 esr = read_sysreg_el2(SYS_ESR);
 	switch (ESR_ELx_EC(esr)) {
 	case ESR_ELx_EC_HVC64:
@@ -2039,7 +2037,50 @@ static struct ghost_trap_data compute_trap_state(struct kvm_cpu_context *ctxt, b
 	}
 }
 
-static void tag_exception_entry(struct kvm_cpu_context *ctxt)
+static struct ghost_trap_data guest_irq_trap_data = {
+	.valid = true,
+	.name = "IRQ"
+};
+
+static struct ghost_trap_data guest_serror_trap_data = {
+	.valid = true,
+	.name = "SError"
+};
+
+static struct ghost_trap_data compute_irq_state(struct kvm_cpu_context *ctxt, bool from_guest)
+{
+	ghost_assert(from_guest); // TODO: host as well?
+	return guest_irq_trap_data;
+}
+
+static struct ghost_trap_data compute_serror_state(struct kvm_cpu_context *ctxt, bool from_guest)
+{
+	ghost_assert(from_guest); // TODO: host as well?
+	return guest_serror_trap_data;
+}
+
+static struct ghost_trap_data compute_exception_state(struct kvm_cpu_context *ctxt, bool from_guest, u64 guest_exit_code)
+{
+	if (from_guest) {
+		switch (guest_exit_code) {
+		case ARM_EXCEPTION_TRAP:
+			return compute_trap_state(ctxt, from_guest);
+		case ARM_EXCEPTION_IRQ:
+			return compute_irq_state(ctxt, from_guest);
+		case ARM_EXCEPTION_EL1_SERROR:
+			return compute_serror_state(ctxt, from_guest);
+		case ARM_EXCEPTION_IL:
+			return unknown_trap_data;
+		default:
+			BUG(); // unreachable?
+		}
+	} else {
+		// TODO: detect IRQs and other interrupts from host?
+		return compute_trap_state(ctxt, from_guest);
+	}
+}
+
+static void tag_exception_entry(struct kvm_cpu_context *ctxt, u64 guest_exit_code)
 {
 	ghost_print_enter();
 
@@ -2048,7 +2089,7 @@ static void tag_exception_entry(struct kvm_cpu_context *ctxt)
 	struct ghost_running_state *cpu_run_state = this_cpu_ptr(&ghost_cpu_run_state);
 	bool from_guest = cpu_run_state->guest_running;
 
-	struct ghost_trap_data trap = compute_trap_state(ctxt, from_guest);
+	struct ghost_trap_data trap = compute_exception_state(ctxt, from_guest, guest_exit_code);
 
 	__this_cpu_write(ghost_this_trap, trap.name);
 	__this_cpu_write(ghost_print_this_hypercall, ghost_print_on(trap.name));
@@ -2081,9 +2122,9 @@ print_exit:
 }
 
 
-void ghost_record_pre(struct kvm_cpu_context *ctxt)
+void ghost_record_pre(struct kvm_cpu_context *ctxt, u64 guest_exit_code)
 {
-	tag_exception_entry(ctxt);
+	tag_exception_entry(ctxt, guest_exit_code);
 
 	GHOST_LOG_CONTEXT_ENTER();
 	if (! GHOST_EXEC_SPEC)

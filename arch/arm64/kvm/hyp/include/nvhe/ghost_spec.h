@@ -562,8 +562,15 @@ DECLARE_PER_CPU(struct ghost_running_state, ghost_cpu_run_state);
 /**
  * ghost_record_pre() - Record the state on entry to pKVM
  * @ctxt: the context (saved registers) on entry to pKVM.
+ * @guest_exit_code: if from a guest, the pKVM-computed guest exit code.
+ *                   if not from a guest, must be 0.
+ *
+ * NOTE: Theoretically, this should be a snapshot of the state on exception entry,
+ *       including the full saved register context, system registers, and vector offset.
+ *       However, we insert this call into more convenient-to-edit places, and reconstruct
+ *       that data from the pKVM-saved cpu context and exit code.
  */
-void ghost_record_pre(struct kvm_cpu_context *ctxt);
+void ghost_record_pre(struct kvm_cpu_context *ctxt, u64 guest_exit_code);
 
 /**
  * ghost_post() - Record and check the state just prior to the exception return
