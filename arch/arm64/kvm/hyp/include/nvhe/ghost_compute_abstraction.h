@@ -61,7 +61,7 @@ void check_abstraction_equals_loaded_vcpu(struct ghost_loaded_vcpu *loaded_vcpu1
 void check_abstraction_equals_loaded_vcpus(struct ghost_state *g1, struct ghost_state *g2);
 void check_abstraction_equals_vcpu(struct ghost_vcpu *vcpu1, struct ghost_vcpu *vcpu2);
 void check_abstraction_equals_vm(struct ghost_vm *vm1, struct ghost_vm *vm2, enum vm_field_owner owner);
-void check_abstraction_vms_subseteq(struct ghost_vms *gc, struct ghost_vms *gr_post);
+void check_abstraction_vms_subseteq(struct ghost_vms *g_spec, struct ghost_vms *g_impl);
 void check_abstract_pgtable_equal(
 	abstract_pgtable *pgt1,
 	abstract_pgtable *pgt2,
@@ -69,6 +69,10 @@ void check_abstract_pgtable_equal(
 	char* pgt1_name,
 	char* pgt2_name,
 	u64 indent
+);
+void check_abstraction_refined_pgtable(
+	abstract_pgtable *pgt_spec,
+	abstract_pgtable *pgt_impl
 );
 
 

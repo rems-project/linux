@@ -339,6 +339,15 @@ void check_abstract_pgtable_equal(abstract_pgtable *ap1, abstract_pgtable *ap2, 
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
+void check_abstraction_refined_pgtable(abstract_pgtable *ap_spec, abstract_pgtable *ap_impl)
+{
+	GHOST_LOG_CONTEXT_ENTER();
+	check_mapping_equal(ap_spec->mapping, ap_impl->mapping);
+	ghost_pfn_set_assert_subseteq(&ap_impl->table_pfns, &ap_spec->table_pfns);
+	ghost_assert(ap_spec->root == ap_impl->root);
+	GHOST_LOG_CONTEXT_EXIT();
+}
+
 bool check_abstraction_equals_register(struct ghost_register *r1, struct ghost_register *r2, bool todo_warnonly)
 {
 	bool ret = true;
@@ -592,7 +601,7 @@ void check_abstraction_equals_vcpu(struct ghost_vcpu *vcpu1, struct ghost_vcpu *
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
-void check_abstraction_equals_vm(struct ghost_vm *vm1, struct ghost_vm *vm2, enum vm_field_owner owner)
+void check_abstraction_refined_vm(struct ghost_vm *vm_spec, struct ghost_vm *vm_impl, enum vm_field_owner owner)
 {
 	GHOST_LOG_CONTEXT_ENTER();
 	// NOTE: we can't have this check on the lock here because some calls
@@ -604,46 +613,40 @@ void check_abstraction_equals_vm(struct ghost_vm *vm1, struct ghost_vm *vm2, enu
 	// if not for the same guest VM, then not equal
 
 	/* these fields are protected by the ghost_vms_lock and duplicated on the VM struct for ease of access */
-	GHOST_LOG(vm1->pkvm_handle, u32);
-	GHOST_LOG(vm2->pkvm_handle, u32);
-	ghost_spec_assert(vm1->pkvm_handle == vm2->pkvm_handle);
+	GHOST_SPEC_ASSERT_VAR_EQ(vm_spec->pkvm_handle, vm_impl->pkvm_handle, u32);
+	GHOST_SPEC_ASSERT_VAR_EQ(vm_spec->vm_teardown_data.host_mc, vm_impl->vm_teardown_data.host_mc, u64);
+	GHOST_SPEC_ASSERT_VAR_EQ(vm_spec->vm_teardown_data.hyp_vm_struct_addr, vm_impl->vm_teardown_data.hyp_vm_struct_addr, u64);
+	GHOST_SPEC_ASSERT_VAR_EQ(vm_spec->vm_teardown_data.last_ran_addr, vm_impl->vm_teardown_data.last_ran_addr, u64);
 
-	GHOST_SPEC_ASSERT_VAR_EQ(vm1->vm_teardown_data.host_mc, vm2->vm_teardown_data.host_mc, u64);
-	GHOST_SPEC_ASSERT_VAR_EQ(vm1->vm_teardown_data.hyp_vm_struct_addr, vm2->vm_teardown_data.hyp_vm_struct_addr, u64);
-	GHOST_SPEC_ASSERT_VAR_EQ(vm1->vm_teardown_data.last_ran_addr, vm2->vm_teardown_data.last_ran_addr, u64);
+	ghost_safety_check(vm_spec->lock == vm_impl->lock);
 
-	ghost_safety_check(vm1->lock == vm2->lock);
+	if ((owner & VMS_VM_TABLE_OWNED) && vm_spec->vm_table_locked.present) {
+		if (!vm_impl->vm_table_locked.present)
+			GHOST_SPEC_FAIL("vm_impl->vm_table_locked missing");
 
-	if ((owner & VMS_VM_TABLE_OWNED) && vm1->vm_table_locked.present) {
-		if (!vm2->vm_table_locked.present)
-			GHOST_SPEC_FAIL("vm2->vm_table_locked missing");
-
-		GHOST_LOG(vm1->vm_table_locked.nr_vcpus, u64);
-		GHOST_LOG(vm2->vm_table_locked.nr_vcpus, u64);
-		ghost_spec_assert(vm1->vm_table_locked.nr_vcpus == vm2->vm_table_locked.nr_vcpus);
+		GHOST_LOG(vm_spec->vm_table_locked.nr_vcpus, u64);
+		GHOST_LOG(vm_impl->vm_table_locked.nr_vcpus, u64);
+		ghost_spec_assert(vm_spec->vm_table_locked.nr_vcpus == vm_impl->vm_table_locked.nr_vcpus);
 
 
-		// GHOST_LOG(vm1->vm_table_locked.nr_initialised_vcpus, u64);
-		// GHOST_LOG(vm2->vm_table_locked.nr_initialised_vcpus, u64);
-		// ghost_spec_assert(vm1->vm_table_locked.nr_initialised_vcpus == vm2->vm_table_locked.nr_initialised_vcpus);
+		// GHOST_LOG(vm_spec->vm_table_locked.nr_initialised_vcpus, u64);
+		// GHOST_LOG(vm_impl->vm_table_locked.nr_initialised_vcpus, u64);
+		// ghost_spec_assert(vm_spec->vm_table_locked.nr_initialised_vcpus == vm_impl->vm_table_locked.nr_initialised_vcpus);
 
-		for (int i=0; i < vm1->vm_table_locked.nr_vcpus; i++) {
+		for (int i=0; i < vm_spec->vm_table_locked.nr_vcpus; i++) {
 			GHOST_LOG_CONTEXT_ENTER_INNER("loop vcpus");
 			GHOST_LOG_INNER("loop vcpus", i, u32);
-			if (vm1->vm_teardown_data.vcpu_addrs[i] != vm2->vm_teardown_data.vcpu_addrs[i]) {
-				ghost_printf("vcpu %d: %p <--->%p\n", i, vm1->vm_teardown_data.vcpu_addrs[i], vm2->vm_teardown_data.vcpu_addrs[i]);
-			}
-			ghost_spec_assert(vm1->vm_teardown_data.vcpu_addrs[i] == vm2->vm_teardown_data.vcpu_addrs[i]);
-			check_abstraction_equals_vcpu(vm1->vm_table_locked.vcpus[i], vm2->vm_table_locked.vcpus[i]);
+			ghost_spec_assert(vm_spec->vm_teardown_data.vcpu_addrs[i] == vm_impl->vm_teardown_data.vcpu_addrs[i]);
+			check_abstraction_equals_vcpu(vm_spec->vm_table_locked.vcpus[i], vm_impl->vm_table_locked.vcpus[i]);
 			GHOST_LOG_CONTEXT_EXIT_INNER("loop vcpus");
 		}
 	}
 
-	if ((owner & VMS_VM_OWNED) && vm1->vm_locked.present) {
-		if (!vm2->vm_locked.present)
-			GHOST_SPEC_FAIL("vm2->vm_locked missing");
+	if ((owner & VMS_VM_OWNED) && vm_spec->vm_locked.present) {
+		if (!vm_impl->vm_locked.present)
+			GHOST_SPEC_FAIL("vm_impl->vm_locked missing");
 
-		check_abstract_pgtable_equal(&vm1->vm_locked.vm_abstract_pgtable, &vm2->vm_locked.vm_abstract_pgtable, "abstraction_equals_vm", "vm1.vm_abstract_pgtable", "vm2.vm_abstract_pgtable", 4);
+		check_abstraction_refined_pgtable(&vm_spec->vm_locked.vm_abstract_pgtable, &vm_impl->vm_locked.vm_abstract_pgtable);
 	}
 
 	GHOST_LOG_CONTEXT_EXIT();
@@ -661,7 +664,7 @@ void check_abstraction_vm_in_vms_and_equal(pkvm_handle_t vm_handle, struct ghost
 	ghost_assert(g_vm != NULL);
 	ghost_spec_assert(found_vm);
 
-	check_abstraction_equals_vm(g_vm, found_vm, owner);
+	check_abstraction_refined_vm(g_vm, found_vm, owner);
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
@@ -669,36 +672,36 @@ void __check_abstraction_vm_contained_in(struct ghost_vm *vm, struct ghost_vms *
 	struct ghost_vm *vm2 = ghost_vms_get(vms, vm->pkvm_handle);
 
 	if (vm2) {
-		check_abstraction_equals_vm(vm, vm2, owner);
+		check_abstraction_refined_vm(vm, vm2, owner);
 	} else {
 		ghost_spec_assert(false);
 	}
 }
 
-void __check_abstraction_vm_all_contained_in(struct ghost_vms *vms1, struct ghost_vms *vms2) {
+void __check_abstraction_vm_all_contained_in(struct ghost_vms *vms_spec, struct ghost_vms *vms_impl) {
 	int i;
 	// just iterate over the whole table of slots
 	// and check, for each VM that exists in vms1 whether that vm can be found in vms2
 	for (i=0; i<KVM_MAX_PVMS; i++) {
-		struct ghost_vm_slot *slot = &vms1->table[i];
+		struct ghost_vm_slot *slot = &vms_spec->table[i];
 		if (slot->exists) {
-			__check_abstraction_vm_contained_in(slot->vm, vms2, VMS_VM_TABLE_OWNED | VMS_VM_OWNED);
+			__check_abstraction_vm_contained_in(slot->vm, vms_impl, VMS_VM_TABLE_OWNED | VMS_VM_OWNED);
 		}
 	}
 }
 
-void check_abstraction_vms_subseteq(struct ghost_vms *gc, struct ghost_vms *gr_post)
+void check_abstraction_vms_subseteq(struct ghost_vms *g_spec, struct ghost_vms *g_impl)
 {
 	GHOST_LOG_CONTEXT_ENTER();
-	ghost_assert(gc->present && gr_post->present);
+	ghost_assert(g_spec->present && g_impl->present);
 
-	if (gc->table_data.present) {
-		if (!gr_post->table_data.present)
-			GHOST_SPEC_FAIL("gr_post->table_data was missing");
+	if (g_spec->table_data.present) {
+		if (!g_impl->table_data.present)
+			GHOST_SPEC_FAIL("g_impl->table_data was missing");
 
-		GHOST_LOG(gc->table_data.nr_vms, u64);
-		GHOST_LOG(gr_post->table_data.nr_vms, u64);
-		ghost_spec_assert(gc->table_data.nr_vms == gr_post->table_data.nr_vms);
+		GHOST_LOG(g_spec->table_data.nr_vms, u64);
+		GHOST_LOG(g_impl->table_data.nr_vms, u64);
+		ghost_spec_assert(g_spec->table_data.nr_vms == g_impl->table_data.nr_vms);
 	}
 
 	/* it might be that we recorded more of the state than was touched by the spec,
@@ -707,7 +710,7 @@ void check_abstraction_vms_subseteq(struct ghost_vms *gc, struct ghost_vms *gr_p
 	 *
 	 * So we need to only check that `VMS(spec) subseteq VMS(recorded)`
 	 */
-	__check_abstraction_vm_all_contained_in(gc, gr_post);
+	__check_abstraction_vm_all_contained_in(g_spec, g_impl);
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
