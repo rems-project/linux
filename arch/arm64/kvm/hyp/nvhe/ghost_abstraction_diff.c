@@ -627,6 +627,11 @@ static void ghost_diff_vm(struct diff_container *node, pkvm_handle_t handle, str
 	ghost_diff_field(node, "host_mc", diff_pair(TU64((u64)vm1->vm_teardown_data.host_mc), TU64((u64)vm2->vm_teardown_data.host_mc)));
 	ghost_diff_field(node, "hyp_vm_struct_addr", diff_pair(TU64((u64)vm1->vm_teardown_data.hyp_vm_struct_addr), TU64((u64)vm2->vm_teardown_data.hyp_vm_struct_addr)));
 	ghost_diff_field(node, "last_ran_addr", diff_pair(TU64((u64)vm1->vm_teardown_data.last_ran_addr), TU64((u64)vm2->vm_teardown_data.last_ran_addr)));
+	for (u64 i = 0; i < KVM_MAX_VCPUS; i++) {
+		ghost_diff_enter_subfield_val(node, TGPRINT("vcpu_addr %ld", i));
+		ghost_diff_attach(node, diff_pair(TU64((u64)vm1->vm_teardown_data.vcpu_addrs[i]), TU64((u64)vm2->vm_teardown_data.vcpu_addrs[i])));
+		ghost_diff_pop_subfield(node);
+	}
 	ghost_diff_pop_subfield(node);
 
 	if (vm1->pkvm_handle == vm2->pkvm_handle) {

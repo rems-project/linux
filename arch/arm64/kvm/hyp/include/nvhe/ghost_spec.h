@@ -197,13 +197,19 @@ struct ghost_vm_locked_by_vm_table {
  * @host_mc: location of shared host memcache.
  * @hyp_vm_struct_addr: location of the `pkvm_hyp_vm` struct itself, donated during __pkvm_init_vm.
  * @last_ran_addr: location of the last_vcpu_ran array, donated during __pkvm_init_vm.
+ * @vcpu_addrs: locations of the `pkvm_hyp_vcpu` structures, donated during __pkvm_init_vcpu calls.
  *
  * NOTE: number of donated pages not saved here, but computed as part of spec.
+ *
+ * NOTE2: in `.vcpu_addrs`, there are only `.vm_table_locked.nr_initialised_vcpus`
+ * (from the enclosing `struct ghost_vm`) valid locations. The remaining
+ * elements of the array should be zero.
  */
 struct ghost_vm_teardown_data {
 	phys_addr_t host_mc;
 	phys_addr_t hyp_vm_struct_addr;
 	phys_addr_t last_ran_addr;
+	phys_addr_t vcpu_addrs[KVM_MAX_VCPUS];
 };
 
 /**

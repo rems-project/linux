@@ -305,6 +305,8 @@ void compute_abstraction_vm_partial(struct ghost_vm *dest, struct pkvm_hyp_vm *h
 				g_vcpu->initialised = vcpu_idx < hyp_vm->nr_vcpus;
 				// vcpu_idx < hyp_vm->nr_vcpus --> vcpu is not NULL
 				ghost_spec_assert(!g_vcpu->initialised || vcpu);
+				dest->vm_teardown_data.vcpu_addrs[vcpu_idx] =
+				  g_vcpu->initialised ? hyp_virt_to_phys(hyp_vm->vcpus[vcpu_idx]) : 0;
 				if (vcpu) {
 					g_vcpu->loaded = vcpu->loaded_hyp_vcpu ? true : false;
 					g_vcpu->regs.present = true;
@@ -628,6 +630,10 @@ void check_abstraction_equals_vm(struct ghost_vm *vm1, struct ghost_vm *vm2, enu
 		for (int i=0; i < vm1->vm_table_locked.nr_vcpus; i++) {
 			GHOST_LOG_CONTEXT_ENTER_INNER("loop vcpus");
 			GHOST_LOG_INNER("loop vcpus", i, u32);
+			if (vm1->vm_teardown_data.vcpu_addrs[i] != vm2->vm_teardown_data.vcpu_addrs[i]) {
+				ghost_printf("vcpu %d: %p <--->%p\n", i, vm1->vm_teardown_data.vcpu_addrs[i], vm2->vm_teardown_data.vcpu_addrs[i]);
+			}
+			ghost_spec_assert(vm1->vm_teardown_data.vcpu_addrs[i] == vm2->vm_teardown_data.vcpu_addrs[i]);
 			check_abstraction_equals_vcpu(vm1->vm_table_locked.vcpus[i], vm2->vm_table_locked.vcpus[i]);
 			GHOST_LOG_CONTEXT_EXIT_INNER("loop vcpus");
 		}
@@ -1067,6 +1073,8 @@ void ghost_vm_clone_into_partial(struct ghost_vm *dest, struct ghost_vm *src, en
 			} else {
 				dest->vm_table_locked.vcpus[vcpu_idx] = NULL;
 			}
+			dest->vm_teardown_data.vcpu_addrs[vcpu_idx] =
+				src->vm_teardown_data.vcpu_addrs[vcpu_idx];
 		}
 		ghost_assert(copied_vcpu == dest->vm_table_locked.nr_vcpus);
 	}
