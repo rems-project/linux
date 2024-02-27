@@ -1198,6 +1198,7 @@ bool compute_new_abstract_state_handle___pkvm_init_vcpu(struct ghost_state *g1, 
 	init_vcpu_sysregs(g1, vcpu_id, &vcpu->regs, vm1->protected);
 
 	g1->vms.table_data.present = true; // TODO: check with Ben that we really need this here
+	vm1->vm_teardown_data.vcpu_addrs[vm1->vm_table_locked.nr_initialised_vcpus] = phys_of_host_ipa(vcpu_ipa);
 	vm1->vm_table_locked.nr_initialised_vcpus++;
 out:
 	ghost_write_gpr(g1, 1, ret);
