@@ -1034,6 +1034,8 @@ void copy_abstraction_host(struct ghost_state *g_tgt, struct ghost_state *g_src)
 
 	g_tgt->host.host_abstract_pgtable_annot = mapping_copy(g_src->host.host_abstract_pgtable_annot);
 	g_tgt->host.host_abstract_pgtable_shared = mapping_copy(g_src->host.host_abstract_pgtable_shared);
+	ghost_pfn_set_copy(&g_tgt->host.reclaimable_pfn_sets, &g_src->host.reclaimable_pfn_sets);
+	ghost_pfn_set_copy(&g_tgt->host.need_poisoning_pfn_sets, &g_src->host.need_poisoning_pfn_sets);
 	abstract_pgtable_copy(&g_tgt->host.host_concrete_pgtable, &g_src->host.host_concrete_pgtable);
 
 	g_tgt->host.present = g_src->host.present;
