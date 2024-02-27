@@ -1097,6 +1097,9 @@ bool compute_new_abstract_state_handle___pkvm_init_vm(struct ghost_state *g1, st
 	vm1->vm_teardown_data.host_mc = phys_of_hyp_va(g0, (hyp_va_t)&host_kvm->arch.pkvm.teardown_mc);
 	vm1->vm_teardown_data.hyp_vm_struct_addr = vm_phys;
 	vm1->vm_teardown_data.last_ran_addr = last_ran_phys;
+	for (int idx=0; idx<KVM_MAX_VCPUS; idx++) {
+		vm1->vm_teardown_data.vcpu_addrs[idx] = 0;
+	}
 
 	// in theory this is unsafe, as another thread could've swooped in between
 	// the release of all the locks and this check,
