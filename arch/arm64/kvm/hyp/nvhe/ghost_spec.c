@@ -1341,12 +1341,25 @@ bool compute_new_abstract_state_handle___pkvm_teardown_vm(struct ghost_state *g1
 		}
 	}
 
+	for (int idx=0; idx<vm->vm_table_locked.nr_initialised_vcpus; idx++) {
+		host_ipa_t vcpu_ipa = host_ipa_of_phys(vm->vm_teardown_data.vcpu_addrs[idx]);
+		hyp_va_t vcpu_hyp_va = hyp_va_of_phys(g0, vm->vm_teardown_data.vcpu_addrs[idx]);
+		u64 vcpu_nr_pages = PAGE_ALIGN((u64)sizeof(struct pkvm_hyp_vcpu)) >> PAGE_SHIFT;
+		mapping_update(
+			&g1->host.host_abstract_pgtable_annot,
+			g1->host.host_abstract_pgtable_annot,
+			MAP_REMOVE_PAGE, GHOST_STAGE2, vcpu_ipa, vcpu_nr_pages, MAPLET_NONE
+		);
+		mapping_update(
+			&g1->pkvm.pkvm_abstract_pgtable.mapping,
+			g1->pkvm.pkvm_abstract_pgtable.mapping,
+			MAP_REMOVE_PAGE, GHOST_STAGE1, vcpu_hyp_va, vcpu_nr_pages, MAPLET_NONE
+		);
+	}
 
 	// finally, remove the VM.
 	clear_abstraction_vm_partial(g1, vm_handle, VMS_VM_TABLE_OWNED | VMS_VM_OWNED);
 	g1->vms.table_data.nr_vms--;
-
-	// TODO: we need to also undonate (HYP -> HOST) the vcpu stuff
 
 	// success
 	ret = 0;
