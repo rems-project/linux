@@ -1295,7 +1295,7 @@ bool compute_new_abstract_state_handle___pkvm_teardown_vm(struct ghost_state *g1
 		g1->pkvm.pkvm_abstract_pgtable.mapping,
 		MAP_REMOVE_PAGE, GHOST_STAGE1, pgd_hyp_va, pgd_nr_pages, MAPLET_NONE
 	);
-	for (int i = 0; i < g0->pkvm.pkvm_abstract_pgtable.table_pfns.len; i++) {
+	for (int i = 0; i < vm->vm_locked.vm_abstract_pgtable.table_pfns.len; i++) {
 		u64 pfn = vm->vm_locked.vm_abstract_pgtable.table_pfns.external_pfns[i];
 		host_ipa_t pgt_host_ipa = host_ipa_of_phys(hyp_pfn_to_phys(pfn));
 		hyp_va_t pgt_hyp_va = hyp_va_of_phys(g0, hyp_pfn_to_phys(pfn));
