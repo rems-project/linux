@@ -573,6 +573,10 @@ static void ghost_diff_registers(struct diff_container *node, struct ghost_regis
 	GHOST_LOG_CONTEXT_ENTER();
 	ghost_diff_enter_subfield(node, "regs");
 	ghost_diff_field(node, "present", diff_pair(TBOOL(regs1->present), TBOOL(regs2->present)));
+	if (THIS_HCALL_IS("__kvm_vcpu_run")) {
+		ghost_printf("\n" GHOST_WHITE_ON_YELLOW "skipping registers diff" GHOST_NORMAL "\n");
+		goto exit;
+	}
 	if (regs1->present && regs2->present) {
 		int i;
 
@@ -598,6 +602,7 @@ static void ghost_diff_registers(struct diff_container *node, struct ghost_regis
 			GHOST_LOG_CONTEXT_EXIT_INNER("loop el2_regs");
 		}
 	}
+exit:
 	ghost_diff_pop_subfield(node);
 	GHOST_LOG_CONTEXT_EXIT();
 }
