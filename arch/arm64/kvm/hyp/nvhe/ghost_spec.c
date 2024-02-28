@@ -2230,20 +2230,18 @@ void ghost_record_pre(struct kvm_cpu_context *ctxt, u64 guest_exit_code)
 
 	GHOST_LOG_CONTEXT_ENTER();
 
-	if (__this_cpu_read(ghost_check_this_hypercall)) {
-		clear_abstraction_thread_local();
+	clear_abstraction_thread_local();
 
-		ghost_lock_maplets();
-		record_abstraction_constants_pre();
-		ghost_unlock_maplets();
+	ghost_lock_maplets();
+	record_abstraction_constants_pre();
+	ghost_unlock_maplets();
 
-		/* need vms lock because loaded_vcpu might need to create that vm */
-		ghost_lock_vms();
-		record_and_check_abstraction_local_state_pre(ctxt);
-		ghost_unlock_vms();
+	/* need vms lock because loaded_vcpu might need to create that vm */
+	ghost_lock_vms();
+	record_and_check_abstraction_local_state_pre(ctxt);
+	ghost_unlock_vms();
 
-		ghost_clear_call_data();
-	}
+	ghost_clear_call_data();
 
 	GHOST_LOG_CONTEXT_EXIT();
 }
@@ -2258,24 +2256,24 @@ void ghost_post(struct kvm_cpu_context *ctxt)
 	struct ghost_call_data *call = this_cpu_ptr(&gs_call_data);
 
 	GHOST_LOG_CONTEXT_ENTER();
+	/* print out the return error codes */
+	if (__this_cpu_read(ghost_print_this_hypercall)) {
+		ghost_printf("---\n");
+		ghost_print_call_data();
+		ghost_printf("ret:\n");
+		ghost_printf("[r0] %lx\n", ctxt->regs.regs[0]);
+		ghost_printf("[r1] %lx\n", ctxt->regs.regs[1]);
+	}
+
+	// record the remaining parts of the new impl abstract state
+	// (the pkvm, host, and vm components having been recorded at impl lock points)
+	ghost_lock_maplets();
+	record_abstraction_constants_post();
+	ghost_lock_vms();
+	record_and_copy_abstraction_local_state_post(ctxt);
+	call->return_value = cpu_reg(ctxt, 1);
+
 	if (ghost_exec_enabled()) {
-		/* print out the return error codes */
-		if (__this_cpu_read(ghost_print_this_hypercall)) {
-			ghost_printf("---\n");
-			ghost_print_call_data();
-			ghost_printf("ret:\n");
-			ghost_printf("[r0] %lx\n", ctxt->regs.regs[0]);
-			ghost_printf("[r1] %lx\n", ctxt->regs.regs[1]);
-		}
-
-		// record the remaining parts of the new impl abstract state
-		// (the pkvm, host, and vm components having been recorded at impl lock points)
-		ghost_lock_maplets();
-		record_abstraction_constants_post();
-		ghost_lock_vms();
-		record_and_copy_abstraction_local_state_post(ctxt);
-		call->return_value = cpu_reg(ctxt, 1);
-
 		// actually compute the new state
 		new_state_computed = compute_new_abstract_state_for_exception(gc_post, gr_pre, call);
 
@@ -2304,9 +2302,9 @@ void ghost_post(struct kvm_cpu_context *ctxt)
 				ghost_printf(GHOST_WHITE_ON_YELLOW "skipping spec check" GHOST_NORMAL "\n");
 			}
 		}
-
-		ghost_unlock_vms();
-		ghost_unlock_maplets();
 	}
+
+	ghost_unlock_vms();
+	ghost_unlock_maplets();
 	GHOST_LOG_CONTEXT_EXIT();
 }
