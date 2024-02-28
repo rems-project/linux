@@ -1324,13 +1324,6 @@ bool compute_new_abstract_state_handle___pkvm_teardown_vm(struct ghost_state *g1
 				// then mark it as needing to be cleared
 				ghost_pfn_set_insert(&g1->host.need_poisoning_pfn_sets, pfn);
 			}
-
-			hyp_va_t addr_hyp_va = hyp_va_of_phys(g0, addr);
-			mapping_update(
-				&g1->pkvm.pkvm_abstract_pgtable.mapping,
-				g1->pkvm.pkvm_abstract_pgtable.mapping,
-				MAP_REMOVE_PAGE, GHOST_STAGE1, addr_hyp_va, 1, MAPLET_NONE
-			);
 		}
 	}
 
