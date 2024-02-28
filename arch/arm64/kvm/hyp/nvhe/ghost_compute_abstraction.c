@@ -1373,23 +1373,27 @@ void record_abstraction_local_state(struct ghost_state *g, struct kvm_cpu_contex
 
 void record_and_check_abstraction_local_state_pre(struct kvm_cpu_context *ctxt)
 {
-	struct ghost_state *g = this_cpu_ptr(&gs_recorded_pre);
-	GHOST_LOG_CONTEXT_ENTER();
-	record_abstraction_local_state(g, ctxt);
+	if (ghost_machinery_enabled()) {
+		struct ghost_state *g = this_cpu_ptr(&gs_recorded_pre);
+		GHOST_LOG_CONTEXT_ENTER();
+		record_abstraction_local_state(g, ctxt);
 
-	if (this_cpu_ghost_registers(&gs)->present) {
-		GHOST_TRACE("expected:gs");
-		GHOST_TRACE("impl:gr_pre");
-		check_abstraction_equals_local_state(&gs, g);
+		if (this_cpu_ghost_registers(&gs)->present) {
+			GHOST_TRACE("expected:gs");
+			GHOST_TRACE("impl:gr_pre");
+			check_abstraction_equals_local_state(&gs, g);
+		}
+		GHOST_LOG_CONTEXT_EXIT();
 	}
-	GHOST_LOG_CONTEXT_EXIT();
 }
 
 void record_and_copy_abstraction_local_state_post(struct kvm_cpu_context *ctxt)
 {
-	struct ghost_state *g = this_cpu_ptr(&gs_recorded_post);
-	record_abstraction_local_state(g, ctxt);
-	copy_abstraction_local_state(ghost_this_cpu_local_state(&gs), ghost_this_cpu_local_state(g));
+	if (ghost_machinery_enabled()) {
+		struct ghost_state *g = this_cpu_ptr(&gs_recorded_post);
+		record_abstraction_local_state(g, ctxt);
+		copy_abstraction_local_state(ghost_this_cpu_local_state(&gs), ghost_this_cpu_local_state(g));
+	}
 }
 
 /**
@@ -1455,66 +1459,74 @@ void record_abstraction_common(void)
 
 void record_and_check_abstraction_pkvm_pre(void)
 {
-	GHOST_LOG_CONTEXT_ENTER();
-	ghost_lock_maplets();
-	struct ghost_state *g = this_cpu_ptr(&gs_recorded_pre);
-	// For pKVM and Host we believe there is no single synchronisation point during a hypercall
-	// because the hypercalls may take and release the locks on these multiple times.
-	//
-	// For now we just record the pre for the very first lock, and assume no interference.
-	// ... but later on we'll have to do some this-thread-diff/trajectory tracking instead
-	if (!g->pkvm.present) {
-		record_abstraction_pkvm(g);
-		check_abstraction_equals_pkvm(&g->pkvm, &gs.pkvm);
+	if (ghost_machinery_enabled()) {
+		GHOST_LOG_CONTEXT_ENTER();
+		ghost_lock_maplets();
+		struct ghost_state *g = this_cpu_ptr(&gs_recorded_pre);
+		// For pKVM and Host we believe there is no single synchronisation point during a hypercall
+		// because the hypercalls may take and release the locks on these multiple times.
+		//
+		// For now we just record the pre for the very first lock, and assume no interference.
+		// ... but later on we'll have to do some this-thread-diff/trajectory tracking instead
+		if (!g->pkvm.present) {
+			record_abstraction_pkvm(g);
+			check_abstraction_equals_pkvm(&g->pkvm, &gs.pkvm);
+		}
+		ghost_unlock_maplets();
+		GHOST_LOG_CONTEXT_EXIT();
 	}
-	ghost_unlock_maplets();
-	GHOST_LOG_CONTEXT_EXIT();
 }
 
 void record_and_copy_abstraction_pkvm_post(void)
 {
-	GHOST_LOG_CONTEXT_ENTER();
-	ghost_lock_maplets();
-	struct ghost_state *g = this_cpu_ptr(&gs_recorded_post);
-	// TODO: for pKVM and Host we believe there is no single synchronisation point
-	// (see comment in record_and_check_abstraction_pkvm_pre)
-	// so on the post we must clear if there was a previous recorded post
-	if (g->pkvm.present)
-		clear_abstraction_pkvm(g);
-	record_abstraction_pkvm(g);
-	copy_abstraction_pkvm(&gs, g);
-	ghost_unlock_maplets();
-	GHOST_LOG_CONTEXT_EXIT();
+	if (ghost_machinery_enabled()) {
+		GHOST_LOG_CONTEXT_ENTER();
+		ghost_lock_maplets();
+		struct ghost_state *g = this_cpu_ptr(&gs_recorded_post);
+		// TODO: for pKVM and Host we believe there is no single synchronisation point
+		// (see comment in record_and_check_abstraction_pkvm_pre)
+		// so on the post we must clear if there was a previous recorded post
+		if (g->pkvm.present)
+			clear_abstraction_pkvm(g);
+		record_abstraction_pkvm(g);
+		copy_abstraction_pkvm(&gs, g);
+		ghost_unlock_maplets();
+		GHOST_LOG_CONTEXT_EXIT();
+	}
 }
 
 void record_and_check_abstraction_host_pre(void)
 {
-	GHOST_LOG_CONTEXT_ENTER();
-	ghost_lock_maplets();
-	struct ghost_state *g = this_cpu_ptr(&gs_recorded_pre);
-	// TODO: see comment in record_and_check_abstraction_pkvm_pre
-	if (!g->host.present) {
-		record_abstraction_host(g);
-		check_abstraction_equals_host(&g->host, &gs.host);
+	if (ghost_machinery_enabled()) {
+		GHOST_LOG_CONTEXT_ENTER();
+		ghost_lock_maplets();
+		struct ghost_state *g = this_cpu_ptr(&gs_recorded_pre);
+		// TODO: see comment in record_and_check_abstraction_pkvm_pre
+		if (!g->host.present) {
+			record_abstraction_host(g);
+			check_abstraction_equals_host(&g->host, &gs.host);
+		}
+		ghost_unlock_maplets();
+		GHOST_LOG_CONTEXT_EXIT();
 	}
-	ghost_unlock_maplets();
-	GHOST_LOG_CONTEXT_EXIT();
 }
 
 void record_and_copy_abstraction_host_post(void)
 {
-	GHOST_LOG_CONTEXT_ENTER();
-	ghost_lock_maplets();
-	struct ghost_state *g = this_cpu_ptr(&gs_recorded_post);
-	// TODO: for pKVM and Host we believe there is no single synchronisation point
-	// (see comment in record_and_check_abstraction_pkvm_pre)
-	// so on the post we must clear if there was a previous recorded post
-	if (g->host.present)
-		clear_abstraction_host(g);
-	record_abstraction_host(g);
-	copy_abstraction_host(&gs, g);
-	ghost_unlock_maplets();
-	GHOST_LOG_CONTEXT_EXIT();
+	if (ghost_machinery_enabled()) {
+		GHOST_LOG_CONTEXT_ENTER();
+		ghost_lock_maplets();
+		struct ghost_state *g = this_cpu_ptr(&gs_recorded_post);
+		// TODO: for pKVM and Host we believe there is no single synchronisation point
+		// (see comment in record_and_check_abstraction_pkvm_pre)
+		// so on the post we must clear if there was a previous recorded post
+		if (g->host.present)
+			clear_abstraction_host(g);
+		record_abstraction_host(g);
+		copy_abstraction_host(&gs, g);
+		ghost_unlock_maplets();
+		GHOST_LOG_CONTEXT_EXIT();
+	}
 }
 
 void record_abstraction_loaded_vcpu_and_check_none(void)
@@ -1528,69 +1540,77 @@ void record_abstraction_loaded_vcpu_and_check_none(void)
 
 void record_and_check_abstraction_vms_pre(void)
 {
-	GHOST_LOG_CONTEXT_ENTER();
-	struct ghost_state *g = this_cpu_ptr(&gs_recorded_pre);
-	ghost_lock_vms();
-	record_abstraction_vms_partial(g, VMS_VM_TABLE_OWNED);
-	check_abstraction_vms_subseteq(&g->vms, &gs.vms);
-	ghost_unlock_vms();
-	GHOST_LOG_CONTEXT_EXIT();
+	if (ghost_machinery_enabled()) {
+		GHOST_LOG_CONTEXT_ENTER();
+		struct ghost_state *g = this_cpu_ptr(&gs_recorded_pre);
+		ghost_lock_vms();
+		record_abstraction_vms_partial(g, VMS_VM_TABLE_OWNED);
+		check_abstraction_vms_subseteq(&g->vms, &gs.vms);
+		ghost_unlock_vms();
+		GHOST_LOG_CONTEXT_EXIT();
+	}
 }
 
 void record_and_copy_abstraction_vms_post(void)
 {
-	GHOST_LOG_CONTEXT_ENTER();
-	struct ghost_state *g = this_cpu_ptr(&gs_recorded_post);
-	ghost_lock_vms();
-	record_abstraction_vms_partial(g, VMS_VM_TABLE_OWNED);
-	copy_abstraction_vms_partial(&gs, g, VMS_VM_TABLE_OWNED);
-	ghost_unlock_vms();
-	GHOST_LOG_CONTEXT_EXIT();
+	if (ghost_machinery_enabled()) {
+		GHOST_LOG_CONTEXT_ENTER();
+		struct ghost_state *g = this_cpu_ptr(&gs_recorded_post);
+		ghost_lock_vms();
+		record_abstraction_vms_partial(g, VMS_VM_TABLE_OWNED);
+		copy_abstraction_vms_partial(&gs, g, VMS_VM_TABLE_OWNED);
+		ghost_unlock_vms();
+		GHOST_LOG_CONTEXT_EXIT();
+	}
 }
 
 void record_and_check_abstraction_vm_pre(struct pkvm_hyp_vm *vm)
 {
-	GHOST_LOG_CONTEXT_ENTER();
-	// TODO: (and for the others) maplets are already locked by the top-level hcall
-	// but this isn't right (e.g. for vpu_run), and it should be at least this
-	// (if not more!) fine-grained locking for maplets and the vms.vms table.
-	ghost_lock_maplets();
-	ghost_lock_vms();
-	struct ghost_state *g = this_cpu_ptr(&gs_recorded_pre);
-	pkvm_handle_t handle = vm->kvm.arch.pkvm.handle;
+	if (ghost_machinery_enabled()) {
+		GHOST_LOG_CONTEXT_ENTER();
+		// TODO: (and for the others) maplets are already locked by the top-level hcall
+		// but this isn't right (e.g. for vpu_run), and it should be at least this
+		// (if not more!) fine-grained locking for maplets and the vms.vms table.
+		ghost_lock_maplets();
+		ghost_lock_vms();
+		struct ghost_state *g = this_cpu_ptr(&gs_recorded_pre);
+		pkvm_handle_t handle = vm->kvm.arch.pkvm.handle;
 
-	// If this is __init_vm, then the lock was taken after a vm was partially initialised
-	// and we shouldn't try record it.
-	if (!THIS_HCALL_IS("__pkvm_init_vm")) {
-		record_abstraction_vm_partial(g, vm, VMS_VM_OWNED);
-		enum vm_field_owner owner = VMS_VM_OWNED | VMS_VM_TABLE_OWNED;
+		// If this is __init_vm, then the lock was taken after a vm was partially initialised
+		// and we shouldn't try record it.
+		if (!THIS_HCALL_IS("__pkvm_init_vm")) {
+			record_abstraction_vm_partial(g, vm, VMS_VM_OWNED);
+			enum vm_field_owner owner = VMS_VM_OWNED | VMS_VM_TABLE_OWNED;
 
-		if (THIS_HCALL_IS("__pkvm_teardown_vm")) {
-			// If this is __pkvm_teardown_vm, then
-			// the VM has already been removed from the table
-			// so we only record the VM_OWNED part.
-			owner ^= VMS_VM_TABLE_OWNED;
+			if (THIS_HCALL_IS("__pkvm_teardown_vm")) {
+				// If this is __pkvm_teardown_vm, then
+				// the VM has already been removed from the table
+				// so we only record the VM_OWNED part.
+				owner ^= VMS_VM_TABLE_OWNED;
+			}
+
+			check_abstraction_vm_in_vms_and_equal(handle, g, &gs.vms, owner);
 		}
 
-		check_abstraction_vm_in_vms_and_equal(handle, g, &gs.vms, owner);
+		ghost_unlock_vms();
+		ghost_unlock_maplets();
+		GHOST_LOG_CONTEXT_EXIT();
 	}
-
-	ghost_unlock_vms();
-	ghost_unlock_maplets();
-	GHOST_LOG_CONTEXT_EXIT();
 }
 
 void record_and_copy_abstraction_vm_post(struct pkvm_hyp_vm *vm)
 {
-	GHOST_LOG_CONTEXT_ENTER();
-	ghost_lock_maplets();
-	ghost_lock_vms();
-	struct ghost_state *g = this_cpu_ptr(&gs_recorded_post);
-	record_abstraction_vm_partial(g, vm, VMS_VM_OWNED);
-	copy_abstraction_vm_partial(&gs, g, vm->kvm.arch.pkvm.handle, VMS_VM_OWNED);
-	ghost_unlock_vms();
-	ghost_unlock_maplets();
-	GHOST_LOG_CONTEXT_EXIT();
+	if (ghost_machinery_enabled()) {
+		GHOST_LOG_CONTEXT_ENTER();
+		ghost_lock_maplets();
+		ghost_lock_vms();
+		struct ghost_state *g = this_cpu_ptr(&gs_recorded_post);
+		record_abstraction_vm_partial(g, vm, VMS_VM_OWNED);
+		copy_abstraction_vm_partial(&gs, g, vm->kvm.arch.pkvm.handle, VMS_VM_OWNED);
+		ghost_unlock_vms();
+		ghost_unlock_maplets();
+		GHOST_LOG_CONTEXT_EXIT();
+	}
 }
 
 

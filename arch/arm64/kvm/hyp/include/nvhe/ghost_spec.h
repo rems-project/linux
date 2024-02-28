@@ -63,6 +63,12 @@ DECLARE_PER_CPU(const char *, ghost_this_trap);
  */
 DECLARE_PER_CPU(bool, ghost_print_this_hypercall);
 
+
+/**
+ * ghost_machinery_enabled() - Whether we can start recording/checking the ghost_state (because pKVM has finished initialising).
+ */
+bool ghost_machinery_enabled(void);
+
 /**
  * ghost_exec_enabled() - Whether executable checking is currently enabled on this CPU.
  */

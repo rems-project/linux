@@ -93,8 +93,14 @@ DEFINE_HYP_SPINLOCK(ghost_prot_finalized_lock);
 u64 ghost_prot_finalized_count;
 bool ghost_prot_finalized_all;
 
+DEFINE_PER_CPU(bool, ghost_machinery_enabled_this_hypercall);
 DEFINE_PER_CPU(bool, ghost_check_this_hypercall);
 DEFINE_PER_CPU(bool, ghost_print_this_hypercall);
+
+bool ghost_machinery_enabled(void)
+{
+	return __this_cpu_read(ghost_machinery_enabled_this_hypercall);
+}
 
 bool ghost_exec_enabled(void)
 {
@@ -2190,12 +2196,14 @@ static void tag_exception_entry(struct kvm_cpu_context *ctxt, u64 guest_exit_cod
 	// since we (currently) trust that more.
 	struct ghost_running_state *cpu_run_state = this_cpu_ptr(&ghost_cpu_run_state);
 	bool from_guest = cpu_run_state->guest_running;
+	bool enable_machinery = READ_ONCE(ghost_prot_finalized_all);
 
 	struct ghost_trap_data trap = compute_exception_state(ctxt, from_guest, guest_exit_code);
 
 	__this_cpu_write(ghost_this_trap, trap.name);
 	__this_cpu_write(ghost_print_this_hypercall, ghost_print_on(trap.name));
-	__this_cpu_write(ghost_check_this_hypercall, READ_ONCE(ghost_prot_finalized_all) && trap.valid && (!ghost_control_is_controlled(trap.name) || ghost_control_check_enabled(trap.name)));
+	__this_cpu_write(ghost_machinery_enabled_this_hypercall, enable_machinery);
+	__this_cpu_write(ghost_check_this_hypercall, enable_machinery && trap.valid && (!ghost_control_is_controlled(trap.name) || ghost_control_check_enabled(trap.name)));
 
 	if (! ghost_print_on(trap.name))
 		goto print_exit;
@@ -2230,19 +2238,20 @@ void ghost_record_pre(struct kvm_cpu_context *ctxt, u64 guest_exit_code)
 
 	GHOST_LOG_CONTEXT_ENTER();
 
-	clear_abstraction_thread_local();
+	// The global shared state is not stable until pKVM has fully initialised
+	if (ghost_machinery_enabled()) {
+		clear_abstraction_thread_local();
+		ghost_clear_call_data();
 
-	ghost_lock_maplets();
-	record_abstraction_constants_pre();
-	ghost_unlock_maplets();
+		ghost_lock_maplets();
+		record_abstraction_constants_pre();
+		ghost_unlock_maplets();
 
-	/* need vms lock because loaded_vcpu might need to create that vm */
-	ghost_lock_vms();
-	record_and_check_abstraction_local_state_pre(ctxt);
-	ghost_unlock_vms();
-
-	ghost_clear_call_data();
-
+		/* need vms lock because loaded_vcpu might need to create that vm */
+		ghost_lock_vms();
+		record_and_check_abstraction_local_state_pre(ctxt);
+		ghost_unlock_vms();
+	}
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
@@ -2264,6 +2273,10 @@ void ghost_post(struct kvm_cpu_context *ctxt)
 		ghost_printf("[r0] %lx\n", ctxt->regs.regs[0]);
 		ghost_printf("[r1] %lx\n", ctxt->regs.regs[1]);
 	}
+
+	// The global shared state is not stable until pKVM has fully initialised
+	if (!ghost_machinery_enabled())
+		goto leave_context;
 
 	// record the remaining parts of the new impl abstract state
 	// (the pkvm, host, and vm components having been recorded at impl lock points)
@@ -2306,5 +2319,6 @@ void ghost_post(struct kvm_cpu_context *ctxt)
 
 	ghost_unlock_vms();
 	ghost_unlock_maplets();
+leave_context:
 	GHOST_LOG_CONTEXT_EXIT();
 }
