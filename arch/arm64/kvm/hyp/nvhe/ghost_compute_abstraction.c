@@ -495,15 +495,15 @@ void check_abstraction_equals_loaded_vcpu(struct ghost_loaded_vcpu *loaded_vcpu1
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
-void check_abstraction_equals_run_state(struct ghost_running_state *spec, struct ghost_running_state *recorded)
+void check_abstraction_equals_run_state(struct ghost_running_state *expected, struct ghost_running_state *impl)
 {
 	GHOST_LOG_CONTEXT_ENTER();
 
-	GHOST_SPEC_ASSERT_VAR_EQ(spec->guest_running, recorded->guest_running, bool);
+	GHOST_SPEC_ASSERT_VAR_EQ(expected->guest_running, impl->guest_running, bool);
 
-	if (spec->guest_running) {
-		GHOST_SPEC_ASSERT_VAR_EQ(spec->vm_handle, recorded->vm_handle, u32);
-		GHOST_SPEC_ASSERT_VAR_EQ(spec->vcpu_index, recorded->vcpu_index, u64);
+	if (expected->guest_running) {
+		GHOST_SPEC_ASSERT_VAR_EQ(expected->vm_handle, impl->vm_handle, u32);
+		GHOST_SPEC_ASSERT_VAR_EQ(expected->vcpu_index, impl->vcpu_index, u64);
 	}
 
 	GHOST_LOG_CONTEXT_EXIT();
@@ -529,14 +529,14 @@ void check_abstraction_equals_host_regs(struct ghost_host_regs *r1, struct ghost
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
-void check_abstraction_equals_local_state(struct ghost_state *g1, struct ghost_state *g2)
+void check_abstraction_equals_local_state(struct ghost_state *g_expected, struct ghost_state *g_impl)
 {
 	GHOST_LOG_CONTEXT_ENTER();
-	struct ghost_local_state *l1 = ghost_this_cpu_local_state(g1);
-	struct ghost_local_state *l2 = ghost_this_cpu_local_state(g2);
+	struct ghost_local_state *local_expected = ghost_this_cpu_local_state(g_expected);
+	struct ghost_local_state *local_impl = ghost_this_cpu_local_state(g_impl);
 
-	check_abstraction_equals_run_state(&l1->cpu_state, &l2->cpu_state);
-	check_abstraction_equals_loaded_vcpu(&l1->loaded_hyp_vcpu, &l2->loaded_hyp_vcpu);
+	check_abstraction_equals_run_state(&local_expected->cpu_state, &local_impl->cpu_state);
+	check_abstraction_equals_loaded_vcpu(&local_expected->loaded_hyp_vcpu, &local_impl->loaded_hyp_vcpu);
 	/* regs not checked */
 	GHOST_LOG_CONTEXT_EXIT();
 }
@@ -1378,9 +1378,9 @@ void record_and_check_abstraction_local_state_pre(struct kvm_cpu_context *ctxt)
 	record_abstraction_local_state(g, ctxt);
 
 	if (this_cpu_ghost_registers(&gs)->present) {
-		GHOST_TRACE("g1->gr_pre");
-		GHOST_TRACE("g2->gs");
-		check_abstraction_equals_local_state(g, &gs);
+		GHOST_TRACE("expected:gs");
+		GHOST_TRACE("impl:gr_pre");
+		check_abstraction_equals_local_state(&gs, g);
 	}
 	GHOST_LOG_CONTEXT_EXIT();
 }
