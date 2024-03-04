@@ -263,8 +263,8 @@ struct ghost_host {
 
 	mapping host_abstract_pgtable_annot;
 	mapping host_abstract_pgtable_shared;
-	struct pfn_set reclaimable_pfn_sets;
-	struct pfn_set need_poisoning_pfn_sets;
+	struct pfn_set reclaimable_pfn_set;
+	struct pfn_set need_poisoning_pfn_set;
 
 	abstract_pgtable host_concrete_pgtable;
 };

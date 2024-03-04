@@ -568,14 +568,14 @@ bool compute_new_abstract_state_handle___pkvm_host_reclaim_page(struct ghost_sta
 		goto out;
 	}
 
-	if (!ghost_pfn_set_contains(&g0->host.reclaimable_pfn_sets, pfn)) {
+	if (!ghost_pfn_set_contains(&g0->host.reclaimable_pfn_set, pfn)) {
 		ret = -EPERM;
 		goto out;
 	}
 
-	if (ghost_pfn_set_contains(&g0->host.need_poisoning_pfn_sets, pfn)) {
+	if (ghost_pfn_set_contains(&g0->host.need_poisoning_pfn_set, pfn)) {
 		// TODO: how to model the zeroing? Do we want to?
-		ghost_pfn_set_remove_external(&g1->host.need_poisoning_pfn_sets, pfn);
+		ghost_pfn_set_remove_external(&g1->host.need_poisoning_pfn_set, pfn);
 	}
 
 	/* BS: spec should never get into a state where a reclaimable pfn
@@ -592,7 +592,7 @@ bool compute_new_abstract_state_handle___pkvm_host_reclaim_page(struct ghost_sta
 	);
 
 	// unset page.pending_reclaim
-	ghost_pfn_set_remove_external(&g1->host.reclaimable_pfn_sets, pfn);
+	ghost_pfn_set_remove_external(&g1->host.reclaimable_pfn_set, pfn);
 
 	// success.
 	ret = 0;
@@ -1324,11 +1324,13 @@ bool compute_new_abstract_state_handle___pkvm_teardown_vm(struct ghost_state *g1
 			phys_addr_t addr = m->target.map.oa_range_start + i*PAGE_SIZE;
 
 			u64 pfn = hyp_phys_to_pfn(addr);
-			ghost_pfn_set_insert(&g1->host.reclaimable_pfn_sets, pfn);
+			// TODO: we think that for protected VM, the reclaimable pfns always need
+			// to be poisoned. We should restructure the following to make this clearer
+			ghost_pfn_set_insert(&g1->host.reclaimable_pfn_set, pfn);
 			if (m->target.map.attrs.provenance == MAPLET_PAGE_STATE_PRIVATE_OWNED) {
 				// if page was donated to the guest rather than just shared,
 				// then mark it as needing to be cleared
-				ghost_pfn_set_insert(&g1->host.need_poisoning_pfn_sets, pfn);
+				ghost_pfn_set_insert(&g1->host.need_poisoning_pfn_set, pfn);
 			}
 		}
 	}

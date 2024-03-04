@@ -91,6 +91,18 @@ void compute_abstraction_host(struct ghost_host *dest)
 	ghost_record_pgtable_ap(&dest->host_concrete_pgtable, &host_mmu.pgt, pool_range_start, pool_range_end, "host_mmu.pgt", i);
 	dest->host_abstract_pgtable_annot = mapping_annot(dest->host_concrete_pgtable.mapping);
 	dest->host_abstract_pgtable_shared = mapping_shared(dest->host_concrete_pgtable.mapping);
+	for (int i=0; i<hyp_memblock_nr; i++) {
+		struct memblock_region block = hyp_memory[i];
+		for (int j=0; j<block.size; j+=PAGE_SIZE) {
+			phys_addr_t addr = block.base + j;
+			struct hyp_page *page = hyp_phys_to_page(addr);
+			if (page->flags & HOST_PAGE_PENDING_RECLAIM)
+				ghost_pfn_set_insert(&dest->reclaimable_pfn_set, hyp_phys_to_pfn(addr));
+			if (page->flags & HOST_PAGE_NEED_POISONING)
+				ghost_pfn_set_insert(&dest->need_poisoning_pfn_set, hyp_phys_to_pfn(addr));
+		}
+	}
+
 	dest->present = true;
 }
 
@@ -466,6 +478,9 @@ void check_abstraction_equals_host(struct ghost_host *gh1, struct ghost_host *gh
 	// equivalence of spec states
 	ghost_spec_assert(mapping_equal(gh1->host_abstract_pgtable_annot, gh2->host_abstract_pgtable_annot, "abstraction_equals_host", "gh1.host_mapping_annot", "gh2.host_mapping_annot", 4));
 	ghost_spec_assert(mapping_equal(gh1->host_abstract_pgtable_shared, gh2->host_abstract_pgtable_shared, "abstraction_equals_host", "gh1.host_mapping_shared", "gh2.host_mapping_shared", 4));
+
+	ghost_pfn_set_assert_equal(&gh1->reclaimable_pfn_set, &gh2->reclaimable_pfn_set);
+	ghost_pfn_set_assert_equal(&gh1->need_poisoning_pfn_set, &gh2->need_poisoning_pfn_set);
 
 	// refinement of implementation
 	ghost_pfn_set_assert_equal(&gh1->host_concrete_pgtable.table_pfns, &gh2->host_concrete_pgtable.table_pfns);
@@ -916,6 +931,8 @@ void clear_abstraction_host(struct ghost_state *g)
 		free_mapping(g->host.host_abstract_pgtable_annot);
 		free_mapping(g->host.host_abstract_pgtable_shared);
 		clear_abstract_pgtable(&g->host.host_concrete_pgtable);
+		ghost_pfn_set_clear(&g->host.reclaimable_pfn_set);
+		ghost_pfn_set_clear(&g->host.need_poisoning_pfn_set);
 		g->host.present = false;
 	}
 }
@@ -1037,8 +1054,8 @@ void copy_abstraction_host(struct ghost_state *g_tgt, struct ghost_state *g_src)
 
 	g_tgt->host.host_abstract_pgtable_annot = mapping_copy(g_src->host.host_abstract_pgtable_annot);
 	g_tgt->host.host_abstract_pgtable_shared = mapping_copy(g_src->host.host_abstract_pgtable_shared);
-	ghost_pfn_set_copy(&g_tgt->host.reclaimable_pfn_sets, &g_src->host.reclaimable_pfn_sets);
-	ghost_pfn_set_copy(&g_tgt->host.need_poisoning_pfn_sets, &g_src->host.need_poisoning_pfn_sets);
+	ghost_pfn_set_copy(&g_tgt->host.reclaimable_pfn_set, &g_src->host.reclaimable_pfn_set);
+	ghost_pfn_set_copy(&g_tgt->host.need_poisoning_pfn_set, &g_src->host.need_poisoning_pfn_set);
 	abstract_pgtable_copy(&g_tgt->host.host_concrete_pgtable, &g_src->host.host_concrete_pgtable);
 
 	g_tgt->host.present = g_src->host.present;
