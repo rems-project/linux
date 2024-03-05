@@ -146,6 +146,7 @@ struct ghost_vcpu {
 	bool loaded;
 	bool initialised;
 	struct ghost_registers regs;
+	struct pfn_set recorded_memcache_pfn_set;
 };
 
 /**

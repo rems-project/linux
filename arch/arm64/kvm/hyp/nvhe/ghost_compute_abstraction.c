@@ -293,6 +293,11 @@ void compute_abstraction_vcpu(struct ghost_vcpu *dest, struct pkvm_hyp_vcpu *vcp
 		make_abstract_register(&dest->regs.el2_sysregs[GHOST_SYSREG(HCR_EL2)], vcpu->vcpu.arch.hcr_el2);
 		make_abstract_register(&dest->regs.el2_sysregs[GHOST_SYSREG(MDCR_EL2)], vcpu->vcpu.arch.mdcr_el2);
 		make_abstract_register(&dest->regs.el2_sysregs[GHOST_SYSREG(CPTR_EL2)], vcpu->vcpu.arch.cptr_el2);
+		phys_addr_t* p = hyp_phys_to_virt(vcpu->vcpu.arch.pkvm_memcache.head);
+		for (int i=0; i<vcpu->vcpu.arch.pkvm_memcache.nr_pages; i++) {
+			ghost_pfn_set_insert(&dest->recorded_memcache_pfn_set, hyp_virt_to_pfn(p));
+			p = hyp_phys_to_virt(*p);
+		}
 	}
 }
 
@@ -1072,6 +1077,7 @@ void ghost_vcpu_clone_into(struct ghost_vcpu *dest, struct ghost_vcpu *src)
 	dest->loaded = src->loaded;
 	dest->vcpu_handle = src->vcpu_handle;
 	dest->regs = src->regs;
+	ghost_pfn_set_copy(&dest->recorded_memcache_pfn_set, &src->recorded_memcache_pfn_set);
 }
 
 void ghost_vm_clone_into_partial(struct ghost_vm *dest, struct ghost_vm *src, enum vm_field_owner owner)
