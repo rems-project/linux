@@ -787,6 +787,7 @@ bool compute_new_abstract_state_handle___pkvm_vcpu_load(struct ghost_state *g1, 
 		hcr_el2 |= hcr_el2 & (HCR_TWE | HCR_TWI);
 		ghost_write_el2_sysreg_explicit(&vcpu->regs, GHOST_SYSREG(HCR_EL2), hcr_el2);
 	}
+	// TODO: BS: this is wrong, we should only be copying the vCPU being loaded
 	ghost_vm_clone_into_partial(vm1, vm, VMS_VM_TABLE_OWNED);
 
 	// this vm's vcpu is now marked as loaded
@@ -830,6 +831,7 @@ bool compute_new_abstract_state_handle___pkvm_vcpu_put(struct ghost_state *g1, s
 	struct ghost_vm *vm1 = ghost_vms_alloc(&g1->vms, vm_handle);
 	ghost_assert(vm0);
 	ghost_assert(vm1);
+	// TODO: BS: this is wrong, we should only be copying the vCPU being put
 	ghost_vm_clone_into_partial(vm1, vm0, VMS_VM_TABLE_OWNED);
 
 	// the vm's vcpu is now marked as not loaded.
@@ -1144,6 +1146,7 @@ bool compute_new_abstract_state_handle___pkvm_init_vcpu(struct ghost_state *g1, 
 	}
 	struct ghost_vm *vm1 = ghost_vms_alloc(&g1->vms, vm_handle);
 	ghost_assert(vm1);
+	// TODO: BS: this is wrong we should have a function that only clone the VM metadata (not the vCPUs)
 	ghost_vm_clone_into_partial(vm1, vm0, VMS_VM_TABLE_OWNED);
 
 	vcpu_idx = vm1->vm_table_locked.nr_initialised_vcpus;
@@ -1572,8 +1575,8 @@ bool compute_new_abstract_state_pkvm_memshare(struct ghost_state *g1, struct gho
 	copy_abstraction_host(g1, g0);
 	struct ghost_vm *g1_vm = ghost_vms_alloc(&g1->vms, loaded_vcpu->vm_handle);
 	ghost_assert(g1_vm != NULL);
-	ghost_vm_clone_into_partial(g1_vm, g0_vm, VMS_VM_OWNED);
-	ghost_vm_clone_into_partial(g1_vm, g0_vm, VMS_VM_TABLE_OWNED);
+	// TODO: BS: this might be overspecifying
+	ghost_vm_clone_into_partial(g1_vm, g0_vm, VMS_VM_TABLE_OWNED | VMS_VM_OWNED);
 	struct ghost_vcpu *vcpu1 = g1_vm->vm_table_locked.vcpus[loaded_vcpu->vcpu_index];
 	ghost_vcpu_clone_into(vcpu1, vcpu0);
 
@@ -1691,8 +1694,8 @@ bool compute_new_abstract_state_pkvm_memunshare(struct ghost_state *g1, struct g
 	copy_abstraction_host(g1, g0);
 	struct ghost_vm *g1_vm = ghost_vms_alloc(&g1->vms, loaded_vcpu->vm_handle);
 	ghost_assert(g1_vm != NULL);
-	ghost_vm_clone_into_partial(g1_vm, g0_vm, VMS_VM_OWNED);
-	ghost_vm_clone_into_partial(g1_vm, g0_vm, VMS_VM_TABLE_OWNED);
+	// TODO: BS: this might be overspecifying
+	ghost_vm_clone_into_partial(g1_vm, g0_vm, VMS_VM_TABLE_OWNED | VMS_VM_OWNED);
 	struct ghost_vcpu *vcpu1 = g1_vm->vm_table_locked.vcpus[loaded_vcpu->vcpu_index];
 	ghost_vcpu_clone_into(vcpu1, vcpu0);
 
@@ -1830,6 +1833,7 @@ bool compute_new_abstract_state_handle_guest_mem_abort(struct ghost_state *g1, s
 
 	struct ghost_vm *vm0 = ghost_vms_get(&g0->vms, vm_handle);
 	struct ghost_vm *vm1 = ghost_vms_alloc(&g1->vms, vm_handle);
+	// TODO: BS: this should only copy the vCPU loaded in the current physical CPU
 	ghost_vm_clone_into_partial(vm1, vm0, VMS_VM_TABLE_OWNED);
 
 	struct ghost_vcpu *vcpu1 = vm1->vm_table_locked.vcpus[vcpu_index];
