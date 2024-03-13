@@ -143,10 +143,10 @@ struct ghost_registers {
  */
 struct ghost_vcpu {
 	u64 vcpu_handle; // really the index
-	bool loaded;
 	bool initialised;
 	struct ghost_registers regs;
 	struct pfn_set recorded_memcache_pfn_set;
+	bool loaded;
 };
 
 /**
