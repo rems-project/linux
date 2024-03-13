@@ -1675,10 +1675,11 @@ void ghost_relaxed_reads_insert(struct ghost_relaxed_reads *rs, u64 phys_addr, u
 {
 	// quick sanity check: non-overlapping with any that already exist in the list
 	for (int i=0; i<rs->len; i++) {
-		if ((u64)rs->read_slots[i].phys_addr <= phys_addr && phys_addr <= (u64)rs->read_slots[i].phys_addr + 8*rs->read_slots[i].width)
+		if ((u64)rs->read_slots[i].phys_addr <= phys_addr && phys_addr < (u64)rs->read_slots[i].phys_addr + rs->read_slots[i].width)
 			ghost_assert(false); // new read inside an existing one
-		if (phys_addr <= (u64)rs->read_slots[i].phys_addr && (u64)rs->read_slots[i].phys_addr <= phys_addr + 8*width)
+		if (phys_addr <= (u64)rs->read_slots[i].phys_addr && (u64)rs->read_slots[i].phys_addr < phys_addr + width) {
 			ghost_assert(false); // existing read inside this one
+		}
 	}
 
 	ghost_assert(rs->len < GHOST_MAX_RELAXED_READS);
