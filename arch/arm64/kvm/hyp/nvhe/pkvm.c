@@ -518,7 +518,11 @@ static int init_pkvm_hyp_vcpu(struct pkvm_hyp_vcpu *hyp_vcpu,
 	if (hyp_pin_shared_mem(host_vcpu, host_vcpu + 1))
 		return -EBUSY;
 
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	if (READ_ONCE_GHOST_RECORD(host_vcpu->vcpu_idx) != vcpu_idx) {
+#else /* CONFIG_NVHE_GHOST_SPEC */
 	if (host_vcpu->vcpu_idx != vcpu_idx) {
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 		ret = -EINVAL;
 		goto done;
 	}

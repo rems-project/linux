@@ -1158,6 +1158,11 @@ bool compute_new_abstract_state_handle___pkvm_init_vcpu(struct ghost_state *g1, 
 	vcpu = vm1->vm_table_locked.vcpus[vcpu_idx];
 	ghost_assert(vcpu);
 
+	if (GHOST_READ_ONCE(call, host_vcpu_hyp_va->vcpu_idx) != vcpu_idx) {
+		ret = -EINVAL;
+		goto out;
+	}
+
 	copy_abstraction_host(g1, g0);
 	copy_abstraction_pkvm(g1, g0);
 
