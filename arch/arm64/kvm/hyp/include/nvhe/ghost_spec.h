@@ -82,18 +82,16 @@ bool ghost_exec_enabled(void);
 void ghost_enable_this_cpu(void);
 
 /**
- * struct ghost_loaded_vcpu - The identity of the currently loaded vcpu, if there is one.
+ * struct ghost_loaded_vcpu - Whether the current physical CPU has a loaded vCPU, and if there is one, its identity.
  *
- * @present: whether the parent ghost_state has a ghost loaded_vcpu (for this cpu).
- * @loaded: if present, whether this physical CPU has a loaded vCPU.
- * @vm_handle: if present and loaded, the opaque pkvm-assigned handle for the vcpu's parent vm.
- * @vcpu_index: if present and loaded, the index in the guest vm's vcpu table of the loaded vcpu.
+ * @loaded: whether this physical CPU has a loaded vCPU.
+ * @vm_handle: if loaded, the opaque pkvm-assigned handle for the vCPU's parent vm.
+ * @vcpu_index: if loaded, the index in the guest vm's vcpu table of the loaded vcpu.
  *
  * Context: Thread-local, so does not need to be protected by a lock.
  *          However, the underlying vm and its vcpus are protected by that guest vm's lock.
  */
 struct ghost_loaded_vcpu {
-	bool present;
 	bool loaded;
 	pkvm_handle_t vm_handle;
 	u64 vcpu_index;

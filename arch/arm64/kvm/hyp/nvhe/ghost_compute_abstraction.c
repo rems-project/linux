@@ -502,10 +502,6 @@ void check_abstraction_equals_host(struct ghost_host *gh1, struct ghost_host *gh
 void check_abstraction_equals_loaded_vcpu(struct ghost_loaded_vcpu *loaded_vcpu1, struct ghost_loaded_vcpu *loaded_vcpu2)
 {
 	GHOST_LOG_CONTEXT_ENTER();
-	GHOST_LOG(loaded_vcpu1->present, bool);
-	GHOST_LOG(loaded_vcpu2->present, bool);
-	ghost_assert(loaded_vcpu1->present && loaded_vcpu2->present);
-
 	GHOST_LOG(loaded_vcpu1->loaded, bool); GHOST_LOG(loaded_vcpu2->loaded, bool);
 	ghost_spec_assert(loaded_vcpu1->loaded == loaded_vcpu2->loaded);
 
@@ -576,24 +572,10 @@ void check_abstraction_refined_local_state(struct ghost_state *gc, struct ghost_
 	/* computed post and recorded post run and register states must be exactly equal (modulo status) */
 	check_abstraction_refined_registers(&gc_local->regs, &gr_post_local->regs, &gr_pre_local->regs);
 	check_abstraction_equals_run_state(&gc_local->cpu_state, &gr_post_local->cpu_state);
+	check_abstraction_equals_loaded_vcpu(&gc_local->loaded_hyp_vcpu, &gr_post_local->loaded_hyp_vcpu);
 
 	/* the others (loaded_vcpu and host_regs) may be not present on the computed state
 	 * in which case we check they didn't change if they were recorded in the pre. */
-	if (gc_local->loaded_hyp_vcpu.present && gr_post_local->loaded_hyp_vcpu.present) {
-		GHOST_INFO("loaded_vcpu1->gc");
-		GHOST_INFO("loaded_vcpu2->gr_post");
-		check_abstraction_equals_loaded_vcpu(&gc_local->loaded_hyp_vcpu, &gr_post_local->loaded_hyp_vcpu);
-	}
-	else if (gc_local->loaded_hyp_vcpu.present && !gr_post_local->loaded_hyp_vcpu.present) {
-		ghost_assert(false);
-	}
-	else if (!gc_local->loaded_hyp_vcpu.present && gr_post_local->loaded_hyp_vcpu.present) {
-		GHOST_INFO("loaded_vcpu1->gr_post");
-		GHOST_INFO("loaded_vcpu2->gr_pre");
-		ghost_assert(gr_pre_local->loaded_hyp_vcpu.present);
-		check_abstraction_equals_loaded_vcpu(&gr_post_local->loaded_hyp_vcpu, &gr_pre_local->loaded_hyp_vcpu);
-	}
-
 	if (gc_local->host_regs.present && gr_post_local->host_regs.present) {
 		GHOST_INFO("r1->gc");
 		GHOST_INFO("r2->gr_post");
@@ -1264,7 +1246,6 @@ void record_abstraction_loaded_vcpu(struct ghost_state *g, struct pkvm_hyp_vcpu 
 
 	ghost_assert(ghost_this_cpu_local_state(g)->present);
 	ghost_this_cpu_local_state(g)->loaded_hyp_vcpu = (struct ghost_loaded_vcpu){
-		.present = true,
 		.loaded = loaded,
 		.vm_handle = vm_handle,
 		.vcpu_index = vcpu_index,
@@ -1562,7 +1543,6 @@ void record_abstraction_loaded_vcpu_and_check_none(void)
 	struct pkvm_hyp_vcpu *loaded_vcpu = pkvm_get_loaded_hyp_vcpu();
 	// this cpu should have a loaded vcpu yet
 	ghost_spec_assert(!loaded_vcpu);
-	this_cpu_ghost_loaded_vcpu(&gs)->present = true;
 	this_cpu_ghost_loaded_vcpu(&gs)->loaded = false;
 }
 
@@ -1905,16 +1885,14 @@ static void ghost_dump_regs(struct ghost_registers *regs, u64 i)
 	ghost_printf("%Iregs[cpu:%d]:<TODO>\n", i, hyp_smp_processor_id());
 }
 
-static void ghost_dump_loaded_vcpu(struct ghost_loaded_vcpu *vcpu, u64 i)
+static void ghost_dump_loaded_vcpu(struct ghost_loaded_vcpu *loaded_vcpu_info, u64 i)
 {
 	ghost_printf("%Iloaded_vcpu[cpu:%d]: ", i, hyp_smp_processor_id());
 
-	if (!vcpu->present) {
-		ghost_printf(GHOST_MISSING_FIELD "\n");
-	} else if (!vcpu->loaded) {
+	if (!loaded_vcpu_info->loaded) {
 		ghost_printf("<unloaded>\n");
 	} else {
-		ghost_printf("<loaded vm_handle:%x vcpu_index:%ld>\n", vcpu->vm_handle, vcpu->vcpu_index);
+		ghost_printf("<loaded vm_handle:%x vcpu_index:%ld>\n", loaded_vcpu_info->vm_handle, loaded_vcpu_info->vcpu_index);
 	}
 }
 

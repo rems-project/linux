@@ -743,17 +743,14 @@ static void ghost_diff_globals(struct diff_container *node, struct ghost_constan
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
-static void ghost_diff_loaded_vcpu(struct diff_container *node, struct ghost_loaded_vcpu *vcpu1, struct ghost_loaded_vcpu *vcpu2)
+static void ghost_diff_loaded_vcpu(struct diff_container *node, struct ghost_loaded_vcpu *loaded_vcpu_info1, struct ghost_loaded_vcpu *loaded_vcpu_info2)
 {
 	GHOST_LOG_CONTEXT_ENTER();
 	ghost_diff_enter_subfield(node, "loaded_vcpu[cpu]");
-	ghost_diff_field(node, "present", diff_pair(TBOOL(vcpu1->present), TBOOL(vcpu2->present)));
-	if (vcpu1->present && vcpu2->present) {
-		ghost_diff_field(node, "loaded", diff_pair(TBOOL(vcpu1->loaded), TBOOL(vcpu2->loaded)));
-		if (vcpu1->loaded && vcpu2->loaded) {
-			ghost_diff_field(node, "vm_handle", diff_pair(TU64(vcpu1->vm_handle), TU64(vcpu2->vm_handle)));
-			ghost_diff_field(node, "vcpu_index", diff_pair(TU64(vcpu1->vcpu_index), TU64(vcpu2->vcpu_index)));
-		}
+	ghost_diff_field(node, "loaded", diff_pair(TBOOL(loaded_vcpu_info1->loaded), TBOOL(loaded_vcpu_info2->loaded)));
+	if (loaded_vcpu_info1->loaded && loaded_vcpu_info2->loaded) {
+		ghost_diff_field(node, "vm_handle", diff_pair(TU64(loaded_vcpu_info1->vm_handle), TU64(loaded_vcpu_info2->vm_handle)));
+		ghost_diff_field(node, "vcpu_index", diff_pair(TU64(loaded_vcpu_info1->vcpu_index), TU64(loaded_vcpu_info2->vcpu_index)));
 	}
 	ghost_diff_pop_subfield(node);
 	GHOST_LOG_CONTEXT_EXIT();
