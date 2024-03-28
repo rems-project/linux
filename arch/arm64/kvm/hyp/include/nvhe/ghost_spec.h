@@ -82,19 +82,21 @@ bool ghost_exec_enabled(void);
 void ghost_enable_this_cpu(void);
 
 /**
- * struct ghost_loaded_vcpu - Whether the current physical CPU has a loaded vCPU, and if there is one, its identity.
+ * struct ghost_loaded_vcpu - Whether the current physical CPU has a loaded vCPU, and if there is one, a pointer to its state.
  *
  * @loaded: whether this physical CPU has a loaded vCPU.
  * @vm_handle: if loaded, the opaque pkvm-assigned handle for the vCPU's parent vm.
- * @vcpu_index: if loaded, the index in the guest vm's vcpu table of the loaded vcpu.
+ * @loaded_vcpu: if loaded, a pointer to the vCPU state
  *
  * Context: Thread-local, so does not need to be protected by a lock.
  *          However, the underlying vm and its vcpus are protected by that guest vm's lock.
+ *
+ * Invariant: loaded <=> loaded_vcpu_owned_data != NULL
  */
 struct ghost_loaded_vcpu {
 	bool loaded;
 	pkvm_handle_t vm_handle;
-	u64 vcpu_index;
+	struct ghost_vcpu *loaded_vcpu;
 };
 
 /**
@@ -130,21 +132,36 @@ struct ghost_registers {
 };
 
 /**
- * struct ghost_vcpu - A single vcpu within a VM
+ * struct ghost_vcpu - A single vCPU within a VM
  *
- * @vcpu_handle: the 'handle' (or, really, index) of this vcpu in the VM.
- * @initialised: whether this vcpu has been initialised by __pkvm_init_vcpu.
- * @loaded: if initialised, whether this vcpu is currently loaded on a physical CPU.
- * @regs: if initialised, the saved register state of this vcpu.
+ * @vcpu_index: the index of this vCPU in the VM.
+ * @regs: the saved register state of this vCPU.
+ * @recorded_memcache_pfn_set:
  *
- * Context: Protected by the vm_table lock.
+ * Context: This is either protected by the vm_table lock (when the vCPU is not loaded
+ 	    on a physical CPU), or thread-local.
  */
 struct ghost_vcpu {
-	u64 vcpu_handle; // really the index
-	bool initialised;
+	u64 vcpu_index;
 	struct ghost_registers regs;
 	struct pfn_set recorded_memcache_pfn_set;
-	bool loaded;
+};
+
+/**
+ * struct ghost_vcpu_reference - A reference to a single vCPU held by the vm_table locked part of a VM state
+ *
+ * @initialised: whether this vcpu has been initialised by __pkvm_init_vcpu.
+ * @loaded_somewhere: if initialised, whether this vcpu is currently loaded on a physical CPU.
+ * @vcpu: if initialised, a pointer to the actual state of the vCPU. This is NULL if the vCPU is not owned by the vm table (because it is loaded somewhere).
+ *
+ * Context: Protected by the vm_table lock, including the object pointed to by vcpu if not NULL.
+ *
+ * Invariant: loaded_somewhere == true <==> vcpu == NULL
+ */
+struct ghost_vcpu_reference {
+	bool initialised;
+	bool loaded_somewhere;
+	struct ghost_vcpu *vcpu;
 };
 
 /**
@@ -176,7 +193,7 @@ struct ghost_vm_locked_by_vm_lock {
  * @present: whether this portion of the VM is present in the ghost state.
  * @nr_vcpus: if present, the number of vCPUs this VM was created with.
  * @nr_initialised_vcpus: if present, the number vCPUs that have been initialised so far by __pkvm_init_vcpu.
- * @vcpus: if present, the actual table of ghost_vcpu objects, valid up to nr_vcpus.
+ * @vcpu_refs: if present, the actual table of ghost_vcpu_reference objects, valid up to nr_vcpus.
  *
  * Context: Protected by the VM table lock,
  *          the `lock` field should not be used to take the lock, only to check it for sanity checking of the spec machinery
@@ -185,7 +202,7 @@ struct ghost_vm_locked_by_vm_table {
 	bool present;
 	u64 nr_vcpus;
 	u64 nr_initialised_vcpus;
-	struct ghost_vcpu *vcpus[KVM_MAX_VCPUS];
+	struct ghost_vcpu_reference vcpu_refs[KVM_MAX_VCPUS];
 };
 
 /**
