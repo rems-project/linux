@@ -282,6 +282,7 @@ void compute_abstract_registers(struct ghost_registers *regs, struct kvm_cpu_con
 
 void compute_abstraction_vcpu(struct ghost_vcpu *dest, struct pkvm_hyp_vcpu *vcpu, u64 vcpu_index)
 {
+	memset(dest, 0, sizeof(struct ghost_vcpu));
 	dest->vcpu_index = vcpu_index;
 	if (vcpu) {
 		dest->regs.present = true;
