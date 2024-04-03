@@ -632,6 +632,7 @@ bool compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost_state 
 	struct ghost_vm *g1_vm = ghost_vms_alloc(&g1->vms, hyp_loaded_vcpu->vm_handle);
 	ghost_assert(g0_vm != NULL);
 	ghost_assert(g1_vm != NULL);
+	ghost_vm_clone_into_partial(g1_vm, g0_vm, VMS_VM_OWNED);
 
 	if (! g0_vm->protected) {
 		/* don't check this spec */
@@ -656,6 +657,7 @@ bool compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost_state 
 	// This will require adding more state to ghost_pkvm
 	if (call->return_value == -ENOMEM) {
 		ret = -ENOMEM;
+		g1_vm->vm_locked.present = false;
 		goto out;
 	}
 
@@ -668,7 +670,6 @@ bool compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost_state 
 	 */
 	copy_abstraction_host(g1, g0);
 	copy_abstraction_pkvm(g1, g0);
-	ghost_vm_clone_into_partial(g1_vm, g0_vm, VMS_VM_OWNED);
 
 	for (int d=0; d<call->memcache_donations.len; d++) {
 		u64 pfn = call->memcache_donations.pages[d];
