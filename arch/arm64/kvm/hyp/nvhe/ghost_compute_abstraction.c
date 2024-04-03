@@ -177,6 +177,7 @@ struct ghost_vm *ghost_vms_alloc(struct ghost_vms *vms, pkvm_handle_t handle)
 		slot->vm->vm_locked.present = false;
 		slot->vm->vm_table_locked.present = false;
 
+		memset(&slot->vm->vm_teardown_data, 0, sizeof(struct ghost_vm_teardown_data));
 		return slot->vm;
 	} else {
 		/* shouldn't try alloc() a new ghost vm if one already exists for that handle. */
