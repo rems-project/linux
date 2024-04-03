@@ -334,7 +334,7 @@ void compute_abstraction_vm_partial(struct ghost_vm *dest, struct pkvm_hyp_vm *h
 				struct pkvm_hyp_vcpu *vcpu = hyp_vm->vcpus[vcpu_idx];
 				vcpu_ref->initialised = vcpu_idx < hyp_vm->nr_vcpus;
 				if (vcpu_ref->initialised) {
-					dest->vm_teardown_data.vcpu_addrs[vcpu_idx] =
+					dest->vm_table_locked.vm_teardown_vcpu_addrs[vcpu_idx] =
 						vcpu_ref->initialised ? hyp_virt_to_phys(hyp_vm->vcpus[vcpu_idx]) : 0;
 					if (vcpu->loaded_hyp_vcpu) {
 						vcpu_ref->loaded_somewhere = true;
@@ -653,19 +653,24 @@ void check_abstraction_refined_vm(struct ghost_vm *vm_spec, struct ghost_vm *vm_
 		GHOST_LOG(vm_impl->vm_table_locked.nr_vcpus, u64);
 		ghost_spec_assert(vm_spec->vm_table_locked.nr_vcpus == vm_impl->vm_table_locked.nr_vcpus);
 
-
-		// GHOST_LOG(vm_spec->vm_table_locked.nr_initialised_vcpus, u64);
-		// GHOST_LOG(vm_impl->vm_table_locked.nr_initialised_vcpus, u64);
-		// ghost_spec_assert(vm_spec->vm_table_locked.nr_initialised_vcpus == vm_impl->vm_table_locked.nr_initialised_vcpus);
+		GHOST_LOG(vm_spec->vm_table_locked.nr_initialised_vcpus, u64);
+		GHOST_LOG(vm_impl->vm_table_locked.nr_initialised_vcpus, u64);
+		ghost_spec_assert(vm_spec->vm_table_locked.nr_initialised_vcpus == vm_impl->vm_table_locked.nr_initialised_vcpus);
 
 		for (int i=0; i < vm_spec->vm_table_locked.nr_vcpus; i++) {
-			GHOST_LOG_CONTEXT_ENTER_INNER("loop vcpus");
-			GHOST_LOG_INNER("loop vcpus", i, u32);
-			GHOST_LOG_CONTEXT_ENTER();
-			GHOST_SPEC_ASSERT_VAR_EQ(vm_spec->vm_teardown_data.vcpu_addrs[i], vm_impl->vm_teardown_data.vcpu_addrs[i], u64);
-			GHOST_LOG_CONTEXT_EXIT();
+			GHOST_LOG_CONTEXT_ENTER_INNER("loop vcpu_refs");
+			GHOST_LOG_INNER("loop vcpu_refs", i, u32);
 			check_abstraction_equals_vcpu_reference(&vm_spec->vm_table_locked.vcpu_refs[i], &vm_impl->vm_table_locked.vcpu_refs[i]);
-			GHOST_LOG_CONTEXT_EXIT_INNER("loop vcpus");
+			GHOST_LOG_CONTEXT_EXIT_INNER("loop vcpu_refs");
+		}
+
+		for (int i=0; i < vm_spec->vm_table_locked.nr_initialised_vcpus; i++) {
+			GHOST_LOG_CONTEXT_ENTER_INNER("loop vcpu_addrs");
+			GHOST_LOG_INNER("loop vcpu_addrs", i, u32);
+			GHOST_LOG_CONTEXT_ENTER(); // TODO: improve
+			GHOST_SPEC_ASSERT_VAR_EQ(vm_spec->vm_table_locked.vm_teardown_vcpu_addrs[i], vm_impl->vm_table_locked.vm_teardown_vcpu_addrs[i], u64);
+			GHOST_LOG_CONTEXT_EXIT();
+			GHOST_LOG_CONTEXT_EXIT_INNER("loop vcpu_addrs");
 		}
 	}
 
@@ -1127,10 +1132,6 @@ void ghost_vm_clone_into_partial(struct ghost_vm *dest, struct ghost_vm *src, en
 	dest->vm_teardown_data.host_mc = src->vm_teardown_data.host_mc;
 	dest->vm_teardown_data.hyp_vm_struct_addr = src->vm_teardown_data.hyp_vm_struct_addr;
 	dest->vm_teardown_data.last_ran_addr = src->vm_teardown_data.last_ran_addr;
-	for (int vcpu_idx=0; vcpu_idx<KVM_MAX_VCPUS; vcpu_idx++) {
-		dest->vm_teardown_data.vcpu_addrs[vcpu_idx] =
-			src->vm_teardown_data.vcpu_addrs[vcpu_idx];
-	}
 	dest->lock = src->lock;
 
 	/* no need to check we actually own any locks
@@ -1165,8 +1166,10 @@ void ghost_vm_clone_into_partial(struct ghost_vm *dest, struct ghost_vm *src, en
 					dest->vm_table_locked.vcpu_refs[vcpu_idx].vcpu = NULL;
 				}
 			}
-			// dest->vm_teardown_data.vcpu_addrs[vcpu_idx] =
-			// 	src->vm_teardown_data.vcpu_addrs[vcpu_idx];
+		}
+		for (int vcpu_idx=0; vcpu_idx<src->vm_table_locked.nr_initialised_vcpus; vcpu_idx++) {
+			dest->vm_table_locked.vm_teardown_vcpu_addrs[vcpu_idx] =
+				src->vm_table_locked.vm_teardown_vcpu_addrs[vcpu_idx];
 		}
 		// TODO: ghost_assert(copied_vcpu + found_loaded == dest->vm_table_locked.nr_vcpus);
 	}
@@ -1930,6 +1933,15 @@ static void ghost_dump_vm(struct ghost_vm *vm, u64 i)
 			ghost_printf("                  ");
 
 		ghost_printf("\n");
+	}
+
+	ghost_printf("%Ivcpu_addrs:\n", i+4);
+	if (vm->vm_table_locked.present) {
+		for (int idx=0; idx<vm->vm_table_locked.nr_initialised_vcpus; idx++) {
+			ghost_printf("%I[%d]: %p\n", i+8, idx, vm->vm_table_locked.vm_teardown_vcpu_addrs[idx]);
+		}
+	} else {
+		ghost_printf(GHOST_MISSING_FIELD "\n");
 	}
 }
 

@@ -1106,9 +1106,6 @@ bool compute_new_abstract_state_handle___pkvm_init_vm(struct ghost_state *g1, st
 	vm1->vm_teardown_data.host_mc = phys_of_hyp_va(g0, (hyp_va_t)&host_kvm->arch.pkvm.teardown_mc);
 	vm1->vm_teardown_data.hyp_vm_struct_addr = vm_phys;
 	vm1->vm_teardown_data.last_ran_addr = last_ran_phys;
-	for (int idx=0; idx<KVM_MAX_VCPUS; idx++) {
-		vm1->vm_teardown_data.vcpu_addrs[idx] = 0;
-	}
 
 	// in theory this is unsafe, as another thread could've swooped in between
 	// the release of all the locks and this check,
@@ -1213,7 +1210,7 @@ bool compute_new_abstract_state_handle___pkvm_init_vcpu(struct ghost_state *g1, 
 	init_vcpu_sysregs(g1, vcpu_id, &vcpu_ref->vcpu->regs, vm1->protected);
 
 	g1->vms.table_data.present = true; // TODO: check with Ben that we really need this here
-	vm1->vm_teardown_data.vcpu_addrs[vm1->vm_table_locked.nr_initialised_vcpus] = phys_of_host_ipa(vcpu_ipa);
+	vm1->vm_table_locked.vm_teardown_vcpu_addrs[vm1->vm_table_locked.nr_initialised_vcpus] = phys_of_host_ipa(vcpu_ipa);
 	vm1->vm_table_locked.nr_initialised_vcpus++;
 out:
 	ghost_write_gpr(g1, 1, ret);
@@ -1351,8 +1348,8 @@ bool compute_new_abstract_state_handle___pkvm_teardown_vm(struct ghost_state *g1
 	}
 
 	for (int idx=0; idx<vm->vm_table_locked.nr_initialised_vcpus; idx++) {
-		host_ipa_t vcpu_ipa = host_ipa_of_phys(vm->vm_teardown_data.vcpu_addrs[idx]);
-		hyp_va_t vcpu_hyp_va = hyp_va_of_phys(g0, vm->vm_teardown_data.vcpu_addrs[idx]);
+		host_ipa_t vcpu_ipa = host_ipa_of_phys(vm->vm_table_locked.vm_teardown_vcpu_addrs[idx]);
+		hyp_va_t vcpu_hyp_va = hyp_va_of_phys(g0, vm->vm_table_locked.vm_teardown_vcpu_addrs[idx]);
 		u64 vcpu_nr_pages = PAGE_ALIGN((u64)sizeof(struct pkvm_hyp_vcpu)) >> PAGE_SHIFT;
 		mapping_update(
 			&g1->host.host_abstract_pgtable_annot,
