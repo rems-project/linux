@@ -637,6 +637,7 @@ static void ghost_diff_vcpu_reference(struct diff_container *node, int vcpu_idx,
 static void ghost_diff_vm(struct diff_container *node, pkvm_handle_t handle, struct ghost_vm *vm1, struct ghost_vm *vm2)
 {
 	GHOST_LOG_CONTEXT_ENTER();
+	ghost_assert(vm1 && vm2);
 	ghost_diff_enter_subfield_val(node, TGPRINT("vm %lx", (u64)handle));
 
 	ghost_diff_field(node, "handle", diff_pair(TU64((u64)vm1->pkvm_handle), TU64((u64)vm2->pkvm_handle)));
@@ -645,11 +646,6 @@ static void ghost_diff_vm(struct diff_container *node, pkvm_handle_t handle, str
 	ghost_diff_field(node, "host_mc", diff_pair(TU64((u64)vm1->vm_teardown_data.host_mc), TU64((u64)vm2->vm_teardown_data.host_mc)));
 	ghost_diff_field(node, "hyp_vm_struct_addr", diff_pair(TU64((u64)vm1->vm_teardown_data.hyp_vm_struct_addr), TU64((u64)vm2->vm_teardown_data.hyp_vm_struct_addr)));
 	ghost_diff_field(node, "last_ran_addr", diff_pair(TU64((u64)vm1->vm_teardown_data.last_ran_addr), TU64((u64)vm2->vm_teardown_data.last_ran_addr)));
-	for (u64 i = 0; i < KVM_MAX_VCPUS; i++) {
-		ghost_diff_enter_subfield_val(node, TGPRINT("vcpu_addr %ld", i));
-		ghost_diff_attach(node, diff_pair(TU64((u64)vm1->vm_teardown_data.vcpu_addrs[i]), TU64((u64)vm2->vm_teardown_data.vcpu_addrs[i])));
-		ghost_diff_pop_subfield(node);
-	}
 	ghost_diff_pop_subfield(node);
 
 	if (vm1->pkvm_handle == vm2->pkvm_handle) {
@@ -668,6 +664,12 @@ static void ghost_diff_vm(struct diff_container *node, pkvm_handle_t handle, str
 
 			for (u64 i = 0; i < KVM_MAX_VCPUS; i++)
 				ghost_diff_vcpu_reference(node, i, &vm1->vm_table_locked.vcpu_refs[i], &vm2->vm_table_locked.vcpu_refs[i]);
+
+			for (u64 i = 0; i < KVM_MAX_VCPUS; i++) {
+				ghost_diff_enter_subfield_val(node, TGPRINT("vcpu_addr %ld", i));
+				ghost_diff_attach(node, diff_pair(TU64((u64)vm1->vm_table_locked.vm_teardown_vcpu_addrs[i]), TU64((u64)vm2->vm_table_locked.vm_teardown_vcpu_addrs[i])));
+				ghost_diff_pop_subfield(node);
+			}
 		}
 		ghost_diff_pop_subfield(node);
 	}

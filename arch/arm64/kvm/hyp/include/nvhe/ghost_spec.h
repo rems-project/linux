@@ -194,15 +194,21 @@ struct ghost_vm_locked_by_vm_lock {
  * @nr_vcpus: if present, the number of vCPUs this VM was created with.
  * @nr_initialised_vcpus: if present, the number vCPUs that have been initialised so far by __pkvm_init_vcpu.
  * @vcpu_refs: if present, the actual table of ghost_vcpu_reference objects, valid up to nr_vcpus.
+ * @vm_teardown_vcpu_addrs: if present, locations of the `pkvm_hyp_vcpu` structures, donated during __pkvm_init_vcpu calls.
+
  *
  * Context: Protected by the VM table lock,
  *          the `lock` field should not be used to take the lock, only to check it for sanity checking of the spec machinery
+ *
+ * NOTE: in `.vm_teardown_vcpu_addrs`, there are only `.nr_initialised_vcpus`
+ * The remaining elements of the array should be zero.
  */
 struct ghost_vm_locked_by_vm_table {
 	bool present;
 	u64 nr_vcpus;
 	u64 nr_initialised_vcpus;
 	struct ghost_vcpu_reference vcpu_refs[KVM_MAX_VCPUS];
+	phys_addr_t vm_teardown_vcpu_addrs[KVM_MAX_VCPUS];
 };
 
 /**
@@ -210,19 +216,13 @@ struct ghost_vm_locked_by_vm_table {
  * @host_mc: location of shared host memcache.
  * @hyp_vm_struct_addr: location of the `pkvm_hyp_vm` struct itself, donated during __pkvm_init_vm.
  * @last_ran_addr: location of the last_vcpu_ran array, donated during __pkvm_init_vm.
- * @vcpu_addrs: locations of the `pkvm_hyp_vcpu` structures, donated during __pkvm_init_vcpu calls.
  *
  * NOTE: number of donated pages not saved here, but computed as part of spec.
- *
- * NOTE2: in `.vcpu_addrs`, there are only `.vm_table_locked.nr_initialised_vcpus`
- * (from the enclosing `struct ghost_vm`) valid locations. The remaining
- * elements of the array should be zero.
  */
 struct ghost_vm_teardown_data {
 	phys_addr_t host_mc;
 	phys_addr_t hyp_vm_struct_addr;
 	phys_addr_t last_ran_addr;
-	phys_addr_t vcpu_addrs[KVM_MAX_VCPUS];
 };
 
 /**
