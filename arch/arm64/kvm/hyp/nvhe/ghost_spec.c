@@ -1177,12 +1177,6 @@ bool compute_new_abstract_state_handle___pkvm_init_vcpu(struct ghost_state *g1, 
 	}
 	ghost_map_donated_memory_nocheck(g1, vcpu_ipa, sizeof(struct pkvm_hyp_vcpu));
 
-	// TODO: this can't be in the spec at the moment because the load of host_vcpu->vcpu_idx is not READ_ONCE()
-	// if (host_vcpu->vcpu_idx != vcpu_idx) {
-	// 	ret = -EINVAL;
-	// 	goto done;
-	// }
-
 	if (!ghost_hyp_check_host_shared_mem(g0, host_vcpu_hva, host_vcpu_hva + sizeof(struct kvm_vcpu))) {
 		ret = -EBUSY;
 		goto out;
