@@ -1357,6 +1357,25 @@ bool compute_new_abstract_state_handle___pkvm_teardown_vm(struct ghost_state *g1
 			MAP_REMOVE_PAGE, GHOST_STAGE1, vcpu_hyp_va, vcpu_nr_pages, MAPLET_NONE
 		);
 	}
+	for (int vcpu_idx=0; vcpu_idx<vm->vm_table_locked.nr_initialised_vcpus; vcpu_idx++) {
+		struct pfn_set *memcache = &vm->vm_table_locked.vcpu_refs[vcpu_idx].vcpu->recorded_memcache_pfn_set;
+		ghost_assert(memcache->len < GHOST_MAX_PFN_SET_LEN);
+		for (int i=0; i<memcache->len; i++) {
+			u64 pfn = memcache->external_pfns[i];
+			host_ipa_t host_ipa = host_ipa_of_phys(hyp_pfn_to_phys(pfn));
+			hyp_va_t hyp_va = hyp_va_of_phys(g0, hyp_pfn_to_phys(pfn));
+			mapping_update(
+				&g1->host.host_abstract_pgtable_annot,
+				g1->host.host_abstract_pgtable_annot,
+				MAP_REMOVE_PAGE, GHOST_STAGE2, host_ipa, 1, MAPLET_NONE
+			);
+			mapping_update(
+				&g1->pkvm.pkvm_abstract_pgtable.mapping,
+				g1->pkvm.pkvm_abstract_pgtable.mapping,
+				MAP_REMOVE_PAGE, GHOST_STAGE1, hyp_va, 1, MAPLET_NONE
+			);
+		}
+	}
 
 	// finally, remove the VM.
 	clear_abstraction_vm_partial(g1, vm_handle, VMS_VM_TABLE_OWNED | VMS_VM_OWNED);
