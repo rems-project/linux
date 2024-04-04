@@ -670,7 +670,12 @@ bool compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost_state 
 	 * so it's safe to copy.
 	 */
 	copy_abstraction_host(g1, g0);
-	copy_abstraction_pkvm(g1, g0);
+	if (call->memcache_donations.len > 0)
+		copy_abstraction_pkvm(g1, g0);
+	else {
+		ghost_assert(!g0->pkvm.present);
+		g1->pkvm.present = false;
+	}
 
 	for (int d=0; d<call->memcache_donations.len; d++) {
 		u64 pfn = call->memcache_donations.pages[d];
