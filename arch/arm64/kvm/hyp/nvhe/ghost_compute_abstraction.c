@@ -1151,16 +1151,17 @@ void ghost_vm_clone_into_partial(struct ghost_vm *dest, struct ghost_vm *src, en
 			dest_vcpu_ref->initialised = src_vcpu_ref->initialised;
 			dest_vcpu_ref->loaded_somewhere = src_vcpu_ref->loaded_somewhere;
 			if (vcpu_idx<src->vm_table_locked.nr_vcpus) {
-				if (src_vcpu_ref->loaded_somewhere){
-					found_loaded++;
-					ghost_assert(src_vcpu_ref->initialised);
-					ghost_assert(src_vcpu_ref->vcpu == NULL);
-					dest->vm_table_locked.vcpu_refs[vcpu_idx].vcpu = NULL;
-				} else if (src_vcpu_ref->initialised) {
-					copied_vcpu++;
-					ghost_assert(src_vcpu_ref->vcpu);
-					dest_vcpu_ref->vcpu = malloc_or_die(sizeof(struct ghost_vcpu));
-					ghost_vcpu_clone_into(dest_vcpu_ref->vcpu, src_vcpu_ref->vcpu);
+				if (src_vcpu_ref->initialised) {
+					if (src_vcpu_ref->loaded_somewhere){
+						found_loaded++;
+						ghost_assert(src_vcpu_ref->vcpu == NULL);
+						dest->vm_table_locked.vcpu_refs[vcpu_idx].vcpu = NULL;
+					} else {
+						copied_vcpu++;
+						ghost_assert(src_vcpu_ref->vcpu);
+						dest_vcpu_ref->vcpu = malloc_or_die(sizeof(struct ghost_vcpu));
+						ghost_vcpu_clone_into(dest_vcpu_ref->vcpu, src_vcpu_ref->vcpu);
+					}
 				} else {
 					ghost_assert(src_vcpu_ref->vcpu == NULL);
 					dest->vm_table_locked.vcpu_refs[vcpu_idx].vcpu = NULL;
