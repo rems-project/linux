@@ -573,23 +573,24 @@ bool compute_new_abstract_state_handle___pkvm_host_reclaim_page(struct ghost_sta
 		goto out;
 	}
 
-	if (ghost_pfn_set_contains(&g0->host.need_poisoning_pfn_set, pfn)) {
+	bool is_shared = mapping_in_domain(host_ipa, g0->host.host_abstract_pgtable_shared);
+	// If the page needs poisoning, it must not be accessible by the host.
+	ghost_assert(is_shared == !ghost_pfn_set_contains(&g0->host.need_poisoning_pfn_set, pfn));
+	if (is_shared) {
+		mapping_update(
+			&g1->host.host_abstract_pgtable_shared,
+			g0->host.host_abstract_pgtable_shared,
+			MAP_REMOVE_PAGE, GHOST_STAGE2, host_ipa, 1, MAPLET_NONE
+		);
+	} else {
+		mapping_update(
+			&g1->host.host_abstract_pgtable_annot,
+			g0->host.host_abstract_pgtable_annot,
+			MAP_REMOVE_PAGE, GHOST_STAGE2, host_ipa, 1, MAPLET_NONE
+		);
 		// TODO: how to model the zeroing? Do we want to?
 		ghost_pfn_set_remove_external(&g1->host.need_poisoning_pfn_set, pfn);
 	}
-
-	/* BS: spec should never get into a state where a reclaimable pfn
-	 * was shared with or given back to the host before it was reclaimed ?
-	 */
-	ghost_assert(!mapping_in_domain(host_ipa, g0->host.host_abstract_pgtable_shared));
-	ghost_assert(mapping_in_domain(host_ipa, g0->host.host_abstract_pgtable_annot));
-
-	/* was marked as owned by pKVM in annot, remove it. */
-	mapping_update(
-		&g1->host.host_abstract_pgtable_annot,
-		g0->host.host_abstract_pgtable_annot,
-		MAP_REMOVE_PAGE, GHOST_STAGE2, host_ipa, 1,  MAPLET_NONE
-	);
 
 	// unset page.pending_reclaim
 	ghost_pfn_set_remove_external(&g1->host.reclaimable_pfn_set, pfn);
