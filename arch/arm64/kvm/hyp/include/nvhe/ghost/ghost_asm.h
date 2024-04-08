@@ -1,5 +1,5 @@
 #include <asm/kvm_asm.h>
-#include "nvhe/ghost_asm_ids.h"
+#include "nvhe/ghost/ghost_asm_ids.h"
 
 
 /* unsigned long ghost_sysregs[GHOST_SYSREGS_MAX]; */

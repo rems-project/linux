@@ -41,19 +41,19 @@
 
 #include <asm/kvm_mmu.h>
 
-#include <hyp/ghost_extra_debug-pl011.h>
+#include <hyp/ghost/ghost_extra_debug-pl011.h>
 
-#include <nvhe/ghost_maplets.h>
-#include <nvhe/ghost_kvm_pgtable.h>
+#include <nvhe/ghost/ghost_maplets.h>
+#include <nvhe/ghost/ghost_kvm_pgtable.h>
 //#include <linux/list_sort.h>
 
 #include <nvhe/spinlock.h>   // no idea whether this will work - probably not
 #include <asm/kvm_pgtable.h>
 #include <nvhe/mem_protect.h>
-#include <nvhe/ghost_asserts.h>
-#include <nvhe/ghost_context.h>
+#include <nvhe/ghost/ghost_asserts.h>
+#include <nvhe/ghost/ghost_context.h>
 
-#include <nvhe/ghost_printer.h>
+#include <nvhe/ghost/ghost_printer.h>
 
 
 

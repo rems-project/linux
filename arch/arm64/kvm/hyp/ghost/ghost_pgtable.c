@@ -5,13 +5,13 @@
 */
 #include <asm/kvm_mmu.h>
 
-#include <hyp/ghost_extra_debug-pl011.h>
-#include <nvhe/ghost_pgtable.h>
+#include <hyp/ghost/ghost_extra_debug-pl011.h>
+#include <nvhe/ghost/ghost_pgtable.h>
 #include <nvhe/memory.h>   // for hyp_phys_to_virt
 #include <nvhe/mem_protect.h>   // for PKVM_PAGE_SHARED_OWNED etc
 
-#include <nvhe/ghost_pfn_set.h>
-#include <nvhe/ghost_asserts.h>
+#include <nvhe/ghost/ghost_pfn_set.h>
+#include <nvhe/ghost/ghost_asserts.h>
 
 
 #pragma GCC diagnostic ignored "-Wdeclaration-after-statement"

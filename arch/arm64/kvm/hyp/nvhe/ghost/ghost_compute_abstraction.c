@@ -24,14 +24,14 @@
 
 
 // and the ghost headers from mem_protect.c
-#include <hyp/ghost_extra_debug-pl011.h>
-#include <nvhe/ghost_pgtable.h>
-#include <nvhe/ghost_spec.h>
-#include <nvhe/ghost_asm.h>
-#include <nvhe/ghost_asm_ids.h>
+#include <hyp/ghost/ghost_extra_debug-pl011.h>
+#include <nvhe/ghost/ghost_pgtable.h>
+#include <nvhe/ghost/ghost_spec.h>
+#include <nvhe/ghost/ghost_asm.h>
+#include <nvhe/ghost/ghost_asm_ids.h>
 
 #ifdef CONFIG_NVHE_GHOST_DIFF
-#include <nvhe/ghost_abstraction_diff.h>
+#include <nvhe/ghost/ghost_abstraction_diff.h>
 #endif /* CONFIG_NVHE_GHOST_DIFF */
 
 
@@ -45,11 +45,11 @@
 // end of mem_protect.c ghost headers
 
 
-#include <hyp/ghost_alloc.h>
+#include <hyp/ghost/ghost_alloc.h>
 
-#include <nvhe/ghost_registers.h>
-#include <nvhe/ghost_spec.h>
-#include <nvhe/ghost_compute_abstraction.h>
+#include <nvhe/ghost/ghost_registers.h>
+#include <nvhe/ghost/ghost_spec.h>
+#include <nvhe/ghost/ghost_compute_abstraction.h>
 
 /* from nvhe/pkvm.c */
 extern struct pkvm_hyp_vm **vm_table;

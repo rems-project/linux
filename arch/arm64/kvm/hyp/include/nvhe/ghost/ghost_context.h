@@ -1,7 +1,7 @@
 #ifndef GHOST_CONTEXT_H
 #define GHOST_CONTEXT_H
 
-#include <nvhe/ghost_printer.h>
+#include <nvhe/ghost/ghost_printer.h>
 
 /*
  * Useful logging stacked traceback builders

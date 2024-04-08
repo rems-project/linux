@@ -1,16 +1,16 @@
 #include <asm/kvm_mmu.h>
 #include <linux/types.h>
 
-#include <hyp/ghost_extra_debug-pl011.h>
+#include <hyp/ghost/ghost_extra_debug-pl011.h>
 
 #include <nvhe/spinlock.h>
 #include <nvhe/mem_protect.h>
 
-#include <nvhe/ghost_asserts.h>
-#include <nvhe/ghost_context.h>
-#include <nvhe/ghost_control.h>
+#include <nvhe/ghost/ghost_asserts.h>
+#include <nvhe/ghost/ghost_context.h>
+#include <nvhe/ghost/ghost_control.h>
 
-#include <nvhe/ghost_printer.h>
+#include <nvhe/ghost/ghost_printer.h>
 
 
 /**

@@ -1,11 +1,11 @@
 #ifndef _GHOST_SPEC_H
 #define _GHOST_SPEC_H
 
-#include <hyp/ghost_extra_debug-pl011.h>
-//#include <nvhe/ghost_check_pgtables.h>
-#include <nvhe/ghost_asm_ids.h>
-#include <nvhe/ghost_misc.h>
-#include <nvhe/ghost_pgtable.h>
+#include <hyp/ghost/ghost_extra_debug-pl011.h>
+//#include <nvhe/ghost/ghost_check_pgtables.h>
+#include <nvhe/ghost/ghost_asm_ids.h>
+#include <nvhe/ghost/ghost_misc.h>
+#include <nvhe/ghost/ghost_pgtable.h>
 #include <nvhe/spinlock.h>
 #pragma GCC diagnostic ignored "-Wdeclaration-after-statement"
 
@@ -13,12 +13,12 @@
 #include <asm/kvm_asm.h>    // for __KVM_HOST_SMCCC_FUNC___pkvm_host_share_hyp etc
 #include <asm/kvm_pkvm.h> // for KVM_MAX_PVMS
 
-#include <nvhe/ghost_asserts.h>
-#include <nvhe/ghost_pfn_set.h>
-#include <nvhe/ghost_call_data.h>
-#include <nvhe/ghost_control.h>
-#include <nvhe/ghost_status.h>
-#include <nvhe/ghost_registers.h>
+#include <nvhe/ghost/ghost_asserts.h>
+#include <nvhe/ghost/ghost_pfn_set.h>
+#include <nvhe/ghost/ghost_call_data.h>
+#include <nvhe/ghost/ghost_control.h>
+#include <nvhe/ghost/ghost_status.h>
+#include <nvhe/ghost/ghost_registers.h>
 
 // top-level spec types
 

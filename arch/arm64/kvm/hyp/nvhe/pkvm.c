@@ -19,7 +19,7 @@
 
 #ifdef CONFIG_NVHE_GHOST_SPEC
 
-#include <nvhe/ghost_compute_abstraction.h>
+#include <nvhe/ghost/ghost_compute_abstraction.h>
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 
 /* Used by icache_is_vpipt(). */

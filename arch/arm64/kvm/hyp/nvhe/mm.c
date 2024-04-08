@@ -20,8 +20,8 @@
 
 #ifdef CONFIG_NVHE_GHOST_SPEC
 
-#include <nvhe/ghost_spec.h>
-#include <nvhe/ghost_mapping_reqs.h>
+#include <nvhe/ghost/ghost_spec.h>
+#include <nvhe/ghost/ghost_mapping_reqs.h>
 
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 

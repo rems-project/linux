@@ -53,16 +53,16 @@
 
 
 #include <asm/kvm_mmu.h>
-#include <hyp/ghost_extra_debug-pl011.h>
-#include <nvhe/ghost_pgtable.h>
-#include <nvhe/ghost_mapping_reqs.h>
+#include <hyp/ghost/ghost_extra_debug-pl011.h>
+#include <nvhe/ghost/ghost_pgtable.h>
+#include <nvhe/ghost/ghost_mapping_reqs.h>
 //#include <nvhe/spinlock.h>
 
 //#include <asm/kvm_s2mpu.h>
 
 // very hackish copies of linux sort libraries to get them linked in to nvhe.  there must be a much better way to do this...
-#include <nvhe/ghost_sort_hack.h>
-#include <nvhe/ghost_list_sort_hack.h>
+#include <nvhe/ghost/ghost_sort_hack.h>
+#include <nvhe/ghost/ghost_list_sort_hack.h>
 
 
 #pragma GCC diagnostic ignored "-Wdeclaration-after-statement"

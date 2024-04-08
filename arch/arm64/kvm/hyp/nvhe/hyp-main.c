@@ -35,14 +35,14 @@ static DEFINE_PER_CPU(struct user_fpsimd_state, loaded_host_fpsimd_state);
 
 #ifdef CONFIG_NVHE_GHOST_SPEC
 
-#include <hyp/ghost_extra_debug-pl011.h>
-//#include <nvhe/ghost_check_pgtables.h>
-#include <nvhe/ghost_misc.h>
-#include <nvhe/ghost_pgtable.h>
-#include <nvhe/ghost_control.h>
-#include <nvhe/ghost_spec.h>
-#include <nvhe/ghost_compute_abstraction.h>
-#include <nvhe/ghost_context.h>
+#include <hyp/ghost/ghost_extra_debug-pl011.h>
+//#include <nvhe/ghost/ghost_check_pgtables.h>
+#include <nvhe/ghost/ghost_misc.h>
+#include <nvhe/ghost/ghost_pgtable.h>
+#include <nvhe/ghost/ghost_control.h>
+#include <nvhe/ghost/ghost_spec.h>
+#include <nvhe/ghost/ghost_compute_abstraction.h>
+#include <nvhe/ghost/ghost_context.h>
 #pragma GCC diagnostic ignored "-Wdeclaration-after-statement"
 
 #endif /* CONFIG_NVHE_GHOST_SPEC */

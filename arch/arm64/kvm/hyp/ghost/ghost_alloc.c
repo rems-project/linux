@@ -1,9 +1,9 @@
 #include <nvhe/pkvm.h>
-#include <hyp/ghost_alloc.h>
+#include <hyp/ghost/ghost_alloc.h>
 #include <asm-generic/bug.h>
 
 #ifdef CONFIG_NVHE_GHOST_MEM_DUMP_STATS
-#include <nvhe/ghost_printer.h>
+#include <nvhe/ghost/ghost_printer.h>
 #endif /* CONFIG_NVHE_GHOST_MEM_DUMP_STATS */
 
 /*

@@ -22,7 +22,7 @@ int hyp_map_vectors(void);
 int hyp_back_vmemmap(phys_addr_t back);
 int pkvm_cpu_set_vector(enum arm64_hyp_spectre_vector slot);
 #ifdef CONFIG_NVHE_GHOST_SPEC
-#include <nvhe/ghost_mapping_reqs.h>
+#include <nvhe/ghost/ghost_mapping_reqs.h>
 int pkvm_create_mappings(void *from, void *to, enum kvm_pgtable_prot prot, enum mapping_req_kind kind, u64 cpu);
 #else /* CONFIG_NVHE_GHOST_SPEC */
 int pkvm_create_mappings(void *from, void *to, enum kvm_pgtable_prot prot);

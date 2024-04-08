@@ -2,7 +2,7 @@
 #define _GHOST_COMPUTE_ABSTRACTION_H
 
 
-#include <nvhe/ghost_spec.h>
+#include <nvhe/ghost/ghost_spec.h>
 
 // OLD
 void record_abstraction(struct ghost_state *g);

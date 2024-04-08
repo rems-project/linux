@@ -7,7 +7,7 @@
 
 #include <linux/memblock.h>   /* for enum memblock_flags */
 
-#include <nvhe/ghost_printer.h>
+#include <nvhe/ghost/ghost_printer.h>
 
 /* ****************** maplet types ****************** */
 

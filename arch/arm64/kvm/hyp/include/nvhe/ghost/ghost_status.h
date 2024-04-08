@@ -1,7 +1,7 @@
 #ifndef GHOST_STATUS_H
 #define GHOST_STATUS_H
 
-#include <nvhe/ghost_printer.h>
+#include <nvhe/ghost/ghost_printer.h>
 
 /**
  * enum ghost_status - Status of an associated field (this is a three-valued generalisation

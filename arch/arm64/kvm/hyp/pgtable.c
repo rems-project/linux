@@ -15,17 +15,17 @@
 #ifdef CONFIG_NVHE_GHOST_SPEC
 
 #include <asm/kvm_mmu.h>
-#include <hyp/ghost_extra_debug-pl011.h>
-//#include <nvhe/ghost_check_pgtables.h>
-#include <nvhe/ghost_pgtable.h>
-#include <nvhe/ghost_control.h>
+#include <hyp/ghost/ghost_extra_debug-pl011.h>
+//#include <nvhe/ghost/ghost_check_pgtables.h>
+#include <nvhe/ghost/ghost_pgtable.h>
+#include <nvhe/ghost/ghost_control.h>
 
 #pragma GCC diagnostic ignored "-Wdeclaration-after-statement"
 
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 
 #if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
-#include <nvhe/ghost_simplified_model.h>
+#include <nvhe/ghost/ghost_simplified_model.h>
 #endif
 
 #define KVM_PTE_TYPE			BIT(1)

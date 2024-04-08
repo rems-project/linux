@@ -13,7 +13,7 @@
 #include <asm/kvm_mmu.h>
 
 #ifdef CONFIG_NVHE_GHOST_SPEC
-#include <nvhe/ghost_call_data.h>
+#include <nvhe/ghost/ghost_call_data.h>
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 
 static inline bool __translate_far_to_hpfar(u64 far, u64 *hpfar)

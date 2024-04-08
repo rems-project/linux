@@ -1,10 +1,10 @@
 #include <asm/kvm_mmu.h>
 
-#include <nvhe/ghost_asserts.h>
-#include <nvhe/ghost_pfn_set.h>
-#include <nvhe/ghost_context.h>
+#include <nvhe/ghost/ghost_asserts.h>
+#include <nvhe/ghost/ghost_pfn_set.h>
+#include <nvhe/ghost/ghost_context.h>
 
-#include <nvhe/ghost_printer.h>
+#include <nvhe/ghost/ghost_printer.h>
 
 void ghost_pfn_set_init(struct pfn_set *set, u64 pool_range_start, u64 pool_range_end)
 {

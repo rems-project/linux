@@ -12,7 +12,7 @@
 #include <linux/types.h>
 
 #if defined(CONFIG_NVHE_GHOST_SPEC) && defined(__KVM_NVHE_HYPERVISOR__)
-#include <nvhe/ghost_maplets.h>
+#include <nvhe/ghost/ghost_maplets.h>
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 
 #define KVM_PGTABLE_MAX_LEVELS		4U

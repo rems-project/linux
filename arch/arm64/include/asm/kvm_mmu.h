@@ -13,7 +13,7 @@
 #include <asm/cpufeature.h>
 #if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
 #ifndef __ASSEMBLY__
-#include <nvhe/ghost_simplified_model.h>
+#include <nvhe/ghost/ghost_simplified_model.h>
 #endif /* __ASSEMBLY__ */
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 

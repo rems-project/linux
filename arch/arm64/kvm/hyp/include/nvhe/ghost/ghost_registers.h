@@ -3,7 +3,7 @@
 
 #include <asm/kvm_host.h>
 
-#include <nvhe/ghost_asserts.h>
+#include <nvhe/ghost/ghost_asserts.h>
 
 #define GHOST_SYSREG(X) GHOST_SYSREG_ ## X
 

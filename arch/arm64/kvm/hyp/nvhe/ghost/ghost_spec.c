@@ -1,9 +1,9 @@
 #include <asm/kvm_mmu.h>
-#include <hyp/ghost_extra_debug-pl011.h>
-//#include <nvhe/ghost_check_pgtables.h>
-#include <hyp/ghost_alloc.h>
-#include <nvhe/ghost_misc.h>
-#include <nvhe/ghost_pgtable.h>
+#include <hyp/ghost/ghost_extra_debug-pl011.h>
+//#include <nvhe/ghost/ghost_check_pgtables.h>
+#include <hyp/ghost/ghost_alloc.h>
+#include <nvhe/ghost/ghost_misc.h>
+#include <nvhe/ghost/ghost_pgtable.h>
 #include <linux/arm-smccc.h>
 #pragma GCC diagnostic ignored "-Wdeclaration-after-statement"
 
@@ -13,11 +13,11 @@
 #include <asm/kvm_asm.h>    // for __KVM_HOST_SMCCC_FUNC___pkvm_host_share_hyp etc
 #include <asm/kvm_hyp.h> // for read_sysreg_el2
 #include <asm/sysreg.h> // for SYS_ESR_EL2
-#include <nvhe/ghost_asm_ids.h>
-#include <nvhe/ghost_spec.h>
-#include <nvhe/ghost_compute_abstraction.h>
-#include <nvhe/ghost_kvm_pgtable.h>
-#include <nvhe/ghost_control.h>
+#include <nvhe/ghost/ghost_asm_ids.h>
+#include <nvhe/ghost/ghost_spec.h>
+#include <nvhe/ghost/ghost_compute_abstraction.h>
+#include <nvhe/ghost/ghost_kvm_pgtable.h>
+#include <nvhe/ghost/ghost_control.h>
 
 
 /*

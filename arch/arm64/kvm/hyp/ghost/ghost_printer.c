@@ -1,20 +1,20 @@
 #include <linux/types.h>
 #include <linux/stdarg.h>
-#include <nvhe/ghost_printer.h>
+#include <nvhe/ghost/ghost_printer.h>
 
 #include <nvhe/pkvm.h>
 #include <nvhe/spinlock.h>
 
 #include <hyp/debug-pl011.h>
-#include <hyp/ghost_extra_debug-pl011.h>
-#include <nvhe/ghost_asserts.h> // can use asserts here since they dump right to UART without using this printer.
+#include <hyp/ghost/ghost_extra_debug-pl011.h>
+#include <nvhe/ghost/ghost_asserts.h> // can use asserts here since they dump right to UART without using this printer.
 
-#include <nvhe/ghost_maplets.h>
-#include <nvhe/ghost_pgtable.h>
-#include <nvhe/ghost_pfn_set.h>
-#include <nvhe/ghost_status.h>
+#include <nvhe/ghost/ghost_maplets.h>
+#include <nvhe/ghost/ghost_pgtable.h>
+#include <nvhe/ghost/ghost_pfn_set.h>
+#include <nvhe/ghost/ghost_status.h>
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-#include <nvhe/ghost_simplified_model.h>
+#include <nvhe/ghost/ghost_simplified_model.h>
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 
 /*

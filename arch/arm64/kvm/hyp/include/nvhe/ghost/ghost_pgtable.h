@@ -8,11 +8,11 @@
 #define _GHOST_PGTABLE_H
 
 
-#include <nvhe/ghost_maplets.h>
+#include <nvhe/ghost/ghost_maplets.h>
 #include <nvhe/memory.h>   // for hyp_phys_to_virt
 #include <nvhe/mem_protect.h>   // for PKVM_ID_HOST etc
 
-#include <nvhe/ghost_pfn_set.h>
+#include <nvhe/ghost/ghost_pfn_set.h>
 
 
 /*************************************************************************h

@@ -1,4 +1,4 @@
-#include <nvhe/ghost_status.h>
+#include <nvhe/ghost/ghost_status.h>
 
 int gp_put_status(gp_stream_t *out, enum ghost_status s)
 {

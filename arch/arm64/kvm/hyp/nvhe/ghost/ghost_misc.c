@@ -1,18 +1,18 @@
 
 #include <asm/kvm_mmu.h>
-#include <hyp/ghost_extra_debug-pl011.h>
-#include <nvhe/ghost_pgtable.h>
+#include <hyp/ghost/ghost_extra_debug-pl011.h>
+#include <nvhe/ghost/ghost_pgtable.h>
 
-#include <nvhe/ghost_misc.h>
+#include <nvhe/ghost/ghost_misc.h>
 
-#include <nvhe/ghost_asm.h>
-#include "nvhe/ghost_asm_ids.h"
+#include <nvhe/ghost/ghost_asm.h>
+#include "nvhe/ghost/ghost_asm_ids.h"
 
 #include <asm/kvm_pkvm.h>
 #include <linux/memblock.h>
 #include <nvhe/mm.h>
 
-#include <nvhe/ghost_printer.h>
+#include <nvhe/ghost/ghost_printer.h>
 
 #pragma GCC diagnostic ignored "-Wdeclaration-after-statement"
 

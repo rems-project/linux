@@ -8,7 +8,7 @@
 #include <nvhe/gfp.h>
 
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-#include <nvhe/ghost_simplified_model.h>
+#include <nvhe/ghost/ghost_simplified_model.h>
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 
 u64 __hyp_vmemmap;
