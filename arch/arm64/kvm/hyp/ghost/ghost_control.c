@@ -2,7 +2,7 @@
 #include <linux/types.h>
 #include <linux/string.h>
 
-#include <nvhe/ghost_control.h>
+#include <nvhe/ghost/ghost_control.h>
 
 static const bool noisy_spec = IS_ENABLED(CONFIG_NVHE_GHOST_SPEC_NOISY);
 static const bool verbose_spec = IS_ENABLED(CONFIG_NVHE_GHOST_SPEC_VERBOSE);

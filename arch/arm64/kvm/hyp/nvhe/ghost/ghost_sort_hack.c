@@ -14,7 +14,7 @@
 
 #include <linux/types.h>
 #include <linux/export.h>
-#include <nvhe/ghost_sort_hack.h>
+#include <nvhe/ghost/ghost_sort_hack.h>
 
 /**
  * is_aligned - is this pointer & size okay for word-wide copying?

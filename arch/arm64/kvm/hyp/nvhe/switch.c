@@ -31,12 +31,12 @@
 
 #ifdef CONFIG_NVHE_GHOST_SPEC
 
-#include <nvhe/ghost_control.h>
-#include <nvhe/ghost_spec.h>
-#include <nvhe/ghost_compute_abstraction.h>
+#include <nvhe/ghost/ghost_control.h>
+#include <nvhe/ghost/ghost_spec.h>
+#include <nvhe/ghost/ghost_compute_abstraction.h>
 
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-#include <nvhe/ghost_simplified_model.h>
+#include <nvhe/ghost/ghost_simplified_model.h>
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 
 #endif /* CONFIG_NVHE_GHOST_SPEC */

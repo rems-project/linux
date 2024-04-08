@@ -10,7 +10,7 @@
 
 #include <nvhe/mem_protect.h>
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-#include <nvhe/ghost_simplified_model.h>
+#include <nvhe/ghost/ghost_simplified_model.h>
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 
 struct tlb_inv_context {

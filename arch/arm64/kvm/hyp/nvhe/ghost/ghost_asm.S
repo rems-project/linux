@@ -1,6 +1,6 @@
 #include <asm/asm-offsets.h>
 #include <linux/linkage.h>
-#include "nvhe/ghost_asm_ids.h"
+#include "nvhe/ghost/ghost_asm_ids.h"
 
         // looks like it would be more idiomatic to use a C enum instead of the ghost_asm_ids.h #define's, and then have this in C code instead of asm, using read_sysreg_el2, following sysreg-sr.h
         

@@ -16,14 +16,14 @@
 #include <nvhe/pkvm.h>
 #include <nvhe/spinlock.h>
 
-#include <hyp/ghost_extra_debug-pl011.h>
-#include <nvhe/ghost_pgtable.h>
-#include <nvhe/ghost_spec.h>
+#include <hyp/ghost/ghost_extra_debug-pl011.h>
+#include <nvhe/ghost/ghost_pgtable.h>
+#include <nvhe/ghost/ghost_spec.h>
 
-#include <nvhe/ghost_abstraction_diff.h>
+#include <nvhe/ghost/ghost_abstraction_diff.h>
 
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-#include <nvhe/ghost_simplified_model.h>
+#include <nvhe/ghost/ghost_simplified_model.h>
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 
 #define MAX_PRINT_DIFF_PER_SUBFIELDS CONFIG_NVHE_GHOST_DIFF_MAX_DIFFS_PER_NODE

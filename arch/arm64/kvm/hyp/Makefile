@@ -10,8 +10,8 @@ subdir-ccflags-y := -I$(incdir)
 obj-$(CONFIG_KVM) += vhe/ nvhe/ pgtable.o
 
 ghosts := \
-	ghost_maplets.o ghost_pgtable.o ghost_pfn_set.o \
-	ghost_control.o ghost_context.o ghost_extra_debug-pl011.o \
-	ghost_alloc.o ghost_status.o ghost_printer.o
+	ghost/ghost_maplets.o ghost/ghost_pgtable.o ghost/ghost_pfn_set.o \
+	ghost/ghost_control.o ghost/ghost_context.o ghost/ghost_extra_debug-pl011.o \
+	ghost/ghost_alloc.o ghost/ghost_status.o ghost/ghost_printer.o
 
 obj-$(CONFIG_NVHE_GHOST_SPEC) += $(ghosts)
