@@ -3,7 +3,6 @@
 #include <nvhe/pkvm.h>
 #include <hyp/debug-pl011.h>
 
-bool ghost_extra_debug_initialised = false;
 
 static DEFINE_HYP_SPINLOCK(g_print_lock);  // Internal.
 static DEFINE_PER_CPU(int, g_print_lock_locked);

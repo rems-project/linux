@@ -23,7 +23,6 @@
 #define GHOST_NORMAL "***"
 #endif
 
-extern bool ghost_extra_debug_initialised;
 
 /* hyp_put* are internally locked.
  */

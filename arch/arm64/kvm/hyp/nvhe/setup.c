@@ -399,8 +399,6 @@ void __noreturn __pkvm_init_finalise(void)
 
 #ifdef CONFIG_NVHE_GHOST_SPEC
 	GHOST_LOG_CONTEXT_ENTER();
-	// register the debug output
-	ghost_extra_debug_initialised = true;
 
 	if (ghost_print_on("setup")) {
 		// dump some mappings

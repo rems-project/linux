@@ -296,13 +296,6 @@ static inline int __kvm_pgtable_visit(struct kvm_pgtable_walk_data *data,
 	kvm_pteref_t childp;
 	bool table = kvm_pte_table(ctx.old, level);
 
-/* #ifdef CONFIG_NVHE_GHOST_SPEC */
-/* 	if (ghost_extra_debug_initialised) { */
-/* 		hyp_putsxn("__kvm_pgtable_visit &ret",(u64)&ret,64); */
-/* 		hyp_putc('\n'); */
-/* 	} */
-/* #endif /1* CONFIG_NVHE_GHOST_SPEC *1/ */
-
 	if (table && (ctx.flags & KVM_PGTABLE_WALK_TABLE_PRE)) {
 		ret = kvm_pgtable_visitor_cb(data, &ctx, KVM_PGTABLE_WALK_TABLE_PRE);
 		reload = true;
@@ -1117,13 +1110,6 @@ static int stage2_map_walker_try_leaf(const struct kvm_pgtable_visit_ctx *ctx,
 	struct kvm_pgtable *pgt = data->mmu->pgt;
 	struct kvm_pgtable_mm_ops *mm_ops = ctx->mm_ops;
 
-/* #ifdef CONFIG_NVHE_GHOST_SPEC */
-/* 	if (ghost_extra_debug_initialised) { */
-/* 		hyp_putsxn("stage2_map_walker_try_leaf &new",(u64)&new,64); */
-/* 		hyp_putc('\n'); */
-/* 	} */
-/* #endif /1* CONFIG_NVHE_GHOST_SPEC *1/ */
-
 	if (!stage2_leaf_mapping_allowed(ctx, data))
 		return -E2BIG;
 
@@ -1193,13 +1179,6 @@ static int stage2_map_walk_leaf(const struct kvm_pgtable_visit_ctx *ctx,
 	struct kvm_pgtable_mm_ops *mm_ops = ctx->mm_ops;
 	kvm_pte_t *childp, new;
 	int ret;
-
-/* #ifdef CONFIG_NVHE_GHOST_SPEC */
-/* 	if (ghost_extra_debug_initialised) { */
-/* 		hyp_putsxn("stage2_map_walk_leaf &ret",(u64)&ret,64); */
-/* 		hyp_putc('\n'); */
-/* 	} */
-/* #endif /1* CONFIG_NVHE_GHOST_SPEC *1/ */
 
 	ret = stage2_map_walker_try_leaf(ctx, data);
 	if (ret != -E2BIG)
