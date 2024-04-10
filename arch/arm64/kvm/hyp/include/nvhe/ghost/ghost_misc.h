@@ -1,6 +1,8 @@
 #ifndef __KVM_HYP_GHOST_MISC_H
 #define __KVM_HYP_GHOST_MISC_H
 
+#include <asm/kvm_asm.h> // for u64, struct kvm_nvhe_init_params
+
 void dump_kvm_nvhe_init_params(struct kvm_nvhe_init_params *params);
 void ghost_dump_shadow_table(void);
 void ghost_dump_sysregs(void);
