@@ -490,7 +490,6 @@ int __pkvm_init(phys_addr_t phys, unsigned long size, unsigned long nr_cpus,
 #endif
 
 	if (ghost_print_on("setup")) {
-		ghost_printf(GHOST_WHITE_ON_MAGENTA "REFACTORED VERSION 5" GHOST_NORMAL "\n");
 		ghost_printf(
 			"\n"
 			"__pkvm_init:\n"
