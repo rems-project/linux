@@ -27,6 +27,8 @@
 #include <nvhe/ghost/ghost_simplified_model.h>
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 
+#pragma GCC diagnostic ignored "-Wdeclaration-after-statement"
+
 #define MAX_PRINT_DIFF_PER_SUBFIELDS CONFIG_NVHE_GHOST_DIFF_MAX_DIFFS_PER_NODE
 
 /*
@@ -391,10 +393,10 @@ static void ghost_diff_attach(struct diff_container *container, struct ghost_dif
 	__attach(container, EMPTY_KEY, child);
 }
 
-static void ghost_diff_gpr(struct diff_container *container, u64 reg, struct ghost_diff child)
-{
-	__attach(container, TGPREG(reg), child);
-}
+// static void ghost_diff_gpr(struct diff_container *container, u64 reg, struct ghost_diff child)
+// {
+// 	__attach(container, TGPREG(reg), child);
+// }
 
 /****************/
 // Differ!
