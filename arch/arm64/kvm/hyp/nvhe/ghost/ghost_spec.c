@@ -25,42 +25,42 @@
 /*
  * Functions to make ghost registers accesses more uniform
  */
-u64 ghost_read_gpr_explicit(struct ghost_registers *st, int n)
+static u64 ghost_read_gpr_explicit(struct ghost_registers *st, int n)
 {
 	ghost_assert(0 <= n && n < 31);
 	ghost_spec_assert(st->gprs[n].status == GHOST_PRESENT);
 	return st->gprs[n].value;
 }
 
-void ghost_write_gpr_explicit(struct ghost_registers *st, int n, u64 value)
+static void ghost_write_gpr_explicit(struct ghost_registers *st, int n, u64 value)
 {
 	ghost_assert(0 <= n && n < 31);
 	st->gprs[n].status = GHOST_PRESENT;
 	st->gprs[n].value = value;
 }
 
-u64 ghost_read_sysreg_explicit(struct ghost_registers *st, enum ghost_sysreg n)
+static u64 ghost_read_sysreg_explicit(struct ghost_registers *st, enum ghost_sysreg n)
 {
 	ghost_assert(0 <= n && n < NR_GHOST_SYSREGS);
 	ghost_spec_assert(st->sysregs[n].status == GHOST_PRESENT);
 	return st->sysregs[n].value;
 }
 
-void ghost_write_sysreg_explicit(struct ghost_registers *st, enum ghost_sysreg n, u64 value)
+static void ghost_write_sysreg_explicit(struct ghost_registers *st, enum ghost_sysreg n, u64 value)
 {
 	ghost_assert(0 <= n && n < NR_GHOST_SYSREGS);
 	st->sysregs[n].status = GHOST_PRESENT;
 	st->sysregs[n].value = value;
 }
 
-u64 ghost_read_el2_sysreg_explicit(struct ghost_registers *st, enum ghost_el2_sysreg n)
+static u64 ghost_read_el2_sysreg_explicit(struct ghost_registers *st, enum ghost_el2_sysreg n)
 {
 	ghost_assert(0 <= n && n < NR_GHOST_EL2_SYSREGS);
 	ghost_spec_assert(st->el2_sysregs[n].status == GHOST_PRESENT);
 	return st->el2_sysregs[n].value;
 }
 
-void ghost_write_el2_sysreg_explicit(struct ghost_registers *st, enum ghost_el2_sysreg n, u64 value)
+static void ghost_write_el2_sysreg_explicit(struct ghost_registers *st, enum ghost_el2_sysreg n, u64 value)
 {
 	ghost_assert(0 <= n && n < NR_GHOST_EL2_SYSREGS);
 	st->el2_sysregs[n].status = GHOST_PRESENT;
@@ -99,16 +99,19 @@ DEFINE_PER_CPU(bool, ghost_machinery_enabled_this_hypercall);
 DEFINE_PER_CPU(bool, ghost_check_this_hypercall);
 DEFINE_PER_CPU(bool, ghost_print_this_hypercall);
 
+// EXPORTED ghost_spec.h
 bool ghost_machinery_enabled(void)
 {
 	return __this_cpu_read(ghost_machinery_enabled_this_hypercall);
 }
 
+// EXPORTED ghost_spec.h
 bool ghost_exec_enabled(void)
 {
 	return __this_cpu_read(ghost_check_this_hypercall);
 }
 
+// EXPORTED ghost_spec.h
 void ghost_enable_this_cpu(void)
 {
 	bool all_finalized;
@@ -126,22 +129,25 @@ void ghost_enable_this_cpu(void)
 
 DEFINE_HYP_SPINLOCK(ghost_vms_hyp_lock);
 
+// EXPORTED ghost_spec.h
 void ghost_lock_vms(void)
 {
 	hyp_spin_lock(&ghost_vms_hyp_lock);
 }
 
+// EXPORTED ghost_spec.h
 void ghost_unlock_vms(void)
 {
 	hyp_spin_unlock(&ghost_vms_hyp_lock);
 }
 
-
+// EXPORTED ghost_spec.h
 void ghost_lock_pkvm_vm_table(void)
 {
 	hyp_spin_lock(&vm_table_lock);
 }
 
+// EXPORTED ghost_spec.h
 void ghost_unlock_pkvm_vm_table(void)
 {
 	hyp_spin_unlock(&vm_table_lock);
@@ -150,6 +156,7 @@ void ghost_unlock_pkvm_vm_table(void)
 
 /********************************************/
 // ghost per-cpu state helpers
+// EXPORTED ghost_spec.h
 struct ghost_local_state *ghost_this_cpu_local_state(struct ghost_state *g)
 {
 	struct ghost_local_state *st = g->cpu_local_state[hyp_smp_processor_id()];
@@ -157,14 +164,19 @@ struct ghost_local_state *ghost_this_cpu_local_state(struct ghost_state *g)
 	return st;
 }
 
+// EXPORTED ghost_spec.h
 struct ghost_loaded_vcpu *this_cpu_ghost_loaded_vcpu(struct ghost_state *g)
 {
 	return &ghost_this_cpu_local_state(g)->loaded_hyp_vcpu;
 }
+
+// EXPORTED ghost_spec.h
 struct ghost_registers *this_cpu_ghost_registers(struct ghost_state *g)
 {
 	return &ghost_this_cpu_local_state(g)->regs;
 }
+
+// EXPORTED ghost_spec.h
 struct ghost_running_state *this_cpu_ghost_run_state(struct ghost_state *g)
 {
 	return &ghost_this_cpu_local_state(g)->cpu_state;
@@ -176,6 +188,7 @@ struct ghost_running_state *this_cpu_ghost_run_state(struct ghost_state *g)
 
 DEFINE_PER_CPU(struct ghost_call_data, gs_call_data);  // thread-local implementation-seen values during call
 
+// EXPORTED ghost_call_data.h
 void ghost_clear_call_data(void)
 {
 	struct ghost_call_data *call = this_cpu_ptr(&gs_call_data);
@@ -185,6 +198,7 @@ void ghost_clear_call_data(void)
 	call->at_translations.len = 0;
 }
 
+// EXPORTED ghost_call_data.h
 void ghost_relaxed_reads_insert(struct ghost_relaxed_reads *rs, u64 phys_addr, u8 width, u64 value)
 {
 	// quick sanity check: non-overlapping with any that already exist in the list
@@ -204,6 +218,7 @@ void ghost_relaxed_reads_insert(struct ghost_relaxed_reads *rs, u64 phys_addr, u
 	};
 }
 
+// EXPORTED ghost_call_data.h
 u64 ghost_relaxed_reads_get(struct ghost_relaxed_reads *rs, u64 phys_addr, u8 width)
 {
 	int i;
@@ -219,11 +234,13 @@ u64 ghost_relaxed_reads_get(struct ghost_relaxed_reads *rs, u64 phys_addr, u8 wi
 	unreachable();
 }
 
+// EXPORTED ghost_call_data.h
 void ghost_memcache_donations_insert(struct ghost_memcache_donations *ds, u64 pfn) {
 	ghost_assert(ds->len < GHOST_MAX_MEMCACHE_DONATIONS);
 	ds->pages[ds->len++] = pfn;
 }
 
+// EXPORTED ghost_call_data.h
 void ghost_at_translations_insert_fail(struct ghost_at_translations *ts, u64 va)
 {
 	ghost_assert(ts->len < GHOST_MAX_AT_TRANSLATIONS);
@@ -233,6 +250,7 @@ void ghost_at_translations_insert_fail(struct ghost_at_translations *ts, u64 va)
 	};
 }
 
+// EXPORTED ghost_call_data.h
 void ghost_at_translations_insert_success(struct ghost_at_translations *ts, u64 va, u64 ipa)
 {
 	ghost_assert(ts->len < GHOST_MAX_AT_TRANSLATIONS);
@@ -243,6 +261,7 @@ void ghost_at_translations_insert_success(struct ghost_at_translations *ts, u64 
 	};
 }
 
+// EXPORTED ghost_call_data.h
 struct ghost_at_translation *ghost_at_translations_get(struct ghost_at_translations *ts, u64 va)
 {
 	for (int i = 0; i < ts->len; i++) {
@@ -317,19 +336,19 @@ static inline phys_addr_t phys_of_host_va(const struct ghost_state *g, host_va_t
 
 
 // adapted from mem_protect.c to use the hyp_memory map
-bool ghost_addr_is_memory(struct ghost_state *g, phys_addr_t phys)
-{
-	struct maplet_target t;
-	if ( !mapping_lookup(phys, g->globals.hyp_memory, &t) ) {
-		return false;
-	}
-	ghost_assert(t.kind == MAPLET_MEMBLOCK);
-	return true;
-}
+// bool ghost_addr_is_memory(struct ghost_state *g, phys_addr_t phys)
+// {
+// 	struct maplet_target t;
+// 	if ( !mapping_lookup(phys, g->globals.hyp_memory, &t) ) {
+// 		return false;
+// 	}
+// 	ghost_assert(t.kind == MAPLET_MEMBLOCK);
+// 	return true;
+// }
 
 
 // adapted from mem_protect.c to use the hyp_memory map
-bool ghost_addr_is_allowed_memory(struct ghost_state *g, phys_addr_t phys)
+static bool ghost_addr_is_allowed_memory(struct ghost_state *g, phys_addr_t phys)
 {
 	struct maplet_target t;
 	if (!mapping_lookup(phys, g->globals.hyp_memory, &t))
@@ -454,7 +473,7 @@ static inline u64 calculate_reset_mpidr(int vcpu_id)
 }
 
 // TODO: pointer authentication, SVE regs
-void init_vcpu_sysregs(struct ghost_state *g, int vcpu_idx, struct ghost_registers *regs, bool is_protected)
+static void init_vcpu_sysregs(struct ghost_state *g, int vcpu_idx, struct ghost_registers *regs, bool is_protected)
 {
 	ghost_write_el2_sysreg_explicit(regs, GHOST_SYSREG(CPTR_EL2), CPTR_EL2_DEFAULT);
 	ghost_write_el2_sysreg_explicit(regs, GHOST_SYSREG(MDCR_EL2), 0);
@@ -529,7 +548,7 @@ static void copy_registers_to_host(struct ghost_state *g)
 // 	copy_abstraction_regs(&vcpu->regs, &ghost_this_cpu_local_state(g)->regs);
 // }
 
-bool compute_new_abstract_state_handle___pkvm_host_share_hyp(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call)
+static bool compute_new_abstract_state_handle___pkvm_host_share_hyp(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call)
 {
 	u64 pfn = ghost_read_gpr(g0, 1);
 	phys_addr_t phys = hyp_pfn_to_phys(pfn); // ((phys_addr_t)((pfn) << PAGE_SHIFT)) // pure
@@ -612,7 +631,7 @@ out:
 
 
 /* pkvm_host_unshare_hyp(pfn) */
-bool compute_new_abstract_state_handle___pkvm_host_unshare_hyp(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call)
+static bool compute_new_abstract_state_handle___pkvm_host_unshare_hyp(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call)
 {
 	u64 pfn = ghost_read_gpr(g0, 1);
 	phys_addr_t phys = hyp_pfn_to_phys(pfn); // ((phys_addr_t)((pfn) << PAGE_SHIFT)) // pure
@@ -672,7 +691,7 @@ out:
 	return true;
 }
 
-bool compute_new_abstract_state_handle___pkvm_host_reclaim_page(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call)
+static bool compute_new_abstract_state_handle___pkvm_host_reclaim_page(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call)
 {
 	int ret = 0;
 	u64 pfn = ghost_read_gpr(g0, 1);
@@ -734,7 +753,7 @@ out:
 /**
  * compute the new abstract ghost_state from a struct ghost_call_data *call = pkvm_host_map_guest(host_pfn, guest_gfn)
  */
-bool compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call) {
+static bool compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call) {
 	int ret;
 
 	u64 pfn = ghost_read_gpr(g0, 1);
@@ -883,7 +902,7 @@ out:
 	return true;
 }
 
-bool compute_new_abstract_state_handle___pkvm_vcpu_load(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call) {
+static bool compute_new_abstract_state_handle___pkvm_vcpu_load(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call) {
 	pkvm_handle_t vm_handle = ghost_read_gpr(g0, 1);
 	unsigned int vcpu_idx = ghost_read_gpr(g0, 2);
 
@@ -947,7 +966,7 @@ out:
 	return true;
 }
 
-bool compute_new_abstract_state_handle___pkvm_vcpu_put(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call)
+static bool compute_new_abstract_state_handle___pkvm_vcpu_put(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call)
 {
 	struct ghost_loaded_vcpu *loaded_vcpu_info = this_cpu_ghost_loaded_vcpu(g0);
 
@@ -996,7 +1015,7 @@ out:
 	return true;
 }
 
-bool compute_new_abstract_state_handle___kvm_vcpu_run_begin(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call)
+static bool compute_new_abstract_state_handle___kvm_vcpu_run_begin(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call)
 {
 	struct ghost_loaded_vcpu *loaded_vcpu_info = this_cpu_ghost_loaded_vcpu(g0);
 
@@ -1034,7 +1053,7 @@ out:
 
 // performs the mapping checks of hyp_pin_shared_mem (from mem_protect.c)
 // @from and @to are host_va
-bool ghost_hyp_check_host_shared_mem(struct ghost_state *g, host_va_t from, host_va_t to)
+static bool ghost_hyp_check_host_shared_mem(struct ghost_state *g, host_va_t from, host_va_t to)
 {
 	u64 start = ALIGN_DOWN((u64)from, PAGE_SIZE);
 	u64 end = PAGE_ALIGN((u64)to);
@@ -1103,7 +1122,7 @@ static size_t ghost_pkvm_get_last_ran_size_in_bytes(struct ghost_state *g)
 	return array_size(hyp_nr_cpus, sizeof(int));
 }
 
-bool compute_new_abstract_state_handle___pkvm_init_vm(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call) {
+static bool compute_new_abstract_state_handle___pkvm_init_vm(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call) {
 	int ret;
 	size_t vm_size, pgd_size, last_ran_size;
 
@@ -1266,7 +1285,7 @@ out:
 		(3) (optional) [L_host L_hyp  hyp_pin_shared_mem(sve_state) U_hyp U_host]
 	U_vm_table]
  */
-bool compute_new_abstract_state_handle___pkvm_init_vcpu(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call)
+static bool compute_new_abstract_state_handle___pkvm_init_vcpu(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call)
 {
 	int ret = 0;
 	int vcpu_idx;
@@ -1350,7 +1369,7 @@ out:
 }
 
 
-bool compute_new_abstract_state_handle___pkvm_teardown_vm(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call)
+static bool compute_new_abstract_state_handle___pkvm_teardown_vm(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call)
 {
 	int ret = 0;
 	pkvm_handle_t vm_handle = ghost_read_gpr(g0, 1);
@@ -1526,7 +1545,7 @@ out:
 	return true;
 }
 
-bool compute_new_abstract_state_handle_host_hcall(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call)
+static bool compute_new_abstract_state_handle_host_hcall(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call)
 {
 	bool new_state_computed = false;
 	GHOST_LOG_CONTEXT_ENTER();
@@ -1584,7 +1603,7 @@ bool compute_new_abstract_state_handle_host_hcall(struct ghost_state *g1, struct
 	return new_state_computed;
 }
 
-u64 ghost_esr_ec_low_to_cur(u64 esr)
+static u64 ghost_esr_ec_low_to_cur(u64 esr)
 {
 	u64 ec = ESR_ELx_EC(esr);
 	switch (ec) {
@@ -1607,7 +1626,7 @@ u64 ghost_esr_ec_low_to_cur(u64 esr)
 // of the registers as the pKVM implementation.
 // What we should instead do is (symbolically) run the ASL AArch64.DataAbort with the right arguments
 // and collect the set of register writes it does and use that as a kind of spec.
-void ghost_inject_abort(struct ghost_state *g1, struct ghost_state *g0)
+static void ghost_inject_abort(struct ghost_state *g1, struct ghost_state *g0)
 {
 	u64 spsr_el2 = ghost_read_el2_sysreg(g0, SPSR_EL2);
 	u64 esr_el2 = ghost_read_el2_sysreg(g0, ESR_EL2);
@@ -1643,7 +1662,7 @@ void ghost_inject_abort(struct ghost_state *g1, struct ghost_state *g0)
 // TODO: move this somewhere more sensible
 #define HPFAR_FIPA_SHIFT UL(4)
 
-bool compute_new_abstract_state_handle_host_mem_abort(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call)
+static bool compute_new_abstract_state_handle_host_mem_abort(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call)
 {
 	u64 esr = ghost_read_el2_sysreg(g0, ESR_EL2);
 	u64 hpfar;
@@ -1701,7 +1720,7 @@ static void ghost_restore_host_context(struct ghost_state *g1, struct ghost_stat
 	copy_abstraction_regs(&ghost_this_cpu_local_state(g1)->regs, &ghost_this_cpu_local_state(g0)->host_regs.regs);
 }
 
-bool compute_new_abstract_state_pkvm_memshare(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call)
+static bool compute_new_abstract_state_pkvm_memshare(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call)
 {
 	int ret = 0;
 
@@ -1821,7 +1840,7 @@ out_guest_err:
 	return true;
 }
 
-bool compute_new_abstract_state_pkvm_memunshare(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call)
+static bool compute_new_abstract_state_pkvm_memunshare(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call)
 {
 	int ret = 0;
 
@@ -1935,7 +1954,7 @@ out_guest_err:
 	return true;
 }
 
-bool compute_new_abstract_state_handle_guest_hcall(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call)
+static bool compute_new_abstract_state_handle_guest_hcall(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call)
 {
 	bool new_state_computed = false;
 	GHOST_LOG_CONTEXT_ENTER();
@@ -1974,7 +1993,7 @@ bool compute_new_abstract_state_handle_guest_hcall(struct ghost_state *g1, struc
 }
 
 
-bool compute_new_abstract_state_handle_guest_mem_abort(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call)
+static bool compute_new_abstract_state_handle_guest_mem_abort(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call)
 {
 	/* guest mem abort = return back to, and then ERET from, vcpu_run */
 	struct ghost_loaded_vcpu *loaded_vcpu_info = this_cpu_ghost_loaded_vcpu(g0);
@@ -2072,7 +2091,7 @@ static bool compute_new_abstract_state_il(struct ghost_state *post, struct ghost
 	return false;
 }
 
-bool compute_new_abstract_state_for_exception(struct ghost_state *post, struct ghost_state *pre, struct ghost_call_data *call)
+static bool compute_new_abstract_state_for_exception(struct ghost_state *post, struct ghost_state *pre, struct ghost_call_data *call)
 {
 	bool new_state_computed = false;
 	GHOST_LOG_CONTEXT_ENTER();
@@ -2391,6 +2410,7 @@ print_exit:
 }
 
 
+// EXPORTED ghost_spec.h
 void ghost_record_pre(struct kvm_cpu_context *ctxt, u64 guest_exit_code)
 {
 	tag_exception_entry(ctxt, guest_exit_code);
@@ -2414,6 +2434,7 @@ void ghost_record_pre(struct kvm_cpu_context *ctxt, u64 guest_exit_code)
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
+// EXPORTED ghost_spec.h
 void ghost_post(struct kvm_cpu_context *ctxt)
 {
 	bool new_state_computed = false;
