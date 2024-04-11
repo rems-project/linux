@@ -2,8 +2,14 @@
 #include <hyp/ghost/ghost_extra_debug-pl011.h>
 #include <nvhe/ghost/ghost_misc.h>
 
+#include <nvhe/ghost/ghost_control.h>
 #include <nvhe/ghost/ghost_state.h>
+#include <nvhe/ghost/ghost_types.h>
 #include <nvhe/ghost/ghost_spec.h>
+
+#ifdef CONFIG_NVHE_GHOST_DIFF
+#include <nvhe/ghost/ghost_abstraction_diff.h>
+#endif /* CONFIG_NVHE_GHOST_DIFF */
 
 #pragma GCC diagnostic ignored "-Wdeclaration-after-statement"
 
@@ -16,7 +22,7 @@ extern struct pkvm_hyp_vm **vm_table;
 
 
 //TODO BEGIN VM objects memory management
-static void make_abstraction_vms(struct ghost_vms *vms)
+void make_abstraction_vms(struct ghost_vms *vms)
 {
 	ghost_assert(!vms->present);
 
@@ -29,7 +35,8 @@ static void make_abstraction_vms(struct ghost_vms *vms)
 	vms->table_data.present = false;
 }
 
-static struct ghost_vm_slot *__ghost_vm_or_free_slot_from_handle(struct ghost_vms *vms, pkvm_handle_t handle) {
+struct ghost_vm_slot *__ghost_vm_or_free_slot_from_handle(struct ghost_vms *vms, pkvm_handle_t handle)
+{
 	ghost_assert_vms_locked();
 
 	if (!vms->present)
@@ -53,6 +60,97 @@ static struct ghost_vm_slot *__ghost_vm_or_free_slot_from_handle(struct ghost_vm
 	return free_slot;
 }
 
+// struct ghost_vms;
+struct ghost_vm *ghost_vms_get(struct ghost_vms *vms, pkvm_handle_t handle)
+{
+	ghost_assert_vms_locked();
+	struct ghost_vm_slot *slot = __ghost_vm_or_free_slot_from_handle(vms, handle);
+	if (slot->exists)
+		return slot->vm;
+	return NULL;
+}
+
+struct ghost_vm *ghost_vms_alloc(struct ghost_vms *vms, pkvm_handle_t handle)
+{
+	ghost_assert_vms_locked();
+
+	struct ghost_vm_slot *slot = __ghost_vm_or_free_slot_from_handle(vms, handle);
+
+	/* check for Out-of-Memory */
+	if (!slot)
+		return NULL;
+
+	if (!slot->exists) {
+		slot->vm = malloc_or_die(sizeof(struct ghost_vm));
+		slot->exists = true;
+		slot->handle = handle;
+
+		/* just in case, make sure the two sides are marked not present */
+		slot->vm->vm_locked.present = false;
+		slot->vm->vm_table_locked.present = false;
+
+		memset(&slot->vm->vm_teardown_data, 0, sizeof(struct ghost_vm_teardown_data));
+		return slot->vm;
+	} else {
+		/* shouldn't try alloc() a new ghost vm if one already exists for that handle. */
+		ghost_assert(false);
+	}
+}
+// TODO: void __check_abstraction_vm_contained_in(struct ghost_vm *vm, struct ghost_vms *vms, enum vm_field_owner owner)
+// TODO: void ghost_vms_free(struct ghost_vms *vms, pkvm_handle_t handle)
+
+bool ghost_vms_is_valid_handle(struct ghost_vms *vms, pkvm_handle_t handle)
+{
+	ghost_assert_vms_locked();
+	ghost_assert(vms->present);
+	struct ghost_vm *vm = ghost_vms_get(vms, handle);
+	return vm != NULL;
+}
+
+
+// TODO CLEARING FUNCTIONS
+void clear_abstract_pgtable(abstract_pgtable *ap)
+{
+	free_mapping(ap->mapping);
+	ghost_pfn_set_clear(&ap->table_pfns);
+}
+
+void clear_abstraction_pkvm(struct ghost_state *g)
+{
+	if (g->pkvm.present) {
+		clear_abstract_pgtable(&g->pkvm.pkvm_abstract_pgtable);
+		g->pkvm.present = false;
+	}
+}
+
+void clear_abstraction_host(struct ghost_state *g)
+{
+	if (g->host.present) {
+		free_mapping(g->host.host_abstract_pgtable_annot);
+		free_mapping(g->host.host_abstract_pgtable_shared);
+		clear_abstract_pgtable(&g->host.host_concrete_pgtable);
+		ghost_pfn_set_clear(&g->host.reclaimable_pfn_set);
+		ghost_pfn_set_clear(&g->host.need_poisoning_pfn_set);
+		g->host.present = false;
+	}
+}
+
+void clear_abstraction_regs(struct ghost_state *g)
+{
+	this_cpu_ghost_registers(g)->present = false;
+}
+
+
+/**
+ * ghost_vms_free() - Remove a previously emptied VM from the table
+ *
+ * @vms: ghost vm table
+ * @handle: opaque pkvm-defined handle for the VM to remove
+ *
+ * Marks any slot (if it exists) for that VM as empty.
+ *
+ * Must own the ghost vms lock
+ */
 static void ghost_vms_free(struct ghost_vms *vms, pkvm_handle_t handle)
 {
 	struct ghost_vm_slot *slot = __ghost_vm_or_free_slot_from_handle(vms, handle);
@@ -68,6 +166,35 @@ static void ghost_vms_free(struct ghost_vms *vms, pkvm_handle_t handle)
 	slot->exists = false;
 }
 
+static void ghost_vm_clear_slot(struct ghost_vm_slot *slot)
+{
+	ghost_assert_vms_locked();
+	if (slot->exists) {
+		// if the slot says it has a vm, then it must have one.
+		ghost_assert(slot->vm);
+
+		slot->exists = false;
+
+		/* either side might be present, or both */
+
+		if (slot->vm->vm_locked.present)
+			clear_abstract_pgtable(&slot->vm->vm_locked.vm_abstract_pgtable);
+
+		if (slot->vm->vm_table_locked.present) {
+			for (int i = 0; i < KVM_MAX_VCPUS; i++) {
+				if (slot->vm->vm_table_locked.vcpu_refs[i].vcpu) {
+					free(slot->vm->vm_table_locked.vcpu_refs[i].vcpu);
+					slot->vm->vm_table_locked.vcpu_refs[i].vcpu = NULL;
+				}
+			}
+		}
+
+		free(slot->vm);
+		slot->vm = NULL;
+	}
+}
+
+
 static void ghost_vms_partial_vm_try_free_slot(struct ghost_state *g, struct ghost_vm *vm)
 {
 	ghost_assert(vm);
@@ -79,111 +206,95 @@ static void ghost_vms_partial_vm_try_free_slot(struct ghost_state *g, struct gho
 	ghost_vms_free(&g->vms, vm->pkvm_handle);
 }
 
+void clear_abstraction_vm_partial(struct ghost_state *g, pkvm_handle_t handle, enum vm_field_owner owner)
+{
+	ghost_assert_vms_locked();
+	struct ghost_vm *vm = ghost_vms_get(&g->vms, handle);
+
+	/* if not there, nothing to do */
+	if (!vm)
+		return;
+
+	if (owner & VMS_VM_OWNED) {
+		if (vm->vm_locked.present)
+			clear_abstract_pgtable(&vm->vm_locked.vm_abstract_pgtable);
+
+
+		vm->vm_locked.present = false;
+	}
+
+	if (owner & VMS_VM_TABLE_OWNED) {
+		vm->vm_table_locked.present = false;
+		for (int i = 0; i < KVM_MAX_VCPUS; i++) {
+			if (vm->vm_table_locked.vcpu_refs[i].vcpu) {
+				free(vm->vm_table_locked.vcpu_refs[i].vcpu);
+				vm->vm_table_locked.vcpu_refs[i].vcpu = NULL;
+			}
+		}
+	}
+
+	ghost_vms_partial_vm_try_free_slot(g, vm);
+}
+
+void clear_abstraction_vms_partial(struct ghost_state *g, enum vm_field_owner owner)
+{
+	if (!g->vms.present)
+		return;
+
+	for (int i=0; i < KVM_MAX_PVMS; i++) {
+		struct ghost_vm_slot *slot = &g->vms.table[i];
+		clear_abstraction_vm_partial(g, slot->handle, owner);
+	}
+}
+
+void clear_abstraction_vms(struct ghost_state *g)
+{
+	int i;
+	g->vms.present = false;
+	g->vms.table_data.present = false;
+	for (i=0; i<KVM_MAX_PVMS; i++) {
+		ghost_vm_clear_slot(&g->vms.table[i]);
+	}
+}
+
+void clear_abstraction_all(struct ghost_state *g)
+{
+	clear_abstraction_pkvm(g);
+	clear_abstraction_host(g);
+	clear_abstraction_regs(g);
+	clear_abstraction_vms(g);
+	for (int i=0;i <NR_CPUS; i++) {
+		struct ghost_local_state *st = g->cpu_local_state[i];
+		if (st) {
+			if (st->present) {
+				if (st->loaded_hyp_vcpu.loaded) {
+					ghost_assert(st->loaded_hyp_vcpu.loaded_vcpu);
+					free(st->loaded_hyp_vcpu.loaded_vcpu);
+					st->loaded_hyp_vcpu.loaded_vcpu = NULL;
+				}
+				st->present = false;
+			}
+		}
+	}
+}
+
+void clear_abstraction_thread_local(void)
+{
+	ghost_lock_maplets();
+	ghost_lock_vms();
+	clear_abstraction_all(this_cpu_ptr(&gs_recorded_pre));
+	clear_abstraction_all(this_cpu_ptr(&gs_recorded_post));
+	clear_abstraction_all(this_cpu_ptr(&gs_computed_post));
+	ghost_unlock_vms();
+	ghost_unlock_maplets();
+}
+
+
 //TODO END VM objects memory management
 
-
-// TODO[doc] ghost_register
-static bool check_abstraction_equals_register(struct ghost_register *r1, struct ghost_register *r2, bool todo_warnonly)
-{
-	bool ret = true;
-	GHOST_LOG_CONTEXT_ENTER();
-	ghost_assert(r1->status == GHOST_PRESENT && r2->status == GHOST_PRESENT);
-	if (todo_warnonly) {
-		if (r1->value != r2->value)
-			ret = false;
-	} else {
-		ghost_spec_assert(r1->value == r2->value);
-	}
-	GHOST_LOG_CONTEXT_EXIT();
-	return ret;
-}
-
-static void check_abstraction_refined_register(int idx, struct ghost_register *gc_reg, struct ghost_register *gr_post_reg, struct ghost_register *gr_pre_reg)
-{
-	GHOST_LOG_CONTEXT_ENTER();
-
-	//TODO: GHOST_LOG(gc_reg->status, enum ghost_status);
-	//TODO: GHOST_LOG(gr_post_reg->status, enum ghost_status);
-
-	if (gr_post_reg->status == GHOST_PRESENT && gc_reg->status == GHOST_PRESENT) {
-		GHOST_LOG(idx, u32);
-		GHOST_INFO("gc_reg");
-		GHOST_INFO("gr_post_pre");
-		if(!check_abstraction_equals_register(gc_reg, gr_post_reg, /*TODO*/true))
-			ghost_printf("\x1b[30;41mWARNING register X%d mismatch ==> computed: %lx -- post: %lx\x1b[0m\n", idx, gc_reg->value, gr_post_reg->value);
-	}
-	else if (gr_post_reg->status == GHOST_ABSENT && gc_reg->status == GHOST_PRESENT) {
-		ghost_assert(false);
-	}
-	else if (gr_post_reg->status == GHOST_PRESENT && gc_reg->status == GHOST_ABSENT) {
-		GHOST_LOG(idx, u32);
-		GHOST_INFO("gr_pre_reg");
-		GHOST_INFO("gr_post_reg");
-		ghost_assert(gr_pre_reg->status == GHOST_PRESENT);
-		check_abstraction_equals_register(gr_pre_reg, gr_post_reg, false);
-	}
-
-	GHOST_LOG_CONTEXT_EXIT();
-}
-
-
-// TODO[doc] struct ghost_registers;
-static void check_abstraction_refined_registers(struct ghost_registers *gc_regs, struct ghost_registers *gr_post_regs, struct ghost_registers *gr_pre_regs)
-{
-	GHOST_LOG_CONTEXT_ENTER();
-	
-	GHOST_INFO("gprs");
-	for (int i=0; i<31; i++) {
-		check_abstraction_refined_register(i, &gc_regs->gprs[i], &gr_post_regs->gprs[i], &gr_pre_regs->gprs[i]);
-	}
-
-	// TODO EL0/1 and EL2 sysregs
-
-	GHOST_LOG_CONTEXT_EXIT();
-}
-
-static void check_abstraction_equals_reg(struct ghost_registers *r1, struct ghost_registers *r2, bool check_sysregs)
-{
-	GHOST_LOG_CONTEXT_ENTER();
-	for (int i=0; i<31; i++) {
-		u64 value1 = r1->gprs[i].value;
-		u64 value2 = r2->gprs[i].value;
-		if (r1->gprs[i].status != r2->gprs[i].status || value1 != value2) {
-			GHOST_LOG(i, u64);
-			GHOST_LOG(value1, u64);
-			GHOST_LOG(value2, u64);
-			GHOST_WARN("gpr register mismatch");
-			ghost_spec_assert(false);
-		}
-	}
-	if (check_sysregs) {
-		for (int i=0; i<NR_GHOST_SYSREGS; i++) {
-			u64 value1 = r1->sysregs[i].value;
-			u64 value2 = r2->sysregs[i].value;
-			if (r1->sysregs[i].status != r2->sysregs[i].status || value1 != value2) {
-				GHOST_LOG(i, u64);
-				GHOST_LOG(GHOST_SYSREGS_NAMES[i], str);
-				GHOST_LOG(value1, u64);
-				GHOST_LOG(value2, u64);
-				GHOST_WARN("EL0/1 sysreg register mismatch");
-				ghost_spec_assert(false);
-			}
-		}
-		for (int i=0; i<NR_GHOST_EL2_SYSREGS; i++) {
-			u64 value1 = r1->sysregs[i].value;
-			u64 value2 = r2->sysregs[i].value;
-			if (r1->sysregs[i].status != r2->sysregs[i].status || value1 != value2) {
-				GHOST_LOG(i, u64);
-				GHOST_LOG(GHOST_EL2_SYSREGS_NAMES[i], str);
-				GHOST_LOG(value1, u64);
-				GHOST_LOG(value2, u64);
-				GHOST_WARN("EL2 sysreg register mismatch");
-				ghost_spec_assert(false);
-			}
-		}
-	}
-	GHOST_LOG_CONTEXT_EXIT();
-}
+/*
+ * Copying
+ */
 
 void copy_abstraction_regs(struct ghost_registers *g_tgt, struct ghost_registers *g_src)
 {
@@ -192,23 +303,86 @@ void copy_abstraction_regs(struct ghost_registers *g_tgt, struct ghost_registers
 	memcpy(g_tgt, g_src, sizeof(struct ghost_registers));
 }
 
-// TODO: struct ghost_registers *this_cpu_ghost_registers(struct ghost_state *g)
-static void ghost_dump_regs(struct ghost_registers *regs, u64 i)
+void copy_abstraction_constants(struct ghost_state *g_tgt, struct ghost_state *g_src)
 {
-	ghost_printf("%Iregs[cpu:%d]:<TODO>\n", i, hyp_smp_processor_id());
+	g_tgt->globals.hyp_nr_cpus = g_src->globals.hyp_nr_cpus;
+	g_tgt->globals.hyp_physvirt_offset = g_src->globals.hyp_physvirt_offset;
+	g_tgt->globals.tag_lsb = g_src->globals.tag_lsb;
+	g_tgt->globals.tag_val = g_src->globals.tag_val;
+	g_tgt->globals.hyp_memory = mapping_copy(g_src->globals.hyp_memory);
 }
 
+void copy_abstraction_host(struct ghost_state *g_tgt, struct ghost_state *g_src)
+{
+	ghost_assert_maplets_locked();
+	ghost_assert(g_src->host.present);
+	clear_abstraction_host(g_tgt);
 
-// TODO[doc]: struct ghost_vcpu;
-static void check_abstraction_equals_vcpu(struct ghost_vcpu *vcpu1, struct ghost_vcpu *vcpu2)
+	g_tgt->host.host_abstract_pgtable_annot = mapping_copy(g_src->host.host_abstract_pgtable_annot);
+	g_tgt->host.host_abstract_pgtable_shared = mapping_copy(g_src->host.host_abstract_pgtable_shared);
+	ghost_pfn_set_copy(&g_tgt->host.reclaimable_pfn_set, &g_src->host.reclaimable_pfn_set);
+	ghost_pfn_set_copy(&g_tgt->host.need_poisoning_pfn_set, &g_src->host.need_poisoning_pfn_set);
+	abstract_pgtable_copy(&g_tgt->host.host_concrete_pgtable, &g_src->host.host_concrete_pgtable);
+
+	g_tgt->host.present = g_src->host.present;
+}
+
+void copy_abstraction_pkvm(struct ghost_state *g_tgt, struct ghost_state *g_src)
+{
+	ghost_assert_maplets_locked();
+	ghost_assert(g_src->pkvm.present);
+	clear_abstraction_pkvm(g_tgt);
+
+	abstract_pgtable_copy(&g_tgt->pkvm.pkvm_abstract_pgtable, &g_src->pkvm.pkvm_abstract_pgtable);
+
+	g_tgt->pkvm.present = g_src->pkvm.present;
+}
+
+void copy_abstraction_vm_partial(struct ghost_state *g_tgt, struct ghost_state *g_src, pkvm_handle_t handle, enum vm_field_owner owner)
 {
 	GHOST_LOG_CONTEXT_ENTER();
-	ghost_assert(vcpu1);
-	ghost_assert(vcpu2);
 
-	GHOST_SPEC_ASSERT_VAR_EQ(vcpu1->vcpu_index, vcpu2->vcpu_index, u64);
+	/* if the vms table isn't present in the target
+	 * which might be if it had been previously cleared
+	 * re-create a new one */
+	if (!g_tgt->vms.present)
+		make_abstraction_vms(&g_tgt->vms);
+
+	struct ghost_vm *src_vm = ghost_vms_get(&g_src->vms, handle);
+	ghost_assert(src_vm);
+
+	clear_abstraction_vm_partial(g_tgt, handle, owner);
+
+	struct ghost_vm *tgt_vm = ghost_vms_get(&g_tgt->vms, handle);
+	if (!tgt_vm) {
+		tgt_vm = ghost_vms_alloc(&g_tgt->vms, handle);
+		ghost_assert(tgt_vm);
+	}
+
+	ghost_vm_clone_into_partial(tgt_vm, src_vm, owner);
 	GHOST_LOG_CONTEXT_EXIT();
 }
+
+void copy_abstraction_vms_partial(struct ghost_state *g_tgt, struct ghost_state *g_src, enum vm_field_owner owner)
+{
+	ghost_assert_vms_locked();
+	ghost_assert(g_src->vms.present);
+
+	clear_abstraction_vms_partial(g_tgt, owner);
+
+	// for each VM, copy it.
+	for (int i=0; i<KVM_MAX_PVMS; i++) {
+		struct ghost_vm_slot *src_slot = &g_src->vms.table[i];
+
+		if (src_slot->exists) {
+			copy_abstraction_vm_partial(g_tgt, g_src, src_slot->handle, owner);
+		}
+	}
+
+	if (owner & VMS_VM_TABLE_OWNED)
+		g_tgt->vms.table_data = g_src->vms.table_data;
+}
+
 void ghost_vcpu_clone_into(struct ghost_vcpu *dest, struct ghost_vcpu *src)
 {
 	ghost_assert(src);
@@ -218,124 +392,30 @@ void ghost_vcpu_clone_into(struct ghost_vcpu *dest, struct ghost_vcpu *src)
 	ghost_pfn_set_copy(&dest->recorded_memcache_pfn_set, &src->recorded_memcache_pfn_set);
 }
 
-
-// TODO[doc]: struct ghost_vcpu_reference;
-static void check_abstraction_equals_vcpu_reference(struct ghost_vcpu_reference *vcpu_ref1, struct ghost_vcpu_reference *vcpu_ref2)
+void copy_abstraction_loaded_vcpu(struct ghost_loaded_vcpu *tgt, struct ghost_loaded_vcpu *src)
 {
-	GHOST_LOG_CONTEXT_ENTER();
-	ghost_assert(vcpu_ref1);
-	ghost_assert(vcpu_ref2);
-
-	GHOST_SPEC_ASSERT_VAR_EQ(vcpu_ref1->initialised, vcpu_ref2->initialised, bool);
-	GHOST_SPEC_ASSERT_VAR_EQ(vcpu_ref1->loaded_somewhere, vcpu_ref2->loaded_somewhere, bool);
-	GHOST_LOG(vcpu_ref1->vcpu, u64);
-	GHOST_LOG(vcpu_ref2->vcpu, u64);
-
-	if (vcpu_ref1->initialised && vcpu_ref2->initialised)
-		if (vcpu_ref1->vcpu && vcpu_ref2->vcpu)
-			check_abstraction_equals_vcpu(vcpu_ref1->vcpu, vcpu_ref2->vcpu);
-	GHOST_LOG_CONTEXT_EXIT();
-}
-
-static void ghost_vcpu_reference_clone_into(struct ghost_vcpu_reference *dest, struct ghost_vcpu_reference *src)
-{
-	dest->initialised = src->initialised;
-	dest->loaded_somewhere = src->loaded_somewhere;
-	if (src->vcpu)
-		ghost_vcpu_clone_into(dest->vcpu, src->vcpu);
-	else
-		dest->vcpu = NULL;
-}
-
-
-// TODO[doc]: abstract_pgtable
-static void check_abstraction_refined_pgtable(abstract_pgtable *ap_spec, abstract_pgtable *ap_impl)
-{
-	GHOST_LOG_CONTEXT_ENTER();
-	check_mapping_equal(ap_spec->mapping, ap_impl->mapping);
-	ghost_pfn_set_assert_subseteq(&ap_impl->table_pfns, &ap_spec->table_pfns);
-	ghost_assert(ap_spec->root == ap_impl->root);
-	GHOST_LOG_CONTEXT_EXIT();
-}
-
-static void check_abstract_pgtable_equal(abstract_pgtable *ap1, abstract_pgtable *ap2, char *cmp_name, char* ap1_name, char* ap2_name, u64 indent)
-{
-	GHOST_LOG_CONTEXT_ENTER();
-	GHOST_LOG(cmp_name, str);
-	GHOST_LOG(ap1_name, str);
-	GHOST_LOG(ap2_name, str);
-
-	// assert mathematical spec equivalence
-	check_mapping_equal(ap1->mapping, ap2->mapping);
-
-	// implementation refinement check
-	ghost_pfn_set_assert_equal(&ap1->table_pfns, &ap2->table_pfns);
-	ghost_assert(ap1->root == ap2->root);
-
-	GHOST_LOG_CONTEXT_EXIT();
-}
-
-
-// TODO[doc]: struct ghost_vm;
-static void check_abstraction_refined_vm(struct ghost_vm *vm_spec, struct ghost_vm *vm_impl, enum vm_field_owner owner)
-{
-	GHOST_LOG_CONTEXT_ENTER();
-	// NOTE: we can't have this check on the lock here because some calls
-	// of the current function compare the thread-local pre/post states in
-	// which case we don't hold the lock.
-	//
-	// ghost_assert_vm_locked(vm1);
-
-	// if not for the same guest VM, then not equal
-
-	/* these fields are protected by the ghost_vms_lock and duplicated on the VM struct for ease of access */
-	GHOST_SPEC_ASSERT_VAR_EQ(vm_spec->pkvm_handle, vm_impl->pkvm_handle, u32);
-	GHOST_SPEC_ASSERT_VAR_EQ(vm_spec->vm_teardown_data.host_mc, vm_impl->vm_teardown_data.host_mc, u64);
-	GHOST_SPEC_ASSERT_VAR_EQ(vm_spec->vm_teardown_data.hyp_vm_struct_addr, vm_impl->vm_teardown_data.hyp_vm_struct_addr, u64);
-	GHOST_SPEC_ASSERT_VAR_EQ(vm_spec->vm_teardown_data.last_ran_addr, vm_impl->vm_teardown_data.last_ran_addr, u64);
-
-	ghost_safety_check(vm_spec->lock == vm_impl->lock);
-
-	if ((owner & VMS_VM_TABLE_OWNED) && vm_spec->vm_table_locked.present) {
-		if (!vm_impl->vm_table_locked.present)
-			GHOST_SPEC_FAIL("vm_impl->vm_table_locked missing");
-
-		GHOST_LOG(vm_spec->vm_table_locked.nr_vcpus, u64);
-		GHOST_LOG(vm_impl->vm_table_locked.nr_vcpus, u64);
-		ghost_spec_assert(vm_spec->vm_table_locked.nr_vcpus == vm_impl->vm_table_locked.nr_vcpus);
-
-		GHOST_LOG(vm_spec->vm_table_locked.nr_initialised_vcpus, u64);
-		GHOST_LOG(vm_impl->vm_table_locked.nr_initialised_vcpus, u64);
-		ghost_spec_assert(vm_spec->vm_table_locked.nr_initialised_vcpus == vm_impl->vm_table_locked.nr_initialised_vcpus);
-
-		for (int i=0; i < vm_spec->vm_table_locked.nr_vcpus; i++) {
-			GHOST_LOG_CONTEXT_ENTER_INNER("loop vcpu_refs");
-			GHOST_LOG_INNER("loop vcpu_refs", i, u32);
-			check_abstraction_equals_vcpu_reference(&vm_spec->vm_table_locked.vcpu_refs[i], &vm_impl->vm_table_locked.vcpu_refs[i]);
-			GHOST_LOG_CONTEXT_EXIT_INNER("loop vcpu_refs");
-		}
-
-		for (int i=0; i < vm_spec->vm_table_locked.nr_initialised_vcpus; i++) {
-			GHOST_LOG_CONTEXT_ENTER_INNER("loop vcpu_addrs");
-			GHOST_LOG_INNER("loop vcpu_addrs", i, u32);
-			GHOST_LOG_CONTEXT_ENTER(); // TODO: improve
-			GHOST_SPEC_ASSERT_VAR_EQ(vm_spec->vm_table_locked.vm_teardown_vcpu_addrs[i], vm_impl->vm_table_locked.vm_teardown_vcpu_addrs[i], u64);
-			GHOST_LOG_CONTEXT_EXIT();
-			GHOST_LOG_CONTEXT_EXIT_INNER("loop vcpu_addrs");
-		}
+	tgt->loaded = src->loaded;
+	tgt->vm_handle = src->vm_handle;
+	tgt->loaded_vcpu = NULL;
+	if (src->loaded_vcpu) {
+		ghost_assert(tgt->loaded_vcpu == NULL);
+		tgt->loaded_vcpu = malloc_or_die(sizeof(struct ghost_vcpu));
+		ghost_vcpu_clone_into(tgt->loaded_vcpu, src->loaded_vcpu);
 	}
-
-	if ((owner & VMS_VM_OWNED) && vm_spec->vm_locked.present) {
-		if (!vm_impl->vm_locked.present)
-			GHOST_SPEC_FAIL("vm_impl->vm_locked missing");
-
-		check_abstraction_refined_pgtable(&vm_spec->vm_locked.vm_abstract_pgtable, &vm_impl->vm_locked.vm_abstract_pgtable);
-	}
-
-	GHOST_LOG_CONTEXT_EXIT();
 }
 
-static void ghost_vm_clone_into_partial(struct ghost_vm *dest, struct ghost_vm *src, enum vm_field_owner owner)
+void copy_abstraction_local_state(struct ghost_local_state *l_tgt, struct ghost_local_state *l_src)
+{
+	ghost_assert(l_src->present);
+	l_tgt->present = true;
+	memcpy(&l_tgt->regs, &l_src->regs, sizeof(struct ghost_registers));
+	copy_abstraction_loaded_vcpu(&l_tgt->loaded_hyp_vcpu, &l_src->loaded_hyp_vcpu);
+	memcpy(&l_tgt->cpu_state, &l_src->cpu_state, sizeof(struct ghost_running_state));
+	memcpy(&l_tgt->host_regs, &l_src->host_regs, sizeof(struct ghost_host_regs));
+}
+
+
+void ghost_vm_clone_into_partial(struct ghost_vm *dest, struct ghost_vm *src, enum vm_field_owner owner)
 {
 	dest->protected = src->protected;
 	dest->pkvm_handle = src->pkvm_handle;
@@ -395,8 +475,241 @@ static void ghost_vm_clone_into_partial(struct ghost_vm *dest, struct ghost_vm *
 // TODO: static void ghost_dump_vm(struct ghost_vm *vm, u64 i)
 
 
+
+// TODO[doc] ghost_register
+bool check_abstraction_equals_register(struct ghost_register *r1, struct ghost_register *r2, bool todo_warnonly)
+{
+	bool ret = true;
+	GHOST_LOG_CONTEXT_ENTER();
+	ghost_assert(r1->status == GHOST_PRESENT && r2->status == GHOST_PRESENT);
+	if (todo_warnonly) {
+		if (r1->value != r2->value)
+			ret = false;
+	} else {
+		ghost_spec_assert(r1->value == r2->value);
+	}
+	GHOST_LOG_CONTEXT_EXIT();
+	return ret;
+}
+
+void check_abstraction_refined_register(int idx, struct ghost_register *gc_reg, struct ghost_register *gr_post_reg, struct ghost_register *gr_pre_reg)
+{
+	GHOST_LOG_CONTEXT_ENTER();
+
+	//TODO: GHOST_LOG(gc_reg->status, enum ghost_status);
+	//TODO: GHOST_LOG(gr_post_reg->status, enum ghost_status);
+
+	if (gr_post_reg->status == GHOST_PRESENT && gc_reg->status == GHOST_PRESENT) {
+		GHOST_LOG(idx, u32);
+		GHOST_INFO("gc_reg");
+		GHOST_INFO("gr_post_pre");
+		if(!check_abstraction_equals_register(gc_reg, gr_post_reg, /*TODO*/true))
+			ghost_printf("\x1b[30;41mWARNING register X%d mismatch ==> computed: %lx -- post: %lx\x1b[0m\n", idx, gc_reg->value, gr_post_reg->value);
+	}
+	else if (gr_post_reg->status == GHOST_ABSENT && gc_reg->status == GHOST_PRESENT) {
+		ghost_assert(false);
+	}
+	else if (gr_post_reg->status == GHOST_PRESENT && gc_reg->status == GHOST_ABSENT) {
+		GHOST_LOG(idx, u32);
+		GHOST_INFO("gr_pre_reg");
+		GHOST_INFO("gr_post_reg");
+		ghost_assert(gr_pre_reg->status == GHOST_PRESENT);
+		check_abstraction_equals_register(gr_pre_reg, gr_post_reg, false);
+	}
+
+	GHOST_LOG_CONTEXT_EXIT();
+}
+
+
+// TODO[doc] struct ghost_registers;
+void check_abstraction_refined_registers(struct ghost_registers *gc_regs, struct ghost_registers *gr_post_regs, struct ghost_registers *gr_pre_regs)
+{
+	GHOST_LOG_CONTEXT_ENTER();
+
+	GHOST_INFO("gprs");
+	for (int i=0; i<31; i++) {
+		check_abstraction_refined_register(i, &gc_regs->gprs[i], &gr_post_regs->gprs[i], &gr_pre_regs->gprs[i]);
+	}
+
+	// TODO EL0/1 and EL2 sysregs
+
+	GHOST_LOG_CONTEXT_EXIT();
+}
+
+void check_abstraction_equals_reg(struct ghost_registers *r1, struct ghost_registers *r2, bool check_sysregs)
+{
+	GHOST_LOG_CONTEXT_ENTER();
+	for (int i=0; i<31; i++) {
+		u64 value1 = r1->gprs[i].value;
+		u64 value2 = r2->gprs[i].value;
+		if (r1->gprs[i].status != r2->gprs[i].status || value1 != value2) {
+			GHOST_LOG(i, u64);
+			GHOST_LOG(value1, u64);
+			GHOST_LOG(value2, u64);
+			GHOST_WARN("gpr register mismatch");
+			ghost_spec_assert(false);
+		}
+	}
+	if (check_sysregs) {
+		for (int i=0; i<NR_GHOST_SYSREGS; i++) {
+			u64 value1 = r1->sysregs[i].value;
+			u64 value2 = r2->sysregs[i].value;
+			if (r1->sysregs[i].status != r2->sysregs[i].status || value1 != value2) {
+				GHOST_LOG(i, u64);
+				GHOST_LOG(GHOST_SYSREGS_NAMES[i], str);
+				GHOST_LOG(value1, u64);
+				GHOST_LOG(value2, u64);
+				GHOST_WARN("EL0/1 sysreg register mismatch");
+				ghost_spec_assert(false);
+			}
+		}
+		for (int i=0; i<NR_GHOST_EL2_SYSREGS; i++) {
+			u64 value1 = r1->sysregs[i].value;
+			u64 value2 = r2->sysregs[i].value;
+			if (r1->sysregs[i].status != r2->sysregs[i].status || value1 != value2) {
+				GHOST_LOG(i, u64);
+				GHOST_LOG(GHOST_EL2_SYSREGS_NAMES[i], str);
+				GHOST_LOG(value1, u64);
+				GHOST_LOG(value2, u64);
+				GHOST_WARN("EL2 sysreg register mismatch");
+				ghost_spec_assert(false);
+			}
+		}
+	}
+	GHOST_LOG_CONTEXT_EXIT();
+}
+
+// TODO[doc]: struct ghost_vcpu;
+void check_abstraction_equals_vcpu(struct ghost_vcpu *vcpu1, struct ghost_vcpu *vcpu2)
+{
+	GHOST_LOG_CONTEXT_ENTER();
+	ghost_assert(vcpu1);
+	ghost_assert(vcpu2);
+
+	GHOST_SPEC_ASSERT_VAR_EQ(vcpu1->vcpu_index, vcpu2->vcpu_index, u64);
+	GHOST_LOG_CONTEXT_EXIT();
+}
+
+
+// TODO[doc]: struct ghost_vcpu_reference;
+void check_abstraction_equals_vcpu_reference(struct ghost_vcpu_reference *vcpu_ref1, struct ghost_vcpu_reference *vcpu_ref2)
+{
+	GHOST_LOG_CONTEXT_ENTER();
+	ghost_assert(vcpu_ref1);
+	ghost_assert(vcpu_ref2);
+
+	GHOST_SPEC_ASSERT_VAR_EQ(vcpu_ref1->initialised, vcpu_ref2->initialised, bool);
+	GHOST_SPEC_ASSERT_VAR_EQ(vcpu_ref1->loaded_somewhere, vcpu_ref2->loaded_somewhere, bool);
+	GHOST_LOG(vcpu_ref1->vcpu, u64);
+	GHOST_LOG(vcpu_ref2->vcpu, u64);
+
+	if (vcpu_ref1->initialised && vcpu_ref2->initialised)
+		if (vcpu_ref1->vcpu && vcpu_ref2->vcpu)
+			check_abstraction_equals_vcpu(vcpu_ref1->vcpu, vcpu_ref2->vcpu);
+	GHOST_LOG_CONTEXT_EXIT();
+}
+
+void ghost_vcpu_reference_clone_into(struct ghost_vcpu_reference *dest, struct ghost_vcpu_reference *src)
+{
+	dest->initialised = src->initialised;
+	dest->loaded_somewhere = src->loaded_somewhere;
+	if (src->vcpu)
+		ghost_vcpu_clone_into(dest->vcpu, src->vcpu);
+	else
+		dest->vcpu = NULL;
+}
+
+
+// TODO[doc]: abstract_pgtable
+void check_abstraction_refined_pgtable(abstract_pgtable *ap_spec, abstract_pgtable *ap_impl)
+{
+	GHOST_LOG_CONTEXT_ENTER();
+	check_mapping_equal(ap_spec->mapping, ap_impl->mapping);
+	ghost_pfn_set_assert_subseteq(&ap_impl->table_pfns, &ap_spec->table_pfns);
+	ghost_assert(ap_spec->root == ap_impl->root);
+	GHOST_LOG_CONTEXT_EXIT();
+}
+
+void check_abstract_pgtable_equal(abstract_pgtable *ap1, abstract_pgtable *ap2, char *cmp_name, char* ap1_name, char* ap2_name, u64 indent)
+{
+	GHOST_LOG_CONTEXT_ENTER();
+	GHOST_LOG(cmp_name, str);
+	GHOST_LOG(ap1_name, str);
+	GHOST_LOG(ap2_name, str);
+
+	// assert mathematical spec equivalence
+	check_mapping_equal(ap1->mapping, ap2->mapping);
+
+	// implementation refinement check
+	ghost_pfn_set_assert_equal(&ap1->table_pfns, &ap2->table_pfns);
+	ghost_assert(ap1->root == ap2->root);
+
+	GHOST_LOG_CONTEXT_EXIT();
+}
+
+
+// TODO[doc]: struct ghost_vm;
+void check_abstraction_refined_vm(struct ghost_vm *vm_spec, struct ghost_vm *vm_impl, enum vm_field_owner owner)
+{
+	GHOST_LOG_CONTEXT_ENTER();
+	// NOTE: we can't have this check on the lock here because some calls
+	// of the current function compare the thread-local pre/post states in
+	// which case we don't hold the lock.
+	//
+	// ghost_assert_vm_locked(vm1);
+
+	// if not for the same guest VM, then not equal
+
+	/* these fields are protected by the ghost_vms_lock and duplicated on the VM struct for ease of access */
+	GHOST_SPEC_ASSERT_VAR_EQ(vm_spec->pkvm_handle, vm_impl->pkvm_handle, u32);
+	GHOST_SPEC_ASSERT_VAR_EQ(vm_spec->vm_teardown_data.host_mc, vm_impl->vm_teardown_data.host_mc, u64);
+	GHOST_SPEC_ASSERT_VAR_EQ(vm_spec->vm_teardown_data.hyp_vm_struct_addr, vm_impl->vm_teardown_data.hyp_vm_struct_addr, u64);
+	GHOST_SPEC_ASSERT_VAR_EQ(vm_spec->vm_teardown_data.last_ran_addr, vm_impl->vm_teardown_data.last_ran_addr, u64);
+
+	ghost_safety_check(vm_spec->lock == vm_impl->lock);
+
+	if ((owner & VMS_VM_TABLE_OWNED) && vm_spec->vm_table_locked.present) {
+		if (!vm_impl->vm_table_locked.present)
+			GHOST_SPEC_FAIL("vm_impl->vm_table_locked missing");
+
+		GHOST_LOG(vm_spec->vm_table_locked.nr_vcpus, u64);
+		GHOST_LOG(vm_impl->vm_table_locked.nr_vcpus, u64);
+		ghost_spec_assert(vm_spec->vm_table_locked.nr_vcpus == vm_impl->vm_table_locked.nr_vcpus);
+
+		GHOST_LOG(vm_spec->vm_table_locked.nr_initialised_vcpus, u64);
+		GHOST_LOG(vm_impl->vm_table_locked.nr_initialised_vcpus, u64);
+		ghost_spec_assert(vm_spec->vm_table_locked.nr_initialised_vcpus == vm_impl->vm_table_locked.nr_initialised_vcpus);
+
+		for (int i=0; i < vm_spec->vm_table_locked.nr_vcpus; i++) {
+			GHOST_LOG_CONTEXT_ENTER_INNER("loop vcpu_refs");
+			GHOST_LOG_INNER("loop vcpu_refs", i, u32);
+			check_abstraction_equals_vcpu_reference(&vm_spec->vm_table_locked.vcpu_refs[i], &vm_impl->vm_table_locked.vcpu_refs[i]);
+			GHOST_LOG_CONTEXT_EXIT_INNER("loop vcpu_refs");
+		}
+
+		for (int i=0; i < vm_spec->vm_table_locked.nr_initialised_vcpus; i++) {
+			GHOST_LOG_CONTEXT_ENTER_INNER("loop vcpu_addrs");
+			GHOST_LOG_INNER("loop vcpu_addrs", i, u32);
+			GHOST_LOG_CONTEXT_ENTER(); // TODO: improve
+			GHOST_SPEC_ASSERT_VAR_EQ(vm_spec->vm_table_locked.vm_teardown_vcpu_addrs[i], vm_impl->vm_table_locked.vm_teardown_vcpu_addrs[i], u64);
+			GHOST_LOG_CONTEXT_EXIT();
+			GHOST_LOG_CONTEXT_EXIT_INNER("loop vcpu_addrs");
+		}
+	}
+
+	if ((owner & VMS_VM_OWNED) && vm_spec->vm_locked.present) {
+		if (!vm_impl->vm_locked.present)
+			GHOST_SPEC_FAIL("vm_impl->vm_locked missing");
+
+		check_abstraction_refined_pgtable(&vm_spec->vm_locked.vm_abstract_pgtable, &vm_impl->vm_locked.vm_abstract_pgtable);
+	}
+
+	GHOST_LOG_CONTEXT_EXIT();
+}
+
+
 // TODO[doc]: struct ghost_host_regs;
-static void check_abstraction_equals_host_regs(struct ghost_host_regs *r1, struct ghost_host_regs *r2)
+void check_abstraction_equals_host_regs(struct ghost_host_regs *r1, struct ghost_host_regs *r2)
 {
 	GHOST_LOG_CONTEXT_ENTER();
 	ghost_assert(r1->present == r2->present);
@@ -405,20 +718,8 @@ static void check_abstraction_equals_host_regs(struct ghost_host_regs *r1, struc
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
-static void ghost_dump_host_regs(struct ghost_host_regs *host_regs, u64 i)
-{
-	ghost_printf("%Ihost regs: ", i);
-
-	if (!host_regs->present) {
-		ghost_printf(GHOST_MISSING_FIELD "\n");
-	} else {
-		ghost_printf("<TODO>\n");
-	}
-}
-
-
 // TODO[doc]: struct ghost_host;
-static void check_abstraction_equals_host(struct ghost_host *gh1, struct ghost_host *gh2)
+void check_abstraction_equals_host(struct ghost_host *gh1, struct ghost_host *gh2)
 {
 	GHOST_LOG_CONTEXT_ENTER();
 	GHOST_LOG(gh1->present, bool);
@@ -439,7 +740,85 @@ static void check_abstraction_equals_host(struct ghost_host *gh1, struct ghost_h
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
-static void ghost_dump_host(struct ghost_host *host)
+// TODO[doc]: struct ghost_pkvm;
+void check_abstraction_equals_pkvm(struct ghost_pkvm *gp1, struct ghost_pkvm *gp2)
+{
+	GHOST_LOG_CONTEXT_ENTER();
+	ghost_assert(gp1->present && gp2->present);
+	check_abstract_pgtable_equal(&gp1->pkvm_abstract_pgtable, &gp2->pkvm_abstract_pgtable, "abstraction_equals_pkvm", "gp1.pkvm_mapping", "gp2.pkvm_mapping", 4);
+	GHOST_LOG_CONTEXT_EXIT();
+}
+
+// TODO[doc]: struct ghost_vm_slot;
+// TODO: static void ghost_vm_clear_slot(struct ghost_vm_slot *slot)
+
+
+// TODO[doc]: struct ghost_vms_table_data;
+// TODO: NOTHING
+
+/// Check that `vm` is found in `vms` and that the two ghost vms are equal
+void check_abstraction_vm_in_vms_and_equal(pkvm_handle_t vm_handle, struct ghost_state *g, struct ghost_vms *vms, enum vm_field_owner owner) {
+	GHOST_LOG_CONTEXT_ENTER();
+	GHOST_LOG(vm_handle, u32);
+
+	struct ghost_vm *g_vm = ghost_vms_get(&g->vms, vm_handle);
+	struct ghost_vm *found_vm = ghost_vms_get(vms, vm_handle);
+
+	ghost_assert(g_vm != NULL);
+	ghost_spec_assert(found_vm);
+
+	check_abstraction_refined_vm(g_vm, found_vm, owner);
+	GHOST_LOG_CONTEXT_EXIT();
+}
+
+// TODO: void __check_abstraction_vm_all_contained_in(struct ghost_vms *vms_spec, struct ghost_vms *vms_impl) {
+// TODO: void check_abstraction_vms_subseteq(struct ghost_vms *g_spec, struct ghost_vms *g_impl)
+// TODO: static void ghost_dump_vms(struct ghost_vms *vms)
+
+
+// TODO[doc]: struct ghost_constant_globals;
+// TODO: static void ghost_dump_globals(struct ghost_constant_globals *globals)
+
+
+// KKKK ---- clean up to here
+
+
+
+
+
+
+// TODO VM LIFETIME MANAGEMENT
+
+hyp_spinlock_t *ghost_pointer_to_vm_lock(pkvm_handle_t handle)
+{
+	// TODO: remove this unsafe operation.
+	return &vm_table[handle - /*HANDLE_OFFSET*/ 0x1000]->lock;
+}
+
+// TODO END VM LIFETIME MANAGEMENT
+
+
+/*****************************************/
+// Dumping and diffing
+
+#define GHOST_MISSING_FIELD "<not recorded>"
+
+void ghost_dump_pkvm(struct ghost_pkvm *pkvm)
+{
+	ghost_printf("pkvm: ");
+
+	if (!pkvm->present) {
+		ghost_printf(GHOST_MISSING_FIELD "\n");
+	} else {
+		ghost_printf(
+			"\n"
+			"%I%gI(pgtable)\n",
+			2, &pkvm->pkvm_abstract_pgtable, 2
+		);
+	}
+}
+
+void ghost_dump_host(struct ghost_host *host)
 {
 	ghost_printf("host: ");
 
@@ -462,300 +841,229 @@ static void ghost_dump_host(struct ghost_host *host)
 	);
 }
 
-
-// TODO[doc]: struct ghost_pkvm;
-void check_abstraction_equals_pkvm(struct ghost_pkvm *gp1, struct ghost_pkvm *gp2)
+void ghost_dump_vm(struct ghost_vm *vm, u64 i)
 {
-	GHOST_LOG_CONTEXT_ENTER();
-	ghost_assert(gp1->present && gp2->present);
-	check_abstract_pgtable_equal(&gp1->pkvm_abstract_pgtable, &gp2->pkvm_abstract_pgtable, "abstraction_equals_pkvm", "gp1.pkvm_mapping", "gp2.pkvm_mapping", 4);
-	GHOST_LOG_CONTEXT_EXIT();
-}
-// TODO: static void ghost_dump_pkvm(struct ghost_pkvm *pkvm)
-
-
-// TODO[doc]: struct ghost_vm_slot;
-// TODO: static void ghost_vm_clear_slot(struct ghost_vm_slot *slot)
-
-
-// TODO[doc]: struct ghost_vms_table_data;
-// TODO: NOTHING
-
-
-// struct ghost_vms;
-struct ghost_vm *ghost_vms_get(struct ghost_vms *vms, pkvm_handle_t handle)
-{
-	ghost_assert_vms_locked();
-	struct ghost_vm_slot *slot = __ghost_vm_or_free_slot_from_handle(vms, handle);
-	if (slot->exists)
-		return slot->vm;
-	return NULL;
-}
-
-static struct ghost_vm *ghost_vms_alloc(struct ghost_vms *vms, pkvm_handle_t handle)
-{
-	ghost_assert_vms_locked();
-
-	struct ghost_vm_slot *slot = __ghost_vm_or_free_slot_from_handle(vms, handle);
-
-	/* check for Out-of-Memory */
-	if (!slot)
-		return NULL;
-
-	if (!slot->exists) {
-		slot->vm = malloc_or_die(sizeof(struct ghost_vm));
-		slot->exists = true;
-		slot->handle = handle;
-
-		/* just in case, make sure the two sides are marked not present */
-		slot->vm->vm_locked.present = false;
-		slot->vm->vm_table_locked.present = false;
-
-		memset(&slot->vm->vm_teardown_data, 0, sizeof(struct ghost_vm_teardown_data));
-		return slot->vm;
-	} else {
-		/* shouldn't try alloc() a new ghost vm if one already exists for that handle. */
-		ghost_assert(false);
-	}
-}
-// TODO: void __check_abstraction_vm_contained_in(struct ghost_vm *vm, struct ghost_vms *vms, enum vm_field_owner owner)
-// TODO: void ghost_vms_free(struct ghost_vms *vms, pkvm_handle_t handle)
-// TODO: bool ghost_vms_is_valid_handle(struct ghost_vms *vms, pkvm_handle_t handle)
-// TODO: void check_abstraction_vm_in_vms_and_equal(pkvm_handle_t vm_handle, struct ghost_state *g, struct ghost_vms *vms, enum vm_field_owner owner)  /// <---- MOVE
-// TODO: void __check_abstraction_vm_all_contained_in(struct ghost_vms *vms_spec, struct ghost_vms *vms_impl) {
-// TODO: void check_abstraction_vms_subseteq(struct ghost_vms *g_spec, struct ghost_vms *g_impl)
-// TODO: static void ghost_dump_vms(struct ghost_vms *vms)
-
-
-// TODO[doc]: struct ghost_constant_globals;
-// TODO: static void ghost_dump_globals(struct ghost_constant_globals *globals)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// KKKK ---- clean up to here
-
-
-
-
-
-
-// TODO VM LIFETIME MANAGEMENT
-
-
-
-
-
-
-
-
-
-
-
-hyp_spinlock_t *ghost_pointer_to_vm_lock(pkvm_handle_t handle)
-{
-	// TODO: remove this unsafe operation.
-	return &vm_table[handle - /*HANDLE_OFFSET*/ 0x1000]->lock;
-}
-
-// TODO END VM LIFETIME MANAGEMENT
-
-
-// TODO CLEARING FUNCTIONS
-static void clear_abstract_pgtable(abstract_pgtable *ap)
-{
-	free_mapping(ap->mapping);
-	ghost_pfn_set_clear(&ap->table_pfns);
-}
-
-static void clear_abstraction_vm_partial(struct ghost_state *g, pkvm_handle_t handle, enum vm_field_owner owner)
-{
-	ghost_assert_vms_locked();
-	struct ghost_vm *vm = ghost_vms_get(&g->vms, handle);
-
-	/* if not there, nothing to do */
 	if (!vm)
 		return;
 
-	if (owner & VMS_VM_OWNED) {
-		if (vm->vm_locked.present)
-			clear_abstract_pgtable(&vm->vm_locked.vm_abstract_pgtable);
+	ghost_printf("%Ivm %x:\n", i, vm->pkvm_handle);
 
-
-		vm->vm_locked.present = false;
+	ghost_printf("%Ivm_locked: ", i+4);
+	if (vm->vm_locked.present) {
+		ghost_printf(
+			"\n"
+			"%I%gI(pgtable)\n",
+			i+8,
+			&vm->vm_locked.vm_abstract_pgtable, i+8
+		);
+	} else {
+		ghost_printf(GHOST_MISSING_FIELD "\n");
 	}
 
-	if (owner & VMS_VM_TABLE_OWNED) {
-		vm->vm_table_locked.present = false;
-		for (int i = 0; i < KVM_MAX_VCPUS; i++) {
-			if (vm->vm_table_locked.vcpu_refs[i].vcpu) {
-				free(vm->vm_table_locked.vcpu_refs[i].vcpu);
-				vm->vm_table_locked.vcpu_refs[i].vcpu = NULL;
-			}
+	ghost_printf("%Ivm_table_locked: ", i+4);
+	if (!vm->vm_table_locked.present) {
+		ghost_printf(GHOST_MISSING_FIELD "\n");
+		return;
+	}
+
+	ghost_printf("\n");
+	ghost_printf("%Inr_vcpus:%ld\n", i+8, vm->vm_table_locked.nr_vcpus);
+	ghost_printf("%Inr_initialised_vcpus:%ld\n", i+8, vm->vm_table_locked.nr_initialised_vcpus);
+
+	ghost_printf("%Ivcpus:\n", i+8);
+	for (int vcpu_indx = 0; vcpu_indx < vm->vm_table_locked.nr_vcpus; vcpu_indx++) {
+		struct ghost_vcpu_reference *vcpu_ref = &vm->vm_table_locked.vcpu_refs[vcpu_indx];
+		ghost_printf("%Ivcpu %ld ", i+12, vcpu_indx);
+
+		if (vcpu_ref->initialised)
+			ghost_printf("(initialised)");
+		else
+			ghost_printf("             ");
+
+		ghost_printf(" ");
+
+		if (vcpu_ref->loaded_somewhere)
+			ghost_printf("(loaded_somewhere)");
+		else
+			ghost_printf("                  ");
+
+		ghost_printf("\n");
+	}
+
+	ghost_printf("%Ivcpu_addrs:\n", i+4);
+	if (vm->vm_table_locked.present) {
+		for (int idx=0; idx<vm->vm_table_locked.nr_initialised_vcpus; idx++) {
+			ghost_printf("%I[%d]: %p\n", i+8, idx, vm->vm_table_locked.vm_teardown_vcpu_addrs[idx]);
 		}
+	} else {
+		ghost_printf(GHOST_MISSING_FIELD "\n");
 	}
-
-	ghost_vms_partial_vm_try_free_slot(g, vm);
 }
 
-static void clear_abstraction_vms_partial(struct ghost_state *g, enum vm_field_owner owner)
+void ghost_dump_vms(struct ghost_vms *vms)
 {
-	if (!g->vms.present)
+	ghost_printf("vms: ");
+
+	if (!vms->present) {
+		ghost_printf(GHOST_MISSING_FIELD "\n");
+		return;
+	}
+
+	ghost_printf("\n");
+
+	ghost_printf("    vm_table_data: ");
+	if (vms->table_data.present) {
+		ghost_printf("\n");
+		ghost_printf("        nr_vms:%lx\n", vms->table_data.nr_vms);
+
+	} else {
+		ghost_printf(GHOST_MISSING_FIELD "\n");
+	}
+
+	ghost_printf("    vm_table:\n", vms->table_data.nr_vms);
+	for (int i = 0; i < KVM_MAX_PVMS; i++) {
+		struct ghost_vm_slot *slot = &vms->table[i];
+		if (slot->exists) {
+			ghost_dump_vm(slot->vm, 4+4);
+		}
+	}
+}
+
+void ghost_dump_globals(struct ghost_constant_globals *globals)
+{
+	ghost_printf(
+		"globals:\n"
+		"  hyp_nr_cpus:%lx\n"
+		"  hyp_physvirt_offset:%lx\n"
+		"  tag_lsb:%lx\n"
+		"  tag_val:%lx\n",
+		globals->hyp_nr_cpus,
+		globals->hyp_physvirt_offset,
+		globals->tag_lsb,
+		globals->tag_val
+	);
+	/* TODO: dump hyp memory */
+}
+
+void ghost_dump_regs(struct ghost_registers *regs, u64 i)
+{
+	ghost_printf("%Iregs[cpu:%d]:<TODO>\n", i, hyp_smp_processor_id());
+}
+
+void ghost_dump_loaded_vcpu(struct ghost_loaded_vcpu *loaded_vcpu_info, u64 i)
+{
+	ghost_printf("%Iloaded_vcpu[cpu:%d]: ", i, hyp_smp_processor_id());
+
+	if (!loaded_vcpu_info->loaded) {
+		ghost_printf("<unloaded>\n");
+	} else {
+		ghost_printf("<loaded vm_handle:%x vcpu_index:%ld>\n", loaded_vcpu_info->vm_handle, loaded_vcpu_info->loaded_vcpu->vcpu_index);
+	}
+}
+
+void ghost_dump_running_state(struct ghost_running_state *run, u64 i)
+{
+	ghost_printf("%Irun_state[cpu:%d]: ", i, hyp_smp_processor_id());
+
+	if (!run->guest_running) {
+		ghost_printf("<host running>\n");
+	} else {
+		ghost_printf("<VM running, vm_handle:%x vcpu_index:%ld exit_code:%ld>\n", run->vm_handle, run->vcpu_index, run->guest_exit_code);
+	}
+}
+
+void ghost_dump_host_regs(struct ghost_host_regs *host_regs, u64 i)
+{
+	ghost_printf("%Ihost regs: ", i);
+
+	if (!host_regs->present) {
+		ghost_printf(GHOST_MISSING_FIELD "\n");
+	} else {
+		ghost_printf("<TODO>\n");
+	}
+}
+
+void ghost_dump_thread_local(struct ghost_local_state *local)
+{
+	ghost_printf("locals[%ld]: ", hyp_smp_processor_id());
+	if (!local->present) {
+		ghost_printf(GHOST_MISSING_FIELD "\n");
+	} else {
+		ghost_printf("\n");
+		ghost_dump_regs(&local->regs, 4);
+		ghost_dump_loaded_vcpu(&local->loaded_hyp_vcpu, 4);
+		ghost_dump_running_state(&local->cpu_state, 4);
+		ghost_dump_host_regs(&local->host_regs, 4);
+	}
+}
+
+void ghost_dump_state(struct ghost_state *g)
+{
+	ghost_dump_pkvm(&g->pkvm);
+	ghost_dump_host(&g->host);
+	ghost_dump_vms(&g->vms);
+	ghost_dump_globals(&g->globals);
+	ghost_dump_thread_local(ghost_this_cpu_local_state(g));
+}
+
+
+#ifdef CONFIG_NVHE_GHOST_DIFF
+/*
+ * Print the diff between the recorded pre concrete host pgtable state and recorded post pgtable state
+ */
+static void ghost_post_dump_recorded_concrete_host_pgtable_diff(struct ghost_state *gc, struct ghost_state *gr_post, struct ghost_state *gr_pre)
+{
+	if (! ghost_print_on(__func__))
 		return;
 
-	for (int i=0; i < KVM_MAX_PVMS; i++) {
-		struct ghost_vm_slot *slot = &g->vms.table[i];
-		clear_abstraction_vm_partial(g, slot->handle, owner);
+	if (gr_pre->host.present && gr_post->host.present) {
+		ghost_printf("\n");
+		ghost_printf("recorded post host pgtable diff from recorded pre: ");
+		ghost_diff_and_print_pgtable(&gr_pre->host.host_concrete_pgtable, &gr_post->host.host_concrete_pgtable);
+		ghost_printf("\n");
 	}
 }
 
-static void clear_abstraction_pkvm(struct ghost_state *g)
+/*
+ * Print the diff between the recorded pre ghost state and recorded post ghost state
+ */
+static void ghost_post_dump_recorded_ghost_diff(struct ghost_state *gc, struct ghost_state *gr_post, struct ghost_state *gr_pre)
 {
-	if (g->pkvm.present) {
-		clear_abstract_pgtable(&g->pkvm.pkvm_abstract_pgtable);
-		g->pkvm.present = false;
-	}
+	if (! ghost_print_on(__func__))
+		return;
+
+	ghost_printf("\n");
+	ghost_printf("recorded post ghost state diff from recorded pre: ");
+	ghost_diff_and_print_state(gr_pre, gr_post);
+	ghost_printf("\n");
 }
 
-static void clear_abstraction_host(struct ghost_state *g)
+/*
+ * Print the diff between the recorded post and computed (spec) post.
+ */
+static void ghost_post_dump_computed_ghost_diff(struct ghost_state *gc, struct ghost_state *gr_post, struct ghost_state *gr_pre)
 {
-	if (g->host.present) {
-		free_mapping(g->host.host_abstract_pgtable_annot);
-		free_mapping(g->host.host_abstract_pgtable_shared);
-		clear_abstract_pgtable(&g->host.host_concrete_pgtable);
-		ghost_pfn_set_clear(&g->host.reclaimable_pfn_set);
-		ghost_pfn_set_clear(&g->host.need_poisoning_pfn_set);
-		g->host.present = false;
-	}
+	if (! ghost_print_on(__func__))
+		return;
+
+	ghost_printf("\n");
+	ghost_printf("computed ghost spec diff from recorded post: ");
+	ghost_diff_and_print_state(gr_post, gc);
+	ghost_printf("\n");
 }
 
-// TODO COPYING FUNCTIONS
-void copy_abstraction_constants(struct ghost_state *g_tgt, struct ghost_state *g_src)
+static void post_dump_diff(struct ghost_state *gc, struct ghost_state *gr_post, struct ghost_state *gr_pre)
 {
-	g_tgt->globals.hyp_nr_cpus = g_src->globals.hyp_nr_cpus;
-	g_tgt->globals.hyp_physvirt_offset = g_src->globals.hyp_physvirt_offset;
-	g_tgt->globals.tag_lsb = g_src->globals.tag_lsb;
-	g_tgt->globals.tag_val = g_src->globals.tag_val;
-	g_tgt->globals.hyp_memory = mapping_copy(g_src->globals.hyp_memory);
+	ghost_post_dump_recorded_concrete_host_pgtable_diff(gc, gr_post, gr_pre);
+	ghost_post_dump_recorded_ghost_diff(gc, gr_post, gr_pre);
+	ghost_post_dump_computed_ghost_diff(gc, gr_post, gr_pre);
 }
+#endif /* CONFIG_NVHE_GHOST_SPEC_DIFF */
 
-void copy_abstraction_host(struct ghost_state *g_tgt, struct ghost_state *g_src)
-{
-	ghost_assert_maplets_locked();
-	ghost_assert(g_src->host.present);
-	clear_abstraction_host(g_tgt);
+/*****************************************/
+// Equality
 
-	g_tgt->host.host_abstract_pgtable_annot = mapping_copy(g_src->host.host_abstract_pgtable_annot);
-	g_tgt->host.host_abstract_pgtable_shared = mapping_copy(g_src->host.host_abstract_pgtable_shared);
-	ghost_pfn_set_copy(&g_tgt->host.reclaimable_pfn_set, &g_src->host.reclaimable_pfn_set);
-	ghost_pfn_set_copy(&g_tgt->host.need_poisoning_pfn_set, &g_src->host.need_poisoning_pfn_set);
-	abstract_pgtable_copy(&g_tgt->host.host_concrete_pgtable, &g_src->host.host_concrete_pgtable);
-
-	g_tgt->host.present = g_src->host.present;
-}
-
-void copy_abstraction_pkvm(struct ghost_state *g_tgt, struct ghost_state *g_src)
-{
-	ghost_assert_maplets_locked();
-	ghost_assert(g_src->pkvm.present);
-	clear_abstraction_pkvm(g_tgt);
-
-	abstract_pgtable_copy(&g_tgt->pkvm.pkvm_abstract_pgtable, &g_src->pkvm.pkvm_abstract_pgtable);
-
-	g_tgt->pkvm.present = g_src->pkvm.present;
-}
-
-static void copy_abstraction_vm_partial(struct ghost_state *g_tgt, struct ghost_state *g_src, pkvm_handle_t handle, enum vm_field_owner owner)
-{
-	GHOST_LOG_CONTEXT_ENTER();
-
-	/* if the vms table isn't present in the target
-	 * which might be if it had been previously cleared
-	 * re-create a new one */
-	if (!g_tgt->vms.present)
-		make_abstraction_vms(&g_tgt->vms);
-
-	struct ghost_vm *src_vm = ghost_vms_get(&g_src->vms, handle);
-	ghost_assert(src_vm);
-
-	clear_abstraction_vm_partial(g_tgt, handle, owner);
-
-	struct ghost_vm *tgt_vm = ghost_vms_get(&g_tgt->vms, handle);
-	if (!tgt_vm) {
-		tgt_vm = ghost_vms_alloc(&g_tgt->vms, handle);
-		ghost_assert(tgt_vm);
-	}
-
-	ghost_vm_clone_into_partial(tgt_vm, src_vm, owner);
-	GHOST_LOG_CONTEXT_EXIT();
-}
-
-void copy_abstraction_vms_partial(struct ghost_state *g_tgt, struct ghost_state *g_src, enum vm_field_owner owner)
-{
-	ghost_assert_vms_locked();
-	ghost_assert(g_src->vms.present);
-
-	clear_abstraction_vms_partial(g_tgt, owner);
-
-	// for each VM, copy it.
-	for (int i=0; i<KVM_MAX_PVMS; i++) {
-		struct ghost_vm_slot *src_slot = &g_src->vms.table[i];
-
-		if (src_slot->exists) {
-			copy_abstraction_vm_partial(g_tgt, g_src, src_slot->handle, owner);
-		}
-	}
-
-	if (owner & VMS_VM_TABLE_OWNED)
-		g_tgt->vms.table_data = g_src->vms.table_data;
-}
-
-void copy_abstraction_loaded_vcpu(struct ghost_loaded_vcpu *tgt, struct ghost_loaded_vcpu *src)
-{
-	tgt->loaded = src->loaded;
-	tgt->vm_handle = src->vm_handle;
-	tgt->loaded_vcpu = NULL;
-	if (src->loaded_vcpu) {
-		ghost_assert(tgt->loaded_vcpu == NULL);
-		tgt->loaded_vcpu = malloc_or_die(sizeof(struct ghost_vcpu));
-		ghost_vcpu_clone_into(tgt->loaded_vcpu, src->loaded_vcpu);
-	}
-}
-
-void copy_abstraction_local_state(struct ghost_local_state *l_tgt, struct ghost_local_state *l_src)
-{
-	ghost_assert(l_src->present);
-	l_tgt->present = true;
-	memcpy(&l_tgt->regs, &l_src->regs, sizeof(struct ghost_registers));
-	copy_abstraction_loaded_vcpu(&l_tgt->loaded_hyp_vcpu, &l_src->loaded_hyp_vcpu);
-	memcpy(&l_tgt->cpu_state, &l_src->cpu_state, sizeof(struct ghost_running_state));
-	memcpy(&l_tgt->host_regs, &l_src->host_regs, sizeof(struct ghost_host_regs));
-}
-
-
-// TODO CHECK ABTRACTION EQUALS FUNCTONS
-static void check_abstraction_equals_run_state(struct ghost_running_state *expected, struct ghost_running_state *impl)
+void check_abstraction_equals_run_state(struct ghost_running_state *expected, struct ghost_running_state *impl)
 {
 	GHOST_LOG_CONTEXT_ENTER();
 
@@ -769,7 +1077,20 @@ static void check_abstraction_equals_run_state(struct ghost_running_state *expec
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
-static void check_abstraction_equals_loaded_vcpu(struct ghost_loaded_vcpu *loaded_vcpu1, struct ghost_loaded_vcpu *loaded_vcpu2)
+void check_abstraction_equals_local_state(struct ghost_state *g_expected, struct ghost_state *g_impl)
+{
+	GHOST_LOG_CONTEXT_ENTER();
+	struct ghost_local_state *local_expected = ghost_this_cpu_local_state(g_expected);
+	struct ghost_local_state *local_impl = ghost_this_cpu_local_state(g_impl);
+
+	check_abstraction_equals_run_state(&local_expected->cpu_state, &local_impl->cpu_state);
+	check_abstraction_equals_loaded_vcpu(&local_expected->loaded_hyp_vcpu, &local_impl->loaded_hyp_vcpu);
+	/* regs not checked */
+	GHOST_LOG_CONTEXT_EXIT();
+}
+
+
+void check_abstraction_equals_loaded_vcpu(struct ghost_loaded_vcpu *loaded_vcpu1, struct ghost_loaded_vcpu *loaded_vcpu2)
 {
 	GHOST_LOG_CONTEXT_ENTER();
 	GHOST_LOG(loaded_vcpu1->loaded, bool); GHOST_LOG(loaded_vcpu2->loaded, bool);
@@ -808,7 +1129,7 @@ static void __check_abstraction_vm_all_contained_in(struct ghost_vms *vms_spec, 
 	}
 }
 
-static void check_abstraction_vms_subseteq(struct ghost_vms *g_spec, struct ghost_vms *g_impl)
+void check_abstraction_vms_subseteq(struct ghost_vms *g_spec, struct ghost_vms *g_impl)
 {
 	GHOST_LOG_CONTEXT_ENTER();
 	ghost_assert(g_spec->present && g_impl->present);
@@ -832,7 +1153,7 @@ static void check_abstraction_vms_subseteq(struct ghost_vms *g_spec, struct ghos
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
-static void check_abstraction_refined_pkvm(struct ghost_state *gc, struct ghost_state *gr_post, struct ghost_state *gr_pre)
+void check_abstraction_refined_pkvm(struct ghost_state *gc, struct ghost_state *gr_post, struct ghost_state *gr_pre)
 {
 	GHOST_LOG_CONTEXT_ENTER();
 
@@ -853,7 +1174,7 @@ static void check_abstraction_refined_pkvm(struct ghost_state *gc, struct ghost_
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
-static void check_abstraction_refined_host(struct ghost_state *gc, struct ghost_state *gr_post, struct ghost_state *gr_pre)
+void check_abstraction_refined_host(struct ghost_state *gc, struct ghost_state *gr_post, struct ghost_state *gr_pre)
 {
 	GHOST_LOG_CONTEXT_ENTER();
 
@@ -874,7 +1195,7 @@ static void check_abstraction_refined_host(struct ghost_state *gc, struct ghost_
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
-static void check_abstraction_refined_vms(struct ghost_state *gc, struct ghost_state *gr_post, struct ghost_state *gr_pre)
+void check_abstraction_refined_vms(struct ghost_state *gc, struct ghost_state *gr_post, struct ghost_state *gr_pre)
 {
 	GHOST_LOG_CONTEXT_ENTER();
 
@@ -891,7 +1212,7 @@ static void check_abstraction_refined_vms(struct ghost_state *gc, struct ghost_s
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
-static void check_abstraction_refined_run_state(struct ghost_state *gc, struct ghost_state *gr_post, struct ghost_state *gr_pre)
+void check_abstraction_refined_run_state(struct ghost_state *gc, struct ghost_state *gr_post, struct ghost_state *gr_pre)
 {
 	GHOST_LOG_CONTEXT_ENTER();
 	struct ghost_running_state *gc_run = this_cpu_ghost_run_state(gc);
@@ -902,7 +1223,7 @@ static void check_abstraction_refined_run_state(struct ghost_state *gc, struct g
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
-static void check_abstraction_refined_local_state(struct ghost_state *gc, struct ghost_state *gr_post, struct ghost_state *gr_pre)
+void check_abstraction_refined_local_state(struct ghost_state *gc, struct ghost_state *gr_post, struct ghost_state *gr_pre)
 {
 	GHOST_LOG_CONTEXT_ENTER();
 	struct ghost_local_state *gc_local = ghost_this_cpu_local_state(gc);
@@ -933,7 +1254,7 @@ static void check_abstraction_refined_local_state(struct ghost_state *gc, struct
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
-static void check_abstraction_equals_globals(struct ghost_state *gc, struct ghost_state *gr_post)
+void check_abstraction_equals_globals(struct ghost_state *gc, struct ghost_state *gr_post)
 {
 	GHOST_LOG_CONTEXT_ENTER();
 

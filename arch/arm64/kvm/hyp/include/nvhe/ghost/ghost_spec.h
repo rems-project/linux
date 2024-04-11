@@ -6,27 +6,10 @@
 #include <nvhe/ghost/ghost_state.h>
 
 
-/*
- * Initialisation:
- *
- * We track when __pkvm_init has succeeded with `ghost_pkvm_init_finalized`.
- *
- * However, up until all the cores have switched over to use the new pgtables,
- * pKVM is not yet guaranteeing isolation.
- *
- * So we track up until all cores have finishes __pkvm_prot_finalize
- * (with the `ghost_prot_finalized_count` counter, up to `hyp_nr_cpus`)
- * and once they have, we trip the global switch
- * (`ghost_prot_finalized_all`)
- *
- * It may be that a hypercall on another thread is midway execution during this,
- * this hypercall does not guarantee isolation as it started before the last CPU's __pkvm_prot_finalize
- * so we have a per-CPU hypercall check (`ghost_check_this_hypercall`) which is set a the start of a trap
- * iff ghost_prot_finalized_all
+/**
+ * ghost_check_this_hypercall - Per-CPU check of whether to check the current hypercall
+ * (SEE comment in ghost_record.h)
  */
-extern bool ghost_pkvm_init_finalized;
-extern u64 ghost_prot_finalized_count;
-extern bool ghost_prot_finalized_all;
 DECLARE_PER_CPU(bool, ghost_check_this_hypercall);
 
 /**
@@ -96,7 +79,6 @@ static inline void ghost_assert_pkvm_vm_table_locked(void)
 }
 
 
-
 struct ghost_local_state *ghost_this_cpu_local_state(struct ghost_state *g);
 /**
  * this_cpu_read_ghost_loaded_vcpu() - Get the loaded_hyp_vcpu for this CPU
@@ -104,41 +86,6 @@ struct ghost_local_state *ghost_this_cpu_local_state(struct ghost_state *g);
 struct ghost_loaded_vcpu *this_cpu_ghost_loaded_vcpu(struct ghost_state *g);
 struct ghost_registers *this_cpu_ghost_registers(struct ghost_state *g);
 struct ghost_running_state *this_cpu_ghost_run_state(struct ghost_state *g);
-
-
-// top-level spec ghost state
-
-// the "master" common ghost state, shared but with its parts protected by the associated impl locks
-extern struct ghost_state gs;
-
-// thread-local ghost state, of which only the relevant parts are used within each transition
-DECLARE_PER_CPU(struct ghost_state, gs_recorded_pre);
-DECLARE_PER_CPU(struct ghost_state, gs_recorded_post);
-DECLARE_PER_CPU(struct ghost_state, gs_computed_post);
-
-
-
-
-//struct ghost_state spec_handle_trap(struct ghost_state *g);
-
-/**
- * ghost_record_pre() - Record the state on entry to pKVM
- * @ctxt: the context (saved registers) on entry to pKVM.
- * @guest_exit_code: if from a guest, the pKVM-computed guest exit code.
- *                   if not from a guest, must be 0.
- *
- * NOTE: Theoretically, this should be a snapshot of the state on exception entry,
- *       including the full saved register context, system registers, and vector offset.
- *       However, we insert this call into more convenient-to-edit places, and reconstruct
- *       that data from the pKVM-saved cpu context and exit code.
- */
-void ghost_record_pre(struct kvm_cpu_context *ctxt, u64 guest_exit_code);
-
-/**
- * ghost_post() - Record and check the state just prior to the exception return
- * @ctxt: the context (saved registers) on exit from pKVM.
- */
-void ghost_post(struct kvm_cpu_context *ctxt);
 
 #define HANDLE_FUNC_STRING(x)	[__KVM_HOST_SMCCC_FUNC_##x] = #x
 static const char *ghost_host_hcall_names[] = {
@@ -172,6 +119,37 @@ static const char *ghost_host_hcall_names[] = {
 	HANDLE_FUNC_STRING(__pkvm_vcpu_put),
 	HANDLE_FUNC_STRING(__pkvm_vcpu_sync_state),
 };
+
+// top-level spec ghost state
+
+// the gs and gs_recorded_* are the ghost_state actually written to by the ghost_record.h functions
+
+// the "master" common ghost state, shared but with its parts protected by the associated impl locks
+extern struct ghost_state gs;
+
+// thread-local ghost state, of which only the relevant parts are used within each transition
+DECLARE_PER_CPU(struct ghost_state, gs_recorded_pre);
+DECLARE_PER_CPU(struct ghost_state, gs_recorded_post);
+DECLARE_PER_CPU(struct ghost_state, gs_computed_post);
+
+/**
+ * ghost_record_pre() - Record the state on entry to pKVM
+ * @ctxt: the context (saved registers) on entry to pKVM.
+ * @guest_exit_code: if from a guest, the pKVM-computed guest exit code.
+ *                   if not from a guest, must be 0.
+ *
+ * NOTE: Theoretically, this should be a snapshot of the state on exception entry,
+ *       including the full saved register context, system registers, and vector offset.
+ *       However, we insert this call into more convenient-to-edit places, and reconstruct
+ *       that data from the pKVM-saved cpu context and exit code.
+ */
+void ghost_record_pre(struct kvm_cpu_context *ctxt, u64 guest_exit_code);
+
+/**
+ * ghost_post() - Record and check the state just prior to the exception return
+ * @ctxt: the context (saved registers) on exit from pKVM.
+ */
+void ghost_post(struct kvm_cpu_context *ctxt);
 
 #endif // _GHOST_SPEC_H
 
