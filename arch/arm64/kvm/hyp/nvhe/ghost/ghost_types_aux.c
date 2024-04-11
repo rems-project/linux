@@ -4,7 +4,7 @@
 
 #include <nvhe/ghost/ghost_control.h>
 #include <nvhe/ghost/ghost_state.h>
-#include <nvhe/ghost/ghost_types.h>
+#include <nvhe/ghost/ghost_types_aux.h>
 #include <nvhe/ghost/ghost_spec.h>
 
 #ifdef CONFIG_NVHE_GHOST_DIFF
@@ -25,7 +25,7 @@ hyp_spinlock_t *ghost_pointer_to_vm_lock(pkvm_handle_t handle)
 /*
  * Constructors and initialisers
  */
-// EXPORTED ghost_types.h
+// EXPORTED ghost_types_aux.h
 void make_abstraction_vms(struct ghost_vms *vms)
 {
 	ghost_assert(!vms->present);
@@ -74,7 +74,7 @@ struct ghost_vm *ghost_vms_get(struct ghost_vms *vms, pkvm_handle_t handle)
 	return NULL;
 }
 
-// EXPORTED ghost_types.h
+// EXPORTED ghost_types_aux.h
 struct ghost_vm *ghost_vms_alloc(struct ghost_vms *vms, pkvm_handle_t handle)
 {
 	ghost_assert_vms_locked();
@@ -112,14 +112,14 @@ bool ghost_vms_is_valid_handle(struct ghost_vms *vms, pkvm_handle_t handle)
 }
 
 
-// EXPORTED ghost_types.h
+// EXPORTED ghost_types_aux.h
 void clear_abstract_pgtable(abstract_pgtable *ap)
 {
 	free_mapping(ap->mapping);
 	ghost_pfn_set_clear(&ap->table_pfns);
 }
 
-// EXPORTED ghost_types.h
+// EXPORTED ghost_types_aux.h
 void clear_abstraction_pkvm(struct ghost_state *g)
 {
 	if (g->pkvm.present) {
@@ -128,7 +128,7 @@ void clear_abstraction_pkvm(struct ghost_state *g)
 	}
 }
 
-// EXPORTED ghost_types.h
+// EXPORTED ghost_types_aux.h
 void clear_abstraction_host(struct ghost_state *g)
 {
 	if (g->host.present) {
@@ -141,7 +141,7 @@ void clear_abstraction_host(struct ghost_state *g)
 	}
 }
 
-// EXPORTED ghost_types.h
+// EXPORTED ghost_types_aux.h
 void clear_abstraction_regs(struct ghost_state *g)
 {
 	this_cpu_ghost_registers(g)->present = false;
@@ -211,7 +211,7 @@ static void ghost_vms_partial_vm_try_free_slot(struct ghost_state *g, struct gho
 	ghost_vms_free(&g->vms, vm->pkvm_handle);
 }
 
-// EXPORTED ghost_types.h
+// EXPORTED ghost_types_aux.h
 void clear_abstraction_vm_partial(struct ghost_state *g, pkvm_handle_t handle, enum vm_field_owner owner)
 {
 	ghost_assert_vms_locked();
@@ -242,7 +242,7 @@ void clear_abstraction_vm_partial(struct ghost_state *g, pkvm_handle_t handle, e
 	ghost_vms_partial_vm_try_free_slot(g, vm);
 }
 
-// EXPORTED ghost_types.h
+// EXPORTED ghost_types_aux.h
 void clear_abstraction_vms_partial(struct ghost_state *g, enum vm_field_owner owner)
 {
 	if (!g->vms.present)
@@ -254,7 +254,7 @@ void clear_abstraction_vms_partial(struct ghost_state *g, enum vm_field_owner ow
 	}
 }
 
-// EXPORTED ghost_types.h
+// EXPORTED ghost_types_aux.h
 void clear_abstraction_vms(struct ghost_state *g)
 {
 	int i;
@@ -265,7 +265,7 @@ void clear_abstraction_vms(struct ghost_state *g)
 	}
 }
 
-// EXPORTED ghost_types.h
+// EXPORTED ghost_types_aux.h
 void clear_abstraction_all(struct ghost_state *g)
 {
 	clear_abstraction_pkvm(g);
@@ -287,7 +287,7 @@ void clear_abstraction_all(struct ghost_state *g)
 	}
 }
 
-// EXPORTED ghost_types.h
+// EXPORTED ghost_types_aux.h
 void clear_abstraction_thread_local(void)
 {
 	ghost_lock_maplets();
@@ -303,7 +303,7 @@ void clear_abstraction_thread_local(void)
 /*
  * Copying
  */
-// EXPORTED ghost_types.h
+// EXPORTED ghost_types_aux.h
 void copy_abstraction_regs(struct ghost_registers *g_tgt, struct ghost_registers *g_src)
 {
 	ghost_assert(g_tgt->present);
@@ -311,7 +311,7 @@ void copy_abstraction_regs(struct ghost_registers *g_tgt, struct ghost_registers
 	memcpy(g_tgt, g_src, sizeof(struct ghost_registers));
 }
 
-// EXPORTED ghost_types.h
+// EXPORTED ghost_types_aux.h
 void copy_abstraction_constants(struct ghost_state *g_tgt, struct ghost_state *g_src)
 {
 	g_tgt->globals.hyp_nr_cpus = g_src->globals.hyp_nr_cpus;
@@ -321,7 +321,7 @@ void copy_abstraction_constants(struct ghost_state *g_tgt, struct ghost_state *g
 	g_tgt->globals.hyp_memory = mapping_copy(g_src->globals.hyp_memory);
 }
 
-// EXPORTED ghost_types.h
+// EXPORTED ghost_types_aux.h
 void copy_abstraction_host(struct ghost_state *g_tgt, struct ghost_state *g_src)
 {
 	ghost_assert_maplets_locked();
@@ -337,7 +337,7 @@ void copy_abstraction_host(struct ghost_state *g_tgt, struct ghost_state *g_src)
 	g_tgt->host.present = g_src->host.present;
 }
 
-// EXPORTED ghost_types.h
+// EXPORTED ghost_types_aux.h
 void copy_abstraction_pkvm(struct ghost_state *g_tgt, struct ghost_state *g_src)
 {
 	ghost_assert_maplets_locked();
@@ -349,7 +349,7 @@ void copy_abstraction_pkvm(struct ghost_state *g_tgt, struct ghost_state *g_src)
 	g_tgt->pkvm.present = g_src->pkvm.present;
 }
 
-// EXPORTED ghost_types.h
+// EXPORTED ghost_types_aux.h
 void copy_abstraction_vm_partial(struct ghost_state *g_tgt, struct ghost_state *g_src, pkvm_handle_t handle, enum vm_field_owner owner)
 {
 	GHOST_LOG_CONTEXT_ENTER();
@@ -375,7 +375,7 @@ void copy_abstraction_vm_partial(struct ghost_state *g_tgt, struct ghost_state *
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
-// EXPORTED ghost_types.h
+// EXPORTED ghost_types_aux.h
 void copy_abstraction_vms_partial(struct ghost_state *g_tgt, struct ghost_state *g_src, enum vm_field_owner owner)
 {
 	ghost_assert_vms_locked();
@@ -396,7 +396,7 @@ void copy_abstraction_vms_partial(struct ghost_state *g_tgt, struct ghost_state 
 		g_tgt->vms.table_data = g_src->vms.table_data;
 }
 
-// EXPORTED ghost_types.h
+// EXPORTED ghost_types_aux.h
 void ghost_vcpu_clone_into(struct ghost_vcpu *dest, struct ghost_vcpu *src)
 {
 	ghost_assert(src);
@@ -406,7 +406,7 @@ void ghost_vcpu_clone_into(struct ghost_vcpu *dest, struct ghost_vcpu *src)
 	ghost_pfn_set_copy(&dest->recorded_memcache_pfn_set, &src->recorded_memcache_pfn_set);
 }
 
-// EXPORTED ghost_types.h
+// EXPORTED ghost_types_aux.h
 void copy_abstraction_loaded_vcpu(struct ghost_loaded_vcpu *tgt, struct ghost_loaded_vcpu *src)
 {
 	tgt->loaded = src->loaded;
@@ -419,7 +419,7 @@ void copy_abstraction_loaded_vcpu(struct ghost_loaded_vcpu *tgt, struct ghost_lo
 	}
 }
 
-// EXPORTED ghost_types.h
+// EXPORTED ghost_types_aux.h
 void copy_abstraction_local_state(struct ghost_local_state *l_tgt, struct ghost_local_state *l_src)
 {
 	ghost_assert(l_src->present);
@@ -431,7 +431,7 @@ void copy_abstraction_local_state(struct ghost_local_state *l_tgt, struct ghost_
 }
 
 
-// EXPORTED ghost_types.h
+// EXPORTED ghost_types_aux.h
 void ghost_vm_clone_into_partial(struct ghost_vm *dest, struct ghost_vm *src, enum vm_field_owner owner)
 {
 	dest->protected = src->protected;
@@ -494,7 +494,7 @@ void ghost_vm_clone_into_partial(struct ghost_vm *dest, struct ghost_vm *src, en
 /*
  * Equality checks over ghost objects
  */
-// EXPORTED ghost_types.h
+// EXPORTED ghost_types_aux.h
 bool check_abstraction_equals_register(struct ghost_register *r1, struct ghost_register *r2, bool todo_warnonly)
 {
 	bool ret = true;
@@ -510,7 +510,7 @@ bool check_abstraction_equals_register(struct ghost_register *r1, struct ghost_r
 	return ret;
 }
 
-// EXPORTED ghost_types.h
+// EXPORTED ghost_types_aux.h
 void check_abstraction_equals_reg(struct ghost_registers *r1, struct ghost_registers *r2, bool check_sysregs)
 {
 	GHOST_LOG_CONTEXT_ENTER();
@@ -554,7 +554,7 @@ void check_abstraction_equals_reg(struct ghost_registers *r1, struct ghost_regis
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
-// EXPORTED ghost_types.h
+// EXPORTED ghost_types_aux.h
 void check_abstraction_equals_vcpu(struct ghost_vcpu *vcpu1, struct ghost_vcpu *vcpu2)
 {
 	GHOST_LOG_CONTEXT_ENTER();
@@ -565,7 +565,7 @@ void check_abstraction_equals_vcpu(struct ghost_vcpu *vcpu1, struct ghost_vcpu *
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
-// EXPORTED ghost_types.h
+// EXPORTED ghost_types_aux.h
 void check_abstraction_equals_vcpu_reference(struct ghost_vcpu_reference *vcpu_ref1, struct ghost_vcpu_reference *vcpu_ref2)
 {
 	GHOST_LOG_CONTEXT_ENTER();
@@ -583,7 +583,7 @@ void check_abstraction_equals_vcpu_reference(struct ghost_vcpu_reference *vcpu_r
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
-// EXPORTED ghost_types.h
+// EXPORTED ghost_types_aux.h
 void check_abstraction_equals_host_regs(struct ghost_host_regs *r1, struct ghost_host_regs *r2)
 {
 	GHOST_LOG_CONTEXT_ENTER();
@@ -593,7 +593,7 @@ void check_abstraction_equals_host_regs(struct ghost_host_regs *r1, struct ghost
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
-// EXPORTED ghost_types.h
+// EXPORTED ghost_types_aux.h
 void check_abstraction_equals_host(struct ghost_host *gh1, struct ghost_host *gh2)
 {
 	GHOST_LOG_CONTEXT_ENTER();
@@ -615,7 +615,7 @@ void check_abstraction_equals_host(struct ghost_host *gh1, struct ghost_host *gh
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
-// EXPORTED ghost_types.h
+// EXPORTED ghost_types_aux.h
 void check_abstraction_equals_pkvm(struct ghost_pkvm *gp1, struct ghost_pkvm *gp2)
 {
 	GHOST_LOG_CONTEXT_ENTER();
@@ -624,7 +624,7 @@ void check_abstraction_equals_pkvm(struct ghost_pkvm *gp1, struct ghost_pkvm *gp
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
-// EXPORTED ghost_types.h
+// EXPORTED ghost_types_aux.h
 void check_abstraction_equals_run_state(struct ghost_running_state *expected, struct ghost_running_state *impl)
 {
 	GHOST_LOG_CONTEXT_ENTER();
@@ -639,7 +639,7 @@ void check_abstraction_equals_run_state(struct ghost_running_state *expected, st
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
-// EXPORTED ghost_types.h
+// EXPORTED ghost_types_aux.h
 void check_abstraction_equals_local_state(struct ghost_state *g_expected, struct ghost_state *g_impl)
 {
 	GHOST_LOG_CONTEXT_ENTER();
@@ -652,7 +652,7 @@ void check_abstraction_equals_local_state(struct ghost_state *g_expected, struct
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
-// EXPORTED ghost_types.h
+// EXPORTED ghost_types_aux.h
 void check_abstraction_equals_loaded_vcpu(struct ghost_loaded_vcpu *loaded_vcpu1, struct ghost_loaded_vcpu *loaded_vcpu2)
 {
 	GHOST_LOG_CONTEXT_ENTER();
@@ -668,7 +668,7 @@ void check_abstraction_equals_loaded_vcpu(struct ghost_loaded_vcpu *loaded_vcpu1
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
-// EXPORTED ghost_types.h
+// EXPORTED ghost_types_aux.h
 void check_abstraction_equals_globals(struct ghost_state *gc, struct ghost_state *gr_post)
 {
 	GHOST_LOG_CONTEXT_ENTER();
@@ -707,7 +707,7 @@ static void __check_abstraction_vm_all_contained_in(struct ghost_vms *vms_spec, 
 	}
 }
 
-// EXPORTED ghost_types.h
+// EXPORTED ghost_types_aux.h
 void check_abstraction_vms_subseteq(struct ghost_vms *g_spec, struct ghost_vms *g_impl)
 {
 	GHOST_LOG_CONTEXT_ENTER();
@@ -733,7 +733,7 @@ void check_abstraction_vms_subseteq(struct ghost_vms *g_spec, struct ghost_vms *
 }
 
 static void post_dump_diff(struct ghost_state *gc, struct ghost_state *gr_post, struct ghost_state *gr_pre);
-// EXPORTED ghost_types.h
+// EXPORTED ghost_types_aux.h
 void check_abstraction_equals_all(struct ghost_state *gc, struct ghost_state *gr_post, struct ghost_state *gr_pre)
 {
 	GHOST_LOG_CONTEXT_ENTER();
@@ -757,7 +757,7 @@ void check_abstraction_equals_all(struct ghost_state *gc, struct ghost_state *gr
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
-//EXPORTED ghost_types.h
+//EXPORTED ghost_types_aux.h
 /// Check that `vm` is found in `vms` and that the two ghost vms are equal
 void check_abstraction_vm_in_vms_and_equal(pkvm_handle_t vm_handle, struct ghost_state *g, struct ghost_vms *vms, enum vm_field_owner owner) {
 	GHOST_LOG_CONTEXT_ENTER();
@@ -773,7 +773,7 @@ void check_abstraction_vm_in_vms_and_equal(pkvm_handle_t vm_handle, struct ghost
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
-// EXPORTED ghost_types.h
+// EXPORTED ghost_types_aux.h
 void check_abstract_pgtable_equal(abstract_pgtable *ap1, abstract_pgtable *ap2, char *cmp_name, char* ap1_name, char* ap2_name, u64 indent)
 {
 	GHOST_LOG_CONTEXT_ENTER();
@@ -795,7 +795,7 @@ void check_abstract_pgtable_equal(abstract_pgtable *ap1, abstract_pgtable *ap2, 
 /*
  * Refinement checks over ghost objects
  */
-// EXPORTED ghost_types.h
+// EXPORTED ghost_types_aux.h
 void check_abstraction_refined_pgtable(abstract_pgtable *ap_spec, abstract_pgtable *ap_impl)
 {
 	GHOST_LOG_CONTEXT_ENTER();
@@ -805,7 +805,7 @@ void check_abstraction_refined_pgtable(abstract_pgtable *ap_spec, abstract_pgtab
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
-// EXPORTED ghost_types.h
+// EXPORTED ghost_types_aux.h
 void check_abstraction_refined_register(int idx, struct ghost_register *gc_reg, struct ghost_register *gr_post_reg, struct ghost_register *gr_pre_reg)
 {
 	GHOST_LOG_CONTEXT_ENTER();
@@ -834,7 +834,7 @@ void check_abstraction_refined_register(int idx, struct ghost_register *gc_reg, 
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
-// EXPORTED ghost_types.h
+// EXPORTED ghost_types_aux.h
 void check_abstraction_refined_registers(struct ghost_registers *gc_regs, struct ghost_registers *gr_post_regs, struct ghost_registers *gr_pre_regs)
 {
 	GHOST_LOG_CONTEXT_ENTER();
@@ -849,7 +849,7 @@ void check_abstraction_refined_registers(struct ghost_registers *gc_regs, struct
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
-// EXPORTED ghost_types.h
+// EXPORTED ghost_types_aux.h
 void check_abstraction_refined_run_state(struct ghost_state *gc, struct ghost_state *gr_post, struct ghost_state *gr_pre)
 {
 	GHOST_LOG_CONTEXT_ENTER();
@@ -861,7 +861,7 @@ void check_abstraction_refined_run_state(struct ghost_state *gc, struct ghost_st
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
-// EXPORTED ghost_types.h
+// EXPORTED ghost_types_aux.h
 void check_abstraction_refined_local_state(struct ghost_state *gc, struct ghost_state *gr_post, struct ghost_state *gr_pre)
 {
 	GHOST_LOG_CONTEXT_ENTER();
@@ -893,7 +893,7 @@ void check_abstraction_refined_local_state(struct ghost_state *gc, struct ghost_
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
-// EXPORTED ghost_types.h
+// EXPORTED ghost_types_aux.h
 void check_abstraction_refined_vm(struct ghost_vm *vm_spec, struct ghost_vm *vm_impl, enum vm_field_owner owner)
 {
 	GHOST_LOG_CONTEXT_ENTER();
@@ -952,7 +952,7 @@ void check_abstraction_refined_vm(struct ghost_vm *vm_spec, struct ghost_vm *vm_
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
-// EXPORTED ghost_types.h
+// EXPORTED ghost_types_aux.h
 void check_abstraction_refined_pkvm(struct ghost_state *gc, struct ghost_state *gr_post, struct ghost_state *gr_pre)
 {
 	GHOST_LOG_CONTEXT_ENTER();
@@ -974,7 +974,7 @@ void check_abstraction_refined_pkvm(struct ghost_state *gc, struct ghost_state *
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
-// EXPORTED ghost_types.h
+// EXPORTED ghost_types_aux.h
 void check_abstraction_refined_host(struct ghost_state *gc, struct ghost_state *gr_post, struct ghost_state *gr_pre)
 {
 	GHOST_LOG_CONTEXT_ENTER();
@@ -996,7 +996,7 @@ void check_abstraction_refined_host(struct ghost_state *gc, struct ghost_state *
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
-// EXPORTED ghost_types.h
+// EXPORTED ghost_types_aux.h
 void check_abstraction_refined_vms(struct ghost_state *gc, struct ghost_state *gr_post, struct ghost_state *gr_pre)
 {
 	GHOST_LOG_CONTEXT_ENTER();
@@ -1019,7 +1019,7 @@ void check_abstraction_refined_vms(struct ghost_state *gc, struct ghost_state *g
  * Dumping and diffing
  */
 #define GHOST_MISSING_FIELD "<not recorded>"
-// EXPORTED ghost_types.h
+// EXPORTED ghost_types_aux.h
 void ghost_dump_pkvm(struct ghost_pkvm *pkvm)
 {
 	ghost_printf("pkvm: ");
@@ -1035,7 +1035,7 @@ void ghost_dump_pkvm(struct ghost_pkvm *pkvm)
 	}
 }
 
-// EXPORTED ghost_types.h
+// EXPORTED ghost_types_aux.h
 void ghost_dump_host(struct ghost_host *host)
 {
 	ghost_printf("host: ");
@@ -1059,7 +1059,7 @@ void ghost_dump_host(struct ghost_host *host)
 	);
 }
 
-// EXPORTED ghost_types.h
+// EXPORTED ghost_types_aux.h
 void ghost_dump_vm(struct ghost_vm *vm, u64 i)
 {
 	if (!vm)
@@ -1119,7 +1119,7 @@ void ghost_dump_vm(struct ghost_vm *vm, u64 i)
 	}
 }
 
-// EXPORTED ghost_types.h
+// EXPORTED ghost_types_aux.h
 void ghost_dump_vms(struct ghost_vms *vms)
 {
 	ghost_printf("vms: ");
@@ -1149,7 +1149,7 @@ void ghost_dump_vms(struct ghost_vms *vms)
 	}
 }
 
-// EXPORTED ghost_types.h
+// EXPORTED ghost_types_aux.h
 void ghost_dump_globals(struct ghost_constant_globals *globals)
 {
 	ghost_printf(
@@ -1166,13 +1166,13 @@ void ghost_dump_globals(struct ghost_constant_globals *globals)
 	/* TODO: dump hyp memory */
 }
 
-// EXPORTED ghost_types.h
+// EXPORTED ghost_types_aux.h
 void ghost_dump_regs(struct ghost_registers *regs, u64 i)
 {
 	ghost_printf("%Iregs[cpu:%d]:<TODO>\n", i, hyp_smp_processor_id());
 }
 
-// EXPORTED ghost_types.h
+// EXPORTED ghost_types_aux.h
 void ghost_dump_loaded_vcpu(struct ghost_loaded_vcpu *loaded_vcpu_info, u64 i)
 {
 	ghost_printf("%Iloaded_vcpu[cpu:%d]: ", i, hyp_smp_processor_id());
@@ -1184,7 +1184,7 @@ void ghost_dump_loaded_vcpu(struct ghost_loaded_vcpu *loaded_vcpu_info, u64 i)
 	}
 }
 
-// EXPORTED ghost_types.h
+// EXPORTED ghost_types_aux.h
 void ghost_dump_running_state(struct ghost_running_state *run, u64 i)
 {
 	ghost_printf("%Irun_state[cpu:%d]: ", i, hyp_smp_processor_id());
@@ -1196,7 +1196,7 @@ void ghost_dump_running_state(struct ghost_running_state *run, u64 i)
 	}
 }
 
-// EXPORTED ghost_types.h
+// EXPORTED ghost_types_aux.h
 void ghost_dump_host_regs(struct ghost_host_regs *host_regs, u64 i)
 {
 	ghost_printf("%Ihost regs: ", i);
@@ -1208,7 +1208,7 @@ void ghost_dump_host_regs(struct ghost_host_regs *host_regs, u64 i)
 	}
 }
 
-// EXPORTED ghost_types.h
+// EXPORTED ghost_types_aux.h
 void ghost_dump_thread_local(struct ghost_local_state *local)
 {
 	ghost_printf("locals[%ld]: ", hyp_smp_processor_id());
@@ -1223,7 +1223,7 @@ void ghost_dump_thread_local(struct ghost_local_state *local)
 	}
 }
 
-// EXPORTED ghost_types.h
+// EXPORTED ghost_types_aux.h
 void ghost_dump_state(struct ghost_state *g)
 {
 	ghost_dump_pkvm(&g->pkvm);

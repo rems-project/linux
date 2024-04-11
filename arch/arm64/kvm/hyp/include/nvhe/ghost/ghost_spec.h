@@ -8,7 +8,7 @@
 
 /**
  * ghost_check_this_hypercall - Per-CPU check of whether to check the current hypercall
- * (SEE comment in ghost_record.h)
+ * (SEE comment in ghost_recording.h)
  */
 DECLARE_PER_CPU(bool, ghost_check_this_hypercall);
 
@@ -122,7 +122,7 @@ static const char *ghost_host_hcall_names[] = {
 
 // top-level spec ghost state
 
-// the gs and gs_recorded_* are the ghost_state actually written to by the ghost_record.h functions
+// the gs and gs_recorded_* are the ghost_state actually written to by the ghost_recording.h functions
 
 // the "master" common ghost state, shared but with its parts protected by the associated impl locks
 extern struct ghost_state gs;
