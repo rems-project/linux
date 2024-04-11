@@ -18,6 +18,42 @@
 struct ghost_vm *ghost_vms_get(struct ghost_vms *vms, pkvm_handle_t handle);
 hyp_spinlock_t *ghost_pointer_to_vm_lock(pkvm_handle_t handle);
 
+//#ifdef IS_GHOST_SOURCE
+void copy_abstraction_regs(struct ghost_registers *g_tgt, struct ghost_registers *g_src);
+void copy_abstraction_constants(struct ghost_state *g_tgt, struct ghost_state *g_src);
+void copy_abstraction_host(struct ghost_state *g_tgt, struct ghost_state *g_src);
+void copy_abstraction_pkvm(struct ghost_state *g_tgt, struct ghost_state *g_src);
+// INTERNAL void copy_abstraction_vms(struct ghost_state *g_tgt, struct ghost_state *g_src);
+void copy_abstraction_vms_partial(struct ghost_state *g_tgt, struct ghost_state *g_src, enum vm_field_owner owner);
+// INTERNAL void copy_abstraction_vm_partial(struct ghost_state *g_tgt, struct ghost_state *g_src, pkvm_handle_t handle, enum vm_field_owner owner);
+void copy_abstraction_local_state(struct ghost_local_state *l_tgt, struct ghost_local_state *l_src);
+void ghost_vcpu_clone_into(struct ghost_vcpu *dest, struct ghost_vcpu *src);
+
+
+void check_abstraction_equals_all(
+	struct ghost_state *gc,
+	struct ghost_state *gr_post,
+	struct ghost_state *gr_pre
+);
+
+// INTERNAL void check_abstraction_equals_reg(struct ghost_registers *r1, struct ghost_registers *r2, bool check_sysregs);
+void check_abstraction_equals_pkvm(struct ghost_pkvm *gp1, struct ghost_pkvm *gp2);
+// INTERNAL void check_abstraction_equals_host(struct ghost_host *gh1, struct ghost_host *gh2);
+// INTERNAL void check_abstraction_equals_loaded_vcpu(struct ghost_loaded_vcpu *loaded_vcpu1, struct ghost_loaded_vcpu *loaded_vcpu2);
+// INTERNAL void check_abstraction_equals_vcpu(struct ghost_vcpu *vcpu1, struct ghost_vcpu *vcpu2);
+// INTERNAL void check_abstraction_vms_subseteq(struct ghost_vms *g_spec, struct ghost_vms *g_impl);
+// INTERNAL void check_abstract_pgtable_equal(
+// 	abstract_pgtable *pgt1,
+// 	abstract_pgtable *pgt2,
+// 	char* cmp_name,
+// 	char* pgt1_name,
+// 	char* pgt2_name,
+// 	u64 indent
+// );
+// INTERNAL void check_abstraction_refined_pgtable(
+// 	abstract_pgtable *pgt_spec,
+// 	abstract_pgtable *pgt_impl
+// );
 
 /**
  * ghost_vms_alloc() - Get a reference to a fresh (empty) ghost_vm in the table
@@ -63,4 +99,5 @@ void ghost_vm_clone_into_partial(struct ghost_vm *dest, struct ghost_vm *src, en
 
 void ghost_dump_state(struct ghost_state *g);
 
+//#endif // IS_GHOST_SOURCE
 #endif // _GHOST_TYPES_H

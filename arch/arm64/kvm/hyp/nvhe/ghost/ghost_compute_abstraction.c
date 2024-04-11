@@ -46,11 +46,13 @@
 
 
 #include <hyp/ghost/ghost_alloc.h>
+#include <nvhe/ghost/ghost_control.h>
 #include <nvhe/ghost/ghost_misc.h>
 
 #include <nvhe/ghost/ghost_registers.h>
 #include <nvhe/ghost/ghost_spec.h>
-#include <nvhe/ghost/ghost_compute_abstraction.h>
+#include <nvhe/ghost/ghost_types.h>
+#include <nvhe/ghost/ghost_record.h>
 
 /* from nvhe/pkvm.c */
 extern struct pkvm_hyp_vm **vm_table;
@@ -508,6 +510,16 @@ void check_abstraction_equals_host(struct ghost_host *gh1, struct ghost_host *gh
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
+void check_abstraction_equals_vcpu(struct ghost_vcpu *vcpu1, struct ghost_vcpu *vcpu2)
+{
+	GHOST_LOG_CONTEXT_ENTER();
+	ghost_assert(vcpu1);
+	ghost_assert(vcpu2);
+
+	GHOST_SPEC_ASSERT_VAR_EQ(vcpu1->vcpu_index, vcpu2->vcpu_index, u64);
+	GHOST_LOG_CONTEXT_EXIT();
+}
+
 void check_abstraction_equals_loaded_vcpu(struct ghost_loaded_vcpu *loaded_vcpu1, struct ghost_loaded_vcpu *loaded_vcpu2)
 {
 	GHOST_LOG_CONTEXT_ENTER();
@@ -600,15 +612,7 @@ void check_abstraction_refined_local_state(struct ghost_state *gc, struct ghost_
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
-void check_abstraction_equals_vcpu(struct ghost_vcpu *vcpu1, struct ghost_vcpu *vcpu2)
-{
-	GHOST_LOG_CONTEXT_ENTER();
-	ghost_assert(vcpu1);
-	ghost_assert(vcpu2);
 
-	GHOST_SPEC_ASSERT_VAR_EQ(vcpu1->vcpu_index, vcpu2->vcpu_index, u64);
-	GHOST_LOG_CONTEXT_EXIT();
-}
 
 void check_abstraction_equals_vcpu_reference(struct ghost_vcpu_reference *vcpu_ref1, struct ghost_vcpu_reference *vcpu_ref2)
 {

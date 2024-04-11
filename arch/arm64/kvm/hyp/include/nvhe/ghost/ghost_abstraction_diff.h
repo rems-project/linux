@@ -1,7 +1,7 @@
 #ifndef GHOST_ABSTRACTION_DIFF_H
 #define GHOST_ABSTRACTION_DIFF_H
 
-#include <nvhe/ghost/ghost_compute_abstraction.h>
+#include <nvhe/ghost/ghost_types.h>
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
 #include <nvhe/ghost/ghost_simplified_model.h>
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */

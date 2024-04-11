@@ -20,13 +20,10 @@
 
 #ifdef CONFIG_NVHE_GHOST_SPEC
 
-#include <hyp/ghost/ghost_extra_debug-pl011.h>
-#include <nvhe/ghost/ghost_mapping_reqs.h>
-#include <nvhe/ghost/ghost_misc.h>
-#include <nvhe/ghost/ghost_compute_abstraction.h>
-#include <nvhe/ghost/ghost_abstraction_diff.h>
-#include <nvhe/ghost/ghost_pgtable.h>
+#include <hyp/ghost/ghost_extra_debug-pl011.h> // TODO: move on to ghost_printer.h
 #include <nvhe/ghost/ghost_control.h>
+#include <nvhe/ghost/ghost_misc.h>
+#include <nvhe/ghost/ghost_record.h>
 
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
 #include <nvhe/ghost/ghost_simplified_model.h>
