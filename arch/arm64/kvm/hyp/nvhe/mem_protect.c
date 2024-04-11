@@ -24,7 +24,7 @@
 #include <hyp/ghost/ghost_extra_debug-pl011.h> // TODO: move on to ghost_printer.h
 #include <nvhe/ghost/ghost_control.h>
 #include <nvhe/ghost/ghost_misc.h>
-#include <nvhe/ghost/ghost_record.h>
+#include <nvhe/ghost/ghost_recording.h>
 #include <nvhe/ghost/ghost_call_data.h>
 #ifdef CONFIG_NVHE_GHOST_SPEC_DUMP_STATE_RAW_HOST
 #include <nvhe/ghost/ghost_spec.h> // for ghost_print_this_hypercall

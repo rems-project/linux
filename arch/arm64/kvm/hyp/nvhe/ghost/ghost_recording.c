@@ -5,7 +5,7 @@
 #include <nvhe/ghost/ghost_misc.h>
 
 #include <nvhe/ghost/ghost_spec.h>
-#include <nvhe/ghost/ghost_types.h>
+#include <nvhe/ghost/ghost_types_aux.h>
 
 #pragma GCC diagnostic ignored "-Wdeclaration-after-statement"
 
@@ -37,13 +37,13 @@ static void init_abstraction(struct ghost_state *g)
 	}
 }
 
-// EXPORTED ghost_record.h
+// EXPORTED ghost_recording.h
 void init_abstraction_common(void)
 {
 	init_abstraction(&gs);
 }
 
-// EXPORTED ghost_record.h
+// EXPORTED ghost_recording.h
 void init_abstraction_thread_local(void)
 {
 	init_abstraction(this_cpu_ptr(&gs_recorded_pre));
@@ -282,7 +282,7 @@ static void record_abstraction_pkvm(struct ghost_state *g)
 	compute_abstraction_pkvm(&g->pkvm);
 }
 
-// EXPORTED ghost_record.h
+// EXPORTED ghost_recording.h
 void record_and_check_abstraction_pkvm_pre(void)
 {
 	if (ghost_machinery_enabled()) {
@@ -303,7 +303,7 @@ void record_and_check_abstraction_pkvm_pre(void)
 	}
 }
 
-// EXPORTED ghost_record.h
+// EXPORTED ghost_recording.h
 void record_and_copy_abstraction_pkvm_post(void)
 {
 	if (ghost_machinery_enabled()) {
@@ -328,7 +328,7 @@ static void record_abstraction_host(struct ghost_state *g)
 	compute_abstraction_host(&g->host);
 }
 
-// EXPORTED ghost_record.h
+// EXPORTED ghost_recording.h
 void record_and_check_abstraction_host_pre(void)
 {
 	if (ghost_machinery_enabled()) {
@@ -345,7 +345,7 @@ void record_and_check_abstraction_host_pre(void)
 	}
 }
 
-// EXPORTED ghost_record.h
+// EXPORTED ghost_recording.h
 void record_and_copy_abstraction_host_post(void)
 {
 	if (ghost_machinery_enabled()) {
@@ -373,14 +373,14 @@ static void record_abstraction_constants(struct ghost_state *g)
 	g->globals.hyp_memory = compute_abstraction_hyp_memory();
 }
 
-// EXPORTED ghost_record.h
+// EXPORTED ghost_recording.h
 void record_abstraction_constants_pre(void)
 {
 	struct ghost_state *g = this_cpu_ptr(&gs_recorded_pre);
 	record_abstraction_constants(g);
 }
 
-// EXPORTED ghost_record.h
+// EXPORTED ghost_recording.h
 void record_abstraction_constants_post(void)
 {
 	struct ghost_state *g = this_cpu_ptr(&gs_recorded_post);
@@ -414,7 +414,7 @@ static void record_abstraction_vm_partial(struct ghost_state *g, struct pkvm_hyp
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
-// EXPORTED ghost_record.h
+// EXPORTED ghost_recording.h
 void record_and_check_abstraction_vm_pre(struct pkvm_hyp_vm *vm)
 {
 	if (ghost_machinery_enabled()) {
@@ -449,7 +449,7 @@ void record_and_check_abstraction_vm_pre(struct pkvm_hyp_vm *vm)
 	}
 }
 
-// EXPORTED ghost_record.h
+// EXPORTED ghost_recording.h
 void record_and_copy_abstraction_vm_post(struct pkvm_hyp_vm *vm)
 {
 	if (ghost_machinery_enabled()) {
@@ -495,7 +495,7 @@ static void record_abstraction_vms_partial(struct ghost_state *g, enum vm_field_
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
-// EXPORTED ghost_record.h
+// EXPORTED ghost_recording.h
 void record_and_check_abstraction_vms_pre(void)
 {
 	if (ghost_machinery_enabled()) {
@@ -509,7 +509,7 @@ void record_and_check_abstraction_vms_pre(void)
 	}
 }
 
-// EXPORTED ghost_record.h
+// EXPORTED ghost_recording.h
 void record_and_copy_abstraction_vms_post(void)
 {
 	if (ghost_machinery_enabled()) {
@@ -583,7 +583,7 @@ static void record_abstraction_local_state(struct ghost_state *g, struct kvm_cpu
 	record_abstraction_loaded_vcpu(g, loaded_vcpu);
 }
 
-// EXPORTED ghost_record.h
+// EXPORTED ghost_recording.h
 void record_and_check_abstraction_local_state_pre(struct kvm_cpu_context *ctxt)
 {
 	if (ghost_machinery_enabled()) {
@@ -600,7 +600,7 @@ void record_and_check_abstraction_local_state_pre(struct kvm_cpu_context *ctxt)
 	}
 }
 
-// EXPORTED ghost_record.h
+// EXPORTED ghost_recording.h
 void record_and_copy_abstraction_local_state_post(struct kvm_cpu_context *ctxt)
 {
 	if (ghost_machinery_enabled()) {
@@ -610,7 +610,7 @@ void record_and_copy_abstraction_local_state_post(struct kvm_cpu_context *ctxt)
 	}
 }
 
-// EXPORTED ghost_record.h
+// EXPORTED ghost_recording.h
 void record_abstraction_loaded_vcpu_and_check_none(void)
 {
 	struct pkvm_hyp_vcpu *loaded_vcpu = pkvm_get_loaded_hyp_vcpu();
@@ -665,7 +665,7 @@ static void record_abstraction_all(struct ghost_state *g, struct kvm_cpu_context
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
-// EXPORTED ghost_record.h
+// EXPORTED ghost_recording.h
 void record_abstraction_common(void)
 {
 	GHOST_LOG_CONTEXT_ENTER();

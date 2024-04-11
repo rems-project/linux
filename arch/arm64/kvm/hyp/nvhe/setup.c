@@ -23,7 +23,7 @@
 #include <hyp/ghost/ghost_extra_debug-pl011.h> // TODO: move on to ghost_printer.h
 #include <nvhe/ghost/ghost_control.h>
 #include <nvhe/ghost/ghost_misc.h>
-#include <nvhe/ghost/ghost_record.h>
+#include <nvhe/ghost/ghost_recording.h>
 
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
 #include <nvhe/ghost/ghost_simplified_model.h>
@@ -490,6 +490,7 @@ int __pkvm_init(phys_addr_t phys, unsigned long size, unsigned long nr_cpus,
 #endif
 
 	if (ghost_print_on("setup")) {
+		ghost_printf(GHOST_WHITE_ON_MAGENTA "REFACTORED VERSION 5" GHOST_NORMAL "\n");
 		ghost_printf(
 			"\n"
 			"__pkvm_init:\n"

@@ -18,7 +18,7 @@
 #include <nvhe/trap_handler.h>
 
 #ifdef CONFIG_NVHE_GHOST_SPEC
-#include <nvhe/ghost/ghost_record.h>
+#include <nvhe/ghost/ghost_recording.h>
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 
 /* Used by icache_is_vpipt(). */

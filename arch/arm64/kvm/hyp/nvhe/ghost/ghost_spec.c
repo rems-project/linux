@@ -18,8 +18,8 @@
 // #include <nvhe/ghost/ghost_compute_abstraction.h>
 #include <nvhe/ghost/ghost_kvm_pgtable.h>
 #include <nvhe/ghost/ghost_control.h>
-#include <nvhe/ghost/ghost_types.h>
-#include <nvhe/ghost/ghost_record.h>
+#include <nvhe/ghost/ghost_types_aux.h>
+#include <nvhe/ghost/ghost_recording.h>
 
 
 /*
