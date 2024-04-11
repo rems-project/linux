@@ -152,5 +152,3 @@ void ghost_record_pre(struct kvm_cpu_context *ctxt, u64 guest_exit_code);
 void ghost_post(struct kvm_cpu_context *ctxt);
 
 #endif // _GHOST_SPEC_H
-
-

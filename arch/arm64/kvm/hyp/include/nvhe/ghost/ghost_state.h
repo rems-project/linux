@@ -103,7 +103,6 @@ enum vm_field_owner {
 	VMS_VM_OWNED = BIT(1),
 };
 
-
 /**
  * struct ghost_vm_locked_by_vm_lock - A guest VM (part protected by the internal VM lock)
  *
@@ -116,6 +115,7 @@ struct ghost_vm_locked_by_vm_lock {
 	bool present;
 	abstract_pgtable vm_abstract_pgtable;
 };
+
 /**
  * struct ghost_vm_locked_by_vm_table - A guest VM (part protected by the VM table lock)
  *
