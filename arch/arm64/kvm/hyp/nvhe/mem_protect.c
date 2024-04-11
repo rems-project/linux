@@ -21,8 +21,7 @@
 
 #ifdef CONFIG_NVHE_GHOST_SPEC
 
-#include <hyp/ghost/ghost_extra_debug-pl011.h>
-#include <nvhe/ghost/ghost_pgtable.h>
+#include <hyp/ghost/ghost_extra_debug-pl011.h> // TODO: move on to ghost_printer.h
 #include <nvhe/ghost/ghost_control.h>
 #include <nvhe/ghost/ghost_misc.h>
 #include <nvhe/ghost/ghost_record.h>

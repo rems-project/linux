@@ -19,10 +19,7 @@
 #include <nvhe/spinlock.h>
 
 #ifdef CONFIG_NVHE_GHOST_SPEC
-
 #include <nvhe/ghost/ghost_spec.h>
-#include <nvhe/ghost/ghost_mapping_reqs.h>
-
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 
 struct kvm_pgtable pkvm_pgtable;
