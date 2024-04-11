@@ -37,11 +37,13 @@ static void init_abstraction(struct ghost_state *g)
 	}
 }
 
+// EXPORTED ghost_record.h
 void init_abstraction_common(void)
 {
 	init_abstraction(&gs);
 }
 
+// EXPORTED ghost_record.h
 void init_abstraction_thread_local(void)
 {
 	init_abstraction(this_cpu_ptr(&gs_recorded_pre));
@@ -59,8 +61,6 @@ static mapping compute_abstraction_hyp_memory(void)
 	return m;
 }
 
-
-// TODO[doc]: struct ghost_host;
 static void compute_abstraction_host(struct ghost_host *dest)
 {
 	u64 i=0; /* base indent */ /* though we'll mostly want this to be quiet, later */
@@ -84,7 +84,6 @@ static void compute_abstraction_host(struct ghost_host *dest)
 	dest->present = true;
 }
 
-// TODO[doc]: struct ghost_pkvm;
 // should this read from the mapping, or from our ghost record of the mapping requests?  From the mapping, as this is to specify what EL2 Stage 1 translation does - correctness of the initialisation w.r.t. the requests is a different question
 // should this be usable only from a freshly initialised state, or from an arbitrary point during pKVM execution?  From an arbitrary point during execution.  (Do we have to remove any annot parts here?  not sure)
 // need to hold the pkvm lock
@@ -98,7 +97,6 @@ static void compute_abstraction_pkvm(struct ghost_pkvm *dest)
 }
 
 
-// TODO[doc] struct ghost_register
 inline void make_abstract_register(struct ghost_register *reg, u64 value)
 {
 	reg->status = GHOST_PRESENT;
@@ -127,7 +125,6 @@ static void ghost_registers_copy_el2_sysregs_from_context(const struct kvm_cpu_c
 	}
 }
 
-// TODO[doc] struct ghost_registers
 static void compute_abstract_registers(struct ghost_registers *regs, struct kvm_cpu_context *ctxt, bool copy_el2_sysregs)
 {
 	regs->present = true;
@@ -207,8 +204,6 @@ static void record_abstraction_regs(struct ghost_registers *gr, struct kvm_cpu_c
 	record_abstraction_el2_sysregs(gr);
 }
 
-
-// TODO[doc]: struct ghost_vcpu;
 static void compute_abstraction_vcpu(struct ghost_vcpu *dest, struct pkvm_hyp_vcpu *vcpu, u64 vcpu_index)
 {
 	memset(dest, 0, sizeof(struct ghost_vcpu));
@@ -228,11 +223,6 @@ static void compute_abstraction_vcpu(struct ghost_vcpu *dest, struct pkvm_hyp_vc
 	}
 }
 
-/*
- * TODO[doc]: ghost_vm
- */
-/// from a vm_table index compute the abstract ghost VM
-// TODO: is that comment out of sync?
 static void compute_abstraction_vm_partial(struct ghost_vm *dest, struct pkvm_hyp_vm *hyp_vm, enum vm_field_owner owner)
 {
 	ghost_assert(hyp_vm);
@@ -286,7 +276,118 @@ static void compute_abstraction_vm_partial(struct ghost_vm *dest, struct pkvm_hy
 	}
 }
 
-void record_abstraction_vm_partial(struct ghost_state *g, struct pkvm_hyp_vm *hyp_vm, enum vm_field_owner owner)
+static void record_abstraction_pkvm(struct ghost_state *g)
+{
+	ghost_assert(!g->pkvm.present);
+	compute_abstraction_pkvm(&g->pkvm);
+}
+
+// EXPORTED ghost_record.h
+void record_and_check_abstraction_pkvm_pre(void)
+{
+	if (ghost_machinery_enabled()) {
+		GHOST_LOG_CONTEXT_ENTER();
+		ghost_lock_maplets();
+		struct ghost_state *g = this_cpu_ptr(&gs_recorded_pre);
+		// For pKVM and Host we believe there is no single synchronisation point during a hypercall
+		// because the hypercalls may take and release the locks on these multiple times.
+		//
+		// For now we just record the pre for the very first lock, and assume no interference.
+		// ... but later on we'll have to do some this-thread-diff/trajectory tracking instead
+		if (!g->pkvm.present) {
+			record_abstraction_pkvm(g);
+			check_abstraction_equals_pkvm(&g->pkvm, &gs.pkvm);
+		}
+		ghost_unlock_maplets();
+		GHOST_LOG_CONTEXT_EXIT();
+	}
+}
+
+// EXPORTED ghost_record.h
+void record_and_copy_abstraction_pkvm_post(void)
+{
+	if (ghost_machinery_enabled()) {
+		GHOST_LOG_CONTEXT_ENTER();
+		ghost_lock_maplets();
+		struct ghost_state *g = this_cpu_ptr(&gs_recorded_post);
+		// TODO: for pKVM and Host we believe there is no single synchronisation point
+		// (see comment in record_and_check_abstraction_pkvm_pre)
+		// so on the post we must clear if there was a previous recorded post
+		if (g->pkvm.present)
+			clear_abstraction_pkvm(g);
+		record_abstraction_pkvm(g);
+		copy_abstraction_pkvm(&gs, g);
+		ghost_unlock_maplets();
+		GHOST_LOG_CONTEXT_EXIT();
+	}
+}
+
+static void record_abstraction_host(struct ghost_state *g)
+{
+	ghost_assert(!g->host.present);
+	compute_abstraction_host(&g->host);
+}
+
+// EXPORTED ghost_record.h
+void record_and_check_abstraction_host_pre(void)
+{
+	if (ghost_machinery_enabled()) {
+		GHOST_LOG_CONTEXT_ENTER();
+		ghost_lock_maplets();
+		struct ghost_state *g = this_cpu_ptr(&gs_recorded_pre);
+		// TODO: see comment in record_and_check_abstraction_pkvm_pre
+		if (!g->host.present) {
+			record_abstraction_host(g);
+			check_abstraction_equals_host(&g->host, &gs.host);
+		}
+		ghost_unlock_maplets();
+		GHOST_LOG_CONTEXT_EXIT();
+	}
+}
+
+// EXPORTED ghost_record.h
+void record_and_copy_abstraction_host_post(void)
+{
+	if (ghost_machinery_enabled()) {
+		GHOST_LOG_CONTEXT_ENTER();
+		ghost_lock_maplets();
+		struct ghost_state *g = this_cpu_ptr(&gs_recorded_post);
+		// TODO: for pKVM and Host we believe there is no single synchronisation point
+		// (see comment in record_and_check_abstraction_pkvm_pre)
+		// so on the post we must clear if there was a previous recorded post
+		if (g->host.present)
+			clear_abstraction_host(g);
+		record_abstraction_host(g);
+		copy_abstraction_host(&gs, g);
+		ghost_unlock_maplets();
+		GHOST_LOG_CONTEXT_EXIT();
+	}
+}
+
+static void record_abstraction_constants(struct ghost_state *g)
+{
+	g->globals.hyp_nr_cpus = hyp_nr_cpus;
+	g->globals.hyp_physvirt_offset = hyp_physvirt_offset;
+	g->globals.tag_lsb = tag_lsb;
+	g->globals.tag_val = tag_val;
+	g->globals.hyp_memory = compute_abstraction_hyp_memory();
+}
+
+// EXPORTED ghost_record.h
+void record_abstraction_constants_pre(void)
+{
+	struct ghost_state *g = this_cpu_ptr(&gs_recorded_pre);
+	record_abstraction_constants(g);
+}
+
+// EXPORTED ghost_record.h
+void record_abstraction_constants_post(void)
+{
+	struct ghost_state *g = this_cpu_ptr(&gs_recorded_post);
+	record_abstraction_constants(g);
+}
+
+static void record_abstraction_vm_partial(struct ghost_state *g, struct pkvm_hyp_vm *hyp_vm, enum vm_field_owner owner)
 {
 	GHOST_LOG_CONTEXT_ENTER();
 	ghost_assert_vms_locked();
@@ -313,49 +414,7 @@ void record_abstraction_vm_partial(struct ghost_state *g, struct pkvm_hyp_vm *hy
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
-void record_abstraction_vms_partial(struct ghost_state *g, enum vm_field_owner owner)
-{
-	GHOST_LOG_CONTEXT_ENTER();
-
-	/* Make empty table if not already there */
-	if (!g->vms.present) {
-		make_abstraction_vms(&g->vms);
-	}
-
-	if (owner & VMS_VM_TABLE_OWNED) {
-		g->vms.table_data.present = true;
-		g->vms.table_data.nr_vms = 0;
-	}
-
-	for (int idx=0; idx<KVM_MAX_PVMS; idx++) {
-		struct pkvm_hyp_vm *hyp_vm = vm_table[idx];
-		/* If we only have the table lock, not the entire vm lock
-		 * then can't record the pgtable right now,
-		 * so only take a partial view of it.
-		 */
-		if (hyp_vm) {
-			record_abstraction_vm_partial(g, hyp_vm, owner);
-
-			if (owner & VMS_VM_TABLE_OWNED)
-				g->vms.table_data.nr_vms++;
-		}
-	}
-	GHOST_LOG_CONTEXT_EXIT();
-}
-
-void record_abstraction_pkvm(struct ghost_state *g)
-{
-	ghost_assert(!g->pkvm.present);
-	compute_abstraction_pkvm(&g->pkvm);
-}
-
-void record_abstraction_host(struct ghost_state *g)
-{
-	ghost_assert(!g->host.present);
-	compute_abstraction_host(&g->host);
-}
-
-
+// EXPORTED ghost_record.h
 void record_and_check_abstraction_vm_pre(struct pkvm_hyp_vm *vm)
 {
 	if (ghost_machinery_enabled()) {
@@ -390,6 +449,7 @@ void record_and_check_abstraction_vm_pre(struct pkvm_hyp_vm *vm)
 	}
 }
 
+// EXPORTED ghost_record.h
 void record_and_copy_abstraction_vm_post(struct pkvm_hyp_vm *vm)
 {
 	if (ghost_machinery_enabled()) {
@@ -405,7 +465,37 @@ void record_and_copy_abstraction_vm_post(struct pkvm_hyp_vm *vm)
 	}
 }
 
+static void record_abstraction_vms_partial(struct ghost_state *g, enum vm_field_owner owner)
+{
+	GHOST_LOG_CONTEXT_ENTER();
 
+	/* Make empty table if not already there */
+	if (!g->vms.present) {
+		make_abstraction_vms(&g->vms);
+	}
+
+	if (owner & VMS_VM_TABLE_OWNED) {
+		g->vms.table_data.present = true;
+		g->vms.table_data.nr_vms = 0;
+	}
+
+	for (int idx=0; idx<KVM_MAX_PVMS; idx++) {
+		struct pkvm_hyp_vm *hyp_vm = vm_table[idx];
+		/* If we only have the table lock, not the entire vm lock
+		 * then can't record the pgtable right now,
+		 * so only take a partial view of it.
+		 */
+		if (hyp_vm) {
+			record_abstraction_vm_partial(g, hyp_vm, owner);
+
+			if (owner & VMS_VM_TABLE_OWNED)
+				g->vms.table_data.nr_vms++;
+		}
+	}
+	GHOST_LOG_CONTEXT_EXIT();
+}
+
+// EXPORTED ghost_record.h
 void record_and_check_abstraction_vms_pre(void)
 {
 	if (ghost_machinery_enabled()) {
@@ -419,6 +509,7 @@ void record_and_check_abstraction_vms_pre(void)
 	}
 }
 
+// EXPORTED ghost_record.h
 void record_and_copy_abstraction_vms_post(void)
 {
 	if (ghost_machinery_enabled()) {
@@ -430,6 +521,14 @@ void record_and_copy_abstraction_vms_post(void)
 		ghost_unlock_vms();
 		GHOST_LOG_CONTEXT_EXIT();
 	}
+}
+
+static void ghost_cpu_running_state_copy(struct ghost_running_state *run_tgt, struct ghost_running_state *g_src)
+{
+	run_tgt->guest_running = g_src->guest_running;
+	run_tgt->vm_handle = g_src->vm_handle;
+	run_tgt->vcpu_index = g_src->vcpu_index;
+	run_tgt->guest_exit_code = g_src->guest_exit_code;
 }
 
 static void record_abstraction_loaded_vcpu(struct ghost_state *g, struct pkvm_hyp_vcpu *loaded_vcpu)
@@ -464,29 +563,7 @@ static void record_abstraction_loaded_vcpu(struct ghost_state *g, struct pkvm_hy
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
-void record_abstraction_loaded_vcpu_and_check_none(void)
-{
-	struct pkvm_hyp_vcpu *loaded_vcpu = pkvm_get_loaded_hyp_vcpu();
-	// this cpu should have a loaded vcpu yet
-	ghost_spec_assert(!loaded_vcpu);
-	this_cpu_ghost_loaded_vcpu(&gs)->loaded = false;
-	// TODO: given this is currently only called at the beginning of time,
-	// may better to just assert false.
-	if (this_cpu_ghost_loaded_vcpu(&gs)->loaded_vcpu) {
-		free(this_cpu_ghost_loaded_vcpu(&gs)->loaded_vcpu);
-		this_cpu_ghost_loaded_vcpu(&gs)->loaded_vcpu = NULL;
-	}
-}
-
-void ghost_cpu_running_state_copy(struct ghost_running_state *run_tgt, struct ghost_running_state *g_src)
-{
-	run_tgt->guest_running = g_src->guest_running;
-	run_tgt->vm_handle = g_src->vm_handle;
-	run_tgt->vcpu_index = g_src->vcpu_index;
-	run_tgt->guest_exit_code = g_src->guest_exit_code;
-}
-
-void record_abstraction_local_state(struct ghost_state *g, struct kvm_cpu_context *ctxt)
+static void record_abstraction_local_state(struct ghost_state *g, struct kvm_cpu_context *ctxt)
 {
 	struct ghost_local_state *local = ghost_this_cpu_local_state(g);
 	struct ghost_running_state *cpu_run_state = this_cpu_ptr(&ghost_cpu_run_state);
@@ -506,6 +583,7 @@ void record_abstraction_local_state(struct ghost_state *g, struct kvm_cpu_contex
 	record_abstraction_loaded_vcpu(g, loaded_vcpu);
 }
 
+// EXPORTED ghost_record.h
 void record_and_check_abstraction_local_state_pre(struct kvm_cpu_context *ctxt)
 {
 	if (ghost_machinery_enabled()) {
@@ -522,6 +600,7 @@ void record_and_check_abstraction_local_state_pre(struct kvm_cpu_context *ctxt)
 	}
 }
 
+// EXPORTED ghost_record.h
 void record_and_copy_abstraction_local_state_post(struct kvm_cpu_context *ctxt)
 {
 	if (ghost_machinery_enabled()) {
@@ -531,112 +610,22 @@ void record_and_copy_abstraction_local_state_post(struct kvm_cpu_context *ctxt)
 	}
 }
 
-void record_abstraction_constants(struct ghost_state *g)
+// EXPORTED ghost_record.h
+void record_abstraction_loaded_vcpu_and_check_none(void)
 {
-	g->globals.hyp_nr_cpus = hyp_nr_cpus;
-	g->globals.hyp_physvirt_offset = hyp_physvirt_offset;
-	g->globals.tag_lsb = tag_lsb;
-	g->globals.tag_val = tag_val;
-	g->globals.hyp_memory = compute_abstraction_hyp_memory();
-}
-
-
-void record_abstraction_constants_pre(void)
-{
-	struct ghost_state *g = this_cpu_ptr(&gs_recorded_pre);
-	record_abstraction_constants(g);
-}
-
-void record_abstraction_constants_post(void)
-{
-	struct ghost_state *g = this_cpu_ptr(&gs_recorded_post);
-	record_abstraction_constants(g);
-}
-
-
-void record_and_check_abstraction_pkvm_pre(void)
-{
-	if (ghost_machinery_enabled()) {
-		GHOST_LOG_CONTEXT_ENTER();
-		ghost_lock_maplets();
-		struct ghost_state *g = this_cpu_ptr(&gs_recorded_pre);
-		// For pKVM and Host we believe there is no single synchronisation point during a hypercall
-		// because the hypercalls may take and release the locks on these multiple times.
-		//
-		// For now we just record the pre for the very first lock, and assume no interference.
-		// ... but later on we'll have to do some this-thread-diff/trajectory tracking instead
-		if (!g->pkvm.present) {
-			record_abstraction_pkvm(g);
-			check_abstraction_equals_pkvm(&g->pkvm, &gs.pkvm);
-		}
-		ghost_unlock_maplets();
-		GHOST_LOG_CONTEXT_EXIT();
+	struct pkvm_hyp_vcpu *loaded_vcpu = pkvm_get_loaded_hyp_vcpu();
+	// this cpu should have a loaded vcpu yet
+	ghost_spec_assert(!loaded_vcpu);
+	this_cpu_ghost_loaded_vcpu(&gs)->loaded = false;
+	// TODO: given this is currently only called at the beginning of time,
+	// may better to just assert false.
+	if (this_cpu_ghost_loaded_vcpu(&gs)->loaded_vcpu) {
+		free(this_cpu_ghost_loaded_vcpu(&gs)->loaded_vcpu);
+		this_cpu_ghost_loaded_vcpu(&gs)->loaded_vcpu = NULL;
 	}
 }
 
-void record_and_copy_abstraction_pkvm_post(void)
-{
-	if (ghost_machinery_enabled()) {
-		GHOST_LOG_CONTEXT_ENTER();
-		ghost_lock_maplets();
-		struct ghost_state *g = this_cpu_ptr(&gs_recorded_post);
-		// TODO: for pKVM and Host we believe there is no single synchronisation point
-		// (see comment in record_and_check_abstraction_pkvm_pre)
-		// so on the post we must clear if there was a previous recorded post
-		if (g->pkvm.present)
-			clear_abstraction_pkvm(g);
-		record_abstraction_pkvm(g);
-		copy_abstraction_pkvm(&gs, g);
-		ghost_unlock_maplets();
-		GHOST_LOG_CONTEXT_EXIT();
-	}
-}
-
-
-void record_and_check_abstraction_host_pre(void)
-{
-	if (ghost_machinery_enabled()) {
-		GHOST_LOG_CONTEXT_ENTER();
-		ghost_lock_maplets();
-		struct ghost_state *g = this_cpu_ptr(&gs_recorded_pre);
-		// TODO: see comment in record_and_check_abstraction_pkvm_pre
-		if (!g->host.present) {
-			record_abstraction_host(g);
-			check_abstraction_equals_host(&g->host, &gs.host);
-		}
-		ghost_unlock_maplets();
-		GHOST_LOG_CONTEXT_EXIT();
-	}
-}
-
-void record_and_copy_abstraction_host_post(void)
-{
-	if (ghost_machinery_enabled()) {
-		GHOST_LOG_CONTEXT_ENTER();
-		ghost_lock_maplets();
-		struct ghost_state *g = this_cpu_ptr(&gs_recorded_post);
-		// TODO: for pKVM and Host we believe there is no single synchronisation point
-		// (see comment in record_and_check_abstraction_pkvm_pre)
-		// so on the post we must clear if there was a previous recorded post
-		if (g->host.present)
-			clear_abstraction_host(g);
-		record_abstraction_host(g);
-		copy_abstraction_host(&gs, g);
-		ghost_unlock_maplets();
-		GHOST_LOG_CONTEXT_EXIT();
-	}
-}
-
-
-
-
-
-
-
-
-
-//// <======>
-void record_abstraction_vms_and_check_none(struct ghost_state *g)
+static void record_abstraction_vms_and_check_none(struct ghost_state *g)
 {
 	GHOST_LOG_CONTEXT_ENTER();
 	ghost_assert_vms_locked();
@@ -676,6 +665,7 @@ static void record_abstraction_all(struct ghost_state *g, struct kvm_cpu_context
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
+// EXPORTED ghost_record.h
 void record_abstraction_common(void)
 {
 	GHOST_LOG_CONTEXT_ENTER();
@@ -688,16 +678,3 @@ void record_abstraction_common(void)
 	ghost_unlock_pkvm_vm_table();
 	GHOST_LOG_CONTEXT_EXIT();
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
