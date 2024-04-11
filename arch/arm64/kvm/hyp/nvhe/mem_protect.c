@@ -25,6 +25,7 @@
 #include <nvhe/ghost/ghost_pgtable.h>
 #include <nvhe/ghost/ghost_compute_abstraction.h>
 #include <nvhe/ghost/ghost_control.h>
+#include <nvhe/ghost/ghost_misc.h>
 
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
 #include <nvhe/ghost/ghost_simplified_model.h>

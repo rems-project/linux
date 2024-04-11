@@ -46,6 +46,7 @@
 
 
 #include <hyp/ghost/ghost_alloc.h>
+#include <nvhe/ghost/ghost_misc.h>
 
 #include <nvhe/ghost/ghost_registers.h>
 #include <nvhe/ghost/ghost_spec.h>
