@@ -121,12 +121,59 @@ void ghost_enable_this_cpu(void)
 		WRITE_ONCE(ghost_prot_finalized_all, true);
 }
 
+/****************************************/
+// locking
+
+DEFINE_HYP_SPINLOCK(ghost_vms_hyp_lock);
+
+void ghost_lock_vms(void)
+{
+	hyp_spin_lock(&ghost_vms_hyp_lock);
+}
+
+void ghost_unlock_vms(void)
+{
+	hyp_spin_unlock(&ghost_vms_hyp_lock);
+}
 
 
-struct ghost_state gs; // the "master" ghost state, shared but with its parts protected by the associated impl locks
-DEFINE_PER_CPU(struct ghost_state, gs_recorded_pre);         // thread-local ghost state, of which only the relevant
-DEFINE_PER_CPU(struct ghost_state, gs_recorded_post);        //  parts are used within each transition
-DEFINE_PER_CPU(struct ghost_state, gs_computed_post);
+void ghost_lock_pkvm_vm_table(void)
+{
+	hyp_spin_lock(&vm_table_lock);
+}
+
+void ghost_unlock_pkvm_vm_table(void)
+{
+	hyp_spin_unlock(&vm_table_lock);
+}
+
+
+/********************************************/
+// ghost per-cpu state helpers
+struct ghost_local_state *ghost_this_cpu_local_state(struct ghost_state *g)
+{
+	struct ghost_local_state *st = g->cpu_local_state[hyp_smp_processor_id()];
+	ghost_assert(st);
+	return st;
+}
+
+struct ghost_loaded_vcpu *this_cpu_ghost_loaded_vcpu(struct ghost_state *g)
+{
+	return &ghost_this_cpu_local_state(g)->loaded_hyp_vcpu;
+}
+struct ghost_registers *this_cpu_ghost_registers(struct ghost_state *g)
+{
+	return &ghost_this_cpu_local_state(g)->regs;
+}
+struct ghost_running_state *this_cpu_ghost_run_state(struct ghost_state *g)
+{
+	return &ghost_this_cpu_local_state(g)->cpu_state;
+}
+
+
+/****************************************/
+// ghost call data
+
 DEFINE_PER_CPU(struct ghost_call_data, gs_call_data);  // thread-local implementation-seen values during call
 
 void ghost_clear_call_data(void)
@@ -138,6 +185,83 @@ void ghost_clear_call_data(void)
 	call->at_translations.len = 0;
 }
 
+void ghost_relaxed_reads_insert(struct ghost_relaxed_reads *rs, u64 phys_addr, u8 width, u64 value)
+{
+	// quick sanity check: non-overlapping with any that already exist in the list
+	for (int i=0; i<rs->len; i++) {
+		if ((u64)rs->read_slots[i].phys_addr <= phys_addr && phys_addr < (u64)rs->read_slots[i].phys_addr + rs->read_slots[i].width)
+			ghost_assert(false); // new read inside an existing one
+		if (phys_addr <= (u64)rs->read_slots[i].phys_addr && (u64)rs->read_slots[i].phys_addr < phys_addr + width) {
+			ghost_assert(false); // existing read inside this one
+		}
+	}
+
+	ghost_assert(rs->len < GHOST_MAX_RELAXED_READS);
+	rs->read_slots[rs->len++] = (struct ghost_read){
+		.phys_addr = phys_addr,
+		.width = width,
+		.value = value,
+	};
+}
+
+u64 ghost_relaxed_reads_get(struct ghost_relaxed_reads *rs, u64 phys_addr, u8 width)
+{
+	int i;
+	for (i=0; i<rs->len; i++) {
+		struct ghost_read *r = &rs->read_slots[i];
+		if (r->phys_addr == phys_addr && r->width == width)
+			return r->value;
+	}
+
+	/* If the spec tries to read a relaxed read which wasn't read during the call
+	 * then the spec is clearly incorrect. */
+	ghost_spec_assert(false);
+	unreachable();
+}
+
+void ghost_memcache_donations_insert(struct ghost_memcache_donations *ds, u64 pfn) {
+	ghost_assert(ds->len < GHOST_MAX_MEMCACHE_DONATIONS);
+	ds->pages[ds->len++] = pfn;
+}
+
+void ghost_at_translations_insert_fail(struct ghost_at_translations *ts, u64 va)
+{
+	ghost_assert(ts->len < GHOST_MAX_AT_TRANSLATIONS);
+	ts->translations[ts->len++] = (struct ghost_at_translation){
+		.va = va,
+		.success = false,
+	};
+}
+
+void ghost_at_translations_insert_success(struct ghost_at_translations *ts, u64 va, u64 ipa)
+{
+	ghost_assert(ts->len < GHOST_MAX_AT_TRANSLATIONS);
+	ts->translations[ts->len++] = (struct ghost_at_translation){
+		.va = va,
+		.success = true,
+		.ipa = ipa,
+	};
+}
+
+struct ghost_at_translation *ghost_at_translations_get(struct ghost_at_translations *ts, u64 va)
+{
+	for (int i = 0; i < ts->len; i++) {
+		struct ghost_at_translation *t = &ts->translations[i];
+		if (t->va == va)
+			return t;
+	}
+
+	return NULL;
+}
+
+
+/****************************************/
+// top-level spec and checking
+
+struct ghost_state gs; // the "master" ghost state, shared but with its parts protected by the associated impl locks
+DEFINE_PER_CPU(struct ghost_state, gs_recorded_pre);         // thread-local ghost state, of which only the relevant
+DEFINE_PER_CPU(struct ghost_state, gs_recorded_post);        //  parts are used within each transition
+DEFINE_PER_CPU(struct ghost_state, gs_computed_post);
 
 
 // adapted from memory.h to make it a pure function of the ghost state rather than depend on the impl global hyp_phys_virt_offset

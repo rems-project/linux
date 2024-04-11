@@ -1,3 +1,5 @@
+#include <nvhe/mm.h> // for pkvm_pgtable
+
 #include <hyp/ghost/ghost_alloc.h>
 #include <nvhe/ghost/ghost_state.h>
 #include <nvhe/ghost/ghost_misc.h>
@@ -6,6 +8,21 @@
 #include <nvhe/ghost/ghost_types.h>
 
 #pragma GCC diagnostic ignored "-Wdeclaration-after-statement"
+
+/* from nvhe/pkvm.c */
+extern struct pkvm_hyp_vm **vm_table;
+
+/**
+ * these are here to make __kvm_nvhe_ versions of them that are accessible in both the nvhe and non-nvhe code
+ * as they were static in va_layout.c but now we need to access them in the ghost spec.
+ *
+ * TODO: Ben will move these (or fix it or something)
+ */
+u8 tag_lsb;
+u64 tag_val;
+
+/* from setup.c */
+extern unsigned long hyp_nr_cpus;
 
 
 static void init_abstraction(struct ghost_state *g)
@@ -32,122 +49,16 @@ void init_abstraction_thread_local(void)
 	init_abstraction(this_cpu_ptr(&gs_computed_post));
 }
 
-
-// TODO: this is in ghost_type.sc
-extern void clear_abstract_pgtable(abstract_pgtable *ap);
-
-static void clear_abstraction_pkvm(struct ghost_state *g)
+static mapping compute_abstraction_hyp_memory(void)
 {
-	if (g->pkvm.present) {
-		clear_abstract_pgtable(&g->pkvm.pkvm_abstract_pgtable);
-		g->pkvm.present = false;
-	}
+	mapping m;
+	int cur;
+	m = mapping_empty_();
+	for (cur=0; cur<hyp_memblock_nr; cur++)
+		extend_mapping_coalesce(&m, GHOST_STAGE_NONE, hyp_memory[cur].base, hyp_memory[cur].size / PAGE_SIZE, maplet_target_memblock(hyp_memory[cur].flags));
+	return m;
 }
 
-static void clear_abstraction_host(struct ghost_state *g)
-{
-	if (g->host.present) {
-		free_mapping(g->host.host_abstract_pgtable_annot);
-		free_mapping(g->host.host_abstract_pgtable_shared);
-		clear_abstract_pgtable(&g->host.host_concrete_pgtable);
-		ghost_pfn_set_clear(&g->host.reclaimable_pfn_set);
-		ghost_pfn_set_clear(&g->host.need_poisoning_pfn_set);
-		g->host.present = false;
-	}
-}
-
-static void clear_abstraction_regs(struct ghost_state *g)
-{
-	this_cpu_ghost_registers(g)->present = false;
-}
-
-static void ghost_vm_clear_slot(struct ghost_vm_slot *slot)
-{
-	ghost_assert_vms_locked();
-	if (slot->exists) {
-		// if the slot says it has a vm, then it must have one.
-		ghost_assert(slot->vm);
-
-		slot->exists = false;
-
-		/* either side might be present, or both */
-
-		if (slot->vm->vm_locked.present)
-			clear_abstract_pgtable(&slot->vm->vm_locked.vm_abstract_pgtable);
-
-		if (slot->vm->vm_table_locked.present) {
-			for (int i = 0; i < KVM_MAX_VCPUS; i++) {
-				if (slot->vm->vm_table_locked.vcpu_refs[i].vcpu) {
-					free(slot->vm->vm_table_locked.vcpu_refs[i].vcpu);
-					slot->vm->vm_table_locked.vcpu_refs[i].vcpu = NULL;
-				}
-			}
-		}
-
-		free(slot->vm);
-		slot->vm = NULL;
-	}
-}
-
-static void clear_abstraction_vms(struct ghost_state *g)
-{
-	int i;
-	g->vms.present = false;
-	g->vms.table_data.present = false;
-	for (i=0; i<KVM_MAX_PVMS; i++) {
-		ghost_vm_clear_slot(&g->vms.table[i]);
-	}
-}
-
-static void clear_abstraction_all(struct ghost_state *g)
-{
-	clear_abstraction_pkvm(g);
-	clear_abstraction_host(g);
-	clear_abstraction_regs(g);
-	clear_abstraction_vms(g);
-	for (int i=0;i <NR_CPUS; i++) {
-		struct ghost_local_state *st = g->cpu_local_state[i];
-		if (st) {
-			if (st->present) {
-				if (st->loaded_hyp_vcpu.loaded) {
-					ghost_assert(st->loaded_hyp_vcpu.loaded_vcpu);
-					free(st->loaded_hyp_vcpu.loaded_vcpu);
-					st->loaded_hyp_vcpu.loaded_vcpu = NULL;
-				}
-				st->present = false;
-			}
-		}
-	}
-}
-
-void clear_abstraction_thread_local(void)
-{
-	ghost_lock_maplets();
-	ghost_lock_vms();
-	clear_abstraction_all(this_cpu_ptr(&gs_recorded_pre));
-	clear_abstraction_all(this_cpu_ptr(&gs_recorded_post));
-	clear_abstraction_all(this_cpu_ptr(&gs_computed_post));
-	ghost_unlock_vms();
-	ghost_unlock_maplets();
-}
-
-// TODO in ghost_types.c
-void clear_abstraction_vm_partial(struct ghost_state *g, pkvm_handle_t handle, enum vm_field_owner owner);
-
-
-void record_abstraction_loaded_vcpu_and_check_none(void)
-{
-	struct pkvm_hyp_vcpu *loaded_vcpu = pkvm_get_loaded_hyp_vcpu();
-	// this cpu should have a loaded vcpu yet
-	ghost_spec_assert(!loaded_vcpu);
-	this_cpu_ghost_loaded_vcpu(&gs)->loaded = false;
-	// TODO: given this is currently only called at the beginning of time,
-	// may better to just assert false.
-	if (this_cpu_ghost_loaded_vcpu(&gs)->loaded_vcpu) {
-		free(this_cpu_ghost_loaded_vcpu(&gs)->loaded_vcpu);
-		this_cpu_ghost_loaded_vcpu(&gs)->loaded_vcpu = NULL;
-	}
-}
 
 // TODO[doc]: struct ghost_host;
 static void compute_abstraction_host(struct ghost_host *dest)
@@ -521,6 +432,79 @@ void record_and_copy_abstraction_vms_post(void)
 	}
 }
 
+static void record_abstraction_loaded_vcpu(struct ghost_state *g, struct pkvm_hyp_vcpu *loaded_vcpu)
+{
+	GHOST_LOG_CONTEXT_ENTER();
+	bool loaded = false;
+	pkvm_handle_t vm_handle = 0;
+	u64 vcpu_index = 0;
+	struct ghost_vcpu *g_vcpu = NULL;
+	if (loaded_vcpu) {
+		// Now we dereference the vcpu struct, even though we're not protected by a lock
+		// this is somehow ok?
+		vm_handle = loaded_vcpu->vcpu.kvm->arch.pkvm.handle;
+		vcpu_index = loaded_vcpu->vcpu.vcpu_idx;
+		loaded = true;
+
+		/* The vm_table lock is still protecting us, ensuring the vcpu is only on one core
+		 * it's just that we 'forgot' about that on the hypercall
+		 * so just re-compute the vm-table-owned data. */
+		record_abstraction_vm_partial(g, pkvm_hyp_vcpu_to_hyp_vm(loaded_vcpu), VMS_VM_TABLE_OWNED);
+		g_vcpu = malloc_or_die(sizeof (struct ghost_vcpu));
+		compute_abstraction_vcpu(g_vcpu, loaded_vcpu, vcpu_index);
+	}
+
+	ghost_assert(ghost_this_cpu_local_state(g)->present);
+	ghost_this_cpu_local_state(g)->loaded_hyp_vcpu = (struct ghost_loaded_vcpu){
+		.loaded = loaded,
+		.vm_handle = vm_handle,
+		.loaded_vcpu = g_vcpu,
+	};
+
+	GHOST_LOG_CONTEXT_EXIT();
+}
+
+void record_abstraction_loaded_vcpu_and_check_none(void)
+{
+	struct pkvm_hyp_vcpu *loaded_vcpu = pkvm_get_loaded_hyp_vcpu();
+	// this cpu should have a loaded vcpu yet
+	ghost_spec_assert(!loaded_vcpu);
+	this_cpu_ghost_loaded_vcpu(&gs)->loaded = false;
+	// TODO: given this is currently only called at the beginning of time,
+	// may better to just assert false.
+	if (this_cpu_ghost_loaded_vcpu(&gs)->loaded_vcpu) {
+		free(this_cpu_ghost_loaded_vcpu(&gs)->loaded_vcpu);
+		this_cpu_ghost_loaded_vcpu(&gs)->loaded_vcpu = NULL;
+	}
+}
+
+void ghost_cpu_running_state_copy(struct ghost_running_state *run_tgt, struct ghost_running_state *g_src)
+{
+	run_tgt->guest_running = g_src->guest_running;
+	run_tgt->vm_handle = g_src->vm_handle;
+	run_tgt->vcpu_index = g_src->vcpu_index;
+	run_tgt->guest_exit_code = g_src->guest_exit_code;
+}
+
+void record_abstraction_local_state(struct ghost_state *g, struct kvm_cpu_context *ctxt)
+{
+	struct ghost_local_state *local = ghost_this_cpu_local_state(g);
+	struct ghost_running_state *cpu_run_state = this_cpu_ptr(&ghost_cpu_run_state);
+
+	if (ctxt)
+		record_abstraction_regs(&local->regs, ctxt);
+
+	ghost_cpu_running_state_copy(&local->cpu_state, cpu_run_state);
+
+	local->host_regs.present = true;
+	record_abstraction_regs(&local->host_regs.regs, &this_cpu_ptr(&kvm_host_data)->host_ctxt);
+
+	local->present = true;
+
+	/* no loaded_vcpu state, as that is read separately */
+	struct pkvm_hyp_vcpu *loaded_vcpu = pkvm_get_loaded_hyp_vcpu();
+	record_abstraction_loaded_vcpu(g, loaded_vcpu);
+}
 
 void record_and_check_abstraction_local_state_pre(struct kvm_cpu_context *ctxt)
 {
@@ -546,6 +530,16 @@ void record_and_copy_abstraction_local_state_post(struct kvm_cpu_context *ctxt)
 		copy_abstraction_local_state(ghost_this_cpu_local_state(&gs), ghost_this_cpu_local_state(g));
 	}
 }
+
+void record_abstraction_constants(struct ghost_state *g)
+{
+	g->globals.hyp_nr_cpus = hyp_nr_cpus;
+	g->globals.hyp_physvirt_offset = hyp_physvirt_offset;
+	g->globals.tag_lsb = tag_lsb;
+	g->globals.tag_val = tag_val;
+	g->globals.hyp_memory = compute_abstraction_hyp_memory();
+}
+
 
 void record_abstraction_constants_pre(void)
 {

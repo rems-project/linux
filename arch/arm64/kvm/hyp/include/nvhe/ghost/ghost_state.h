@@ -276,6 +276,27 @@ struct ghost_vms {
 };
 
 /**
+ * ghost_vms_is_valid_handle() - Checks that the guest associated with an opaque pkvm-assigned handle exists in the vm table
+ *
+ * Must own the ghost vms lock
+ */
+bool ghost_vms_is_valid_handle(struct ghost_vms *vms, pkvm_handle_t handle);
+
+/**
+ * ghost_vms_get() - Get a reference to the ghost_vm in the table
+ *
+ * @vms: ghost vm table
+ * @handle: the pkvm-defined opaque VM handle
+ *
+ * Return:
+ *  - Reference to the ghost_vm* if it exists in the table
+ *  - NULL if there is no VM with that handle in the table
+ *
+ * Context: Must own the ghost vms lock
+ */
+struct ghost_vm *ghost_vms_get(struct ghost_vms *vms, pkvm_handle_t handle);
+
+/**
  * struct ghost_constant_globals - Copy of the hypervisor read-only globals
  * @hyp_memory: abstract mapping interpretation of the hyp_memory array.
  * @hyp_nr_cpus: the actual count of the number of CPUs there are.
