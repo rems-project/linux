@@ -26,6 +26,9 @@
 #include <nvhe/ghost/ghost_misc.h>
 #include <nvhe/ghost/ghost_record.h>
 #include <nvhe/ghost/ghost_call_data.h>
+#ifdef CONFIG_NVHE_GHOST_SPEC_DUMP_STATE_RAW_HOST
+#include <nvhe/ghost/ghost_spec.h> // for ghost_print_this_hypercall
+#endif
 
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
 #include <nvhe/ghost/ghost_simplified_model.h>
