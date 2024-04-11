@@ -1,12 +1,9 @@
 #ifndef _GHOST_MAPLETS_H
 #define _GHOST_MAPLETS_H
 
-#include "ghost_glist.h"
-
-#include <asm/kvm_pgtable.h>
-
 #include <linux/memblock.h>   /* for enum memblock_flags */
 
+#include <nvhe/ghost/ghost_glist.h>
 #include <nvhe/ghost/ghost_printer.h>
 
 /* ****************** maplet types ****************** */
