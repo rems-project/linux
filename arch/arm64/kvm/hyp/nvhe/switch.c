@@ -31,7 +31,6 @@
 
 #ifdef CONFIG_NVHE_GHOST_SPEC
 
-#include <nvhe/ghost/ghost_control.h>
 #include <nvhe/ghost/ghost_spec.h>
 
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
