@@ -3,6 +3,22 @@
 
 #include <linux/types.h>
 #include <asm/kvm_asm.h>    // DECLARE_PER_CPU
+#include <asm/kvm_host.h>    // pkvm_handle_t
+
+/**
+ * struct ghost_running_state - Track who was running before entering pKVM
+ * @guest_running: whether the current exception was from a guest, otherwise was from host.
+ * @vm_handle: if guest_running, the opaque pKVM handle of the VM that was running.
+ * @vcpu_index: if guest_running, the index of the vcpu in the VM with vm_handle which was running.
+ * @guest_exit_code: if guest_running, the pKVM-computed exit code for this guest exception.
+ */
+struct ghost_running_state {
+	bool guest_running;
+	pkvm_handle_t vm_handle;
+	u64 vcpu_index;
+	u64 guest_exit_code;
+};
+DECLARE_PER_CPU(struct ghost_running_state, ghost_cpu_run_state);
 
 /**
  * ghost_clear_call_data - Resets this CPU's recorded hypercall data back to empty

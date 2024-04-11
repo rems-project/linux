@@ -454,20 +454,6 @@ struct ghost_constant_globals {
 	u64 tag_val;
 };
 
-/**
- * struct ghost_running_state - Track who was running before entering pKVM
- * @guest_running: whether the current exception was from a guest, otherwise was from host.
- * @vm_handle: if guest_running, the opaque pKVM handle of the VM that was running.
- * @vcpu_index: if guest_running, the index of the vcpu in the VM with vm_handle which was running.
- * @guest_exit_code: if guest_running, the pKVM-computed exit code for this guest exception.
- */
-struct ghost_running_state {
-	bool guest_running;
-	pkvm_handle_t vm_handle;
-	u64 vcpu_index;
-	u64 guest_exit_code;
-};
-
 void ghost_cpu_running_state_copy(struct ghost_running_state *run_tgt, struct ghost_running_state *g_src);
 
 /**
@@ -572,7 +558,6 @@ DECLARE_PER_CPU(struct ghost_state, gs_recorded_pre);
 DECLARE_PER_CPU(struct ghost_state, gs_recorded_post);
 DECLARE_PER_CPU(struct ghost_state, gs_computed_post);
 
-DECLARE_PER_CPU(struct ghost_running_state, ghost_cpu_run_state);
 
 // __this_cpu_read(g_initial)
 // __this_cpu_ptr(&g_initial)
