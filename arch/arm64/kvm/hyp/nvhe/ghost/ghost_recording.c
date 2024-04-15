@@ -31,7 +31,7 @@ static void init_abstraction(struct ghost_state *g)
 	g->host.present = false;
 	g->vms.present = false;
 	for (int idx=0; idx<hyp_nr_cpus; idx++) {
-		struct ghost_local_state *st = malloc_or_die(sizeof(struct ghost_local_state));
+		struct ghost_local_state *st = malloc_or_die(ALLOC_LOCAL_STATE, sizeof(struct ghost_local_state));
 		st->present = false;
 		g->cpu_local_state[idx] = st;
 	}
@@ -265,7 +265,7 @@ static void compute_abstraction_vm_partial(struct ghost_vm *dest, struct pkvm_hy
 						vcpu_ref->vcpu = NULL;
 					} else {
 						vcpu_ref->loaded_somewhere = false;
-						struct ghost_vcpu *g_vcpu = malloc_or_die(sizeof (struct ghost_vcpu));
+						struct ghost_vcpu *g_vcpu = malloc_or_die(ALLOC_VCPU, sizeof (struct ghost_vcpu));
 						compute_abstraction_vcpu(g_vcpu, vcpu, vcpu_idx);
 						vcpu_ref->vcpu = g_vcpu;
 
@@ -549,7 +549,7 @@ static void record_abstraction_loaded_vcpu(struct ghost_state *g, struct pkvm_hy
 		 * it's just that we 'forgot' about that on the hypercall
 		 * so just re-compute the vm-table-owned data. */
 		record_abstraction_vm_partial(g, pkvm_hyp_vcpu_to_hyp_vm(loaded_vcpu), VMS_VM_TABLE_OWNED);
-		g_vcpu = malloc_or_die(sizeof (struct ghost_vcpu));
+		g_vcpu = malloc_or_die(ALLOC_VCPU, sizeof (struct ghost_vcpu));
 		compute_abstraction_vcpu(g_vcpu, loaded_vcpu, vcpu_index);
 	}
 
@@ -620,7 +620,7 @@ void record_abstraction_loaded_vcpu_and_check_none(void)
 	// TODO: given this is currently only called at the beginning of time,
 	// may better to just assert false.
 	if (this_cpu_ghost_loaded_vcpu(&gs)->loaded_vcpu) {
-		free(this_cpu_ghost_loaded_vcpu(&gs)->loaded_vcpu);
+		free(ALLOC_VCPU, this_cpu_ghost_loaded_vcpu(&gs)->loaded_vcpu);
 		this_cpu_ghost_loaded_vcpu(&gs)->loaded_vcpu = NULL;
 	}
 }

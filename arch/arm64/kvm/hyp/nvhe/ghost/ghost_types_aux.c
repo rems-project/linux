@@ -86,7 +86,7 @@ struct ghost_vm *ghost_vms_alloc(struct ghost_vms *vms, pkvm_handle_t handle)
 		return NULL;
 
 	if (!slot->exists) {
-		slot->vm = malloc_or_die(sizeof(struct ghost_vm));
+		slot->vm = malloc_or_die(ALLOC_VM, sizeof(struct ghost_vm));
 		slot->exists = true;
 		slot->handle = handle;
 
@@ -166,7 +166,7 @@ static void ghost_vms_free(struct ghost_vms *vms, pkvm_handle_t handle)
 
 	ghost_assert(!slot->vm->vm_locked.present);
 	ghost_assert(!slot->vm->vm_table_locked.present);
-	free(slot->vm);
+	free(ALLOC_VM, slot->vm);
 	slot->vm = NULL;
 
 	slot->exists = false;
@@ -189,13 +189,13 @@ static void ghost_vm_clear_slot(struct ghost_vm_slot *slot)
 		if (slot->vm->vm_table_locked.present) {
 			for (int i = 0; i < KVM_MAX_VCPUS; i++) {
 				if (slot->vm->vm_table_locked.vcpu_refs[i].vcpu) {
-					free(slot->vm->vm_table_locked.vcpu_refs[i].vcpu);
+					free(ALLOC_VCPU, slot->vm->vm_table_locked.vcpu_refs[i].vcpu);
 					slot->vm->vm_table_locked.vcpu_refs[i].vcpu = NULL;
 				}
 			}
 		}
 
-		free(slot->vm);
+		free(ALLOC_VM, slot->vm);
 		slot->vm = NULL;
 	}
 }
@@ -233,7 +233,7 @@ void clear_abstraction_vm_partial(struct ghost_state *g, pkvm_handle_t handle, e
 		vm->vm_table_locked.present = false;
 		for (int i = 0; i < KVM_MAX_VCPUS; i++) {
 			if (vm->vm_table_locked.vcpu_refs[i].vcpu) {
-				free(vm->vm_table_locked.vcpu_refs[i].vcpu);
+				free(ALLOC_VCPU, vm->vm_table_locked.vcpu_refs[i].vcpu);
 				vm->vm_table_locked.vcpu_refs[i].vcpu = NULL;
 			}
 		}
@@ -278,7 +278,7 @@ void clear_abstraction_all(struct ghost_state *g)
 			if (st->present) {
 				if (st->loaded_hyp_vcpu.loaded) {
 					ghost_assert(st->loaded_hyp_vcpu.loaded_vcpu);
-					free(st->loaded_hyp_vcpu.loaded_vcpu);
+					free(ALLOC_VCPU, st->loaded_hyp_vcpu.loaded_vcpu);
 					st->loaded_hyp_vcpu.loaded_vcpu = NULL;
 				}
 				st->present = false;
@@ -414,7 +414,7 @@ void copy_abstraction_loaded_vcpu(struct ghost_loaded_vcpu *tgt, struct ghost_lo
 	tgt->loaded_vcpu = NULL;
 	if (src->loaded_vcpu) {
 		ghost_assert(tgt->loaded_vcpu == NULL);
-		tgt->loaded_vcpu = malloc_or_die(sizeof(struct ghost_vcpu));
+		tgt->loaded_vcpu = malloc_or_die(ALLOC_VCPU, sizeof(struct ghost_vcpu));
 		ghost_vcpu_clone_into(tgt->loaded_vcpu, src->loaded_vcpu);
 	}
 }
@@ -466,7 +466,7 @@ void ghost_vm_clone_into_partial(struct ghost_vm *dest, struct ghost_vm *src, en
 					} else {
 						copied_vcpu++;
 						ghost_assert(src_vcpu_ref->vcpu);
-						dest_vcpu_ref->vcpu = malloc_or_die(sizeof(struct ghost_vcpu));
+						dest_vcpu_ref->vcpu = malloc_or_die(ALLOC_VCPU, sizeof(struct ghost_vcpu));
 						ghost_vcpu_clone_into(dest_vcpu_ref->vcpu, src_vcpu_ref->vcpu);
 					}
 				} else {

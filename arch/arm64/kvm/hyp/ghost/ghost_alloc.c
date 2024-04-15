@@ -6,6 +6,17 @@
 #include <nvhe/ghost/ghost_printer.h>
 #endif /* CONFIG_NVHE_GHOST_MEM_DUMP_STATS */
 
+static u64 kind_malloc_counter[ALLOC_KIND_NR];
+static u64 kind_free_counter[ALLOC_KIND_NR];
+
+#ifdef CONFIG_NVHE_GHOST_MEM_DUMP_STATS
+static const char* kind_str[ALLOC_KIND_NR] = {
+	[ALLOC_LOCAL_STATE]= "ALLOC_LOCAL_STATE",
+	[ALLOC_VCPU]= "ALLOC_VCPU",
+	[ALLOC_VM]= "ALLOC_VM"
+};
+#endif
+
 /*
  * The allocator keeps an array of free lists, each one containing blocks with
  * capacity of successive powers of 2.
@@ -131,16 +142,21 @@ static void __g_malloc_stats(pool *pool, struct ghost_alloc_bkt_n *arr, size_t n
 		arr[i] = (struct ghost_alloc_bkt_n) { .order = -1, .buffers = -1 };
 }
 
-void __g_malloc_dump_stats(pool *pool) {
+void __g_malloc_dump_stats(enum alloc_kind kind, pool *pool) {
 	struct ghost_alloc_bkt_n stats[SLOTS];
 	__g_malloc_stats(pool, stats, SLOTS);
-	ghost_printf("(malloc):\t");
+	ghost_printf("(malloc %s):\t", kind_str[kind]);
 	for (int i = 0; i < SLOTS; i++) {
 		if (i % 4 == 0)
 			ghost_printf("[%d] ", 2 << stats[i].order);
 		ghost_printf("%d, ", stats[i].buffers);
 	}
 	ghost_printf("\n");
+	ghost_printf("(kinds):\n");
+	for (int i=0; i<ALLOC_KIND_NR; i++) {
+		long d = kind_malloc_counter[i] - kind_free_counter[i];
+		ghost_printf("  [%s] malloc: %ld -- free: %ld [delta: %ld]\n", kind_str[i], kind_malloc_counter[i], kind_free_counter[i], d);
+	}
 }
 
 #endif /* CONFIG_NVHE_GHOST_MEM_DUMP_STATS */
@@ -159,7 +175,7 @@ static pool heap;
 
 static DEFINE_HYP_SPINLOCK(lock);
 
-void *g_malloc(size_t size) {
+void *g_malloc(enum alloc_kind kind, size_t size) {
 	void *p;
 	hyp_spin_lock(&lock);
 	if (!READ_ONCE(heap.initialised)) {
@@ -167,23 +183,25 @@ void *g_malloc(size_t size) {
 		WRITE_ONCE(heap.initialised, 1);
 	}
 #ifdef CONFIG_NVHE_GHOST_MEM_DUMP_STATS
-	__g_malloc_dump_stats(&heap);
+	__g_malloc_dump_stats(kind, &heap);
 #endif /* CONFIG_NVHE_GHOST_MEM_DUMP_STATS */
 	p = __g_malloc(&heap, size);
+	kind_malloc_counter[kind]++;
 	hyp_spin_unlock(&lock);
 	return p;
 }
 
-void g_free(void *p) {
+void g_free(enum alloc_kind kind, void *p) {
 	if (!p)
 		return;
 	hyp_spin_lock(&lock);
 	__g_free(p);
+	kind_free_counter[kind]++;
 	hyp_spin_unlock(&lock);
 }
 
-void *malloc_or_die(size_t s) {
-	void *p = g_malloc(s);
+void *malloc_or_die(enum alloc_kind kind, size_t s) {
+	void *p = g_malloc(kind, s);
 	BUG_ON(!p);
 	return p;
 }

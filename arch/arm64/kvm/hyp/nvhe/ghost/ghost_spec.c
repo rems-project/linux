@@ -992,7 +992,7 @@ static bool compute_new_abstract_state_handle___pkvm_vcpu_put(struct ghost_state
 
 	// the vm's vcpu is now marked as not loaded and it gets ownership back
 	vm1->vm_table_locked.vcpu_refs[vcpu_index].loaded_somewhere = false;
-	vm1->vm_table_locked.vcpu_refs[vcpu_index].vcpu = malloc_or_die(sizeof(struct ghost_vcpu));
+	vm1->vm_table_locked.vcpu_refs[vcpu_index].vcpu = malloc_or_die(ALLOC_VCPU, sizeof(struct ghost_vcpu));
 	ghost_vcpu_clone_into(vm1->vm_table_locked.vcpu_refs[vcpu_index].vcpu, loaded_vcpu_info->loaded_vcpu);
 
 	// and the table has the same number of vms as before.
@@ -1338,7 +1338,7 @@ static bool compute_new_abstract_state_handle___pkvm_init_vcpu(struct ghost_stat
 	vcpu_ref->initialised = true;
 	vcpu_ref->loaded_somewhere = false;
 
-	vcpu_ref->vcpu = malloc_or_die(sizeof(struct ghost_vcpu));
+	vcpu_ref->vcpu = malloc_or_die(ALLOC_VCPU, sizeof(struct ghost_vcpu));
 	vcpu_ref->vcpu->vcpu_index = vcpu_idx;
 
 	vcpu_ref->vcpu->regs.present = true;
@@ -1751,7 +1751,7 @@ static bool compute_new_abstract_state_pkvm_memshare(struct ghost_state *g1, str
 	ghost_assert(g1_vm != NULL);
 	// TODO: BS: this might be overspecifying
 	ghost_vm_clone_into_partial(g1_vm, g0_vm, VMS_VM_TABLE_OWNED | VMS_VM_OWNED);
-	struct ghost_vcpu *vcpu1 = malloc_or_die(sizeof(struct ghost_vcpu));
+	struct ghost_vcpu *vcpu1 = malloc_or_die(ALLOC_VCPU, sizeof(struct ghost_vcpu));
 	ghost_vcpu_clone_into(vcpu1, vcpu0);
 	this_cpu_ghost_loaded_vcpu(g1)->loaded_vcpu = vcpu1;
 
@@ -1871,7 +1871,7 @@ static bool compute_new_abstract_state_pkvm_memunshare(struct ghost_state *g1, s
 	ghost_assert(g1_vm != NULL);
 	// TODO: BS: this might be overspecifying
 	ghost_vm_clone_into_partial(g1_vm, g0_vm, VMS_VM_TABLE_OWNED | VMS_VM_OWNED);
-	struct ghost_vcpu *vcpu1 = malloc_or_die(sizeof(struct ghost_vcpu));
+	struct ghost_vcpu *vcpu1 = malloc_or_die(ALLOC_VCPU, sizeof(struct ghost_vcpu));
 	ghost_vcpu_clone_into(vcpu1, vcpu0);
 	this_cpu_ghost_loaded_vcpu(g1)->loaded_vcpu = vcpu1;
 
