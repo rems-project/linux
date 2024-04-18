@@ -182,11 +182,11 @@ void *g_malloc(enum alloc_kind kind, size_t size) {
 		add_region(&heap, reserved_for_heap, HEAP);
 		WRITE_ONCE(heap.initialised, 1);
 	}
+	kind_malloc_counter[kind]++;
 #ifdef CONFIG_NVHE_GHOST_MEM_DUMP_STATS
 	__g_malloc_dump_stats(kind, &heap);
 #endif /* CONFIG_NVHE_GHOST_MEM_DUMP_STATS */
 	p = __g_malloc(&heap, size);
-	kind_malloc_counter[kind]++;
 	hyp_spin_unlock(&lock);
 	return p;
 }
