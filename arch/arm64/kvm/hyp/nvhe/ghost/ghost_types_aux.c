@@ -559,13 +559,13 @@ void check_abstraction_equals_vcpu_reference(struct ghost_vcpu_reference *vcpu_r
 	ghost_assert(vcpu_ref2);
 
 	GHOST_SPEC_ASSERT_VAR_EQ(vcpu_ref1->initialised, vcpu_ref2->initialised, bool);
-	GHOST_SPEC_ASSERT_VAR_EQ(vcpu_ref1->loaded_somewhere, vcpu_ref2->loaded_somewhere, bool);
-	GHOST_LOG(vcpu_ref1->vcpu, u64);
-	GHOST_LOG(vcpu_ref2->vcpu, u64);
-
-	if (vcpu_ref1->initialised && vcpu_ref2->initialised)
+	if (vcpu_ref1->initialised && vcpu_ref2->initialised) {
+		GHOST_SPEC_ASSERT_VAR_EQ(vcpu_ref1->loaded_somewhere, vcpu_ref2->loaded_somewhere, bool);
+		GHOST_LOG(vcpu_ref1->vcpu, u64);
+		GHOST_LOG(vcpu_ref2->vcpu, u64);
 		if (vcpu_ref1->vcpu && vcpu_ref2->vcpu)
 			check_abstraction_equals_vcpu(vcpu_ref1->vcpu, vcpu_ref2->vcpu);
+	}
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
