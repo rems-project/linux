@@ -746,6 +746,9 @@ static bool compute_new_abstract_state_handle___pkvm_host_reclaim_page(struct gh
 out:
 	ghost_write_gpr(g1, 1, ret);
 
+	/* these registers now become the host's run context */
+	copy_registers_to_host(g1);
+
 	/* check this spec */
 	return true;
 }
