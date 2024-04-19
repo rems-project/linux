@@ -7,6 +7,8 @@
 #include <nvhe/ghost/ghost_spec.h>
 #include <nvhe/ghost/ghost_types_aux.h>
 
+#include <nvhe/ghost/ghost_tracing.h>
+
 #pragma GCC diagnostic ignored "-Wdeclaration-after-statement"
 
 /* from nvhe/pkvm.c */
@@ -293,6 +295,7 @@ static void record_abstraction_pkvm(struct ghost_state *g)
 // EXPORTED ghost_recording.h
 void record_and_check_abstraction_pkvm_pre(void)
 {
+	trace_ghost_enter(GHOST_TRACE_record_and_check_abstraction_pkvm_pre);
 	if (ghost_machinery_enabled()) {
 		GHOST_LOG_CONTEXT_ENTER();
 		ghost_lock_maplets();
@@ -309,11 +312,13 @@ void record_and_check_abstraction_pkvm_pre(void)
 		ghost_unlock_maplets();
 		GHOST_LOG_CONTEXT_EXIT();
 	}
+	trace_ghost_exit(GHOST_TRACE_record_and_check_abstraction_pkvm_pre);
 }
 
 // EXPORTED ghost_recording.h
 void record_and_copy_abstraction_pkvm_post(void)
 {
+	trace_ghost_enter(GHOST_TRACE_record_and_copy_abstraction_pkvm_post);
 	if (ghost_machinery_enabled()) {
 		GHOST_LOG_CONTEXT_ENTER();
 		ghost_lock_maplets();
@@ -328,6 +333,7 @@ void record_and_copy_abstraction_pkvm_post(void)
 		ghost_unlock_maplets();
 		GHOST_LOG_CONTEXT_EXIT();
 	}
+	trace_ghost_exit(GHOST_TRACE_record_and_copy_abstraction_pkvm_post);
 }
 
 static void record_abstraction_host(struct ghost_state *g)
@@ -339,6 +345,7 @@ static void record_abstraction_host(struct ghost_state *g)
 // EXPORTED ghost_recording.h
 void record_and_check_abstraction_host_pre(void)
 {
+	trace_ghost_enter(GHOST_TRACE_record_and_check_abstraction_host_pre);
 	if (ghost_machinery_enabled()) {
 		GHOST_LOG_CONTEXT_ENTER();
 		ghost_lock_maplets();
@@ -351,11 +358,13 @@ void record_and_check_abstraction_host_pre(void)
 		ghost_unlock_maplets();
 		GHOST_LOG_CONTEXT_EXIT();
 	}
+	trace_ghost_exit(GHOST_TRACE_record_and_check_abstraction_host_pre);
 }
 
 // EXPORTED ghost_recording.h
 void record_and_copy_abstraction_host_post(void)
 {
+	trace_ghost_enter(GHOST_TRACE_record_and_copy_abstraction_host_post);
 	if (ghost_machinery_enabled()) {
 		GHOST_LOG_CONTEXT_ENTER();
 		ghost_lock_maplets();
@@ -370,6 +379,7 @@ void record_and_copy_abstraction_host_post(void)
 		ghost_unlock_maplets();
 		GHOST_LOG_CONTEXT_EXIT();
 	}
+	trace_ghost_exit(GHOST_TRACE_record_and_copy_abstraction_host_post);
 }
 
 static void record_abstraction_constants(struct ghost_state *g)
@@ -384,15 +394,19 @@ static void record_abstraction_constants(struct ghost_state *g)
 // EXPORTED ghost_recording.h
 void record_abstraction_constants_pre(void)
 {
+	trace_ghost_enter(GHOST_TRACE_record_abstraction_constants_pre);
 	struct ghost_state *g = this_cpu_ptr(&gs_recorded_pre);
 	record_abstraction_constants(g);
+	trace_ghost_exit(GHOST_TRACE_record_abstraction_constants_pre);
 }
 
 // EXPORTED ghost_recording.h
 void record_abstraction_constants_post(void)
 {
+	trace_ghost_enter(GHOST_TRACE_record_abstraction_constants_post);
 	struct ghost_state *g = this_cpu_ptr(&gs_recorded_post);
 	record_abstraction_constants(g);
+	trace_ghost_exit(GHOST_TRACE_record_abstraction_constants_post);
 }
 
 static void record_abstraction_vm_partial(struct ghost_state *g, struct pkvm_hyp_vm *hyp_vm, enum vm_field_owner owner)
@@ -425,6 +439,7 @@ static void record_abstraction_vm_partial(struct ghost_state *g, struct pkvm_hyp
 // EXPORTED ghost_recording.h
 void record_and_check_abstraction_vm_pre(struct pkvm_hyp_vm *vm)
 {
+	trace_ghost_enter(GHOST_TRACE_record_and_check_abstraction_vm_pre);
 	if (ghost_machinery_enabled()) {
 		GHOST_LOG_CONTEXT_ENTER();
 		// TODO: (and for the others) maplets are already locked by the top-level hcall
@@ -455,11 +470,13 @@ void record_and_check_abstraction_vm_pre(struct pkvm_hyp_vm *vm)
 		ghost_unlock_maplets();
 		GHOST_LOG_CONTEXT_EXIT();
 	}
+	trace_ghost_exit(GHOST_TRACE_record_and_check_abstraction_vm_pre);
 }
 
 // EXPORTED ghost_recording.h
 void record_and_copy_abstraction_vm_post(struct pkvm_hyp_vm *vm)
 {
+	trace_ghost_enter(GHOST_TRACE_record_and_copy_abstraction_vm_post);
 	if (ghost_machinery_enabled()) {
 		GHOST_LOG_CONTEXT_ENTER();
 		ghost_lock_maplets();
@@ -471,6 +488,7 @@ void record_and_copy_abstraction_vm_post(struct pkvm_hyp_vm *vm)
 		ghost_unlock_maplets();
 		GHOST_LOG_CONTEXT_EXIT();
 	}
+	trace_ghost_exit(GHOST_TRACE_record_and_copy_abstraction_vm_post);
 }
 
 static void record_abstraction_vms_partial(struct ghost_state *g, enum vm_field_owner owner)
@@ -506,6 +524,8 @@ static void record_abstraction_vms_partial(struct ghost_state *g, enum vm_field_
 // EXPORTED ghost_recording.h
 void record_and_check_abstraction_vms_pre(void)
 {
+	trace_ghost_enter(GHOST_TRACE_record_and_check_abstraction_vms_pre);
+
 	if (ghost_machinery_enabled()) {
 		GHOST_LOG_CONTEXT_ENTER();
 		struct ghost_state *g = this_cpu_ptr(&gs_recorded_pre);
@@ -515,11 +535,15 @@ void record_and_check_abstraction_vms_pre(void)
 		ghost_unlock_vms();
 		GHOST_LOG_CONTEXT_EXIT();
 	}
+
+	trace_ghost_exit(GHOST_TRACE_record_and_check_abstraction_vms_pre);
 }
 
 // EXPORTED ghost_recording.h
 void record_and_copy_abstraction_vms_post(void)
 {
+	trace_ghost_enter(GHOST_TRACE_record_and_copy_abstraction_vms_post);
+
 	if (ghost_machinery_enabled()) {
 		GHOST_LOG_CONTEXT_ENTER();
 		struct ghost_state *g = this_cpu_ptr(&gs_recorded_post);
@@ -529,6 +553,8 @@ void record_and_copy_abstraction_vms_post(void)
 		ghost_unlock_vms();
 		GHOST_LOG_CONTEXT_EXIT();
 	}
+
+	trace_ghost_exit(GHOST_TRACE_record_and_copy_abstraction_vms_post);
 }
 
 static void ghost_cpu_running_state_copy(struct ghost_running_state *run_tgt, struct ghost_running_state *g_src)
@@ -588,6 +614,7 @@ static void record_abstraction_local_state(struct ghost_state *g, struct kvm_cpu
 // EXPORTED ghost_recording.h
 void record_and_check_abstraction_local_state_pre(struct kvm_cpu_context *ctxt)
 {
+	trace_ghost_enter(GHOST_TRACE_record_and_check_abstraction_local_state_pre);
 	if (ghost_machinery_enabled()) {
 		struct ghost_state *g = this_cpu_ptr(&gs_recorded_pre);
 		GHOST_LOG_CONTEXT_ENTER();
@@ -600,26 +627,31 @@ void record_and_check_abstraction_local_state_pre(struct kvm_cpu_context *ctxt)
 		}
 		GHOST_LOG_CONTEXT_EXIT();
 	}
+	trace_ghost_exit(GHOST_TRACE_record_and_check_abstraction_local_state_pre);
 }
 
 // EXPORTED ghost_recording.h
 void record_and_copy_abstraction_local_state_post(struct kvm_cpu_context *ctxt)
 {
+	trace_ghost_enter(GHOST_TRACE_record_and_copy_abstraction_local_state_post);
 	if (ghost_machinery_enabled()) {
 		struct ghost_state *g = this_cpu_ptr(&gs_recorded_post);
 		record_abstraction_local_state(g, ctxt);
 		copy_abstraction_local_state(ghost_this_cpu_local_state(&gs), ghost_this_cpu_local_state(g));
 	}
+	trace_ghost_exit(GHOST_TRACE_record_and_copy_abstraction_local_state_post);
 }
 
 // EXPORTED ghost_recording.h
 void record_abstraction_loaded_vcpu_and_check_none(void)
 {
+	trace_ghost_enter(GHOST_TRACE_record_abstraction_loaded_vcpu_and_check_none);
 	struct pkvm_hyp_vcpu *loaded_vcpu = pkvm_get_loaded_hyp_vcpu();
 	// this cpu should have a loaded vcpu yet
 	ghost_spec_assert(!loaded_vcpu);
 	this_cpu_ghost_loaded_vcpu(&gs)->loaded = false;
 	ghost_assert(!this_cpu_ghost_loaded_vcpu(&gs)->loaded);
+	trace_ghost_exit(GHOST_TRACE_record_abstraction_loaded_vcpu_and_check_none);
 }
 
 static void record_abstraction_vms_and_check_none(struct ghost_state *g)
@@ -644,7 +676,6 @@ static void record_abstraction_vms_and_check_none(struct ghost_state *g)
 			ghost_assert(false);
 		}
 	}
-
 	GHOST_LOG_CONTEXT_EXIT();
 }
 

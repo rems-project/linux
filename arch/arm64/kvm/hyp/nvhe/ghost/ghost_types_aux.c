@@ -11,6 +11,8 @@
 #include <nvhe/ghost/ghost_abstraction_diff.h>
 #endif /* CONFIG_NVHE_GHOST_DIFF */
 
+#include <nvhe/ghost/ghost_tracing.h>
+
 #pragma GCC diagnostic ignored "-Wdeclaration-after-statement"
 
 /* from nvhe/pkvm.c */
@@ -721,6 +723,7 @@ static void post_dump_diff(struct ghost_state *gc, struct ghost_state *gr_post, 
 void check_abstraction_equals_all(struct ghost_state *gc, struct ghost_state *gr_post, struct ghost_state *gr_pre)
 {
 	GHOST_LOG_CONTEXT_ENTER();
+	trace_ghost_enter(GHOST_TRACE_POST_CHECK);
 
 #ifdef CONFIG_NVHE_GHOST_DIFF
 	if (__this_cpu_read(ghost_print_this_hypercall))
@@ -738,6 +741,7 @@ void check_abstraction_equals_all(struct ghost_state *gc, struct ghost_state *gr
 	// these must always be present and therefore always checked
 	check_abstraction_equals_globals(gc, gr_post);
 
+	trace_ghost_exit(GHOST_TRACE_POST_CHECK);
 	GHOST_LOG_CONTEXT_EXIT();
 }
 

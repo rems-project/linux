@@ -131,6 +131,13 @@ config NVHE_GHOST_DIFF_post_host_pgtable
 	depends on NVHE_GHOST_DIFF
 	default n
 
+config NVHE_GHOST_TRACE
+	bool "Enable ghost tracing"
+	depends on NVHE_GHOST_SPEC_NOISY
+	default n
+	help
+	  When enabled, trace each ghost enter/exit call site.
+
 menu "Hypercalls"
 	depends on NVHE_GHOST_SPEC
 

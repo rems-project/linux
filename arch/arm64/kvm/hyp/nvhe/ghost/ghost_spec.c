@@ -21,6 +21,8 @@
 #include <nvhe/ghost/ghost_types_aux.h>
 #include <nvhe/ghost/ghost_recording.h>
 
+#include <nvhe/ghost/ghost_tracing.h>
+
 
 /*
  * Functions to make ghost registers accesses more uniform
@@ -271,6 +273,36 @@ struct ghost_at_translation *ghost_at_translations_get(struct ghost_at_translati
 	}
 
 	return NULL;
+}
+
+/****************************************/
+// tracing
+
+/* TODO: use their pkvm-tracing machinery */
+
+static void __trace_ghost_event(const char *prefix, enum ghost_trace_event event)
+{
+	u64 counter;
+	const char *event_name;
+
+	if (! ghost_print_on("GHOST_TRACE"))
+		return;
+
+	/* read clock */
+	event_name  = ghost_trace_event_names[event];
+	counter = arch_timer_read_cntpct_el0();
+
+	ghost_printf(GHOST_WHITE_ON_YELLOW "[%ld] TRACE - %s" GHOST_NORMAL "\n", counter, event_name);
+}
+
+void trace_ghost_enter(enum ghost_trace_event event)
+{
+	__trace_ghost_event("enter", event);
+}
+
+void trace_ghost_exit(enum ghost_trace_event event)
+{
+	__trace_ghost_event("exit", event);
 }
 
 
@@ -2093,6 +2125,8 @@ static bool compute_new_abstract_state_for_exception(struct ghost_state *post, s
 {
 	bool new_state_computed = false;
 	GHOST_LOG_CONTEXT_ENTER();
+	trace_ghost_enter(GHOST_TRACE_POST_COMPUTE);
+
 
 	// copy over the things that were supposed to be constant, and always present.
 	copy_abstraction_constants(post, pre);
@@ -2125,6 +2159,7 @@ static bool compute_new_abstract_state_for_exception(struct ghost_state *post, s
 		new_state_computed = compute_new_abstract_state_handle_trap(post, pre, call);
 	}
 
+	trace_ghost_exit(GHOST_TRACE_POST_COMPUTE);
 	GHOST_LOG_CONTEXT_EXIT();
 	return new_state_computed;
 }
@@ -2411,6 +2446,7 @@ print_exit:
 // EXPORTED ghost_spec.h
 void ghost_record_pre(struct kvm_cpu_context *ctxt, u64 guest_exit_code)
 {
+	trace_ghost_enter(GHOST_TRACE_PRE);
 	tag_exception_entry(ctxt, guest_exit_code);
 
 	GHOST_LOG_CONTEXT_ENTER();
@@ -2429,6 +2465,7 @@ void ghost_record_pre(struct kvm_cpu_context *ctxt, u64 guest_exit_code)
 		record_and_check_abstraction_local_state_pre(ctxt);
 		ghost_unlock_vms();
 	}
+	trace_ghost_exit(GHOST_TRACE_PRE);
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
@@ -2443,6 +2480,8 @@ void ghost_post(struct kvm_cpu_context *ctxt)
 	struct ghost_call_data *call = this_cpu_ptr(&gs_call_data);
 
 	GHOST_LOG_CONTEXT_ENTER();
+	trace_ghost_enter(GHOST_TRACE_POST);
+
 	/* print out the return error codes */
 	if (__this_cpu_read(ghost_print_this_hypercall)) {
 		ghost_printf("---\n");
@@ -2499,4 +2538,5 @@ void ghost_post(struct kvm_cpu_context *ctxt)
 	ghost_unlock_maplets();
 leave_context:
 	GHOST_LOG_CONTEXT_EXIT();
+	trace_ghost_exit(GHOST_TRACE_POST);
 }
