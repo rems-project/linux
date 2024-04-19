@@ -41,8 +41,8 @@ void clear_abstraction_regs(struct ghost_state *g);
 void clear_abstraction_vm_partial(struct ghost_state *g, pkvm_handle_t handle, enum vm_field_owner owner);
 void clear_abstraction_vms_partial(struct ghost_state *g, enum vm_field_owner owner);
 void clear_abstraction_vms(struct ghost_state *g);
-void clear_abstraction_all(struct ghost_state *g);
-void clear_abstraction_thread_local(void);
+void clear_abstraction_this_thread_local_state(struct ghost_state *g);
+void clear_abstraction_this_thread_local_states(void);
 
 /*
  * Functions to copy bits of ghost state from one ghost_* struct into another.

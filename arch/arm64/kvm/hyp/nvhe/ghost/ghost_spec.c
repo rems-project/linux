@@ -2419,7 +2419,7 @@ void ghost_record_pre(struct kvm_cpu_context *ctxt, u64 guest_exit_code)
 
 	// The global shared state is not stable until pKVM has fully initialised
 	if (ghost_machinery_enabled()) {
-		clear_abstraction_thread_local();
+		clear_abstraction_this_thread_local_states();
 		ghost_clear_call_data();
 
 		ghost_lock_maplets();

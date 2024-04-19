@@ -266,7 +266,7 @@ void clear_abstraction_vms(struct ghost_state *g)
 }
 
 // EXPORTED ghost_types_aux.h
-void clear_abstraction_all(struct ghost_state *g)
+void clear_abstraction_this_thread_local_state(struct ghost_state *g)
 {
 	clear_abstraction_pkvm(g);
 	clear_abstraction_host(g);
@@ -288,13 +288,13 @@ void clear_abstraction_all(struct ghost_state *g)
 }
 
 // EXPORTED ghost_types_aux.h
-void clear_abstraction_thread_local(void)
+void clear_abstraction_this_thread_local_states(void)
 {
 	ghost_lock_maplets();
 	ghost_lock_vms();
-	clear_abstraction_all(this_cpu_ptr(&gs_recorded_pre));
-	clear_abstraction_all(this_cpu_ptr(&gs_recorded_post));
-	clear_abstraction_all(this_cpu_ptr(&gs_computed_post));
+	clear_abstraction_this_thread_local_state(this_cpu_ptr(&gs_recorded_pre));
+	clear_abstraction_this_thread_local_state(this_cpu_ptr(&gs_recorded_post));
+	clear_abstraction_this_thread_local_state(this_cpu_ptr(&gs_computed_post));
 	ghost_unlock_vms();
 	ghost_unlock_maplets();
 }
