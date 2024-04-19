@@ -20,7 +20,7 @@
  * Context: Thread-local, so does not need to be protected by a lock.
  *          However, the underlying vm and its vcpus are protected by that guest vm's lock.
  *
- * Invariant: loaded <=> loaded_vcpu_owned_data != NULL
+ * Invariant: loaded_vcpu != NULL
  */
 struct ghost_loaded_vcpu {
 	bool loaded;

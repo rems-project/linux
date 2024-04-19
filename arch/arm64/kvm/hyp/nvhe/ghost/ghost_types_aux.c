@@ -272,19 +272,6 @@ void clear_abstraction_this_thread_local_state(struct ghost_state *g)
 	clear_abstraction_host(g);
 	clear_abstraction_regs(g);
 	clear_abstraction_vms(g);
-	for (int i=0;i <NR_CPUS; i++) {
-		struct ghost_local_state *st = g->cpu_local_state[i];
-		if (st) {
-			if (st->present) {
-				if (st->loaded_hyp_vcpu.loaded) {
-					ghost_assert(st->loaded_hyp_vcpu.loaded_vcpu);
-					free(ALLOC_VCPU, st->loaded_hyp_vcpu.loaded_vcpu);
-					st->loaded_hyp_vcpu.loaded_vcpu = NULL;
-				}
-				st->present = false;
-			}
-		}
-	}
 }
 
 // EXPORTED ghost_types_aux.h
@@ -411,12 +398,7 @@ void copy_abstraction_loaded_vcpu(struct ghost_loaded_vcpu *tgt, struct ghost_lo
 {
 	tgt->loaded = src->loaded;
 	tgt->vm_handle = src->vm_handle;
-	tgt->loaded_vcpu = NULL;
-	if (src->loaded_vcpu) {
-		ghost_assert(tgt->loaded_vcpu == NULL);
-		tgt->loaded_vcpu = malloc_or_die(ALLOC_VCPU, sizeof(struct ghost_vcpu));
-		ghost_vcpu_clone_into(tgt->loaded_vcpu, src->loaded_vcpu);
-	}
+	ghost_vcpu_clone_into(tgt->loaded_vcpu, src->loaded_vcpu);
 }
 
 // EXPORTED ghost_types_aux.h

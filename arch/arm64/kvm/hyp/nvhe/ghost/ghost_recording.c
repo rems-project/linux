@@ -30,10 +30,18 @@ static void init_abstraction(struct ghost_state *g)
 	g->pkvm.present = false;
 	g->host.present = false;
 	g->vms.present = false;
+
+	/* the pointers in the local state are never NULL
+	 * but for some threads might not be valid to read.
+	 */
 	for (int idx=0; idx<hyp_nr_cpus; idx++) {
 		struct ghost_local_state *st = malloc_or_die(ALLOC_LOCAL_STATE, sizeof(struct ghost_local_state));
 		st->present = false;
 		g->cpu_local_state[idx] = st;
+
+		/* allocate a vCPU to sit in the per-CPU loaded state */
+		struct ghost_vcpu *loaded_vcpu = malloc_or_die(ALLOC_VCPU, sizeof(struct ghost_vcpu));
+		g->cpu_local_state[idx]->loaded_hyp_vcpu.loaded_vcpu = loaded_vcpu;
 	}
 }
 
@@ -533,32 +541,26 @@ static void ghost_cpu_running_state_copy(struct ghost_running_state *run_tgt, st
 
 static void record_abstraction_loaded_vcpu(struct ghost_state *g, struct pkvm_hyp_vcpu *loaded_vcpu)
 {
+	struct ghost_loaded_vcpu *g_loaded_vcpu;
+
 	GHOST_LOG_CONTEXT_ENTER();
-	bool loaded = false;
-	pkvm_handle_t vm_handle = 0;
-	u64 vcpu_index = 0;
-	struct ghost_vcpu *g_vcpu = NULL;
+	ghost_assert(ghost_this_cpu_local_state(g)->present);
+	g_loaded_vcpu = &ghost_this_cpu_local_state(g)->loaded_hyp_vcpu;
+
 	if (loaded_vcpu) {
-		// Now we dereference the vcpu struct, even though we're not protected by a lock
-		// this is somehow ok?
-		vm_handle = loaded_vcpu->vcpu.kvm->arch.pkvm.handle;
-		vcpu_index = loaded_vcpu->vcpu.vcpu_idx;
-		loaded = true;
+		u64 vcpu_index = loaded_vcpu->vcpu.vcpu_idx;
+
+		record_abstraction_vm_partial(g, pkvm_hyp_vcpu_to_hyp_vm(loaded_vcpu), VMS_VM_TABLE_OWNED);
 
 		/* The vm_table lock is still protecting us, ensuring the vcpu is only on one core
 		 * it's just that we 'forgot' about that on the hypercall
 		 * so just re-compute the vm-table-owned data. */
-		record_abstraction_vm_partial(g, pkvm_hyp_vcpu_to_hyp_vm(loaded_vcpu), VMS_VM_TABLE_OWNED);
-		g_vcpu = malloc_or_die(ALLOC_VCPU, sizeof (struct ghost_vcpu));
-		compute_abstraction_vcpu(g_vcpu, loaded_vcpu, vcpu_index);
+		g_loaded_vcpu->loaded = true;
+		g_loaded_vcpu->vm_handle = loaded_vcpu->vcpu.kvm->arch.pkvm.handle;
+		compute_abstraction_vcpu(g_loaded_vcpu->loaded_vcpu, loaded_vcpu, vcpu_index);
+	} else {
+		g_loaded_vcpu->loaded = false;
 	}
-
-	ghost_assert(ghost_this_cpu_local_state(g)->present);
-	ghost_this_cpu_local_state(g)->loaded_hyp_vcpu = (struct ghost_loaded_vcpu){
-		.loaded = loaded,
-		.vm_handle = vm_handle,
-		.loaded_vcpu = g_vcpu,
-	};
 
 	GHOST_LOG_CONTEXT_EXIT();
 }
@@ -617,12 +619,7 @@ void record_abstraction_loaded_vcpu_and_check_none(void)
 	// this cpu should have a loaded vcpu yet
 	ghost_spec_assert(!loaded_vcpu);
 	this_cpu_ghost_loaded_vcpu(&gs)->loaded = false;
-	// TODO: given this is currently only called at the beginning of time,
-	// may better to just assert false.
-	if (this_cpu_ghost_loaded_vcpu(&gs)->loaded_vcpu) {
-		free(ALLOC_VCPU, this_cpu_ghost_loaded_vcpu(&gs)->loaded_vcpu);
-		this_cpu_ghost_loaded_vcpu(&gs)->loaded_vcpu = NULL;
-	}
+	ghost_assert(!this_cpu_ghost_loaded_vcpu(&gs)->loaded);
 }
 
 static void record_abstraction_vms_and_check_none(struct ghost_state *g)

@@ -943,14 +943,13 @@ static bool compute_new_abstract_state_handle___pkvm_vcpu_load(struct ghost_stat
 	}
 
 	// and mark the current physical CPU as having a loaded vCPU
-	*this_cpu_ghost_loaded_vcpu(g1) = (struct ghost_loaded_vcpu){
-		.loaded = true,
-		.vm_handle = vm_handle,
-		.loaded_vcpu = vcpu_ref->vcpu,
-	};
+	this_cpu_ghost_loaded_vcpu(g1)->loaded = true;
+	this_cpu_ghost_loaded_vcpu(g1)->vm_handle = vm_handle;
+	ghost_vcpu_clone_into(this_cpu_ghost_loaded_vcpu(g1)->loaded_vcpu, vcpu_ref->vcpu);
 
 	// this vm's vCPU is now marked as loaded and the table looses ownership over it
 	vcpu_ref->loaded_somewhere = true;
+	free(ALLOC_VCPU, vcpu_ref->vcpu);
 	vcpu_ref->vcpu = NULL;
 
 	// and the table has the same number of vms as before.
@@ -1003,10 +1002,8 @@ static bool compute_new_abstract_state_handle___pkvm_vcpu_put(struct ghost_state
 	g1->vms.table_data.nr_vms = g0->vms.table_data.nr_vms;
 
 out:
-	*this_cpu_ghost_loaded_vcpu(g1) = (struct ghost_loaded_vcpu){
-		.loaded = false,
-		.loaded_vcpu = NULL, // just doing this for sanity
-	};
+	/* actually mark this CPU as having no loaded vCPU */
+	this_cpu_ghost_loaded_vcpu(g1)->loaded = false;
 
 	/* NOTE: vcpu_put does not write back to any general purpose register other than the SMCCC errorno (X0) */
 	copy_registers_to_host(g1);
@@ -1751,9 +1748,8 @@ static bool compute_new_abstract_state_pkvm_memshare(struct ghost_state *g1, str
 	ghost_assert(g1_vm != NULL);
 	// TODO: BS: this might be overspecifying
 	ghost_vm_clone_into_partial(g1_vm, g0_vm, VMS_VM_TABLE_OWNED | VMS_VM_OWNED);
-	struct ghost_vcpu *vcpu1 = malloc_or_die(ALLOC_VCPU, sizeof(struct ghost_vcpu));
+	struct ghost_vcpu *vcpu1 = this_cpu_ghost_loaded_vcpu(g1)->loaded_vcpu;
 	ghost_vcpu_clone_into(vcpu1, vcpu0);
-	this_cpu_ghost_loaded_vcpu(g1)->loaded_vcpu = vcpu1;
 
 	if (arg2 || arg3)
 		goto out_guest_err;
@@ -1871,9 +1867,8 @@ static bool compute_new_abstract_state_pkvm_memunshare(struct ghost_state *g1, s
 	ghost_assert(g1_vm != NULL);
 	// TODO: BS: this might be overspecifying
 	ghost_vm_clone_into_partial(g1_vm, g0_vm, VMS_VM_TABLE_OWNED | VMS_VM_OWNED);
-	struct ghost_vcpu *vcpu1 = malloc_or_die(ALLOC_VCPU, sizeof(struct ghost_vcpu));
+	struct ghost_vcpu *vcpu1 = this_cpu_ghost_loaded_vcpu(g1)->loaded_vcpu;
 	ghost_vcpu_clone_into(vcpu1, vcpu0);
-	this_cpu_ghost_loaded_vcpu(g1)->loaded_vcpu = vcpu1;
 
 	if (arg2 || arg3)
 		goto out_guest_err;
