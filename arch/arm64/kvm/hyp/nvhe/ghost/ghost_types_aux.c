@@ -272,6 +272,8 @@ void clear_abstraction_this_thread_local_state(struct ghost_state *g)
 	clear_abstraction_host(g);
 	clear_abstraction_regs(g);
 	clear_abstraction_vms(g);
+	ghost_assert(ghost_this_cpu_local_state(g) != NULL);
+	ghost_this_cpu_local_state(g)->present = false;
 }
 
 // EXPORTED ghost_types_aux.h
