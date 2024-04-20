@@ -39,6 +39,7 @@ static DEFINE_PER_CPU(struct user_fpsimd_state, loaded_host_fpsimd_state);
 #include <nvhe/ghost/ghost_control.h>
 #include <nvhe/ghost/ghost_misc.h>
 #include <nvhe/ghost/ghost_spec.h>
+#include <nvhe/ghost/ghost_tracing.h>
 #pragma GCC diagnostic ignored "-Wdeclaration-after-statement"
 
 #endif /* CONFIG_NVHE_GHOST_SPEC */
@@ -1148,6 +1149,44 @@ static void handle_host_hcall(struct kvm_cpu_context *host_ctxt)
 		ghost_dump_hyp_memory(0);
 		ghost_dump_shadow_table();
 	}
+	enum ghost_trace_event tr_event = 0;
+	bool do_tracing = true;
+	switch (id) {
+	case __KVM_HOST_SMCCC_FUNC___pkvm_host_share_hyp:
+		tr_event = GHOST_TRACE_host_share_hyp;
+		break;
+	case __KVM_HOST_SMCCC_FUNC___pkvm_host_unshare_hyp:
+		tr_event = GHOST_TRACE_host_unshare_hyp;
+		break;
+	case __KVM_HOST_SMCCC_FUNC___pkvm_host_reclaim_page:
+		tr_event = GHOST_TRACE_host_reclaim_page;
+		break;
+	case __KVM_HOST_SMCCC_FUNC___pkvm_host_map_guest:
+		tr_event = GHOST_TRACE_host_map_guest;
+		break;
+	case __KVM_HOST_SMCCC_FUNC___pkvm_vcpu_load:
+		tr_event = GHOST_TRACE_vcpu_load;
+		break;
+	case __KVM_HOST_SMCCC_FUNC___pkvm_vcpu_put:
+		tr_event = GHOST_TRACE_vcpu_put;
+		break;
+	case __KVM_HOST_SMCCC_FUNC___kvm_vcpu_run:
+		tr_event = GHOST_TRACE_vcpu_run;
+		break;
+	case __KVM_HOST_SMCCC_FUNC___pkvm_init_vm:
+		tr_event = GHOST_TRACE_init_vm;
+		break;
+	case __KVM_HOST_SMCCC_FUNC___pkvm_init_vcpu:
+		tr_event = GHOST_TRACE_init_vcpu;
+		break;
+	case __KVM_HOST_SMCCC_FUNC___pkvm_teardown_vm:
+		tr_event = GHOST_TRACE_teardown_vm;
+		break;
+	default:
+		do_tracing = false;
+	}
+	if (do_tracing)
+		trace_ghost_enter(tr_event);
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 
 	if (unlikely(id < hcall_min || id >= ARRAY_SIZE(host_hcall)))
@@ -1161,6 +1200,8 @@ static void handle_host_hcall(struct kvm_cpu_context *host_ctxt)
 	hfn(host_ctxt);
 
 #ifdef CONFIG_NVHE_GHOST_SPEC
+	if (do_tracing)
+		trace_ghost_exit(tr_event);
 	if (ghost_dump_verbose) {
 		hyp_puts("\nafter host hcall body");
 		ghost_dump_pgtable(&pkvm_pgtable,"pkvm_pgtable", i);
@@ -1235,7 +1276,13 @@ void handle_trap(struct kvm_cpu_context *host_ctxt)
 		break;
 	case ESR_ELx_EC_IABT_LOW:
 	case ESR_ELx_EC_DABT_LOW:
+#ifdef CONFIG_NVHE_GHOST_SPEC
+		trace_ghost_enter(GHOST_TRACE_host_mem_abort);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 		handle_host_mem_abort(host_ctxt);
+#ifdef CONFIG_NVHE_GHOST_SPEC
+		trace_ghost_exit(GHOST_TRACE_host_mem_abort);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 		break;
 	default:
 		BUG();

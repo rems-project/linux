@@ -292,17 +292,31 @@ static void __trace_ghost_event(const char *prefix, enum ghost_trace_event event
 	event_name  = ghost_trace_event_names[event];
 	counter = arch_timer_read_cntpct_el0();
 
-	ghost_printf(GHOST_WHITE_ON_YELLOW "[%ld] TRACE - %s" GHOST_NORMAL "\n", counter, event_name);
+	if (IS_ENABLED(CONFIG_NVHE_GHOST_TRACE_TRACE_EVENT)) {
+		u64 freq, ts;
+		freq = read_sysreg(CNTFRQ_EL0);
+		// TODO: assuming that the frequency remains constant
+		ts = counter / (freq / 1000000);
+		ghost_printf(
+			"TRACING {\"name\": \"%s\", \"cat\": \"PKVM\", \"ph\": \"%s\", \"pid\": %d, \"tid\": 0, \"ts\": %ld}\n",
+			event_name,
+			prefix,
+			hyp_smp_processor_id(),
+			ts
+		);
+	} else {
+		ghost_printf(GHOST_WHITE_ON_YELLOW "[%ld] TRACE (%s) - %s" GHOST_NORMAL "\n", counter, prefix, event_name);
+	}
 }
 
 void trace_ghost_enter(enum ghost_trace_event event)
 {
-	__trace_ghost_event("enter", event);
+	__trace_ghost_event(IS_ENABLED(CONFIG_NVHE_GHOST_TRACE_TRACE_EVENT) ? "B" : "enter", event);
 }
 
 void trace_ghost_exit(enum ghost_trace_event event)
 {
-	__trace_ghost_event("exit", event);
+	__trace_ghost_event(IS_ENABLED(CONFIG_NVHE_GHOST_TRACE_TRACE_EVENT) ? "E" : "exit", event);
 }
 
 

@@ -2,6 +2,18 @@
 #define GHOST_TRACING_H
 
 enum ghost_trace_event {
+  GHOST_TRACE_host_share_hyp,
+  GHOST_TRACE_host_unshare_hyp,
+  GHOST_TRACE_host_reclaim_page,
+  GHOST_TRACE_host_map_guest,
+  GHOST_TRACE_init_vm,
+  GHOST_TRACE_init_vcpu,
+  GHOST_TRACE_teardown_vm,
+  GHOST_TRACE_vcpu_load,
+  GHOST_TRACE_vcpu_put,
+  GHOST_TRACE_vcpu_run,
+  GHOST_TRACE_host_mem_abort,
+
   GHOST_TRACE_PRE,
   GHOST_TRACE_POST,
   GHOST_TRACE_POST_COMPUTE,
@@ -34,6 +46,17 @@ void trace_ghost_exit(enum ghost_trace_event event);
 
 #define GHOST_TRACE_STRING(x)	[GHOST_TRACE_##x] = #x
 static const char *ghost_trace_event_names[] = {
+  GHOST_TRACE_STRING(host_share_hyp),
+  GHOST_TRACE_STRING(host_unshare_hyp),
+  GHOST_TRACE_STRING(host_reclaim_page),
+  GHOST_TRACE_STRING(host_map_guest),
+  GHOST_TRACE_STRING(init_vm),
+  GHOST_TRACE_STRING(init_vcpu),
+  GHOST_TRACE_STRING(teardown_vm),
+  GHOST_TRACE_STRING(vcpu_load),
+  GHOST_TRACE_STRING(vcpu_put),
+  GHOST_TRACE_STRING(vcpu_run),
+  GHOST_TRACE_STRING(host_mem_abort),
   GHOST_TRACE_STRING(PRE),
   GHOST_TRACE_STRING(POST),
   GHOST_TRACE_STRING(POST_COMPUTE),

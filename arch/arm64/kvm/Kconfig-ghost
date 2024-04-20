@@ -138,6 +138,13 @@ config NVHE_GHOST_TRACE
 	help
 	  When enabled, trace each ghost enter/exit call site.
 
+config NVHE_GHOST_TRACE_TRACE_EVENT
+	bool "Output ghost tracing for TraceEvent"
+	depends on NVHE_GHOST_TRACE
+	default n
+	help
+	  Output ghost tracing in a format allowing the reconstruction of a TraceEvent file
+
 menu "Hypercalls"
 	depends on NVHE_GHOST_SPEC
 
