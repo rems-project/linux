@@ -54,6 +54,12 @@ static struct ghost_control_item ghost_controls[] = {
 	(struct ghost_control_item){.name="__pkvm_teardown_vm", .check=IS_ENABLED(CONFIG_NVHE_GHOST_SPEC_CHECK___pkvm_teardown_vm), .print=noisy_spec},
 	(struct ghost_control_item){.name="__pkvm_host_reclaim_page", .check=IS_ENABLED(CONFIG_NVHE_GHOST_SPEC_CHECK___pkvm_host_reclaim_page), .print=noisy_spec},
 
+	(struct ghost_control_item){.name="__pkvm_kcov_init_buffer", .check=false, .print=false},
+	(struct ghost_control_item){.name="__pkvm_kcov_buffer_add_page", .check=false, .print=false},
+	(struct ghost_control_item){.name="__pkvm_kcov_teardown_buffer", .check=false, .print=false},
+	(struct ghost_control_item){.name="__pkvm_kcov_enable", .check=false, .print=false},
+	(struct ghost_control_item){.name="__pkvm_kcov_disable", .check=false, .print=false},
+
 	// guest traps
 	(struct ghost_control_item){.name="handle_guest_mem_abort", .check=IS_ENABLED(CONFIG_NVHE_GHOST_SPEC_CHECK_handle_guest_mem_abort), .print=IS_ENABLED(CONFIG_NVHE_GHOST_SPEC_NOISY_handle_guest_mem_abort)},
 	//   guest hypercalls

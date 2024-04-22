@@ -118,6 +118,12 @@ static const char *ghost_host_hcall_names[] = {
 	HANDLE_FUNC_STRING(__pkvm_vcpu_load),
 	HANDLE_FUNC_STRING(__pkvm_vcpu_put),
 	HANDLE_FUNC_STRING(__pkvm_vcpu_sync_state),
+
+	HANDLE_FUNC_STRING(__pkvm_kcov_init_buffer),
+	HANDLE_FUNC_STRING(__pkvm_kcov_buffer_add_page),
+	HANDLE_FUNC_STRING(__pkvm_kcov_teardown_buffer),
+	HANDLE_FUNC_STRING(__pkvm_kcov_enable),
+	HANDLE_FUNC_STRING(__pkvm_kcov_disable),
 };
 
 // top-level spec ghost state
