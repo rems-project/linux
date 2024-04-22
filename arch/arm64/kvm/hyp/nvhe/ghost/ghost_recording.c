@@ -71,14 +71,11 @@ static mapping compute_abstraction_hyp_memory(void)
 	return m;
 }
 
-static void compute_abstraction_host(struct ghost_host *dest)
+// Recording of the set of reclaimable/need_poisoning pages by walking
+// all pages of all hyp_memory memblocks.
+// This is very slow, but only look at the concrete pKVM state.
+static void compute_reclaimable_and_need_poisoning_slow(struct ghost_host *dest)
 {
-	u64 i=0; /* base indent */ /* though we'll mostly want this to be quiet, later */
-	u64 pool_range_start = (u64)hyp_virt_to_phys(host_s2_pgt_base);
-	u64 pool_range_end = pool_range_start + ghost_host_s2_pgt_size * PAGE_SIZE;
-	ghost_record_pgtable_ap(&dest->host_concrete_pgtable, &host_mmu.pgt, pool_range_start, pool_range_end, "host_mmu.pgt", i);
-	dest->host_abstract_pgtable_annot = mapping_annot(dest->host_concrete_pgtable.mapping);
-	dest->host_abstract_pgtable_shared = mapping_shared(dest->host_concrete_pgtable.mapping);
 	for (int i=0; i<hyp_memblock_nr; i++) {
 		struct memblock_region block = hyp_memory[i];
 		for (int j=0; j<block.size; j+=PAGE_SIZE) {
@@ -90,7 +87,67 @@ static void compute_abstraction_host(struct ghost_host *dest)
 				ghost_pfn_set_insert(&dest->need_poisoning_pfn_set, hyp_phys_to_pfn(addr));
 		}
 	}
+}
 
+// This version is much starter, but looks at the ghost host annot and shared mappings
+// instead of looking at the concrete pKVM state.
+static void compute_reclaimable_and_need_poisoning_faster(struct ghost_host *dest)
+{
+	struct glist_node *pos;
+	struct maplet *m;
+	// if (glist_empty(&dest->host_abstract_pgtable_annot))
+	// 	return;
+	glist_for_each(pos, &dest->host_abstract_pgtable_annot) {
+		m = glist_entry(pos, struct maplet, list);
+		ghost_assert(m->target.kind == MAPLET_UNMAPPED);
+		if (MAPLET_OWNER_ANNOT_OWNED_GUEST == m->target.annot.owner) {
+			for (int i = 0; i < m->ia_range_nr_pages; i++) {
+				// NOTE: using the input address because the target is MAPLET_UNMAPPED,
+				// but we know that host is identity mapped so it is fine.
+				phys_addr_t addr = m->ia_range_start + i*PAGE_SIZE;
+				struct hyp_page *page = hyp_phys_to_page(addr);
+				if (page->flags & HOST_PAGE_PENDING_RECLAIM) {
+					ghost_pfn_set_insert(&dest->reclaimable_pfn_set, hyp_phys_to_pfn(addr));
+				}
+				if (page->flags & HOST_PAGE_NEED_POISONING) {
+					ghost_pfn_set_insert(&dest->need_poisoning_pfn_set, hyp_phys_to_pfn(addr));
+				}
+			}
+		}
+	}
+	// NOTE: it is not enough to just look at the annot mapping, because guests may have shared pages with the host.
+	glist_for_each(pos, &dest->host_abstract_pgtable_shared) {
+		m = glist_entry(pos, struct maplet, list);
+		ghost_assert(m);
+		for (int i = 0; i < m->ia_range_nr_pages; i++) {
+			phys_addr_t addr = m->target.map.oa_range_start + i*PAGE_SIZE;
+			struct hyp_page *page = hyp_phys_to_page(addr);
+			ghost_assert(page);
+			if (page->flags & HOST_PAGE_PENDING_RECLAIM) {
+				ghost_pfn_set_insert(&dest->reclaimable_pfn_set, hyp_phys_to_pfn(addr));
+			}
+			if (page->flags & HOST_PAGE_NEED_POISONING) {
+				ghost_pfn_set_insert(&dest->need_poisoning_pfn_set, hyp_phys_to_pfn(addr));
+			}
+		}
+	}
+
+}
+
+
+static void compute_abstraction_host(struct ghost_host *dest)
+{
+	u64 i=0; /* base indent */ /* though we'll mostly want this to be quiet, later */
+	u64 pool_range_start = (u64)hyp_virt_to_phys(host_s2_pgt_base);
+	u64 pool_range_end = pool_range_start + ghost_host_s2_pgt_size * PAGE_SIZE;
+	ghost_record_pgtable_ap(&dest->host_concrete_pgtable, &host_mmu.pgt, pool_range_start, pool_range_end, "host_mmu.pgt", i);
+	dest->host_abstract_pgtable_annot = mapping_annot(dest->host_concrete_pgtable.mapping);
+	dest->host_abstract_pgtable_shared = mapping_shared(dest->host_concrete_pgtable.mapping);
+	// TODO: maybe add a build config switch?
+	if (true)
+		compute_reclaimable_and_need_poisoning_faster(dest);
+	else
+		compute_reclaimable_and_need_poisoning_slow(dest);
 	dest->present = true;
 }
 
