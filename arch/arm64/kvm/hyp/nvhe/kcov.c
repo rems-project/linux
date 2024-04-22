@@ -19,6 +19,8 @@
 #include <nvhe/pkvm.h>
 #include <nvhe/trap_handler.h>
 
+#include <nvhe/ghost/ghost_recording.h>
+
 u64 __ro_after_init hyp_kimage_voffset;
 u64 __ro_after_init hyp_kimage_vaddr;
 
@@ -58,6 +60,23 @@ static struct kcov_buffer kcov_buffers[CONFIG_NVHE_KCOV_NUM_BUFFERS];
  * NULL means the current thread is not actively tracing
  */
 static DEFINE_PER_CPU(struct kcov_buffer *, kcov_active_buffer);
+
+static void hyp_lock_pkvm_pgd_lock(void)
+{
+	hyp_spin_lock(&pkvm_pgd_lock);
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	record_and_check_abstraction_pkvm_pre();
+#endif /* CONFIG_NVHE_GHOST_SPEC */
+}
+
+static void hyp_unlock_pkvm_pgd_lock(void)
+{
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	record_and_copy_abstraction_pkvm_post();
+#endif /* CONFIG_NVHE_GHOST_SPEC */
+	hyp_spin_unlock(&pkvm_pgd_lock);
+
+}
 
 void pkvm_kcov_enter_from_host(void)
 {
@@ -200,9 +219,9 @@ u64 __pkvm_kcov_buffer_add_page(u64 index, u64 pfn)
 
 	vaddr = kcov_buffers[index].area + kcov_buffers[index].mapped;
 
-	hyp_spin_lock(&pkvm_pgd_lock);
+	hyp_lock_pkvm_pgd_lock();
 	ret = kvm_pgtable_hyp_map(&pkvm_pgtable, (u64)vaddr, PAGE_SIZE, hyp_pfn_to_phys(pfn), PAGE_HYP);
-	hyp_spin_unlock(&pkvm_pgd_lock);
+	hyp_unlock_pkvm_pgd_lock();
 	if (ret)
 		goto unpin;
 
@@ -249,11 +268,11 @@ int __pkvm_kcov_teardown_buffer(u64 index)
 
 	vaddr = kcov_buffers[index].area + kcov_buffers[index].mapped;
 
-	hyp_spin_lock(&pkvm_pgd_lock);
+	hyp_lock_pkvm_pgd_lock();
 	BUG_ON(kvm_pgtable_get_leaf(&pkvm_pgtable, (u64)vaddr, &pte, &level));
 	BUG_ON(level != KVM_PGTABLE_MAX_LEVELS - 1);
 	BUG_ON(kvm_pgtable_hyp_unmap(&pkvm_pgtable, (u64)vaddr, PAGE_SIZE) != PAGE_SIZE);
-	hyp_spin_unlock(&pkvm_pgd_lock);
+	hyp_unlock_pkvm_pgd_lock();
 
 	pfn = kvm_pte_to_pfn(pte);
 	page_lm = hyp_pfn_to_virt(pfn);
