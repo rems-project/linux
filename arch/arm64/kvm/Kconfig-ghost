@@ -50,6 +50,13 @@ menuconfig NVHE_GHOST_SIMPLIFIED_MODEL
 	select PROTECTED_NVHE_STACKTRACE
 	select KVM_ARM_HYP_DEBUG_UART
 
+config NVHE_GHOST_SIMPLIFIED_MODEL_LOG_ONLY
+	bool "Only log simplified model steps"
+	depends on NVHE_GHOST_SIMPLIFIED_MODEL
+	default n
+	help
+	  Do not compute the simplified model state but log the transitions for later analysis.
+
 menuconfig NVHE_GHOST_SIMPLIFIED_MODEL_NOISY
 	bool "Noisy ghost simplified model output"
 	depends on NVHE_GHOST_SIMPLIFIED_MODEL

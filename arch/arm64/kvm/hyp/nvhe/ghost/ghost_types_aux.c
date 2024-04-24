@@ -718,7 +718,9 @@ void check_abstraction_vms_subseteq(struct ghost_vms *g_spec, struct ghost_vms *
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
+#ifndef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL_LOG_ONLY
 static void post_dump_diff(struct ghost_state *gc, struct ghost_state *gr_post, struct ghost_state *gr_pre);
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL_LOG_ONLY */
 // EXPORTED ghost_types_aux.h
 void check_abstraction_equals_all(struct ghost_state *gc, struct ghost_state *gr_post, struct ghost_state *gr_pre)
 {
