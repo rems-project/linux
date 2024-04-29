@@ -671,6 +671,7 @@ static int hyp_map_walker(const struct kvm_pgtable_visit_ctx *ctx,
 	if (!childp)
 		return -ENOMEM;
 #if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
+	ghost_simplified_model_step_zalloc(hyp_virt_to_phys(childp));
 	ghost_simplified_model_step_hint(GHOST_HINT_SET_OWNER_ROOT, hyp_virt_to_phys(childp), hyp_virt_to_phys(pkvm_pgtable.pgd));
 #endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 
@@ -796,6 +797,10 @@ int kvm_pgtable_hyp_init(struct kvm_pgtable *pgt, u32 va_bits,
 	if (!pgt->pgd)
 		return -ENOMEM;
 
+
+#if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
+	ghost_simplified_model_step_zalloc(hyp_virt_to_phys(pgt->pgd));
+#endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 	pgt->ia_bits		= va_bits;
 	pgt->start_level	= KVM_PGTABLE_MAX_LEVELS - levels;
 	pgt->mm_ops		= mm_ops;
@@ -1194,6 +1199,7 @@ static int stage2_map_walk_leaf(const struct kvm_pgtable_visit_ctx *ctx,
 	if (!childp)
 		return -ENOMEM;
 #if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
+	ghost_simplified_model_step_zalloc(hyp_virt_to_phys(childp));
 	ghost_simplified_model_step_hint(GHOST_HINT_SET_OWNER_ROOT, hyp_virt_to_phys(childp), hyp_virt_to_phys(data->mmu->pgt->pgd));
 #endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 
@@ -1622,6 +1628,9 @@ int __kvm_pgtable_stage2_init(struct kvm_pgtable *pgt, struct kvm_s2_mmu *mmu,
 	if (!pgt->pgd)
 		return -ENOMEM;
 
+#if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
+	ghost_simplified_model_step_zalloc_exact(hyp_virt_to_phys(pgt->pgd), pgd_sz);
+#endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 	pgt->ia_bits		= ia_bits;
 	pgt->start_level	= start_level;
 	pgt->mm_ops		= mm_ops;
