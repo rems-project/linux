@@ -835,40 +835,23 @@ static bool compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost
 		return false;
 	}
 
-	// The call to pkvm_refill_memcache() may non-deterministically
-	// fail because we run out of memory. In this case the hypercall
-	// ends with that host mapping left unchanged.
-	//
-	// The code of __pkvm_host_donate_guest() allows for a non-deterministic
-	// run out of memory when updating the guest page table.
-	// However, BS and KM think that pkvm_refill_memcache() is checking
-	// that this cannot happens by donating the max number of pages
-	// that may be needed from the host's memcache to pKVM's memcache used
-	// for the guest.
-	// TODO: there is still something we don't understand in the code
-	// see the BS comment in arch/arm64/kvm/hyp/nvhe/mm.c
-	// TODO2: we need to model the donation from the host of the pages used
-	// in pKVM (guest) memcached.
-	// This will require adding more state to ghost_pkvm
-	if (call->return_value == -ENOMEM) {
-		ret = -ENOMEM;
-		g1_vm->vm_locked.present = false;
-		goto out;
-	}
-
 	/*
 	 * Take a snapshot of the host/pkvm and vm states, which we will update.
 	 *
-	 * if a donation happens, then we will update the pkvm state,
-	 * NOTE: we should be holding the pkvm pgd lock here, even if the underlying call didn't do a donation,
-	 * so it's safe to copy.
+	 * if a donation happens, then we will update the host and pkvm states.
 	 */
-	copy_abstraction_host(g1, g0);
-	if (call->memcache_donations.len > 0)
+	if (call->memcache_donations.len > 0) {
+		copy_abstraction_host(g1, g0);
 		copy_abstraction_pkvm(g1, g0);
-	else {
+	} else {
 		ghost_assert(!g0->pkvm.present);
 		g1->pkvm.present = false;
+		ghost_assert(!g0->host.present);
+		g1->host.present = false;
+	}
+
+	for (int idx=0; idx<hyp_loaded_vcpu->loaded_vcpu->recorded_memcache_pfn_set.len; idx++) {
+		ghost_pfn_set_insert(&g1_vm->vm_locked.vm_abstract_pgtable.table_pfns, hyp_loaded_vcpu->loaded_vcpu->recorded_memcache_pfn_set.external_pfns[idx]);
 	}
 
 	for (int d=0; d<call->memcache_donations.len; d++) {
@@ -905,6 +888,27 @@ static bool compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost
 
 		// finally, we mark that this page as one potentially used for a pagetable for this guest.
 		ghost_pfn_set_insert(&g1_vm->vm_locked.vm_abstract_pgtable.table_pfns, pfn);
+	}
+
+	// The call to pkvm_refill_memcache() may non-deterministically
+	// fail because we run out of memory. In this case the hypercall
+	// ends with that host mapping left unchanged.
+	//
+	// The code of __pkvm_host_donate_guest() allows for a non-deterministic
+	// run out of memory when updating the guest page table.
+	// However, BS and KM think that pkvm_refill_memcache() is checking
+	// that this cannot happens by donating the max number of pages
+	// that may be needed from the host's memcache to pKVM's memcache used
+	// for the guest.
+	// TODO: there is still something we don't understand in the code
+	// see the BS comment in arch/arm64/kvm/hyp/nvhe/mm.c
+	// TODO2: we need to model the donation from the host of the pages used
+	// in pKVM (guest) memcached.
+	// This will require adding more state to ghost_pkvm
+	if (call->return_value == -ENOMEM) {
+		ret = -ENOMEM;
+		g1_vm->vm_locked.present = false;
+		goto out;
 	}
 
 	// TODO: non-protected VM/VCPUs?
