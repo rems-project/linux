@@ -821,18 +821,24 @@ static bool compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost
 		goto out;
 	}
 
-	ghost_assert(ghost_vms_is_valid_handle(&g0->vms, hyp_loaded_vcpu->vm_handle))
+	struct ghost_vm *g0_vm = NULL, *g1_vm = NULL;
+	if (call->return_value != -ENOMEM) {
+		ghost_assert(ghost_vms_is_valid_handle(&g0->vms, hyp_loaded_vcpu->vm_handle));
+		g0_vm = ghost_vms_get(&g0->vms, hyp_loaded_vcpu->vm_handle);
+		g1_vm = ghost_vms_alloc(&g1->vms, hyp_loaded_vcpu->vm_handle);
+		ghost_assert(g0_vm != NULL);
+		ghost_assert(g1_vm != NULL);
+		ghost_vm_clone_into_partial(g1_vm, g0_vm, VMS_VM_OWNED);
 
-	struct ghost_vm *g0_vm = ghost_vms_get(&g0->vms, hyp_loaded_vcpu->vm_handle);
-	struct ghost_vm *g1_vm = ghost_vms_alloc(&g1->vms, hyp_loaded_vcpu->vm_handle);
-	ghost_assert(g0_vm != NULL);
-	ghost_assert(g1_vm != NULL);
-	ghost_vm_clone_into_partial(g1_vm, g0_vm, VMS_VM_OWNED);
+		if (! g0_vm->protected) {
+			/* don't check this spec */
+			GHOST_WARN("__pkvm_host_map_guest with non-protected VM");
+			return false;
+		}
 
-	if (! g0_vm->protected) {
-		/* don't check this spec */
-		GHOST_WARN("__pkvm_host_map_guest with non-protected VM");
-		return false;
+		for (int idx=0; idx<hyp_loaded_vcpu->loaded_vcpu->recorded_memcache_pfn_set.len; idx++) {
+			ghost_pfn_set_insert(&g1_vm->vm_locked.vm_abstract_pgtable.table_pfns, hyp_loaded_vcpu->loaded_vcpu->recorded_memcache_pfn_set.external_pfns[idx]);
+		}
 	}
 
 	/*
@@ -848,10 +854,6 @@ static bool compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost
 		g1->pkvm.present = false;
 		ghost_assert(!g0->host.present);
 		g1->host.present = false;
-	}
-
-	for (int idx=0; idx<hyp_loaded_vcpu->loaded_vcpu->recorded_memcache_pfn_set.len; idx++) {
-		ghost_pfn_set_insert(&g1_vm->vm_locked.vm_abstract_pgtable.table_pfns, hyp_loaded_vcpu->loaded_vcpu->recorded_memcache_pfn_set.external_pfns[idx]);
 	}
 
 	for (int d=0; d<call->memcache_donations.len; d++) {
@@ -885,9 +887,6 @@ static bool compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost
 			MAP_INSERT_PAGE, GHOST_STAGE2, host_donated_page_ipa, 1, maplet_target_annot_ext(MAPLET_OWNER_ANNOT_OWNED_HYP)
 		);
 		// TODO: WRITE_ONCE()
-
-		// finally, we mark that this page as one potentially used for a pagetable for this guest.
-		ghost_pfn_set_insert(&g1_vm->vm_locked.vm_abstract_pgtable.table_pfns, pfn);
 	}
 
 	// The call to pkvm_refill_memcache() may non-deterministically
@@ -907,8 +906,14 @@ static bool compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost
 	// This will require adding more state to ghost_pkvm
 	if (call->return_value == -ENOMEM) {
 		ret = -ENOMEM;
-		g1_vm->vm_locked.present = false;
+		//TODO g1_vm->vm_locked.present = false;
 		goto out;
+	}
+
+	for (int d=0; d<call->memcache_donations.len; d++) {
+		u64 pfn = call->memcache_donations.pages[d];
+		// finally, we mark that this page as one potentially used for a pagetable for this guest.
+		ghost_pfn_set_insert(&g1_vm->vm_locked.vm_abstract_pgtable.table_pfns, pfn);
 	}
 
 	// TODO: non-protected VM/VCPUs?
