@@ -1783,7 +1783,6 @@ static bool compute_new_abstract_state_pkvm_memshare(struct ghost_state *g1, str
 	struct ghost_vm *g0_vm = ghost_vms_get(&g0->vms, loaded_vcpu_info->vm_handle);
 	ghost_spec_assert(g0_vm != NULL);
 	ghost_spec_assert(g0_vm->vm_locked.present);
-	ghost_spec_assert(g0_vm->vm_table_locked.present);
 
 	// Get the rest of the VCPU. We need the registers.
 	struct ghost_vcpu *vcpu0 = loaded_vcpu_info->loaded_vcpu;
@@ -1799,8 +1798,7 @@ static bool compute_new_abstract_state_pkvm_memshare(struct ghost_state *g1, str
 	copy_abstraction_host(g1, g0);
 	struct ghost_vm *g1_vm = ghost_vms_alloc(&g1->vms, loaded_vcpu_info->vm_handle);
 	ghost_assert(g1_vm != NULL);
-	// TODO: BS: this might be overspecifying
-	ghost_vm_clone_into_partial(g1_vm, g0_vm, VMS_VM_TABLE_OWNED | VMS_VM_OWNED);
+	ghost_vm_clone_into_partial(g1_vm, g0_vm, VMS_VM_OWNED);
 	struct ghost_vcpu *vcpu1 = this_cpu_ghost_loaded_vcpu(g1)->loaded_vcpu;
 	ghost_vcpu_clone_into(vcpu1, vcpu0);
 
@@ -1902,7 +1900,6 @@ static bool compute_new_abstract_state_pkvm_memunshare(struct ghost_state *g1, s
 	struct ghost_vm *g0_vm = ghost_vms_get(&g0->vms, loaded_vcpu_info->vm_handle);
 	ghost_spec_assert(g0_vm != NULL);
 	ghost_spec_assert(g0_vm->vm_locked.present);
-	ghost_spec_assert(g0_vm->vm_table_locked.present);
 
 	// Get the rest of the VCPU. We need the registers.
 	struct ghost_vcpu *vcpu0 = loaded_vcpu_info->loaded_vcpu;
@@ -1919,7 +1916,7 @@ static bool compute_new_abstract_state_pkvm_memunshare(struct ghost_state *g1, s
 	struct ghost_vm *g1_vm = ghost_vms_alloc(&g1->vms, loaded_vcpu_info->vm_handle);
 	ghost_assert(g1_vm != NULL);
 	// TODO: BS: this might be overspecifying
-	ghost_vm_clone_into_partial(g1_vm, g0_vm, VMS_VM_TABLE_OWNED | VMS_VM_OWNED);
+	ghost_vm_clone_into_partial(g1_vm, g0_vm, VMS_VM_OWNED);
 	struct ghost_vcpu *vcpu1 = this_cpu_ghost_loaded_vcpu(g1)->loaded_vcpu;
 	ghost_vcpu_clone_into(vcpu1, vcpu0);
 
@@ -2052,12 +2049,7 @@ static bool compute_new_abstract_state_handle_guest_mem_abort(struct ghost_state
 	}
 	ghost_assert(loaded_vcpu_info->loaded_vcpu);
 
-	pkvm_handle_t vm_handle = loaded_vcpu_info->vm_handle;
-
-	struct ghost_vm *vm0 = ghost_vms_get(&g0->vms, vm_handle);
-	struct ghost_vm *vm1 = ghost_vms_alloc(&g1->vms, vm_handle);
-	// TODO: BS: this should only copy the vCPU loaded in the current physical CPU
-	ghost_vm_clone_into_partial(vm1, vm0, VMS_VM_TABLE_OWNED);
+	copy_abstraction_loaded_vcpu(this_cpu_ghost_loaded_vcpu(g1), this_cpu_ghost_loaded_vcpu(g0));
 
 	// go back to host
 	ghost_save_guest_context(loaded_vcpu_info->loaded_vcpu, g0);
