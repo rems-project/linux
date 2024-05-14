@@ -452,6 +452,7 @@ void ghost_vm_clone_into_partial(struct ghost_vm *dest, struct ghost_vm *src, en
 					} else {
 						copied_vcpu++;
 						ghost_assert(src_vcpu_ref->vcpu);
+						ghost_assert(dest_vcpu_ref->vcpu == NULL);
 						dest_vcpu_ref->vcpu = malloc_or_die(ALLOC_VCPU, sizeof(struct ghost_vcpu));
 						ghost_vcpu_clone_into(dest_vcpu_ref->vcpu, src_vcpu_ref->vcpu);
 					}

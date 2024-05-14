@@ -1389,6 +1389,7 @@ static bool compute_new_abstract_state_handle___pkvm_init_vcpu(struct ghost_stat
 	vcpu_ref->initialised = true;
 	vcpu_ref->loaded_somewhere = false;
 
+	ghost_assert(vcpu_ref->vcpu == NULL);
 	vcpu_ref->vcpu = malloc_or_die(ALLOC_VCPU, sizeof(struct ghost_vcpu));
 	vcpu_ref->vcpu->vcpu_index = vcpu_idx;
 
