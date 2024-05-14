@@ -1082,10 +1082,6 @@ static bool compute_new_abstract_state_handle___kvm_vcpu_run_begin(struct ghost_
 
 	pkvm_handle_t vm_handle = loaded_vcpu_info->vm_handle;
 
-	/* must have existed to be able to load it */
-	struct ghost_vm *vm0 = ghost_vms_get(&g0->vms, vm_handle);
-	ghost_assert(vm0);
-
 	struct ghost_vcpu *vcpu0 = loaded_vcpu_info->loaded_vcpu;
 	ghost_assert(vcpu0);
 
