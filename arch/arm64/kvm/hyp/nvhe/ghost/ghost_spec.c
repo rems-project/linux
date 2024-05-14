@@ -2419,6 +2419,7 @@ static struct ghost_trap_data compute_exception_state(struct kvm_cpu_context *ct
 
 static void tag_exception_entry(struct kvm_cpu_context *ctxt, u64 guest_exit_code)
 {
+	int cpu = hyp_smp_processor_id();
 	ghost_print_enter();
 
 	// dispatch printing/checking on the implementation's understanding of the state
@@ -2439,8 +2440,9 @@ static void tag_exception_entry(struct kvm_cpu_context *ctxt, u64 guest_exit_cod
 
 	ghost_printf(
 		"\n"
-		GHOST_WHITE_ON_BLUE "****** TRAP (from %s) *****************************************************" GHOST_NORMAL "\n"
+		GHOST_WHITE_ON_BLUE "****** TRAP [CPU%d] (from %s) *****************************************************" GHOST_NORMAL "\n"
 		GHOST_WHITE_ON_BLUE "%s" GHOST_NORMAL "\n",
+		cpu,
 		from_guest ? "guest" : " host",
 		trap.name
 	);
@@ -2490,6 +2492,7 @@ void ghost_record_pre(struct kvm_cpu_context *ctxt, u64 guest_exit_code)
 // EXPORTED ghost_spec.h
 void ghost_post(struct kvm_cpu_context *ctxt)
 {
+	int cpu = hyp_smp_processor_id();
 	bool new_state_computed = false;
 
 	struct ghost_state *gr_pre = this_cpu_ptr(&gs_recorded_pre);
@@ -2498,11 +2501,12 @@ void ghost_post(struct kvm_cpu_context *ctxt)
 	struct ghost_call_data *call = this_cpu_ptr(&gs_call_data);
 
 	GHOST_LOG_CONTEXT_ENTER();
+	ghost_print_enter();
 	trace_ghost_enter(GHOST_TRACE_POST);
 
 	/* print out the return error codes */
 	if (__this_cpu_read(ghost_print_this_hypercall)) {
-		ghost_printf("---\n");
+		ghost_printf("--- [CPU%d] ---\n", cpu);
 		ghost_print_call_data();
 		ghost_printf("ret:\n");
 		ghost_printf("[r0] %lx\n", ctxt->regs.regs[0]);
@@ -2528,7 +2532,7 @@ void ghost_post(struct kvm_cpu_context *ctxt)
 		// and check the two are equal on relevant components
 		if (new_state_computed) {
 			if (__this_cpu_read(ghost_print_this_hypercall)) {
-				ghost_printf(GHOST_WHITE_ON_BLUE "check abstraction" GHOST_NORMAL "\n");
+				ghost_printf(GHOST_WHITE_ON_BLUE "check abstraction CPU%d" GHOST_NORMAL "\n", cpu);
 
 #ifdef CONFIG_NVHE_GHOST_SPEC_DUMP_STATE
 				ghost_printf("ghost recorded pre (full):\n");
@@ -2547,7 +2551,7 @@ void ghost_post(struct kvm_cpu_context *ctxt)
 			check_abstraction_equals_all(gc_post, gr_post, gr_pre);
 		} else {
 			if (__this_cpu_read(ghost_print_this_hypercall)) {
-				ghost_printf(GHOST_WHITE_ON_YELLOW "skipping spec check" GHOST_NORMAL "\n");
+				ghost_printf(GHOST_WHITE_ON_YELLOW "skipping spec check CPU%d" GHOST_NORMAL "\n", cpu);
 			}
 		}
 	}
@@ -2557,4 +2561,5 @@ void ghost_post(struct kvm_cpu_context *ctxt)
 leave_context:
 	GHOST_LOG_CONTEXT_EXIT();
 	trace_ghost_exit(GHOST_TRACE_POST);
+	ghost_print_exit();
 }
