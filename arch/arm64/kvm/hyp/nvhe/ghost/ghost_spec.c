@@ -2458,6 +2458,8 @@ static void tag_exception_entry(struct kvm_cpu_context *ctxt, u64 guest_exit_cod
 	if (!ghost_exec_enabled())
 		ghost_printf(GHOST_WHITE_ON_YELLOW "skipping exec check" GHOST_NORMAL "\n");
 
+	ghost_printf("---\n");
+
 print_exit:
 	ghost_print_exit();
 }
@@ -2506,9 +2508,10 @@ void ghost_post(struct kvm_cpu_context *ctxt)
 
 	/* print out the return error codes */
 	if (__this_cpu_read(ghost_print_this_hypercall)) {
-		ghost_printf("--- [CPU%d] ---\n", cpu);
+		ghost_printf(GHOST_WHITE_ON_BLUE "abstraction post [CPU%d]" GHOST_NORMAL "\n", cpu);
+		ghost_printf(GHOST_WHITE_ON_BLUE "%s" GHOST_NORMAL "\n", __this_cpu_read(ghost_this_trap));
+
 		ghost_print_call_data();
-		ghost_printf("ret:\n");
 		ghost_printf("[r0] %lx\n", ctxt->regs.regs[0]);
 		ghost_printf("[r1] %lx\n", ctxt->regs.regs[1]);
 	}
@@ -2555,6 +2558,10 @@ void ghost_post(struct kvm_cpu_context *ctxt)
 			}
 		}
 	}
+
+	/* put a --- line at the end to signify end of post */
+	if (__this_cpu_read(ghost_print_this_hypercall))
+		ghost_printf("---\n");
 
 	ghost_unlock_vms();
 	ghost_unlock_maplets();
