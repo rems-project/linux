@@ -329,11 +329,13 @@ static void compute_abstraction_vm_partial(struct ghost_vm *dest, struct pkvm_hy
 						vcpu_ref->initialised ? hyp_virt_to_phys(hyp_vm->vcpus[vcpu_idx]) : 0;
 					if (vcpu->loaded_hyp_vcpu) {
 						vcpu_ref->loaded_somewhere = true;
+						ghost_assert(vcpu_ref->vcpu == NULL);
 						vcpu_ref->vcpu = NULL;
 					} else {
 						vcpu_ref->loaded_somewhere = false;
 						struct ghost_vcpu *g_vcpu = malloc_or_die(ALLOC_VCPU, sizeof (struct ghost_vcpu));
 						compute_abstraction_vcpu(g_vcpu, vcpu, vcpu_idx);
+						ghost_assert(vcpu_ref->vcpu == NULL);
 						vcpu_ref->vcpu = g_vcpu;
 
 					}
@@ -632,8 +634,6 @@ static void record_abstraction_loaded_vcpu(struct ghost_state *g, struct pkvm_hy
 
 	if (loaded_vcpu) {
 		u64 vcpu_index = loaded_vcpu->vcpu.vcpu_idx;
-
-		record_abstraction_vm_partial(g, pkvm_hyp_vcpu_to_hyp_vm(loaded_vcpu), VMS_VM_TABLE_OWNED);
 
 		/* The vm_table lock is still protecting us, ensuring the vcpu is only on one core
 		 * it's just that we 'forgot' about that on the hypercall
