@@ -821,39 +821,24 @@ static bool compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost
 		goto out;
 	}
 
-	struct ghost_vm *g0_vm = NULL, *g1_vm = NULL;
-	if (call->return_value != -ENOMEM) {
-		ghost_assert(ghost_vms_is_valid_handle(&g0->vms, hyp_loaded_vcpu->vm_handle));
-		g0_vm = ghost_vms_get(&g0->vms, hyp_loaded_vcpu->vm_handle);
-		g1_vm = ghost_vms_alloc(&g1->vms, hyp_loaded_vcpu->vm_handle);
-		ghost_assert(g0_vm != NULL);
-		ghost_assert(g1_vm != NULL);
-		ghost_vm_clone_into_partial(g1_vm, g0_vm, VMS_VM_OWNED);
-
-		if (! g0_vm->protected) {
-			/* don't check this spec */
-			GHOST_WARN("__pkvm_host_map_guest with non-protected VM");
-			return false;
-		}
-
-		for (int idx=0; idx<hyp_loaded_vcpu->loaded_vcpu->recorded_memcache_pfn_set.len; idx++) {
-			ghost_pfn_set_insert(&g1_vm->vm_locked.vm_abstract_pgtable.table_pfns, hyp_loaded_vcpu->loaded_vcpu->recorded_memcache_pfn_set.external_pfns[idx]);
-		}
-	}
-
 	/*
-	 * Take a snapshot of the host/pkvm and vm states, which we will update.
-	 *
-	 * if a donation happens, then we will update the host and pkvm states.
+	 * Take a snapshot of the host/pkvm when we will need to update them.
+	 * If a donation happens, then we will update the host and pkvm states.
 	 */
 	if (call->memcache_donations.len > 0) {
-		copy_abstraction_host(g1, g0);
 		copy_abstraction_pkvm(g1, g0);
+		copy_abstraction_host(g1, g0);
 	} else {
 		ghost_assert(!g0->pkvm.present);
 		g1->pkvm.present = false;
-		ghost_assert(!g0->host.present);
-		g1->host.present = false;
+
+		// If the hcall succeeds even without donations, the host state will be updated.
+		if (call->return_value != -ENOMEM) {
+			copy_abstraction_host(g1, g0);
+		} else {
+			ghost_assert(!g0->host.present);
+			g1->host.present = false;
+		}
 	}
 
 	for (int d=0; d<call->memcache_donations.len; d++) {
@@ -906,8 +891,26 @@ static bool compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost
 	// This will require adding more state to ghost_pkvm
 	if (call->return_value == -ENOMEM) {
 		ret = -ENOMEM;
-		//TODO g1_vm->vm_locked.present = false;
 		goto out;
+	}
+
+	// From here, we are dealing with a successful hcall.
+	// The vm pgtable will therefore be updated.
+	struct ghost_vm *g0_vm = ghost_vms_get(&g0->vms, hyp_loaded_vcpu->vm_handle);
+	ghost_assert(ghost_vms_is_valid_handle(&g0->vms, hyp_loaded_vcpu->vm_handle));
+	struct ghost_vm *g1_vm = ghost_vms_alloc(&g1->vms, hyp_loaded_vcpu->vm_handle);
+	ghost_assert(g0_vm != NULL);
+	ghost_assert(g1_vm != NULL);
+	ghost_vm_clone_into_partial(g1_vm, g0_vm, VMS_VM_OWNED);
+
+	if (! g0_vm->protected) {
+		/* don't check this spec */
+		GHOST_WARN("__pkvm_host_map_guest with non-protected VM");
+		return false;
+	}
+
+	for (int idx=0; idx<hyp_loaded_vcpu->loaded_vcpu->recorded_memcache_pfn_set.len; idx++) {
+		ghost_pfn_set_insert(&g1_vm->vm_locked.vm_abstract_pgtable.table_pfns, hyp_loaded_vcpu->loaded_vcpu->recorded_memcache_pfn_set.external_pfns[idx]);
 	}
 
 	for (int d=0; d<call->memcache_donations.len; d++) {
