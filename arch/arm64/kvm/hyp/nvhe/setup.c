@@ -95,6 +95,10 @@ static int divide_memory_pool(void *virt, unsigned long size)
 	if (!vmemmap_base)
 		return -ENOMEM;
 
+#if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
+	ghost_simplified_model_step_zalloc_exact(hyp_virt_to_phys(vmemmap_base), nr_pages);
+#endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
+
 	nr_pages = hyp_vm_table_pages();
 #ifdef CONFIG_NVHE_GHOST_SPEC
 	ghost_vm_table_size = nr_pages;
@@ -102,6 +106,10 @@ static int divide_memory_pool(void *virt, unsigned long size)
 	vm_table_base = hyp_early_alloc_contig(nr_pages);
 	if (!vm_table_base)
 		return -ENOMEM;
+
+#if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
+	ghost_simplified_model_step_zalloc_exact(hyp_virt_to_phys(vm_table_base), nr_pages);
+#endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 
 	nr_pages = hyp_s1_pgtable_pages();
 #ifdef CONFIG_NVHE_GHOST_SPEC
@@ -111,6 +119,10 @@ static int divide_memory_pool(void *virt, unsigned long size)
 	if (!hyp_pgt_base)
 		return -ENOMEM;
 
+#if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
+	ghost_simplified_model_step_zalloc_exact(hyp_virt_to_phys(hyp_pgt_base), nr_pages);
+#endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
+
 	nr_pages = host_s2_pgtable_pages();
 #ifdef CONFIG_NVHE_GHOST_SPEC
 	ghost_host_s2_pgt_size = nr_pages;
@@ -118,6 +130,10 @@ static int divide_memory_pool(void *virt, unsigned long size)
 	host_s2_pgt_base = hyp_early_alloc_contig(nr_pages);
 	if (!host_s2_pgt_base)
 		return -ENOMEM;
+
+#if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
+	ghost_simplified_model_step_zalloc_exact(hyp_virt_to_phys(host_s2_pgt_base), nr_pages);
+#endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 
 	return 0;
 }
