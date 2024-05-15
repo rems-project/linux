@@ -1410,7 +1410,8 @@ static bool compute_new_abstract_state_handle___pkvm_init_vcpu(struct ghost_stat
 	u64 vcpu_id = GHOST_READ_ONCE(call, host_vcpu_hyp_va->vcpu_id);
 	init_vcpu_sysregs(g1, vcpu_id, &vcpu_ref->vcpu->regs, vm1->protected);
 
-	g1->vms.table_data.present = true; // TODO: check with Ben that we really need this here
+	g1->vms.table_data.present = true;
+	g1->vms.table_data.nr_vms = g0->vms.table_data.nr_vms;
 	vm1->vm_table_locked.vm_teardown_vcpu_addrs[vm1->vm_table_locked.nr_initialised_vcpus] = phys_of_host_ipa(vcpu_ipa);
 	vm1->vm_table_locked.nr_initialised_vcpus++;
 out:
