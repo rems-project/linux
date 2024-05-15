@@ -665,12 +665,33 @@ static void ghost_diff_vm(struct diff_container *node, pkvm_handle_t handle, str
 			ghost_diff_field(node, "nr_vcpus", diff_pair(TU64(vm1->vm_table_locked.nr_vcpus), TU64(vm2->vm_table_locked.nr_vcpus)));
 			ghost_diff_field(node, "nr_initialised_vcpus", diff_pair(TU64(vm1->vm_table_locked.nr_initialised_vcpus), TU64(vm2->vm_table_locked.nr_initialised_vcpus)));
 
-			for (u64 i = 0; i < KVM_MAX_VCPUS; i++)
-				ghost_diff_vcpu_reference(node, i, &vm1->vm_table_locked.vcpu_refs[i], &vm2->vm_table_locked.vcpu_refs[i]);
+			for (u64 i = 0; i < KVM_MAX_VCPUS; i++) {
+				if (i < vm1->vm_table_locked.nr_vcpus) {
+					if (i < vm2->vm_table_locked.nr_vcpus)
+						ghost_diff_vcpu_reference(node, i, &vm1->vm_table_locked.vcpu_refs[i], &vm2->vm_table_locked.vcpu_refs[i]);
+					else
+					 	ghost_diff_attach(node, diff_pm(false, TGPRINT("vcpu_ref %d -- TODO(print of vcpu_ref1)", i)));
+				} else {
+					if (i < vm2->vm_table_locked.nr_vcpus)
+						ghost_diff_attach(node, diff_pm(true, TGPRINT("vcpu_ref %d -- TODO(print of vcpu_ref2)", i)));
+					else
+					 	break;
+				}
+			}
 
 			for (u64 i = 0; i < KVM_MAX_VCPUS; i++) {
 				ghost_diff_enter_subfield_val(node, TGPRINT("vcpu_addr %ld", i));
-				ghost_diff_attach(node, diff_pair(TU64((u64)vm1->vm_table_locked.vm_teardown_vcpu_addrs[i]), TU64((u64)vm2->vm_table_locked.vm_teardown_vcpu_addrs[i])));
+				if (i < vm1->vm_table_locked.nr_vcpus) {
+					if (i < vm2->vm_table_locked.nr_vcpus) {
+						ghost_diff_attach(node, diff_pair(TU64((u64)vm1->vm_table_locked.vm_teardown_vcpu_addrs[i]), TU64((u64)vm2->vm_table_locked.vm_teardown_vcpu_addrs[i])));
+					} else
+					 	ghost_diff_attach(node, diff_pm(false, TGPRINT("%lx", (u64)vm1->vm_table_locked.vm_teardown_vcpu_addrs[i])));
+				} else {
+					if (i < vm2->vm_table_locked.nr_vcpus)
+						ghost_diff_attach(node, diff_pm(true, TGPRINT("%lx", (u64)vm2->vm_table_locked.vm_teardown_vcpu_addrs[i])));
+					else
+					 	break;
+				}
 				ghost_diff_pop_subfield(node);
 			}
 		}
