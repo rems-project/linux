@@ -1359,7 +1359,9 @@ void mapping_move(mapping *map_out, mapping map)
 
 void mapping_update(mapping *out, mapping in, mapping_update_kind_t kind, ghost_stage_t stage, u64 ia, u64 nr_pages, struct maplet_target t)
 {
-	mapping copy = mapping_copy(in);
+	mapping m;
+	mapping tmp = mapping_copy(in);
+	mapping copy;
 	free_mapping(*out);
 
 	switch (kind) {
@@ -1368,30 +1370,34 @@ void mapping_update(mapping *out, mapping in, mapping_update_kind_t kind, ghost_
 			ghost_assert(false);
 
 		for (u64 p = 0; p < nr_pages; p++) {
-			if (!mapping_in_domain(ia + p*PAGE_SIZE, copy)) {
+			if (!mapping_in_domain(ia + p*PAGE_SIZE, tmp)) {
 				ghost_assert(false);
 			}
 		}
-		copy = mapping_minus(copy, ia, nr_pages);
+		copy = mapping_minus(tmp, ia, nr_pages);
 		break;
 	case MAP_INSERT_PAGE:
 		for (u64 p = 0; p < nr_pages; p++) {
-			if (mapping_in_domain(ia + p*PAGE_SIZE, copy)) {
+			if (mapping_in_domain(ia + p*PAGE_SIZE, tmp)) {
 				ghost_assert(false);
 			}
 		}
-		copy = mapping_plus(copy, mapping_singleton(stage, ia, nr_pages, t));
+		m = mapping_singleton(stage, ia, nr_pages, t);
+		copy = mapping_plus(tmp, m);
+		free_mapping(m);
 		break;
 	case MAP_UPDATE_PAGE:
 		for (u64 p = 0; p < nr_pages; p++) {
-			if (!mapping_in_domain(ia + p*PAGE_SIZE, copy)) {
+			if (!mapping_in_domain(ia + p*PAGE_SIZE, tmp)) {
 				ghost_assert(false);
 			}
 		}
 		/* mapping plus discards lhs and overwrites with rhs */
-		copy = mapping_plus(copy, mapping_singleton(stage, ia, nr_pages, t));
+		m = mapping_singleton(stage, ia, nr_pages, t);
+		copy = mapping_plus(tmp, m);
+		free_mapping(m);
 		break;
 	}
-
+	free_mapping(tmp);
 	*out = copy;
 }
