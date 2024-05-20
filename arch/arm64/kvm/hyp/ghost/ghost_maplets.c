@@ -1136,10 +1136,13 @@ struct glist_head mapping_plus(struct glist_head head2, struct glist_head head3)
 // (this has an inefficient extra copy, but avoids having to futz with the mapping_plus code)
 struct glist_head mapping_minus(struct glist_head head2, u64 virt, u64 nr_pages)
 {
+	mapping m;
 	struct glist_head tmp1, tmp2;
 	ghost_assert_maplets_locked();
-	tmp1 = mapping_plus(head2, mapping_singleton(GHOST_STAGE_NONE, virt, nr_pages, maplet_target_absent()));
+	m = mapping_singleton(GHOST_STAGE_NONE, virt, nr_pages, maplet_target_absent());
+	tmp1 = mapping_plus(head2, m);
 	tmp2 = mapping_copy_except_absent(tmp1);
+	free_mapping(m);
 	free_mapping(tmp1);
 	return tmp2;
 }
