@@ -267,6 +267,12 @@ void clear_abstraction_vms(struct ghost_state *g)
 	}
 }
 
+static void clear_abstraction_constant_globals(struct ghost_state *g)
+{
+	free_mapping(g->globals.hyp_memory);
+	g->globals.hyp_memory = mapping_empty_();
+}
+
 // EXPORTED ghost_types_aux.h
 void clear_abstraction_this_thread_local_state(struct ghost_state *g)
 {
@@ -274,6 +280,7 @@ void clear_abstraction_this_thread_local_state(struct ghost_state *g)
 	clear_abstraction_host(g);
 	clear_abstraction_regs(g);
 	clear_abstraction_vms(g);
+	clear_abstraction_constant_globals(g);
 	ghost_assert(ghost_this_cpu_local_state(g) != NULL);
 	ghost_this_cpu_local_state(g)->present = false;
 }
