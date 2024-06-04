@@ -56,6 +56,9 @@ static DEFINE_PER_CPU(struct pkvm_hyp_vm *, __current_vm);
 static void guest_lock_component(struct pkvm_hyp_vm *vm)
 {
 	hyp_spin_lock(&vm->lock);
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	ghost_simplified_model_step_lock(GHOST_SIMPLIFIED_LOCK, (u64) &vm->lock);
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	current_vm = vm;
 #ifdef CONFIG_NVHE_GHOST_SPEC
 	record_and_check_abstraction_vm_pre(vm);
@@ -69,11 +72,17 @@ static void guest_unlock_component(struct pkvm_hyp_vm *vm)
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 	current_vm = NULL;
 	hyp_spin_unlock(&vm->lock);
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	ghost_simplified_model_step_lock(GHOST_SIMPLIFIED_UNLOCK, (u64) &vm->lock);
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 }
 
 static void host_lock_component(void)
 {
 	hyp_spin_lock(&host_mmu.lock);
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	ghost_simplified_model_step_lock(GHOST_SIMPLIFIED_LOCK, (u64) &host_mmu.lock);
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 #ifdef CONFIG_NVHE_GHOST_SPEC
 #ifdef CONFIG_NVHE_GHOST_SPEC_DUMP_STATE_RAW_HOST
 	if (__this_cpu_read(ghost_print_this_hypercall)) {
@@ -105,6 +114,9 @@ static void host_unlock_component(void)
 	record_and_copy_abstraction_host_post();
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_spin_unlock(&host_mmu.lock);
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	ghost_simplified_model_step_lock(GHOST_SIMPLIFIED_UNLOCK, (u64) &host_mmu.lock);
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 }
 
 
