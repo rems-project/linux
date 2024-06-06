@@ -259,7 +259,7 @@ static void vm_table_lock_component(void)
 {
 	hyp_spin_lock(&vm_table_lock);
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-	ghost_simplified_model_step_lock(GHOST_SIMPLIFIED_LOCK, (u64) &vm_table_lock);
+	ghost_simplified_model_step_lock(GHOST_SIMPLIFIED_LOCK, hyp_virt_to_phys(&vm_table_lock));
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	record_and_check_abstraction_vms_pre();
 }
@@ -267,10 +267,10 @@ static void vm_table_lock_component(void)
 static void vm_table_unlock_component(void)
 {
 	record_and_copy_abstraction_vms_post();
-	hyp_spin_unlock(&vm_table_lock);
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-	ghost_simplified_model_step_lock(GHOST_SIMPLIFIED_UNLOCK, (u64) &vm_table_lock);
+	ghost_simplified_model_step_lock(GHOST_SIMPLIFIED_UNLOCK, hyp_virt_to_phys(&vm_table_lock));
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
+	hyp_spin_unlock(&vm_table_lock);
 }
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 

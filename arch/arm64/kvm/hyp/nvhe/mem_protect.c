@@ -57,7 +57,7 @@ static void guest_lock_component(struct pkvm_hyp_vm *vm)
 {
 	hyp_spin_lock(&vm->lock);
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-	ghost_simplified_model_step_lock(GHOST_SIMPLIFIED_LOCK, (u64) &vm->lock);
+	ghost_simplified_model_step_lock(GHOST_SIMPLIFIED_LOCK, hyp_virt_to_phys(&vm->lock));
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	current_vm = vm;
 #ifdef CONFIG_NVHE_GHOST_SPEC
@@ -71,19 +71,19 @@ static void guest_unlock_component(struct pkvm_hyp_vm *vm)
 	record_and_copy_abstraction_vm_post(vm);
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 	current_vm = NULL;
-	hyp_spin_unlock(&vm->lock);
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-	ghost_simplified_model_step_lock(GHOST_SIMPLIFIED_UNLOCK, (u64) &vm->lock);
+	ghost_simplified_model_step_lock(GHOST_SIMPLIFIED_UNLOCK, hyp_virt_to_phys(&vm->lock));
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
+	hyp_spin_unlock(&vm->lock);
 }
 
 static void host_lock_component(void)
 {
 	hyp_spin_lock(&host_mmu.lock);
-#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-	ghost_simplified_model_step_lock(GHOST_SIMPLIFIED_LOCK, (u64) &host_mmu.lock);
-#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 #ifdef CONFIG_NVHE_GHOST_SPEC
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	ghost_simplified_model_step_lock(GHOST_SIMPLIFIED_LOCK, hyp_virt_to_phys(&host_mmu.lock));
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 #ifdef CONFIG_NVHE_GHOST_SPEC_DUMP_STATE_RAW_HOST
 	if (__this_cpu_read(ghost_print_this_hypercall)) {
 		ghost_printf("host pgtable pre (mapping):\n");
@@ -112,11 +112,11 @@ static void host_unlock_component(void)
 	}
 #endif /* CONFIG_NVHE_GHOST_SPEC_DUMP_STATE_RAW_HOST */
 	record_and_copy_abstraction_host_post();
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	ghost_simplified_model_step_lock(GHOST_SIMPLIFIED_UNLOCK, hyp_virt_to_phys(&host_mmu.lock));
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_spin_unlock(&host_mmu.lock);
-#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-	ghost_simplified_model_step_lock(GHOST_SIMPLIFIED_UNLOCK, (u64) &host_mmu.lock);
-#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 }
 
 
@@ -338,7 +338,7 @@ int kvm_guest_prepare_stage2(struct pkvm_hyp_vm *vm, void *pgd)
 	ret = __kvm_pgtable_stage2_init(mmu->pgt, mmu, &vm->mm_ops, 0,
 					guest_stage2_force_pte_cb);
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-	ghost_simplified_model_step_hint(GHOST_HINT_SET_ROOT_LOCK, hyp_virt_to_phys(mmu->pgt->pgd), (u64)&vm->lock);
+	ghost_simplified_model_step_hint(GHOST_HINT_SET_ROOT_LOCK, hyp_virt_to_phys(mmu->pgt->pgd), hyp_virt_to_phys(&vm->lock));
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	guest_unlock_component(vm);
 	if (ret)
