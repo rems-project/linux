@@ -167,9 +167,9 @@ struct ghost_local_state *ghost_this_cpu_local_state(struct ghost_state *g)
 }
 
 // EXPORTED ghost_spec.h
-struct ghost_loaded_vcpu *this_cpu_ghost_loaded_vcpu(struct ghost_state *g)
+struct ghost_loaded_vcpu_status *this_cpu_ghost_loaded_vcpu_status(struct ghost_state *g)
 {
-	return &ghost_this_cpu_local_state(g)->loaded_hyp_vcpu;
+	return &ghost_this_cpu_local_state(g)->loaded_vcpu_status;
 }
 
 // EXPORTED ghost_spec.h
@@ -812,11 +812,11 @@ static bool compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost
 	host_ipa_t host_ipa = host_ipa_of_phys(phys);
 	guest_ipa_t guest_ipa = (gfn << PAGE_SHIFT);
 
-	struct ghost_loaded_vcpu *hyp_loaded_vcpu = this_cpu_ghost_loaded_vcpu(g0);
+	struct ghost_loaded_vcpu_status *loaded_vcpu_status = this_cpu_ghost_loaded_vcpu_status(g0);
 
 	// previous vcpu_load must have been done
 	// `hyp_vcpu = pkvm_get_loaded_hyp_vcpu(); if (!hyp_vcpu) goto out;`
-	if (!hyp_loaded_vcpu->loaded) {
+	if (!loaded_vcpu_status->loaded) {
 		ret = -EINVAL;
 		goto out;
 	}
@@ -896,9 +896,9 @@ static bool compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost
 
 	// From here, we are dealing with a successful hcall.
 	// The vm pgtable will therefore be updated.
-	struct ghost_vm *g0_vm = ghost_vms_get(&g0->vms, hyp_loaded_vcpu->vm_handle);
-	ghost_assert(ghost_vms_is_valid_handle(&g0->vms, hyp_loaded_vcpu->vm_handle));
-	struct ghost_vm *g1_vm = ghost_vms_alloc(&g1->vms, hyp_loaded_vcpu->vm_handle);
+	struct ghost_vm *g0_vm = ghost_vms_get(&g0->vms, loaded_vcpu_status->vm_handle);
+	ghost_assert(ghost_vms_is_valid_handle(&g0->vms, loaded_vcpu_status->vm_handle));
+	struct ghost_vm *g1_vm = ghost_vms_alloc(&g1->vms, loaded_vcpu_status->vm_handle);
 	ghost_assert(g0_vm != NULL);
 	ghost_assert(g1_vm != NULL);
 	ghost_vm_clone_into_partial(g1_vm, g0_vm, VMS_VM_OWNED);
@@ -909,8 +909,8 @@ static bool compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost
 		return false;
 	}
 
-	for (int idx=0; idx<hyp_loaded_vcpu->loaded_vcpu->recorded_memcache_pfn_set.len; idx++) {
-		ghost_pfn_set_insert(&g1_vm->vm_locked.vm_abstract_pgtable.table_pfns, hyp_loaded_vcpu->loaded_vcpu->recorded_memcache_pfn_set.external_pfns[idx]);
+	for (int idx=0; idx<loaded_vcpu_status->loaded_vcpu->recorded_memcache_pfn_set.len; idx++) {
+		ghost_pfn_set_insert(&g1_vm->vm_locked.vm_abstract_pgtable.table_pfns, loaded_vcpu_status->loaded_vcpu->recorded_memcache_pfn_set.external_pfns[idx]);
 	}
 
 	for (int d=0; d<call->memcache_donations.len; d++) {
@@ -969,7 +969,7 @@ static bool compute_new_abstract_state_handle___pkvm_vcpu_load(struct ghost_stat
 	u64 hcr_el2 = ghost_read_gpr(g0, 3);
 
 	// if another vcpu is already loaded on this CPU, then do nothing
-	if (this_cpu_ghost_loaded_vcpu(g0)->loaded)
+	if (this_cpu_ghost_loaded_vcpu_status(g0)->loaded)
 		goto out;
 
 	// TODO check
@@ -1005,9 +1005,9 @@ static bool compute_new_abstract_state_handle___pkvm_vcpu_load(struct ghost_stat
 	}
 
 	// and mark the current physical CPU as having a loaded vCPU
-	this_cpu_ghost_loaded_vcpu(g1)->loaded = true;
-	this_cpu_ghost_loaded_vcpu(g1)->vm_handle = vm_handle;
-	ghost_vcpu_clone_into(this_cpu_ghost_loaded_vcpu(g1)->loaded_vcpu, vcpu_ref->vcpu);
+	this_cpu_ghost_loaded_vcpu_status(g1)->loaded = true;
+	this_cpu_ghost_loaded_vcpu_status(g1)->vm_handle = vm_handle;
+	ghost_vcpu_clone_into(this_cpu_ghost_loaded_vcpu_status(g1)->loaded_vcpu, vcpu_ref->vcpu);
 
 	// this vm's vCPU is now marked as loaded and the table looses ownership over it
 	vcpu_ref->loaded_somewhere = true;
@@ -1029,16 +1029,16 @@ out:
 
 static bool compute_new_abstract_state_handle___pkvm_vcpu_put(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call)
 {
-	struct ghost_loaded_vcpu *loaded_vcpu_info = this_cpu_ghost_loaded_vcpu(g0);
+	struct ghost_loaded_vcpu_status *loaded_vcpu_status = this_cpu_ghost_loaded_vcpu_status(g0);
 
 	// have to have done a previous vcpu_load
-	if (!loaded_vcpu_info->loaded) {
+	if (!loaded_vcpu_status->loaded) {
 		goto out;
 	}
-	ghost_assert(loaded_vcpu_info->loaded_vcpu);
+	ghost_assert(loaded_vcpu_status->loaded_vcpu);
 
-	pkvm_handle_t vm_handle = loaded_vcpu_info->vm_handle;
-	u64 vcpu_index = loaded_vcpu_info->loaded_vcpu->vcpu_index;
+	pkvm_handle_t vm_handle = loaded_vcpu_status->vm_handle;
+	u64 vcpu_index = loaded_vcpu_status->loaded_vcpu->vcpu_index;
 
 	struct ghost_vm *vm0 = ghost_vms_get(&g0->vms, vm_handle);
 	struct ghost_vm *vm1 = ghost_vms_alloc(&g1->vms, vm_handle);
@@ -1054,7 +1054,7 @@ static bool compute_new_abstract_state_handle___pkvm_vcpu_put(struct ghost_state
 	// the vm's vcpu is now marked as not loaded and it gets ownership back
 	vm1->vm_table_locked.vcpu_refs[vcpu_index].loaded_somewhere = false;
 	vm1->vm_table_locked.vcpu_refs[vcpu_index].vcpu = malloc_or_die(ALLOC_VCPU, sizeof(struct ghost_vcpu));
-	ghost_vcpu_clone_into(vm1->vm_table_locked.vcpu_refs[vcpu_index].vcpu, loaded_vcpu_info->loaded_vcpu);
+	ghost_vcpu_clone_into(vm1->vm_table_locked.vcpu_refs[vcpu_index].vcpu, loaded_vcpu_status->loaded_vcpu);
 
 	// and the table has the same number of vms as before.
 	// NOTE:
@@ -1065,7 +1065,7 @@ static bool compute_new_abstract_state_handle___pkvm_vcpu_put(struct ghost_state
 
 out:
 	/* actually mark this CPU as having no loaded vCPU */
-	this_cpu_ghost_loaded_vcpu(g1)->loaded = false;
+	this_cpu_ghost_loaded_vcpu_status(g1)->loaded = false;
 
 	/* NOTE: vcpu_put does not write back to any general purpose register other than the SMCCC errorno (X0) */
 	copy_registers_to_host(g1);
@@ -1076,17 +1076,17 @@ out:
 
 static bool compute_new_abstract_state_handle___kvm_vcpu_run_begin(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call)
 {
-	struct ghost_loaded_vcpu *loaded_vcpu_info = this_cpu_ghost_loaded_vcpu(g0);
+	struct ghost_loaded_vcpu_status *loaded_vcpu_status = this_cpu_ghost_loaded_vcpu_status(g0);
 
 	// have to have done a previous vcpu_load
-	if (!loaded_vcpu_info->loaded) {
+	if (!loaded_vcpu_status->loaded) {
 		goto out;
 	}
-	ghost_assert(loaded_vcpu_info->loaded_vcpu);
+	ghost_assert(loaded_vcpu_status->loaded_vcpu);
 
-	pkvm_handle_t vm_handle = loaded_vcpu_info->vm_handle;
+	pkvm_handle_t vm_handle = loaded_vcpu_status->vm_handle;
 
-	struct ghost_vcpu *vcpu0 = loaded_vcpu_info->loaded_vcpu;
+	struct ghost_vcpu *vcpu0 = loaded_vcpu_status->loaded_vcpu;
 	ghost_assert(vcpu0);
 
 	/* save current register state into the host context */
@@ -1782,17 +1782,17 @@ static bool compute_new_abstract_state_pkvm_memshare(struct ghost_state *g1, str
 	int ret = 0;
 
 	// Get the VCPU loaded onto this physical core. It provides further indices.
-	struct ghost_loaded_vcpu *loaded_vcpu_info = this_cpu_ghost_loaded_vcpu(g0);
-	ghost_spec_assert(loaded_vcpu_info->loaded);
-	ghost_assert(loaded_vcpu_info->loaded_vcpu);
+	struct ghost_loaded_vcpu_status *loaded_vcpu_status = this_cpu_ghost_loaded_vcpu_status(g0);
+	ghost_spec_assert(loaded_vcpu_status->loaded);
+	ghost_assert(loaded_vcpu_status->loaded_vcpu);
 
 	// Get the VM that this VCPU belongs to.
-	struct ghost_vm *g0_vm = ghost_vms_get(&g0->vms, loaded_vcpu_info->vm_handle);
+	struct ghost_vm *g0_vm = ghost_vms_get(&g0->vms, loaded_vcpu_status->vm_handle);
 	ghost_spec_assert(g0_vm != NULL);
 	ghost_spec_assert(g0_vm->vm_locked.present);
 
 	// Get the rest of the VCPU. We need the registers.
-	struct ghost_vcpu *vcpu0 = loaded_vcpu_info->loaded_vcpu;
+	struct ghost_vcpu *vcpu0 = loaded_vcpu_status->loaded_vcpu;
 	ghost_spec_assert(vcpu0->regs.present);
 
 	// Pluck out the arguments.
@@ -1803,10 +1803,10 @@ static bool compute_new_abstract_state_pkvm_memshare(struct ghost_state *g1, str
 	// Initialise computed host + VM state. We need post-VCPU to return to the guest.
 
 	copy_abstraction_host(g1, g0);
-	struct ghost_vm *g1_vm = ghost_vms_alloc(&g1->vms, loaded_vcpu_info->vm_handle);
+	struct ghost_vm *g1_vm = ghost_vms_alloc(&g1->vms, loaded_vcpu_status->vm_handle);
 	ghost_assert(g1_vm != NULL);
 	ghost_vm_clone_into_partial(g1_vm, g0_vm, VMS_VM_OWNED);
-	struct ghost_vcpu *vcpu1 = this_cpu_ghost_loaded_vcpu(g1)->loaded_vcpu;
+	struct ghost_vcpu *vcpu1 = this_cpu_ghost_loaded_vcpu_status(g1)->loaded_vcpu;
 	ghost_vcpu_clone_into(vcpu1, vcpu0);
 
 	if (arg2 || arg3)
@@ -1899,17 +1899,17 @@ static bool compute_new_abstract_state_pkvm_memunshare(struct ghost_state *g1, s
 	int ret = 0;
 
 	// Get the VCPU loaded onto this physical core. It provides further indices.
-	struct ghost_loaded_vcpu *loaded_vcpu_info = this_cpu_ghost_loaded_vcpu(g0);
-	ghost_spec_assert(loaded_vcpu_info->loaded);
-	ghost_assert(loaded_vcpu_info->loaded_vcpu);
+	struct ghost_loaded_vcpu_status *loaded_vcpu_status = this_cpu_ghost_loaded_vcpu_status(g0);
+	ghost_spec_assert(loaded_vcpu_status->loaded);
+	ghost_assert(loaded_vcpu_status->loaded_vcpu);
 
 	// Get the VM that this VCPU belongs to.
-	struct ghost_vm *g0_vm = ghost_vms_get(&g0->vms, loaded_vcpu_info->vm_handle);
+	struct ghost_vm *g0_vm = ghost_vms_get(&g0->vms, loaded_vcpu_status->vm_handle);
 	ghost_spec_assert(g0_vm != NULL);
 	ghost_spec_assert(g0_vm->vm_locked.present);
 
 	// Get the rest of the VCPU. We need the registers.
-	struct ghost_vcpu *vcpu0 = loaded_vcpu_info->loaded_vcpu;
+	struct ghost_vcpu *vcpu0 = loaded_vcpu_status->loaded_vcpu;
 	ghost_assert(vcpu0->regs.present);
 
 	// Pluck out the arguments.
@@ -1920,11 +1920,11 @@ static bool compute_new_abstract_state_pkvm_memunshare(struct ghost_state *g1, s
 	// Initialise computed host + VM state. We need post-VCPU to return to the guest.
 
 	copy_abstraction_host(g1, g0);
-	struct ghost_vm *g1_vm = ghost_vms_alloc(&g1->vms, loaded_vcpu_info->vm_handle);
+	struct ghost_vm *g1_vm = ghost_vms_alloc(&g1->vms, loaded_vcpu_status->vm_handle);
 	ghost_assert(g1_vm != NULL);
 	// TODO: BS: this might be overspecifying
 	ghost_vm_clone_into_partial(g1_vm, g0_vm, VMS_VM_OWNED);
-	struct ghost_vcpu *vcpu1 = this_cpu_ghost_loaded_vcpu(g1)->loaded_vcpu;
+	struct ghost_vcpu *vcpu1 = this_cpu_ghost_loaded_vcpu_status(g1)->loaded_vcpu;
 	ghost_vcpu_clone_into(vcpu1, vcpu0);
 
 	if (arg2 || arg3)
@@ -2048,18 +2048,18 @@ static bool compute_new_abstract_state_handle_guest_hcall(struct ghost_state *g1
 static bool compute_new_abstract_state_handle_guest_mem_abort(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call)
 {
 	/* guest mem abort = return back to, and then ERET from, vcpu_run */
-	struct ghost_loaded_vcpu *loaded_vcpu_info = this_cpu_ghost_loaded_vcpu(g0);
+	struct ghost_loaded_vcpu_status *loaded_vcpu_status = this_cpu_ghost_loaded_vcpu_status(g0);
 
 	// have to have done a previous vcpu_load
-	if (!loaded_vcpu_info->loaded) {
+	if (!loaded_vcpu_status->loaded) {
 		goto out;
 	}
-	ghost_assert(loaded_vcpu_info->loaded_vcpu);
+	ghost_assert(loaded_vcpu_status->loaded_vcpu);
 
-	copy_abstraction_loaded_vcpu(this_cpu_ghost_loaded_vcpu(g1), this_cpu_ghost_loaded_vcpu(g0));
+	copy_abstraction_loaded_vcpu_status(this_cpu_ghost_loaded_vcpu_status(g1), this_cpu_ghost_loaded_vcpu_status(g0));
 
 	// go back to host
-	ghost_save_guest_context(loaded_vcpu_info->loaded_vcpu, g0);
+	ghost_save_guest_context(loaded_vcpu_status->loaded_vcpu, g0);
 	ghost_restore_host_context(g1, g0);
 
 	// return error code = TRAP for mem aborts

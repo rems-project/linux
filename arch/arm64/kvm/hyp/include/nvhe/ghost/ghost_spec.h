@@ -81,9 +81,9 @@ static inline void ghost_assert_pkvm_vm_table_locked(void)
 
 struct ghost_local_state *ghost_this_cpu_local_state(struct ghost_state *g);
 /**
- * this_cpu_read_ghost_loaded_vcpu() - Get the loaded_hyp_vcpu for this CPU
+ * this_cpu_read_ghost_loaded_vcpu_status() - Get the loaded_vcpu_status for this CPU
  */
-struct ghost_loaded_vcpu *this_cpu_ghost_loaded_vcpu(struct ghost_state *g);
+struct ghost_loaded_vcpu_status *this_cpu_ghost_loaded_vcpu_status(struct ghost_state *g);
 struct ghost_registers *this_cpu_ghost_registers(struct ghost_state *g);
 struct ghost_running_state *this_cpu_ghost_run_state(struct ghost_state *g);
 

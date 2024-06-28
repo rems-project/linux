@@ -405,7 +405,7 @@ void ghost_vcpu_clone_into(struct ghost_vcpu *dest, struct ghost_vcpu *src)
 }
 
 // EXPORTED ghost_types_aux.h
-void copy_abstraction_loaded_vcpu(struct ghost_loaded_vcpu *tgt, struct ghost_loaded_vcpu *src)
+void copy_abstraction_loaded_vcpu_status(struct ghost_loaded_vcpu_status *tgt, struct ghost_loaded_vcpu_status *src)
 {
 	tgt->loaded = src->loaded;
 	tgt->vm_handle = src->vm_handle;
@@ -418,7 +418,7 @@ void copy_abstraction_local_state(struct ghost_local_state *l_tgt, struct ghost_
 	ghost_assert(l_src->present);
 	l_tgt->present = true;
 	memcpy(&l_tgt->regs, &l_src->regs, sizeof(struct ghost_registers));
-	copy_abstraction_loaded_vcpu(&l_tgt->loaded_hyp_vcpu, &l_src->loaded_hyp_vcpu);
+	copy_abstraction_loaded_vcpu_status(&l_tgt->loaded_vcpu_status, &l_src->loaded_vcpu_status);
 	memcpy(&l_tgt->cpu_state, &l_src->cpu_state, sizeof(struct ghost_running_state));
 	memcpy(&l_tgt->host_regs, &l_src->host_regs, sizeof(struct ghost_host_regs));
 }
@@ -641,23 +641,23 @@ void check_abstraction_equals_local_state(struct ghost_state *g_expected, struct
 	struct ghost_local_state *local_impl = ghost_this_cpu_local_state(g_impl);
 
 	check_abstraction_equals_run_state(&local_expected->cpu_state, &local_impl->cpu_state);
-	check_abstraction_equals_loaded_vcpu(&local_expected->loaded_hyp_vcpu, &local_impl->loaded_hyp_vcpu);
+	check_abstraction_equals_loaded_vcpu_status(&local_expected->loaded_vcpu_status, &local_impl->loaded_vcpu_status);
 	/* regs not checked */
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
 // EXPORTED ghost_types_aux.h
-void check_abstraction_equals_loaded_vcpu(struct ghost_loaded_vcpu *loaded_vcpu1, struct ghost_loaded_vcpu *loaded_vcpu2)
+void check_abstraction_equals_loaded_vcpu_status(struct ghost_loaded_vcpu_status *loaded_vcpu_status1, struct ghost_loaded_vcpu_status *loaded_vcpu_status2)
 {
 	GHOST_LOG_CONTEXT_ENTER();
-	GHOST_LOG(loaded_vcpu1->loaded, bool); GHOST_LOG(loaded_vcpu2->loaded, bool);
-	ghost_spec_assert(loaded_vcpu1->loaded == loaded_vcpu2->loaded);
+	GHOST_LOG(loaded_vcpu_status1->loaded, bool); GHOST_LOG(loaded_vcpu_status2->loaded, bool);
+	ghost_spec_assert(loaded_vcpu_status1->loaded == loaded_vcpu_status2->loaded);
 
-	if (loaded_vcpu1->loaded) {
-		GHOST_LOG(loaded_vcpu1->vm_handle, u32);
-		GHOST_LOG(loaded_vcpu2->vm_handle, u32);
-		ghost_spec_assert(loaded_vcpu1->vm_handle == loaded_vcpu2->vm_handle);
-		check_abstraction_equals_vcpu(loaded_vcpu1->loaded_vcpu, loaded_vcpu2->loaded_vcpu);
+	if (loaded_vcpu_status1->loaded) {
+		GHOST_LOG(loaded_vcpu_status1->vm_handle, u32);
+		GHOST_LOG(loaded_vcpu_status2->vm_handle, u32);
+		ghost_spec_assert(loaded_vcpu_status1->vm_handle == loaded_vcpu_status2->vm_handle);
+		check_abstraction_equals_vcpu(loaded_vcpu_status1->loaded_vcpu, loaded_vcpu_status2->loaded_vcpu);
 	}
 	GHOST_LOG_CONTEXT_EXIT();
 }
@@ -870,9 +870,9 @@ void check_abstraction_refined_local_state(struct ghost_state *gc, struct ghost_
 	/* computed post and recorded post run and register states must be exactly equal (modulo status) */
 	check_abstraction_refined_registers(&gc_local->regs, &gr_post_local->regs, &gr_pre_local->regs);
 	check_abstraction_equals_run_state(&gc_local->cpu_state, &gr_post_local->cpu_state);
-	check_abstraction_equals_loaded_vcpu(&gc_local->loaded_hyp_vcpu, &gr_post_local->loaded_hyp_vcpu);
+	check_abstraction_equals_loaded_vcpu_status(&gc_local->loaded_vcpu_status, &gr_post_local->loaded_vcpu_status);
 
-	/* the others (loaded_vcpu and host_regs) may be not present on the computed state
+	/* the others (loaded_vcpu_status and host_regs) may be not present on the computed state
 	 * in which case we check they didn't change if they were recorded in the pre. */
 	if (gc_local->host_regs.present && gr_post_local->host_regs.present) {
 		GHOST_INFO("r1->gc");
@@ -1171,14 +1171,14 @@ void ghost_dump_regs(struct ghost_registers *regs, u64 i)
 }
 
 // EXPORTED ghost_types_aux.h
-void ghost_dump_loaded_vcpu(struct ghost_loaded_vcpu *loaded_vcpu_info, u64 i)
+void ghost_dump_loaded_vcpu_status(struct ghost_loaded_vcpu_status *loaded_vcpu_status, u64 i)
 {
-	ghost_printf("%Iloaded_vcpu[cpu:%d]: ", i, hyp_smp_processor_id());
+	ghost_printf("%Iloaded_vcpu_status[cpu:%d]: ", i, hyp_smp_processor_id());
 
-	if (!loaded_vcpu_info->loaded) {
-		ghost_printf("<unloaded>\n");
+	if (!loaded_vcpu_status->loaded) {
+		ghost_printf("<no loaded vCPU>\n");
 	} else {
-		ghost_printf("<loaded vm_handle:%x vcpu_index:%ld>\n", loaded_vcpu_info->vm_handle, loaded_vcpu_info->loaded_vcpu->vcpu_index);
+		ghost_printf("<loaded vm_handle:%x vcpu_index:%ld>\n", loaded_vcpu_status->vm_handle, loaded_vcpu_status->loaded_vcpu->vcpu_index);
 	}
 }
 
@@ -1215,7 +1215,7 @@ void ghost_dump_thread_local(struct ghost_local_state *local)
 	} else {
 		ghost_printf("\n");
 		ghost_dump_regs(&local->regs, 4);
-		ghost_dump_loaded_vcpu(&local->loaded_hyp_vcpu, 4);
+		ghost_dump_loaded_vcpu_status(&local->loaded_vcpu_status, 4);
 		ghost_dump_running_state(&local->cpu_state, 4);
 		ghost_dump_host_regs(&local->host_regs, 4);
 	}

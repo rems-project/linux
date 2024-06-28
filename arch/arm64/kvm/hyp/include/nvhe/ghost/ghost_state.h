@@ -11,7 +11,7 @@
 
 
 /**
- * struct ghost_loaded_vcpu - Whether the current physical CPU has a loaded vCPU, and if there is one, a pointer to its state.
+ * struct ghost_loaded_vcpu_status - Whether the current physical CPU has a loaded vCPU, and if there is one, a pointer to its state.
  *
  * @loaded: whether this physical CPU has a loaded vCPU.
  * @vm_handle: if loaded, the opaque pkvm-assigned handle for the vCPU's parent vm.
@@ -22,7 +22,7 @@
  *
  * Invariant: loaded_vcpu != NULL
  */
-struct ghost_loaded_vcpu {
+struct ghost_loaded_vcpu_status {
 	bool loaded;
 	pkvm_handle_t vm_handle;
 	struct ghost_vcpu *loaded_vcpu;
@@ -320,14 +320,14 @@ struct ghost_constant_globals {
  * struct ghost_local_state - Physical CPU-local ghost state.
  * @present: whether the ghost state has local state recorded for this CPU.
  * @regs: if present, physical register banks (general purpose, el2 system, el1 system) registers.
- * @loaded_hyp_vcpu: if present, ghost copies of the state of the currently loaded vcpu.
+ * @loaded_vcpu_status: if present, whether a vCPU is loaded (and if so a ghost copie of its state).
  * @cpu_state: if present, what is currently running on this CPU.
  * @host_regs: (optionally) if present, the host registers, for this physical CPU.
  */
 struct ghost_local_state {
 	bool present;
 	struct ghost_registers regs;
-	struct ghost_loaded_vcpu loaded_hyp_vcpu;
+	struct ghost_loaded_vcpu_status loaded_vcpu_status;
 	struct ghost_running_state cpu_state;
 	struct ghost_host_regs host_regs;
 };

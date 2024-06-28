@@ -43,7 +43,7 @@ static void init_abstraction(struct ghost_state *g)
 
 		/* allocate a vCPU to sit in the per-CPU loaded state */
 		struct ghost_vcpu *loaded_vcpu = malloc_or_die(ALLOC_VCPU, sizeof(struct ghost_vcpu));
-		g->cpu_local_state[idx]->loaded_hyp_vcpu.loaded_vcpu = loaded_vcpu;
+		g->cpu_local_state[idx]->loaded_vcpu_status.loaded_vcpu = loaded_vcpu;
 	}
 }
 
@@ -626,11 +626,11 @@ static void ghost_cpu_running_state_copy(struct ghost_running_state *run_tgt, st
 
 static void record_abstraction_loaded_vcpu(struct ghost_state *g, struct pkvm_hyp_vcpu *loaded_vcpu)
 {
-	struct ghost_loaded_vcpu *g_loaded_vcpu;
+	struct ghost_loaded_vcpu_status *g_loaded_vcpu_status;
 
 	GHOST_LOG_CONTEXT_ENTER();
 	ghost_assert(ghost_this_cpu_local_state(g)->present);
-	g_loaded_vcpu = &ghost_this_cpu_local_state(g)->loaded_hyp_vcpu;
+	g_loaded_vcpu_status = &ghost_this_cpu_local_state(g)->loaded_vcpu_status;
 
 	if (loaded_vcpu) {
 		u64 vcpu_index = loaded_vcpu->vcpu.vcpu_idx;
@@ -638,11 +638,11 @@ static void record_abstraction_loaded_vcpu(struct ghost_state *g, struct pkvm_hy
 		/* The vm_table lock is still protecting us, ensuring the vcpu is only on one core
 		 * it's just that we 'forgot' about that on the hypercall
 		 * so just re-compute the vm-table-owned data. */
-		g_loaded_vcpu->loaded = true;
-		g_loaded_vcpu->vm_handle = loaded_vcpu->vcpu.kvm->arch.pkvm.handle;
-		compute_abstraction_vcpu(g_loaded_vcpu->loaded_vcpu, loaded_vcpu, vcpu_index);
+		g_loaded_vcpu_status->loaded = true;
+		g_loaded_vcpu_status->vm_handle = loaded_vcpu->vcpu.kvm->arch.pkvm.handle;
+		compute_abstraction_vcpu(g_loaded_vcpu_status->loaded_vcpu, loaded_vcpu, vcpu_index);
 	} else {
-		g_loaded_vcpu->loaded = false;
+		g_loaded_vcpu_status->loaded = false;
 	}
 
 	GHOST_LOG_CONTEXT_EXIT();
@@ -706,8 +706,8 @@ void record_abstraction_loaded_vcpu_and_check_none(void)
 	struct pkvm_hyp_vcpu *loaded_vcpu = pkvm_get_loaded_hyp_vcpu();
 	// this cpu should have a loaded vcpu yet
 	ghost_spec_assert(!loaded_vcpu);
-	this_cpu_ghost_loaded_vcpu(&gs)->loaded = false;
-	ghost_assert(!this_cpu_ghost_loaded_vcpu(&gs)->loaded);
+	this_cpu_ghost_loaded_vcpu_status(&gs)->loaded = false;
+	ghost_assert(!this_cpu_ghost_loaded_vcpu_status(&gs)->loaded);
 	trace_ghost_exit(GHOST_TRACE_record_abstraction_loaded_vcpu_and_check_none);
 }
 

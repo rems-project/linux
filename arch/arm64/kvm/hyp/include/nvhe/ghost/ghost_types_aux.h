@@ -57,7 +57,7 @@ void copy_abstraction_pkvm(struct ghost_state *g_tgt, struct ghost_state *g_src)
 void copy_abstraction_vm_partial(struct ghost_state *g_tgt, struct ghost_state *g_src, pkvm_handle_t handle, enum vm_field_owner owner);
 void copy_abstraction_vms_partial(struct ghost_state *g_tgt, struct ghost_state *g_src, enum vm_field_owner owner);
 void copy_abstraction_local_state(struct ghost_local_state *l_tgt, struct ghost_local_state *l_src);
-void copy_abstraction_loaded_vcpu(struct ghost_loaded_vcpu *tgt, struct ghost_loaded_vcpu *src);
+void copy_abstraction_loaded_vcpu_status(struct ghost_loaded_vcpu_status *tgt, struct ghost_loaded_vcpu_status *src);
 void ghost_vcpu_clone_into(struct ghost_vcpu *dest, struct ghost_vcpu *src);
 
 /**
@@ -87,7 +87,7 @@ void check_abstraction_equals_reg(struct ghost_registers *r1, struct ghost_regis
 void check_abstraction_equals_vcpu(struct ghost_vcpu *vcpu1, struct ghost_vcpu *vcpu2);
 void check_abstraction_equals_run_state(struct ghost_running_state *expected, struct ghost_running_state *impl);
 void check_abstraction_equals_host_regs(struct ghost_host_regs *r1, struct ghost_host_regs *r2);
-void check_abstraction_equals_loaded_vcpu(struct ghost_loaded_vcpu *loaded_vcpu1, struct ghost_loaded_vcpu *loaded_vcpu2);
+void check_abstraction_equals_loaded_vcpu_status(struct ghost_loaded_vcpu_status *loaded_vcpu_status1, struct ghost_loaded_vcpu_status *loaded_vcpu_status2);
 void check_abstraction_equals_vcpu_reference(struct ghost_vcpu_reference *vcpu_ref1, struct ghost_vcpu_reference *vcpu_ref2);
 void check_abstraction_vm_in_vms_and_equal(pkvm_handle_t vm_handle, struct ghost_state *g, struct ghost_vms *vms, enum vm_field_owner owner);
 void check_abstract_pgtable_equal(
