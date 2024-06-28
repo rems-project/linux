@@ -966,6 +966,7 @@ out:
 static bool compute_new_abstract_state_handle___pkvm_vcpu_load(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call) {
 	pkvm_handle_t vm_handle = ghost_read_gpr(g0, 1);
 	unsigned int vcpu_idx = ghost_read_gpr(g0, 2);
+	u64 hcr_el2 = ghost_read_gpr(g0, 3);
 
 	// if another vcpu is already loaded on this CPU, then do nothing
 	if (this_cpu_ghost_loaded_vcpu(g0)->loaded)
@@ -997,10 +998,10 @@ static bool compute_new_abstract_state_handle___pkvm_vcpu_load(struct ghost_stat
 	struct ghost_vcpu_reference *vcpu_ref = &vm1->vm_table_locked.vcpu_refs[vcpu_idx];
 
 	if (vm1->protected) {
-		u64 hcr_el2 = ghost_read_el2_sysreg_explicit(&vcpu_ref->vcpu->regs, GHOST_SYSREG(HCR_EL2));
-		hcr_el2 &= ~(HCR_TWE | HCR_TWI | HCR_API | HCR_APK);
-		hcr_el2 |= hcr_el2 & (HCR_TWE | HCR_TWI);
-		ghost_write_el2_sysreg_explicit(&vcpu_ref->vcpu->regs, GHOST_SYSREG(HCR_EL2), hcr_el2);
+		u64 vcpu_hcr_el2 = ghost_read_el2_sysreg_explicit(&vcpu_ref->vcpu->regs, GHOST_SYSREG(HCR_EL2));
+		vcpu_hcr_el2 &= ~(HCR_TWE | HCR_TWI | HCR_API | HCR_APK);
+		vcpu_hcr_el2 |= hcr_el2 & (HCR_TWE | HCR_TWI);
+		ghost_write_el2_sysreg_explicit(&vcpu_ref->vcpu->regs, GHOST_SYSREG(HCR_EL2), vcpu_hcr_el2);
 	}
 
 	// and mark the current physical CPU as having a loaded vCPU
