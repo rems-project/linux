@@ -125,6 +125,9 @@ static void hyp_lock_component(void)
 {
 	hyp_spin_lock(&pkvm_pgd_lock);
 #ifdef CONFIG_NVHE_GHOST_SPEC
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	ghost_simplified_model_step_lock(GHOST_SIMPLIFIED_LOCK, hyp_virt_to_phys(&pkvm_pgd_lock));
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	record_and_check_abstraction_pkvm_pre();
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 }
@@ -133,6 +136,9 @@ static void hyp_unlock_component(void)
 {
 #ifdef CONFIG_NVHE_GHOST_SPEC
 	record_and_copy_abstraction_pkvm_post();
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	ghost_simplified_model_step_lock(GHOST_SIMPLIFIED_UNLOCK, hyp_virt_to_phys(&pkvm_pgd_lock));
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_spin_unlock(&pkvm_pgd_lock);
 }

@@ -247,12 +247,18 @@ static int recreate_hyp_mappings(phys_addr_t phys, unsigned long size,
 		 * PAGE_SHIFT bit as 0 - this is used for overflow detection.
 		 */
 		hyp_spin_lock(&pkvm_pgd_lock);
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	ghost_simplified_model_step_lock(GHOST_SIMPLIFIED_LOCK, hyp_virt_to_phys(&pkvm_pgd_lock));
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 		ret = kvm_pgtable_hyp_map(&pkvm_pgtable, hyp_addr + PAGE_SIZE,
 					EL2_STACKSIZE, params->stack_pa, PAGE_HYP);
 
 #ifdef CONFIG_NVHE_GHOST_SPEC
 		ghost_record_mapping_req(hyp_addr + PAGE_SIZE,
 					EL2_STACKSIZE, params->stack_pa, PAGE_HYP, HYP_STACKS);
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	ghost_simplified_model_step_lock(GHOST_SIMPLIFIED_UNLOCK, hyp_virt_to_phys(&pkvm_pgd_lock));
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 
 		hyp_spin_unlock(&pkvm_pgd_lock);
@@ -421,6 +427,9 @@ void __noreturn __pkvm_init_finalise(void)
 		ghost_dump_pgtable(&pkvm_pgtable,"pkvm_pgtable", 0);
 		ghost_check_hyp_mapping_reqs(&pkvm_pgtable,false /*noisy*/);
 	}
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	ghost_simplified_model_step_msr(SYSREG_TTBR_EL2, read_sysreg(ttbr0_el2));
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 
 	/* Now that the vmemmap is backed, install the full-fledged allocator */
