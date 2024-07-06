@@ -81,6 +81,10 @@ enum __kvm_host_smccc_func {
 	__KVM_HOST_SMCCC_FUNC___pkvm_vcpu_load,
 	__KVM_HOST_SMCCC_FUNC___pkvm_vcpu_put,
 	__KVM_HOST_SMCCC_FUNC___pkvm_vcpu_sync_state,
+#ifdef CONFIG_NVHE_LOGGER
+	__KVM_HOST_SMCCC_FUNC___pkvm_logger_buffer_init,
+	__KVM_HOST_SMCCC_FUNC___pkvm_logger_buffer_add_page,
+#endif
 };
 
 #define DECLARE_KVM_VHE_SYM(sym)	extern char sym[]

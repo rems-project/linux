@@ -71,4 +71,22 @@ config PROTECTED_NVHE_STACKTRACE
 
 	  If unsure, or not using protected nVHE (pKVM), say N.
 
+config NVHE_LOGGER
+	bool "Add a logging interface for NVHE EL2"
+	depends on NVHE_EL2_DEBUG
+	default n
+	help
+	  Say Y to add logger to PKVM. The output can be accessed as a file in
+	  debugfs.
+	  Say N here.
+
+config NVHE_LOGGER_PAGES_ORDER
+	int "Logging buffer size, in log_2(pages)"
+	depends on NVHE_LOGGER
+	default 2
+	help
+	  When you say N, the logging buffer will have 2^N pages.
+	  The buffer can overflow, so this depends on what exactly is being
+	  logged and how.
+
 endif # VIRTUALIZATION
