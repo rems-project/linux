@@ -20,6 +20,8 @@
 #include <nvhe/pkvm.h>
 #include <nvhe/trap_handler.h>
 
+#include <nvhe/gcov.h>
+
 #include <linux/irqchip/arm-gic-v3.h>
 #include <uapi/linux/psci.h>
 
@@ -1071,6 +1073,33 @@ static void handle___pkvm_teardown_vm(struct kvm_cpu_context *host_ctxt)
 	cpu_reg(host_ctxt, 1) = __pkvm_teardown_vm(handle);
 }
 
+#ifdef CONFIG_GCOV_NVHE_EL2
+
+static void handle___pkvm_gcov_buffer_init(struct kvm_cpu_context *host_ctxt)
+{
+	DECLARE_REG(u64, pages, host_ctxt, 1);
+	cpu_reg(host_ctxt, 1) = pkvm_gcov_buffer_init(pages);
+}
+
+static void handle___pkvm_gcov_buffer_add_page(struct kvm_cpu_context *host_ctxt)
+{
+	DECLARE_REG(u64, pfn, host_ctxt, 1);
+	cpu_reg(host_ctxt, 1) = pkvm_gcov_buffer_add_page(pfn);
+}
+
+static void handle___pkvm_gcov_export_module(struct kvm_cpu_context *host_ctxt)
+{
+	DECLARE_REG(u64, index, host_ctxt, 1);
+	cpu_reg(host_ctxt, 1) = pkvm_gcov_export_module(index);
+}
+
+static void handle___pkvm_gcov_reset(struct kvm_cpu_context *host_ctxt)
+{
+	cpu_reg(host_ctxt, 1) = pkvm_gcov_reset();
+}
+
+#endif /* CONFIG_GCOV_NVHE_EL2 */
+
 typedef void (*hcall_t)(struct kvm_cpu_context *);
 
 #define HANDLE_FUNC(x)	[__KVM_HOST_SMCCC_FUNC_##x] = (hcall_t)handle_##x
@@ -1104,6 +1133,12 @@ static const hcall_t host_hcall[] = {
 	HANDLE_FUNC(__pkvm_vcpu_load),
 	HANDLE_FUNC(__pkvm_vcpu_put),
 	HANDLE_FUNC(__pkvm_vcpu_sync_state),
+#ifdef CONFIG_GCOV_NVHE_EL2
+	HANDLE_FUNC(__pkvm_gcov_buffer_init),
+	HANDLE_FUNC(__pkvm_gcov_buffer_add_page),
+	HANDLE_FUNC(__pkvm_gcov_export_module),
+	HANDLE_FUNC(__pkvm_gcov_reset),
+#endif
 };
 
 static void handle_host_hcall(struct kvm_cpu_context *host_ctxt)
