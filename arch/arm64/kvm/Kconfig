@@ -83,6 +83,13 @@ config PKVM_PROXY
 
 	  If unsure, say N.
 
+config GCOV_NVHE_EL2
+	bool "GCOV profiling for NVHE EL2 object"
+        depends on (NVHE_EL2_DEBUG && GCOV_KERNEL)
+        default n
+        help
+          Say N here.
+
 config KVM_ARM_HYP_DEBUG_UART
 	bool "Hack up some basic UART functionality at EL2"
 
