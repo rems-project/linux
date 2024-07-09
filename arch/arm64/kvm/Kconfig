@@ -71,4 +71,11 @@ config PROTECTED_NVHE_STACKTRACE
 
 	  If unsure, or not using protected nVHE (pKVM), say N.
 
+config GCOV_NVHE_EL2
+	bool "GCOV profiling for NVHE EL2 object"
+        depends on (NVHE_EL2_DEBUG && GCOV_KERNEL)
+        default n
+        help
+          Say N here.
+
 endif # VIRTUALIZATION
