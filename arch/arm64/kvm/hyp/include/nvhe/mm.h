@@ -41,3 +41,7 @@ int __pkvm_create_private_mapping(phys_addr_t phys, size_t size,
 int pkvm_alloc_private_va_range(size_t size, unsigned long *haddr);
 
 #endif /* __KVM_HYP_MM_H */
+
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+void get_fixmap(void);
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */

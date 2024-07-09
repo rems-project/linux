@@ -358,6 +358,9 @@ static int __create_fixmap_slot_cb(const struct kvm_pgtable_visit_ctx *ctx,
 
 	slot->addr = ctx->addr;
 	slot->ptep = ctx->ptep;
+#if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
+		ghost_simplified_model_step_hint(GHOST_HINT_SET_PTE_THREAD_OWNER, hyp_virt_to_phys(slot->ptep), (u64)ctx->arg);
+#endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 
 	/*
 	 * Clear the PTE, but keep the page-table page refcount elevated to
@@ -470,3 +473,15 @@ int refill_memcache(struct kvm_hyp_memcache *mc, unsigned long min_pages,
 
 	return ret;
 }
+
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+void get_fixmap(void)
+{
+	struct hyp_fixmap_slot *slot;
+	
+	for (int i = 0; i < hyp_nr_cpus; i++) {
+		slot = per_cpu_ptr(&fixmap_slots, (u64)i);
+		ghost_simplified_model_step_hint(GHOST_HINT_SET_PTE_THREAD_OWNER, hyp_virt_to_phys(slot->ptep), (u64)i);
+	}
+}
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
