@@ -9,6 +9,10 @@
 
 #define MAX_GCOV_MODULES 100
 
+#ifdef CONFIG_NVHE_GHOST_SPEC
+#include <nvhe/ghost/ghost_recording.h>
+#endif /* CONFIG_NVHE_GHOST_SPEC */
+
 /* The story:
  *
  * Clang with "GCOV" (-fprofile-arcs -ftest-coverage) emits coverage
@@ -100,6 +104,28 @@ static void pack_gcov_info(void *buf)
 	}
 }
 
+static void hyp_spin_lock_pkvm_pgd_lock(void)
+{
+	hyp_spin_lock(&pkvm_pgd_lock);
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	record_and_check_abstraction_pkvm_pre();
+#endif /* CONFIG_NVHE_GHOST_SPEC */
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	ghost_simplified_model_step_lock(GHOST_SIMPLIFIED_LOCK, hyp_virt_to_phys(&pkvm_pgd_lock));
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
+}
+
+static void hyp_spin_unlock_pkvm_pgd_lock(void)
+{
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	ghost_simplified_model_step_lock(GHOST_SIMPLIFIED_UNLOCK, hyp_virt_to_phys(&pkvm_pgd_lock));
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	record_and_copy_abstraction_pkvm_post();
+#endif /* CONFIG_NVHE_GHOST_SPEC */
+	hyp_spin_unlock(&pkvm_pgd_lock);
+}
+
 static struct shared {
 	void *buf;
 	u64 size;
@@ -149,9 +175,9 @@ int pkvm_gcov_buffer_add_page(u64 pfn)
 	if (ret)
 		goto exit;
 
-	hyp_spin_lock(&pkvm_pgd_lock);
+	hyp_spin_lock_pkvm_pgd_lock();
 	ret = kvm_pgtable_hyp_map(&pkvm_pgtable, (u64)shared.buf + shared.mapped, PAGE_SIZE, phys_addr, PAGE_HYP);
-	hyp_spin_unlock(&pkvm_pgd_lock);
+	hyp_spin_unlock_pkvm_pgd_lock();
 	if (ret)
 		goto exit;
 
