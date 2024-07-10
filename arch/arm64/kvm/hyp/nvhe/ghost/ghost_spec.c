@@ -2272,6 +2272,10 @@ static struct ghost_trap_data host_hcalls[] = {
 	HOST_HCALL(__pkvm_vcpu_load, "", "handle: %x", "vcpu_index: %d", "hcr_el2: %lx", "", ""),
 	HOST_HCALL(__pkvm_vcpu_put, "", "", "", "", "", ""),
 	HOST_HCALL(__pkvm_vcpu_sync_state, "", "", "", "", "", ""),
+
+	HOST_HCALL(__pkvm_gcov_buffer_init, "", "pages: %d", "", "", "", ""),
+	HOST_HCALL(__pkvm_gcov_buffer_add_page, "", "pfn: %d", "", "", "", ""),
+	HOST_HCALL(__pkvm_gcov_export_module, "", "index: %d", "", "", "", ""),
 };
 #define NR_HOST_HCALLS (sizeof(host_hcalls)/sizeof(host_hcalls[0]))
 

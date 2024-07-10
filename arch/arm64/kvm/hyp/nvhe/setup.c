@@ -206,7 +206,11 @@ static int recreate_hyp_mappings(phys_addr_t phys, unsigned long size,
 	if (ret)
 		return ret;
 
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	ret = pkvm_create_mappings(__hyp_init_start, __hyp_init_end, PAGE_HYP_RO, HYP_RODATA, DUMMY_CPU);
+#else
 	ret = pkvm_create_mappings(__hyp_init_start, __hyp_init_end, PAGE_HYP_RO);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	if (ret)
 		return ret;
 
