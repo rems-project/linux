@@ -211,6 +211,10 @@ static int recreate_hyp_mappings(phys_addr_t phys, unsigned long size,
 	if (ret)
 		return ret;
 
+	ret = pkvm_create_mappings(__hyp_init_start, __hyp_init_end, PAGE_HYP_RO);
+	if (ret)
+		return ret;
+
 	for (i = 0; i < hyp_nr_cpus; i++) {
 		struct kvm_nvhe_init_params *params = per_cpu_ptr(&kvm_init_params, i);
 		unsigned long hyp_addr;
@@ -420,6 +424,13 @@ static int fix_hyp_pgtable_refcnt(void)
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 
+static void pkvm_run_initialisers(void) {
+	void (**start)(void) = (void *) __hyp_init_start,
+	     (**end)(void) = (void *) __hyp_init_end;
+	while (start < end)
+		(*(start++))();
+}
+
 void __noreturn __pkvm_init_finalise(void)
 {
 	struct kvm_host_data *host_data = this_cpu_ptr(&kvm_host_data);
@@ -475,6 +486,7 @@ void __noreturn __pkvm_init_finalise(void)
 		goto out;
 
 	pkvm_hyp_vm_table_init(vm_table_base);
+	pkvm_run_initialisers();
 
 #ifdef CONFIG_NVHE_GHOST_SPEC
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
