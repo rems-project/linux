@@ -16,6 +16,7 @@ SECTIONS {
 	HYP_SECTION(.text)
 	HYP_SECTION(.data..ro_after_init)
 	HYP_SECTION(.rodata)
+	HYP_SECTION(.init_array)
 
 	/*
 	 * .hyp..data..percpu needs to be page aligned to maintain the same

@@ -23,6 +23,14 @@
 		__hyp_rodata_end = .;				\
 	}
 
+#define HYPERVISOR_INIT_SECTIONS				\
+	HYP_SECTION_NAME(.init) : {				\
+		. = ALIGN(PAGE_SIZE);				\
+		__hyp_init_start = .;				\
+		*(HYP_SECTION_NAME(.init_array))		\
+		__hyp_init_end = .;				\
+	}
+
 #define HYPERVISOR_PERCPU_SECTION				\
 	. = ALIGN(PAGE_SIZE);					\
 	HYP_SECTION_NAME(.data..percpu) : {			\
@@ -52,6 +60,7 @@
 #else /* CONFIG_KVM */
 #define HYPERVISOR_EXTABLE
 #define HYPERVISOR_DATA_SECTIONS
+#define HYPERVISOR_INIT_SECTIONS
 #define HYPERVISOR_PERCPU_SECTION
 #define HYPERVISOR_RELOC_SECTION
 #define SBSS_ALIGN			0
@@ -190,6 +199,8 @@ SECTIONS
 	RO_DATA(PAGE_SIZE)
 
 	HYPERVISOR_DATA_SECTIONS
+
+	HYPERVISOR_INIT_SECTIONS
 
 	.got : { *(.got) }
 	/*
