@@ -392,6 +392,12 @@ void reclaim_guest_pages(struct pkvm_hyp_vm *vm, struct kvm_hyp_memcache *mc)
 	host_lock_component();
 	guest_lock_component(vm);
 
+
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	// TODO: BS: fold this into the stage2 table free?
+	ghost_simplified_model_step_hint(GHOST_HINT_RELEASE_TABLE, vm->kvm.arch.mmu.pgd_phys, 0);
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
+
 	/* Reclaim all guest pages and dump all pgtable pages in the hyp_pool */
 	BUG_ON(kvm_pgtable_walk(&vm->pgt, 0, BIT(vm->pgt.ia_bits), &walker));
 	kvm_pgtable_stage2_destroy(&vm->pgt);

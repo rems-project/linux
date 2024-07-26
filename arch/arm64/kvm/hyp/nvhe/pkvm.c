@@ -892,10 +892,6 @@ int __pkvm_teardown_vm(pkvm_handle_t handle)
 	__kvm_tlb_flush_vmid(&hyp_vm->kvm.arch.mmu);
 	remove_vm_table_entry(handle);
 #ifdef CONFIG_NVHE_GHOST_SPEC
-#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-	// TODO: BS: fold this into the stage2 table free?
-	ghost_simplified_model_step_hint(GHOST_HINT_RELEASE_TABLE, hyp_vm->kvm.arch.mmu.pgd_phys, 0);
-#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	vm_table_unlock_component();
 #else /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_spin_unlock(&vm_table_lock);
