@@ -1,0 +1,8 @@
+#ifndef __PICOVM_CONFIG_H
+#define __PICOVM_CONFIG_H
+
+#define PICOVM_CONFIG_GRANULE_SIZE	0b00 // 4K granule size
+#define PICOVM_CONFIG_IA_BITS		48
+#define PICOVM_CONFIG_STARTING_LEVEL	0
+
+#endif /* __PICOVM_CONFIG_H */
