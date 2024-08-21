@@ -298,14 +298,14 @@ static void __trace_ghost_event(const char *prefix, enum ghost_trace_event event
 		// TODO: assuming that the frequency remains constant
 		ts = counter / (freq / 1000000);
 		ghost_printf(
-			"TRACING {\"name\": \"%s\", \"cat\": \"PKVM\", \"ph\": \"%s\", \"pid\": %d, \"tid\": 0, \"ts\": %ld}\n",
+			"TRACING {\"name\": \"%s\", \"cat\": \"PKVM\", \"ph\": \"%s\", \"pid\": %d, \"tid\": 0, \"ts\": %lu}\n",
 			event_name,
 			prefix,
 			hyp_smp_processor_id(),
 			ts
 		);
 	} else {
-		ghost_printf(GHOST_WHITE_ON_YELLOW "[%ld] TRACE (%s) - %s" GHOST_NORMAL "\n", counter, prefix, event_name);
+		ghost_printf(GHOST_WHITE_ON_YELLOW "[%lu] TRACE (%s) - %s" GHOST_NORMAL "\n", counter, prefix, event_name);
 	}
 }
 
@@ -2212,7 +2212,7 @@ static void ghost_print_call_data(void)
 		ghost_printf("[relaxed_reads]");
 		for (int i = 0; i < call->relaxed_reads.len; i++) {
 			struct ghost_read *r = &call->relaxed_reads.read_slots[i];
-			ghost_printf(" <addr:%p value:%lx width:%ld>", r->phys_addr, r->value, r->width);
+			ghost_printf(" <addr:%p value:%lx width:%hhu>", r->phys_addr, r->value, r->width);
 			if (i < call->memcache_donations.len - 1)
 				ghost_printf(",");
 		}
@@ -2266,10 +2266,10 @@ static struct ghost_trap_data host_hcalls[] = {
 	HOST_HCALL(__kvm_timer_set_cntvoff, "", "", "", "", "", ""),
 	HOST_HCALL(__vgic_v3_save_vmcr_aprs, "", "", "", "", "", ""),
 	HOST_HCALL(__vgic_v3_restore_vmcr_aprs, "", "", "", "", "", ""),
-	HOST_HCALL(__pkvm_init_vm, "", "host_kvm: %p", "vm_hva: %p", "pgd_hva: %p", "last_ran_hva: %p", ""),
-	HOST_HCALL(__pkvm_init_vcpu, "", "handle: %lx", "host_vcpu: %p", "vcpu_hva: %p", "", ""),
-	HOST_HCALL(__pkvm_teardown_vm, "", "handle: %lx", "", "", "", ""),
-	HOST_HCALL(__pkvm_vcpu_load, "", "handle: %lx", "vcpu_index: %p", "hcr_el2: %lx", "", ""),
+	HOST_HCALL(__pkvm_init_vm, "", "host_kvm: %p", "vm_hva: %lx", "pgd_hva: %lx", "last_ran_hva: %lx", ""),
+	HOST_HCALL(__pkvm_init_vcpu, "", "handle: %x", "host_vcpu: %p", "vcpu_hva: %lx", "", ""),
+	HOST_HCALL(__pkvm_teardown_vm, "", "handle: %x", "", "", "", ""),
+	HOST_HCALL(__pkvm_vcpu_load, "", "handle: %x", "vcpu_index: %d", "hcr_el2: %lx", "", ""),
 	HOST_HCALL(__pkvm_vcpu_put, "", "", "", "", "", ""),
 	HOST_HCALL(__pkvm_vcpu_sync_state, "", "", "", "", "", ""),
 };

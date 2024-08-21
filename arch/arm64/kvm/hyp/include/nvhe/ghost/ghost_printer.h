@@ -14,9 +14,11 @@
  *  %p = raw pointer (as 0x1122334455667788)
  *  %pK = kernel pointer (as 0x.......RAW...../0x......PHYS......)
  *  %pP = phys pointer (as 0x.......RAW...../0x.....HYP_VA.....)
- *  %d = decimal (u8, u16, and u32)
+ *  %d = signed decimal (s8, s16, and s32)
+ *  %u = unsigned decimal (u8, u16, and u32)
  *  %x = hex (u8, u16, and u32)
- *  %ld = long decimal (u64)
+ *  %ld = long signed decimal (s64)
+ *  %lu = long unsigned decimal (u64)
  *  %lx = long hex (u64)
  *  %I  = indent (u64)
  *  %g(KIND) = ghost object

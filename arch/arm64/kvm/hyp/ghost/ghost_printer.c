@@ -218,12 +218,21 @@ int put_str(gp_stream_t *out, char **p, int width, char *arg)
 	return __puts(out, arg);
 }
 
-int put_decimal(gp_stream_t *out, char **p, u64 width, enum arg_length len, u64 x)
+int put_decimal(gp_stream_t *out, char **p, u64 width, _Bool is_signed, enum arg_length len, u64 x)
 {
+	int n;
+	char sign = 0;
+	if (is_signed && (long)x<0) {
+		sign = '-';
+		x = -x;
+	}
 	// pad the left-hand side with . up to width
-	int n = nr_decimal_digits(x);
+	n = nr_decimal_digits(x);
+	n += !!sign;
 	if (n < width)
 		TRY(__puti(out, width - n, '.'));
+	if (sign)
+		TRY_PUT(sign);
 
 	return __putn(out,x);
 }
@@ -445,6 +454,7 @@ int partition_padding(char *p)
  * but substitutes `int` for whatever the `length` specifier says
  */
 #define VA_INT_ARG(AP) (len == LENGTH_l ? va_arg(AP, u64) : (u64)va_arg(AP, int))
+#define VA_UINT_ARG(AP) (len == LENGTH_l ? (u64)va_arg(AP, s64) : (u64)va_arg(AP, unsigned int))
 
 int ghost_vsprintf(gp_stream_t *out, const char *fmt, va_list ap)
 {
@@ -483,10 +493,13 @@ int ghost_vsprintf(gp_stream_t *out, const char *fmt, va_list ap)
 				TRY(put_str(out, &p, width, va_arg(ap, char*)));
 				break;
 			case 'd':
-				TRY(put_decimal(out, &p, width, len, VA_INT_ARG(ap)));
+				TRY(put_decimal(out, &p, width, true, len, VA_INT_ARG(ap)));
+				break;
+			case 'u':
+				TRY(put_decimal(out, &p, width, false, len, VA_UINT_ARG(ap)));
 				break;
 			case 'x':
-				TRY(put_hex(out, &p, width, len, VA_INT_ARG(ap)));
+				TRY(put_hex(out, &p, width, len, VA_UINT_ARG(ap)));
 				break;
 			case 'p':
 				switch (*(p+1)) {

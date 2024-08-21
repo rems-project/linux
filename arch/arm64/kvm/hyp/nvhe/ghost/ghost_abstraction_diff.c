@@ -148,7 +148,7 @@ static int __put_val_string(struct diff_val val, char *buf, u64 n)
 		else
 			return ghost_snprintf(buf, n, "false");
 	case Tgpr:
-		return ghost_snprintf(buf, n, "r%ld", val.n);
+		return ghost_snprintf(buf, n, "r%lu", val.n);
 	case Tgprint:
 		return ghost_snprintf(buf, n, val.gp.fmt, val.gp.val);
 	default:
@@ -207,7 +207,7 @@ static void __put_val(struct diff_val val, u64 indent)
 			ghost_printf("false");
 		break;
 	case Tgpr:
-		ghost_printf("r%ld", val.n);
+		ghost_printf("r%lu", val.n);
 		break;
 	case Tgprint:
 		ghost_printf(val.gp.fmt, val.gp.val);
@@ -622,11 +622,11 @@ static void ghost_diff_vcpu(struct diff_container *node, struct ghost_vcpu *vcpu
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
-static void ghost_diff_vcpu_reference(struct diff_container *node, int vcpu_idx, struct ghost_vcpu_reference *vcpu_ref1, struct ghost_vcpu_reference *vcpu_ref2)
+static void ghost_diff_vcpu_reference(struct diff_container *node, u64 vcpu_idx, struct ghost_vcpu_reference *vcpu_ref1, struct ghost_vcpu_reference *vcpu_ref2)
 {
 	GHOST_LOG_CONTEXT_ENTER();
 	ghost_assert(vcpu_ref1 && vcpu_ref2);
-	ghost_diff_enter_subfield_val(node, TGPRINT("vcpu_ref %ld", (u64)vcpu_idx));
+	ghost_diff_enter_subfield_val(node, TGPRINT("vcpu_ref %lu", vcpu_idx));
 	ghost_diff_field(node, "initialised", diff_pair(TBOOL(vcpu_ref1->initialised), TBOOL(vcpu_ref2->initialised)));
 	if (vcpu_ref1->initialised && vcpu_ref2->initialised) {
 		ghost_diff_field(node, "loaded_somewhere", diff_pair(TBOOL(vcpu_ref1->loaded_somewhere), TBOOL(vcpu_ref2->loaded_somewhere)));
@@ -680,7 +680,7 @@ static void ghost_diff_vm(struct diff_container *node, pkvm_handle_t handle, str
 			}
 
 			for (u64 i = 0; i < KVM_MAX_VCPUS; i++) {
-				ghost_diff_enter_subfield_val(node, TGPRINT("vcpu_addr %ld", i));
+				ghost_diff_enter_subfield_val(node, TGPRINT("vcpu_addr %lu", i));
 				if (i < vm1->vm_table_locked.nr_vcpus) {
 					if (i < vm2->vm_table_locked.nr_vcpus) {
 						ghost_diff_attach(node, diff_pair(TU64((u64)vm1->vm_table_locked.vm_teardown_vcpu_addrs[i]), TU64((u64)vm2->vm_table_locked.vm_teardown_vcpu_addrs[i])));
@@ -787,9 +787,9 @@ static void ghost_diff_loaded_vcpu_status(struct diff_container *node, struct gh
 		if (vcpu1 && vcpu2)
 			ghost_diff_vcpu(node, vcpu1, vcpu2);
 		else if (vcpu1)
-			ghost_diff_attach(node, diff_pm(false, TGPRINT("vcpu %ld", vcpu1->vcpu_index)));
+			ghost_diff_attach(node, diff_pm(false, TGPRINT("vcpu %lu", vcpu1->vcpu_index)));
 		else if (vcpu2)
-			ghost_diff_attach(node, diff_pm(true, TGPRINT("vcpu %ld", vcpu2->vcpu_index)));
+			ghost_diff_attach(node, diff_pm(true, TGPRINT("vcpu %lu", vcpu2->vcpu_index)));
 	}
 	ghost_diff_pop_subfield(node);
 	GHOST_LOG_CONTEXT_EXIT();

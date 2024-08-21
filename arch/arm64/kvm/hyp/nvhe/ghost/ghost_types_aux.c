@@ -1084,13 +1084,13 @@ void ghost_dump_vm(struct ghost_vm *vm, u64 i)
 	}
 
 	ghost_printf("\n");
-	ghost_printf("%Inr_vcpus:%ld\n", i+8, vm->vm_table_locked.nr_vcpus);
-	ghost_printf("%Inr_initialised_vcpus:%ld\n", i+8, vm->vm_table_locked.nr_initialised_vcpus);
+	ghost_printf("%Inr_vcpus:%lu\n", i+8, vm->vm_table_locked.nr_vcpus);
+	ghost_printf("%Inr_initialised_vcpus:%lu\n", i+8, vm->vm_table_locked.nr_initialised_vcpus);
 
 	ghost_printf("%Ivcpus:\n", i+8);
 	for (int vcpu_indx = 0; vcpu_indx < vm->vm_table_locked.nr_vcpus; vcpu_indx++) {
 		struct ghost_vcpu_reference *vcpu_ref = &vm->vm_table_locked.vcpu_refs[vcpu_indx];
-		ghost_printf("%Ivcpu %ld ", i+12, vcpu_indx);
+		ghost_printf("%Ivcpu %d ", i+12, vcpu_indx);
 
 		if (vcpu_ref->initialised)
 			ghost_printf("(initialised)");
@@ -1178,7 +1178,7 @@ void ghost_dump_loaded_vcpu_status(struct ghost_loaded_vcpu_status *loaded_vcpu_
 	if (!loaded_vcpu_status->loaded) {
 		ghost_printf("<no loaded vCPU>\n");
 	} else {
-		ghost_printf("<loaded vm_handle:%x vcpu_index:%ld>\n", loaded_vcpu_status->vm_handle, loaded_vcpu_status->loaded_vcpu->vcpu_index);
+		ghost_printf("<loaded vm_handle:%x vcpu_index:%lu>\n", loaded_vcpu_status->vm_handle, loaded_vcpu_status->loaded_vcpu->vcpu_index);
 	}
 }
 
@@ -1190,7 +1190,7 @@ void ghost_dump_running_state(struct ghost_running_state *run, u64 i)
 	if (!run->guest_running) {
 		ghost_printf("<host running>\n");
 	} else {
-		ghost_printf("<VM running, vm_handle:%x vcpu_index:%ld exit_code:%ld>\n", run->vm_handle, run->vcpu_index, run->guest_exit_code);
+		ghost_printf("<VM running, vm_handle:%x vcpu_index:%lu exit_code:%lu>\n", run->vm_handle, run->vcpu_index, run->guest_exit_code);
 	}
 }
 
@@ -1209,7 +1209,7 @@ void ghost_dump_host_regs(struct ghost_host_regs *host_regs, u64 i)
 // EXPORTED ghost_types_aux.h
 void ghost_dump_thread_local(struct ghost_local_state *local)
 {
-	ghost_printf("locals[%ld]: ", hyp_smp_processor_id());
+	ghost_printf("locals[%d]: ", hyp_smp_processor_id());
 	if (!local->present) {
 		ghost_printf(GHOST_MISSING_FIELD "\n");
 	} else {

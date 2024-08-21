@@ -156,7 +156,7 @@ void __g_malloc_dump_stats(enum alloc_kind kind, pool *pool) {
 	ghost_printf("(kinds):\n");
 	for (int i=0; i<ALLOC_KIND_NR; i++) {
 		long d = kind_malloc_counter[i] - kind_free_counter[i];
-		ghost_printf("  [%s] malloc: %ld -- free: %ld [delta: %ld]\n", kind_str[i], kind_malloc_counter[i], kind_free_counter[i], d);
+		ghost_printf("  [%s] malloc: %lu -- free: %lu [delta: %ld]\n", kind_str[i], kind_malloc_counter[i], kind_free_counter[i], d);
 	}
 }
 
