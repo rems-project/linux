@@ -224,6 +224,12 @@ void init_maplets(void)
 	}
 }
 
+static u64 alloc_counter, free_counter;
+void ghost_maplets_print_stats(const char *str)
+{
+	ghost_assert_maplets_locked();
+	ghost_printf("[%s] alloc: %lu -- free: %lu ==> diff: %ld\n", str, alloc_counter, free_counter, (s64)(alloc_counter - free_counter));
+}
 
 /* alloc: move the head of the free list in @maplets_pool (if it exists) to become the new last entry of maplets_list, and return a pointer to its enclosing maplet */
 struct maplet * get_maplet(struct glist_head *maplets_list)
@@ -235,6 +241,7 @@ struct maplet * get_maplet(struct glist_head *maplets_list)
 	node = maplets_pool.free.first;
 	ret = glist_entry(node, struct maplet, list);
 	glist_move_head_to_tail(&maplets_pool.free, maplets_list);
+	alloc_counter++;
 	return ret;
 }
 
@@ -243,6 +250,10 @@ void free_mapping(struct glist_head maplets_list)
 {
 	ghost_assert_maplets_locked();
 	if (!glist_empty(&maplets_list)) {
+		struct glist_node *cursor;
+		glist_for_each(cursor, &maplets_list) {
+			free_counter++;
+		}
 
 		if (glist_empty(&maplets_pool.free)) {
 			maplets_pool.free.first = maplets_list.first;

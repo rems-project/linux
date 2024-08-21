@@ -338,4 +338,6 @@ int gp_put_maplet(gp_stream_t *out, struct maplet *maplet);
 void hyp_put_maplet_target(struct maplet_target *target, u64 indent);
 void hyp_put_maplet(struct maplet *maplet, u64 indent);
 
+void ghost_maplets_print_stats(const char *str);
+
 #endif  // _GHOST_MAPLETS_H
