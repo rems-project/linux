@@ -10,6 +10,7 @@ enum alloc_kind {
 	ALLOC_LOCAL_STATE,
 	ALLOC_VCPU,
 	ALLOC_VM,
+	ALLOC_KVM_CPU_CONTEXT,
 	ALLOC_KIND_NR // keep this last
 };
 

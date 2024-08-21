@@ -263,10 +263,11 @@ static void record_abstraction_el2_sysregs(struct ghost_registers *gr)
 static void record_abstraction_regs(struct ghost_registers *gr, struct kvm_cpu_context *ctxt)
 {
 	gr->present = true;
-	// TODO: this is blowing up the stack
-	struct kvm_cpu_context myctxt = *ctxt;
-	__sysreg_save_state_nvhe(&myctxt);
-	compute_abstract_registers(gr, &myctxt, false/*we do not copy the EL2 sysregs*/);
+	struct kvm_cpu_context *myctxt = malloc_or_die(ALLOC_KVM_CPU_CONTEXT, sizeof(struct kvm_cpu_context));
+	memcpy(myctxt, ctxt, sizeof(struct kvm_cpu_context));
+	__sysreg_save_state_nvhe(myctxt);
+	compute_abstract_registers(gr, myctxt, false/*we do not copy the EL2 sysregs*/);
+	free(ALLOC_KVM_CPU_CONTEXT, myctxt);
 
 	record_abstraction_el2_sysregs(gr);
 }
