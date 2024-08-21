@@ -1138,7 +1138,7 @@ void ghost_dump_vms(struct ghost_vms *vms)
 		ghost_printf(GHOST_MISSING_FIELD "\n");
 	}
 
-	ghost_printf("    vm_table:\n", vms->table_data.nr_vms);
+	ghost_printf("    vm_table:\n");
 	for (int i = 0; i < KVM_MAX_PVMS; i++) {
 		struct ghost_vm_slot *slot = &vms->table[i];
 		if (slot->exists) {
