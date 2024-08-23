@@ -6,7 +6,7 @@
 #include <nvhe/spinlock.h>
 
 #include <hyp/debug-pl011.h>
-#include <hyp/ghost/ghost_extra_debug-pl011.h>
+#include <nvhe/ghost/ghost_extra_debug-pl011.h>
 #include <nvhe/ghost/ghost_asserts.h> // can use asserts here since they dump right to UART without using this printer.
 
 #include <nvhe/ghost/ghost_maplets.h>

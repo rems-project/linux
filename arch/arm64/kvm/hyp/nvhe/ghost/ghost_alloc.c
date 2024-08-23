@@ -1,5 +1,5 @@
 #include <nvhe/pkvm.h>
-#include <hyp/ghost/ghost_alloc.h>
+#include <nvhe/ghost/ghost_alloc.h>
 #include <asm-generic/bug.h>
 
 #ifdef CONFIG_NVHE_GHOST_MEM_DUMP_STATS

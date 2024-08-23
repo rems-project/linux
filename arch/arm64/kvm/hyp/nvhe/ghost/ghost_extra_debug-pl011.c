@@ -1,4 +1,4 @@
-#include <hyp/ghost/ghost_extra_debug-pl011.h>
+#include <nvhe/ghost/ghost_extra_debug-pl011.h>
 
 #include <nvhe/pkvm.h>
 #include <hyp/debug-pl011.h>

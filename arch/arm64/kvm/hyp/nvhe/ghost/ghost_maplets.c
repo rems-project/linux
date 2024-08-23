@@ -41,7 +41,7 @@
 
 #include <asm/kvm_mmu.h>
 
-#include <hyp/ghost/ghost_extra_debug-pl011.h>
+#include <nvhe/ghost/ghost_extra_debug-pl011.h>
 
 #include <nvhe/ghost/ghost_maplets.h>
 #include <nvhe/ghost/ghost_kvm_pgtable.h>

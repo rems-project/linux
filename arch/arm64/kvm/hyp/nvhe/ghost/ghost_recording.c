@@ -1,6 +1,6 @@
 #include <nvhe/mm.h> // for pkvm_pgtable
 
-#include <hyp/ghost/ghost_alloc.h>
+#include <nvhe/ghost/ghost_alloc.h>
 #include <nvhe/ghost/ghost_state.h>
 #include <nvhe/ghost/ghost_misc.h>
 

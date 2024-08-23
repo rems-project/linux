@@ -1,7 +1,7 @@
 #include <asm/kvm_mmu.h>
 #include <linux/types.h>
 
-#include <hyp/ghost/ghost_extra_debug-pl011.h>
+#include <nvhe/ghost/ghost_extra_debug-pl011.h>
 
 #include <nvhe/spinlock.h>
 #include <nvhe/mem_protect.h>

@@ -12,7 +12,7 @@
 #include <asm/kvm_hyp.h>
 #include <asm/kvm_mmu.h>
 
-#ifdef CONFIG_NVHE_GHOST_SPEC
+#if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SPEC)
 #include <nvhe/ghost/ghost_call_data.h>
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 

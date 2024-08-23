@@ -35,7 +35,7 @@ static DEFINE_PER_CPU(struct user_fpsimd_state, loaded_host_fpsimd_state);
 
 #ifdef CONFIG_NVHE_GHOST_SPEC
 
-#include <hyp/ghost/ghost_extra_debug-pl011.h> // TODO move on to ghost_printer
+#include <nvhe/ghost/ghost_extra_debug-pl011.h> // TODO move on to ghost_printer
 #include <nvhe/ghost/ghost_control.h>
 #include <nvhe/ghost/ghost_misc.h>
 #include <nvhe/ghost/ghost_spec.h>

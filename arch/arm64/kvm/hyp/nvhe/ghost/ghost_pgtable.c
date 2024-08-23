@@ -5,7 +5,7 @@
 */
 #include <asm/kvm_mmu.h>
 
-#include <hyp/ghost/ghost_extra_debug-pl011.h>
+#include <nvhe/ghost/ghost_extra_debug-pl011.h>
 #include <nvhe/ghost/ghost_pgtable.h>
 #include <nvhe/memory.h>   // for hyp_phys_to_virt
 #include <nvhe/mem_protect.h>   // for PKVM_PAGE_SHARED_OWNED etc

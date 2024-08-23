@@ -12,10 +12,10 @@
 #include <asm/stage2_pgtable.h>
 
 
-#ifdef CONFIG_NVHE_GHOST_SPEC
+#if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SPEC)
 
 #include <asm/kvm_mmu.h>
-#include <hyp/ghost/ghost_extra_debug-pl011.h>
+#include <nvhe/ghost/ghost_extra_debug-pl011.h>
 //#include <nvhe/ghost/ghost_check_pgtables.h>
 #include <nvhe/ghost/ghost_pgtable.h>
 #include <nvhe/ghost/ghost_control.h>

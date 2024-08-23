@@ -16,7 +16,7 @@
 #include <nvhe/pkvm.h>
 #include <nvhe/spinlock.h>
 
-#include <hyp/ghost/ghost_extra_debug-pl011.h>
+#include <nvhe/ghost/ghost_extra_debug-pl011.h>
 #include <nvhe/ghost/ghost_pgtable.h>
 #include <nvhe/ghost/ghost_types_aux.h>
 #include <nvhe/ghost/ghost_spec.h>

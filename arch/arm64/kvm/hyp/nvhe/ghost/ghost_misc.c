@@ -1,6 +1,6 @@
 
 #include <asm/kvm_mmu.h>
-#include <hyp/ghost/ghost_extra_debug-pl011.h>
+#include <nvhe/ghost/ghost_extra_debug-pl011.h>
 #include <nvhe/ghost/ghost_pgtable.h>
 
 #include <nvhe/ghost/ghost_misc.h>
