@@ -331,7 +331,7 @@ void ghost_lock_maplets(void);
 void ghost_unlock_maplets(void);
 inline void ghost_assert_maplets_locked(void);
 
-/* don't call these directly, instead use ghost_printf %g(maplet) and %g(maplet_target) codes */
+/* don't call these directly, instead use ghost_printf_ext %g(maplet) and %g(maplet_target) codes */
 int gp_put_maplet_target(gp_stream_t *out, struct maplet_target *target);
 int gp_put_maplet(gp_stream_t *out, struct maplet *maplet);
 

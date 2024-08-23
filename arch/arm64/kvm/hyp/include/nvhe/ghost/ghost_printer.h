@@ -7,6 +7,9 @@
 /*
  * A very minimal printf implementation, with extra features for ghost.
  *
+ * %pK %pP %I %g(KIND) %g2(KIND) %$ are non-std formats that should
+ * only be used with the ghost_XXprintf_ext() functions
+ *
  * Supported format codes:
  *  %c = char
  *  %b = boolean
@@ -59,11 +62,15 @@ typedef struct gp_stream {
 #define STREAM_UART &__GHOST_UART
 #define NEW_STREAM_BUFFERED(buffer, n) ((gp_stream_t){.kind=GP_STREAM_BUF, .buf=(buffer), .buf_rem=(n)})
 
-int ghost_vsprintf(gp_stream_t *out, const char *fmt, va_list ap);
+//int ghost_vsprintf(gp_stream_t *out, const char *fmt, va_list ap);
 
-int ghost_snprintf(char *out, u64 n, const char *fmt, ...);
-int ghost_sprintf(gp_stream_t *out, const char *fmt, ...);
-void ghost_printf(const char *fmt, ...);
+int ghost_snprintf(char *out, u64 n, const char *fmt, ...) __attribute__ ((format (printf, 3, 4)));
+int ghost_sprintf(gp_stream_t *out, const char *fmt, ...) __attribute__ ((format (printf, 2, 3)));
+void ghost_printf(const char *fmt, ...) __attribute__ ((format (printf, 1, 2)));
+
+int ghost_snprintf_ext(char *out, u64 n, const char *fmt, ...);
+int ghost_sprintf_ext(gp_stream_t *out, const char *fmt, ...);
+void ghost_printf_ext(const char *fmt, ...);
 
 /*
  * Printer locks

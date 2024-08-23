@@ -594,3 +594,7 @@ int ghost_sprintf(gp_stream_t *out, const char *fmt, ...)
 	va_end(ap);
 	return ret;
 }
+
+int ghost_snprintf_ext(char *out, u64 n, const char *fmt, ...) __attribute__((alias ("ghost_snprintf")));
+int ghost_sprintf_ext(gp_stream_t *out, const char *fmt, ...) __attribute__((alias ("ghost_sprintf")));
+void ghost_printf_ext(const char *fmt, ...) __attribute__((alias ("ghost_printf")));

@@ -103,7 +103,7 @@ void ghost_pfn_set_assert_equal(struct pfn_set *lhs, struct pfn_set *rhs)
 static void print_set(void *set)
 {
 	struct pfn_set *s = *(struct pfn_set**)set;
-	ghost_printf("%g(pfn_set)\n", s);
+	ghost_printf_ext("%g(pfn_set)\n", s);
 }
 
 void ghost_pfn_set_assert_subseteq(struct pfn_set *lhs, struct pfn_set *rhs)

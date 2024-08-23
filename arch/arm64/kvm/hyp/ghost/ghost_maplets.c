@@ -525,12 +525,12 @@ int gp_put_maplet(gp_stream_t *out, struct maplet *maplet)
 
 void hyp_put_maplet_target(struct maplet_target *target, u64 indent)
 {
-	ghost_printf("%g(maplet_target)", target);
+	ghost_printf_ext("%g(maplet_target)", target);
 }
 
 void hyp_put_maplet(struct maplet *maplet, u64 indent)
 {
-	ghost_printf("%g(maplet)", maplet);
+	ghost_printf_ext("%g(maplet)", maplet);
 }
 
 void hyp_put_mapletptr(void *d)
@@ -553,7 +553,7 @@ void gp_put_mapping(gp_stream_t *out, mapping *mapp, u64 indent)
 
 	first=true;
 	if (glist_empty(&head)) {
-		ghost_printf("%Iempty\n", indent);
+		ghost_printf_ext("%Iempty\n", indent);
 		return;
 	}
 
@@ -573,13 +573,13 @@ void gp_put_mapping(gp_stream_t *out, mapping *mapp, u64 indent)
 			size_first = m->target.map.oa_range_nr_pages;
 			first = false;
 		}
-		ghost_printf("%I%c%g(maplet)\n", indent, prefix, m);
+		ghost_printf_ext("%I%c%g(maplet)\n", indent, prefix, m);
 	}
 }
 
 void hyp_put_mapping(struct glist_head head, u64 i)
 {
-	ghost_printf("%gI(mapping)", &head, i);
+	ghost_printf_ext("%gI(mapping)", &head, i);
 }
 
 
@@ -849,11 +849,11 @@ foo:
 	}
 
 	// all of &head1 matched
-	ghost_printf("%I%s submapping %s %s ok\n", i, s, s1, s2);
+	ghost_printf_ext("%I%s submapping %s %s ok\n", i, s, s1, s2);
 	return true;
 
 not_found:
-	ghost_printf(
+	ghost_printf_ext(
 		"%I " GHOST_WHITE_ON_RED "submapping %s %s no corresponding maping found for virt:%p" GHOST_NORMAL " in\n"
 		"%I%g(maplet)\n"
 		"%I%s\n"
@@ -870,7 +870,7 @@ not_found:
 	return false;
 
 mismatch:
-	ghost_printf(
+	ghost_printf_ext(
 		"%I " GHOST_WHITE_ON_RED "submapping %s %s mismatch at virt:%p" GHOST_NORMAL " in\n"
 		"%I%s:%g(maplet)\n"
 		"%Ivs\n"

@@ -117,7 +117,7 @@ void ghost_log_enter_context(const char *s)
 
 	if (frame_should_print_immediately()) {
 		ghost_print_enter();
-		ghost_printf("%I[enter %s]\n", i*2, (char*)s);
+		ghost_printf_ext("%I[enter %s]\n", i*2, (char*)s);
 		ghost_print_exit();
 	}
 }
@@ -206,7 +206,7 @@ void ghost_log_exit_context(const char *s)
 
 	if (frame_should_print_immediately()) {
 		ghost_print_enter();
-		ghost_printf("%I[exit %s]\n", ctx->nr_frames*2, frame->ctx_name);
+		ghost_printf_ext("%I[exit %s]\n", ctx->nr_frames*2, frame->ctx_name);
 		ghost_print_exit();
 	}
 
@@ -249,7 +249,7 @@ void ghost_log_context_traceback(void)
 	for (int i = 0; i < ctx->nr_frames; i++) {
 		struct ghost_context_frame *frame = &ctx->frames[i];
 
-		ghost_printf("%Iin %s\n", i*4, frame->ctx_name);
+		ghost_printf_ext("%Iin %s\n", i*4, frame->ctx_name);
 
 		for (int d = 0; d < frame->nr_attached_data; d++) {
 			struct ghost_context_data *data = &frame->data[d];
@@ -258,7 +258,7 @@ void ghost_log_context_traceback(void)
 				u64 va = (u64)data->data_ptr;
 
 				// TODO: if context used %g() codes, we could do this in one...
-				ghost_printf("%I|%s%s:", i*4, msg_open_for(data->level), data->data_name);
+				ghost_printf_ext("%I|%s%s:", i*4, msg_open_for(data->level), data->data_name);
 
 				// don't try to dereference NULL pointers
 				if (! data->data_ptr) {
@@ -270,7 +270,7 @@ void ghost_log_context_traceback(void)
 				}
 				ghost_printf("%s\n", msg_close_for(data->level));
 			} else {
-				ghost_printf("%I|%s%s%s\n", i*4, msg_open_for(data->level), data->data_name, msg_close_for(data->level));
+				ghost_printf_ext("%I|%s%s%s\n", i*4, msg_open_for(data->level), data->data_name, msg_close_for(data->level));
 			}
 		}
 	}

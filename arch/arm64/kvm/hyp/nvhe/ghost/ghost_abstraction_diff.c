@@ -210,7 +210,7 @@ static void __put_val(struct diff_val val, u64 indent)
 		ghost_printf("r%lu", val.n);
 		break;
 	case Tgprint:
-		ghost_printf(val.gp.fmt, val.gp.val);
+		ghost_printf_ext(val.gp.fmt, val.gp.val);
 		break;
 	default:
 		BUG();
@@ -253,11 +253,11 @@ static void __hyp_dump_string_diff(struct diff_container *node, struct diff_val 
 			dirty[i] = true;
 	}
 
-	ghost_printf("\n%I", node->depth*4);
+	ghost_printf_ext("\n%I", node->depth*4);
 	ghost_printf("-");
 	__put_dirty_string(lhs_s, dirty, true);
 
-	ghost_printf("\n%I", node->depth*4);
+	ghost_printf_ext("\n%I", node->depth*4);
 	ghost_printf("+");
 	__put_dirty_string(rhs_s, dirty, false);
 }
@@ -268,7 +268,7 @@ static void __ghost_print_diff(struct diff_container *node, struct ghost_diff *d
 	case GHOST_DIFF_NONE:
 		break;
 	case GHOST_DIFF_PM:
-		ghost_printf("\n%I", node->depth*4);
+		ghost_printf_ext("\n%I", node->depth*4);
 
 		if (diff->pm.add)
 			ghost_printf(GHOST_WHITE_ON_GREEN "+");
@@ -288,7 +288,7 @@ static void __ghost_print_diff(struct diff_container *node, struct ghost_diff *d
 static int __put_key(struct diff_container *node, struct diff_val key)
 {
 	if (! val_equal(key, EMPTY_KEY)) {
-		ghost_printf("\n%I", node->depth*4);
+		ghost_printf_ext("\n%I", node->depth*4);
 		__put_val(key, 0);
 		ghost_printf(":");
 
@@ -341,7 +341,7 @@ static void __attach(struct diff_container *node, struct diff_val key, struct gh
 
 		// print out the part of the path we've not printed before.
 		for (int i = node->clean_prefix; i < node->depth; i++) {
-			ghost_printf("\n%I", i*4);
+			ghost_printf_ext("\n%I", i*4);
 			__put_val(node->path[i], 0);
 			ghost_printf(":");
 		};

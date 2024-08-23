@@ -86,12 +86,12 @@ int gp_put_entry(gp_stream_t *out, kvm_pte_t pte, u8 level)
 	case EK_INVALID:
 	case EK_BLOCK:
 	case EK_TABLE:
-		return ghost_sprintf(out, "%g(ek)", ek);
+		return ghost_sprintf_ext(out, "%g(ek)", ek);
 		break;
 
 	case EK_PAGE_DESCRIPTOR:
 		oa = pte & GENMASK(47,12);
-		return ghost_sprintf(out, "%g(ek) oa:%p", ek, oa);
+		return ghost_sprintf_ext(out, "%g(ek) oa:%p", ek, oa);
 		break;
 
 	case EK_BLOCK_NOT_PERMITTED:
@@ -111,13 +111,13 @@ void _dump_pgtable(u64 *pgd, u8 level, u8 indent)
 	u32 idx;
 	if (pgd) {
 		// dump this page
-		ghost_printf("%Ilevel:%hhu table at virt:%p\n", indent, level, pgd);
+		ghost_printf_ext("%Ilevel:%hhu table at virt:%p\n", indent, level, pgd);
 
 		// dump each entry
 		for (idx = 0; idx < 512; idx++) {
 			kvm_pte_t pte = pgd[idx];
 			if (pte!=0) {
-				ghost_printf("%Ilevel:%hhu table at virt:%p raw:%lx %gL(entry)\n", indent+2, level, pgd+idx, pte, level);
+				ghost_printf_ext("%Ilevel:%hhu table at virt:%p raw:%lx %gL(entry)\n", indent+2, level, pgd+idx, pte, level);
 			}
 		}
 
@@ -128,7 +128,7 @@ void _dump_pgtable(u64 *pgd, u8 level, u8 indent)
 				u64 next_level_phys_address, next_level_virt_address;
 				next_level_phys_address = pte & GENMASK(47,12);
 				next_level_virt_address = (u64)hyp_phys_to_virt((phys_addr_t)next_level_phys_address);
-				ghost_printf("%Iin level:%hhu table at virt:%p phys:%p\n", indent+2, level, next_level_virt_address, next_level_phys_address);
+				ghost_printf_ext("%Iin level:%hhu table at virt:%p phys:%p\n", indent+2, level, next_level_virt_address, next_level_phys_address);
 				_dump_pgtable((kvm_pte_t *)next_level_virt_address, level+1, indent+4);
 				ghost_printf("\n");
 			}
@@ -477,7 +477,7 @@ void ghost_dump_pgtable(struct kvm_pgtable *pg, char *doc, u64 i)
 
 int gp_put_abstract_pgtable(gp_stream_t *out, abstract_pgtable *ap, u64 indent)
 {
-	return ghost_sprintf(
+	return ghost_sprintf_ext(
 		out,
 		"%g(mapping)\n"
 		"%I%g(pfn_set)\n"
@@ -490,5 +490,5 @@ int gp_put_abstract_pgtable(gp_stream_t *out, abstract_pgtable *ap, u64 indent)
 
 void hyp_put_abstract_pgtable(abstract_pgtable *ap, u64 indent)
 {
-	ghost_printf("%gI(pgtable)", ap, indent);
+	ghost_printf_ext("%gI(pgtable)", ap, indent);
 }

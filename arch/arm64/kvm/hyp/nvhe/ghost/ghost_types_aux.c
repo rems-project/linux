@@ -1025,7 +1025,7 @@ void ghost_dump_pkvm(struct ghost_pkvm *pkvm)
 	if (!pkvm->present) {
 		ghost_printf(GHOST_MISSING_FIELD "\n");
 	} else {
-		ghost_printf(
+		ghost_printf_ext(
 			"\n"
 			"%I%gI(pgtable)\n",
 			2, &pkvm->pkvm_abstract_pgtable, 2
@@ -1043,7 +1043,7 @@ void ghost_dump_host(struct ghost_host *host)
 		return;
 	}
 
-	ghost_printf(
+	ghost_printf_ext(
 		"\n"
 		"  annot:\n"
 		"%I%gI(mapping)\n"
@@ -1063,11 +1063,11 @@ void ghost_dump_vm(struct ghost_vm *vm, u64 i)
 	if (!vm)
 		return;
 
-	ghost_printf("%Ivm %x:\n", i, vm->pkvm_handle);
+	ghost_printf_ext("%Ivm %x:\n", i, vm->pkvm_handle);
 
-	ghost_printf("%Ivm_locked: ", i+4);
+	ghost_printf_ext("%Ivm_locked: ", i+4);
 	if (vm->vm_locked.present) {
-		ghost_printf(
+		ghost_printf_ext(
 			"\n"
 			"%I%gI(pgtable)\n",
 			i+8,
@@ -1077,20 +1077,20 @@ void ghost_dump_vm(struct ghost_vm *vm, u64 i)
 		ghost_printf(GHOST_MISSING_FIELD "\n");
 	}
 
-	ghost_printf("%Ivm_table_locked: ", i+4);
+	ghost_printf_ext("%Ivm_table_locked: ", i+4);
 	if (!vm->vm_table_locked.present) {
 		ghost_printf(GHOST_MISSING_FIELD "\n");
 		return;
 	}
 
 	ghost_printf("\n");
-	ghost_printf("%Inr_vcpus:%lu\n", i+8, vm->vm_table_locked.nr_vcpus);
-	ghost_printf("%Inr_initialised_vcpus:%lu\n", i+8, vm->vm_table_locked.nr_initialised_vcpus);
+	ghost_printf_ext("%Inr_vcpus:%lu\n", i+8, vm->vm_table_locked.nr_vcpus);
+	ghost_printf_ext("%Inr_initialised_vcpus:%lu\n", i+8, vm->vm_table_locked.nr_initialised_vcpus);
 
-	ghost_printf("%Ivcpus:\n", i+8);
+	ghost_printf_ext("%Ivcpus:\n", i+8);
 	for (int vcpu_indx = 0; vcpu_indx < vm->vm_table_locked.nr_vcpus; vcpu_indx++) {
 		struct ghost_vcpu_reference *vcpu_ref = &vm->vm_table_locked.vcpu_refs[vcpu_indx];
-		ghost_printf("%Ivcpu %d ", i+12, vcpu_indx);
+		ghost_printf_ext("%Ivcpu %d ", i+12, vcpu_indx);
 
 		if (vcpu_ref->initialised)
 			ghost_printf("(initialised)");
@@ -1107,10 +1107,10 @@ void ghost_dump_vm(struct ghost_vm *vm, u64 i)
 		ghost_printf("\n");
 	}
 
-	ghost_printf("%Ivcpu_addrs:\n", i+4);
+	ghost_printf_ext("%Ivcpu_addrs:\n", i+4);
 	if (vm->vm_table_locked.present) {
 		for (int idx=0; idx<vm->vm_table_locked.nr_initialised_vcpus; idx++) {
-			ghost_printf("%I[%d]: %p\n", i+8, idx, vm->vm_table_locked.vm_teardown_vcpu_addrs[idx]);
+			ghost_printf_ext("%I[%d]: %p\n", i+8, idx, vm->vm_table_locked.vm_teardown_vcpu_addrs[idx]);
 		}
 	} else {
 		ghost_printf(GHOST_MISSING_FIELD "\n");
@@ -1167,13 +1167,13 @@ void ghost_dump_globals(struct ghost_constant_globals *globals)
 // EXPORTED ghost_types_aux.h
 void ghost_dump_regs(struct ghost_registers *regs, u64 i)
 {
-	ghost_printf("%Iregs[cpu:%d]:<TODO>\n", i, hyp_smp_processor_id());
+	ghost_printf_ext("%Iregs[cpu:%d]:<TODO>\n", i, hyp_smp_processor_id());
 }
 
 // EXPORTED ghost_types_aux.h
 void ghost_dump_loaded_vcpu_status(struct ghost_loaded_vcpu_status *loaded_vcpu_status, u64 i)
 {
-	ghost_printf("%Iloaded_vcpu_status[cpu:%d]: ", i, hyp_smp_processor_id());
+	ghost_printf_ext("%Iloaded_vcpu_status[cpu:%d]: ", i, hyp_smp_processor_id());
 
 	if (!loaded_vcpu_status->loaded) {
 		ghost_printf("<no loaded vCPU>\n");
@@ -1185,7 +1185,7 @@ void ghost_dump_loaded_vcpu_status(struct ghost_loaded_vcpu_status *loaded_vcpu_
 // EXPORTED ghost_types_aux.h
 void ghost_dump_running_state(struct ghost_running_state *run, u64 i)
 {
-	ghost_printf("%Irun_state[cpu:%d]: ", i, hyp_smp_processor_id());
+	ghost_printf_ext("%Irun_state[cpu:%d]: ", i, hyp_smp_processor_id());
 
 	if (!run->guest_running) {
 		ghost_printf("<host running>\n");
@@ -1197,7 +1197,7 @@ void ghost_dump_running_state(struct ghost_running_state *run, u64 i)
 // EXPORTED ghost_types_aux.h
 void ghost_dump_host_regs(struct ghost_host_regs *host_regs, u64 i)
 {
-	ghost_printf("%Ihost regs: ", i);
+	ghost_printf_ext("%Ihost regs: ", i);
 
 	if (!host_regs->present) {
 		ghost_printf(GHOST_MISSING_FIELD "\n");
