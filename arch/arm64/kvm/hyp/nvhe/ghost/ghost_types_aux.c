@@ -735,7 +735,7 @@ void check_abstraction_equals_all(struct ghost_state *gc, struct ghost_state *gr
 	GHOST_LOG_CONTEXT_ENTER();
 	trace_ghost_enter(GHOST_TRACE_POST_CHECK);
 
-#ifdef CONFIG_NVHE_GHOST_DIFF
+#if defined(CONFIG_NVHE_GHOST_DIFF) && !defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL_LOG_ONLY)
 	if (__this_cpu_read(ghost_print_this_hypercall))
 		post_dump_diff(gc, gr_post, gr_pre);
 #endif /* CONFIG_NVHE_GHOST_DIFF */
@@ -1232,7 +1232,7 @@ void ghost_dump_state(struct ghost_state *g)
 }
 
 
-#ifdef CONFIG_NVHE_GHOST_DIFF
+#if defined(CONFIG_NVHE_GHOST_DIFF) && !defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL_LOG_ONLY)
 /*
  * Print the diff between the recorded pre concrete host pgtable state and recorded post pgtable state
  */
