@@ -216,16 +216,28 @@ static void record_abstraction_el2_sysregs(struct ghost_registers *gr)
 		gr->el2_sysregs[i].status = GHOST_ABSENT;
 
 	RECORD_EL2_SYSREG(gr->el2_sysregs, CNTVOFF_EL2);
-	RECORD_EL2_SYSREG(gr->el2_sysregs, DACR32_EL2);
-	RECORD_EL2_SYSREG(gr->el2_sysregs, IFSR32_EL2);
-	RECORD_EL2_SYSREG(gr->el2_sysregs, DBGVCR32_EL2);
+	if (  (read_sysreg(ID_AA64PFR0_EL1) >> ID_AA64PFR0_EL1_EL1_SHIFT)
+	    & ID_AA64PFR0_EL1_EL1_AARCH32) {
+		// Accessing these registers is undefined if EL1 doesn't
+		// support AArch32.
+		// TODO: do we actually care about these registers?
+		RECORD_EL2_SYSREG(gr->el2_sysregs, DACR32_EL2);
+		RECORD_EL2_SYSREG(gr->el2_sysregs, IFSR32_EL2);
+		RECORD_EL2_SYSREG(gr->el2_sysregs, DBGVCR32_EL2);
+	}
 	RECORD_EL2_SYSREG(gr->el2_sysregs, VPIDR_EL2);
 	RECORD_EL2_SYSREG(gr->el2_sysregs, VMPIDR_EL2);
 	RECORD_EL2_SYSREG(gr->el2_sysregs, SCTLR_EL2);
 	RECORD_EL2_SYSREG(gr->el2_sysregs, ACTLR_EL2);
 	RECORD_EL2_SYSREG(gr->el2_sysregs, HCR_EL2);
+
+	// TODO: if EL3 is implemented, accessing these registers can be
+	// undefined or trap to EL3 (depending on the configuration of
+	// an EL3 register).
+	// pKVM does access these two.
 	RECORD_EL2_SYSREG(gr->el2_sysregs, MDCR_EL2);
 	RECORD_EL2_SYSREG(gr->el2_sysregs, CPTR_EL2);
+
 	RECORD_EL2_SYSREG(gr->el2_sysregs, HSTR_EL2);
 	RECORD_EL2_SYSREG(gr->el2_sysregs, HACR_EL2);
 	RECORD_EL2_SYSREG(gr->el2_sysregs, TTBR0_EL2);
@@ -242,7 +254,11 @@ static void record_abstraction_el2_sysregs(struct ghost_registers *gr)
 	RECORD_EL2_SYSREG(gr->el2_sysregs, MAIR_EL2);
 	RECORD_EL2_SYSREG(gr->el2_sysregs, AMAIR_EL2);
 	RECORD_EL2_SYSREG(gr->el2_sysregs, VBAR_EL2);
+
+	// TODO: if EL3 is implemented, accessing this register
+	// is undefined, and pKVM does not access it.
 	RECORD_EL2_SYSREG(gr->el2_sysregs, RVBAR_EL2);
+
 	RECORD_EL2_SYSREG(gr->el2_sysregs, TPIDR_EL2);
 	RECORD_EL2_SYSREG(gr->el2_sysregs, CNTHCTL_EL2);
 	RECORD_EL2_SYSREG(gr->el2_sysregs, CNTHP_CTL_EL2);
