@@ -24,7 +24,9 @@ typedef _Bool bool;
 
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
 
-
+#define BITS 64
+#define BITMASK(h, l) \
+    (((~0UL) << (l)) & (~0UL >> (BITS - 1 - (h))))
 
 /* TODO(license) from: linux/include/uapi/linux/const.h */
 /* SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note */

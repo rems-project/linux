@@ -1,19 +1,116 @@
+#include "asm/memory.h"
+#include "picovm/prelude.h"
 #include <picovm/config.h>
 #include <picovm/picovm_pgtable.h>
 
-//  TODO(doc): we fix ia_bits
-struct picovm_pgtable {
-	u32 start_level;
-	pte_t *root;
+// TODO: how to import null and boolean true / false
+#define NULL ((void *)0)
+
+// TODO(note):based on linux/arch/arm64/kvm/hyp/pgtable.c::struct kvm_hyp_map_data
+struct picovm_hyp_map_data {
+	const u64 phys;
+	enum picovm_pgtable_prot prot;
 };
 
+// TODO(note):based on linux/arch/arm64/kvm/hyp/pgtable.c::struct kvm_pgtable_walk_data
+struct picovm_pgtable_walk_data {
+  struct picovm_pgtable_walker *walker;
+  const u64			start;
+	u64				addr;
+	const u64			end;
+};
 
-// TODO: pgtable walks
-/*
-	hyp_map_walker
-	
-*/
+// TODO(note):based on linux/arch/arm64/kvm/hyp/pgtable.c::static kvm_pgtable_idx(u64 addr, u32 level)
+static u32 picovm_pgtable_idx(u64 addr, u32 level)
+{
+	u64 shift = picovm_granule_shift(level);
+	u64 mask = BIT(PAGE_SHIFT - 3) - 1;
 
+	return (addr >> shift) & mask;
+}
+
+static int stage2_map_walker(const struct picovm_pgtable_visit_ctx *ctx)
+{
+  // TODO
+  return 0;
+}
+
+static int hyp_map_walker(const struct picovm_pgtable_visit_ctx *ctx)
+{
+  picovm_pte_t* ptep = ctx->ptep;
+  struct picovm_hyp_map_data *data = ctx->arg; 
+  phys_addr_t pa = data->phys + ctx->ofs;
+  picovm_pte_t new = pa | data->prot;
+  
+  *ptep = new;
+  return 0;
+}
+
+static int hyp_unmap_walker(const struct picovm_pgtable_visit_ctx *ctx)
+{
+  picovm_pte_t* ptep = ctx->ptep;
+  *ptep = 0;
+}
+
+picovm_pte_t* _picovm_pgtable_walk(struct picovm_pgtable *pgt, u64 ia) {
+  // Level 0
+  int pgd_idx = picovm_pgtable_idx(ia, 0);
+  picovm_pte_t pgd_desc = pgt->pgd[pgd_idx];
+  if ((pgd_desc & 0b11) != 0b11) {
+    return NULL;
+  }
+
+  phys_addr_t pud_phys = picovm_pte_to_phys(pgd_desc);
+  u64 *pud = phys_to_virt(pud_phys);
+
+  // Level 1
+  int pud_idx = picovm_pgtable_idx(ia, 1);
+  picovm_pte_t pud_desc = pud[pud_idx];
+  if ((pud_desc & 0b11) != 0b11) {
+    return NULL;
+  }
+
+  phys_addr_t pmd_phys = picovm_pte_to_phys(pud_desc);
+  u64 *pmd = phys_to_virt(pmd_phys);
+
+  // Level 2
+  int pmd_idx = picovm_pgtable_idx(ia, 2);
+  picovm_pte_t pmd_desc = pmd[pmd_idx];
+  if ((pmd_desc & 0b11) != 0b11) {
+    return NULL;
+  }
+
+  // Level 3
+  phys_addr_t pte_phys = picovm_pte_to_phys(pmd_desc);
+  picovm_pte_t *pte = phys_to_virt(pte_phys);
+  return &pte[picovm_pgtable_idx(ia, 3)];
+}
+
+// TODO(note):based on linux/arch/arm64/kvm/hyp/pgtable.c::int kvm_pgtable_walk(struct kvm_pgtable *pgt, u64 addr, u64 size,
+//		     struct kvm_pgtable_walker *walker)
+int picovm_pgtable_walk(struct picovm_pgtable *pgt, u64 addr, u64 size,
+		     struct picovm_pgtable_walker *walker)
+{
+  int r;
+  u64 start	= ALIGN_DOWN(addr, PAGE_SIZE);
+	u64 end	= PAGE_ALIGN(addr + size);
+
+  for (u64 cur = start; cur < end; cur += PAGE_SIZE) {
+    picovm_pte_t *ptep = _picovm_pgtable_walk(pgt, cur);
+    
+    struct picovm_pgtable_visit_ctx ctx = {
+      .ptep=ptep,
+      .arg=walker->arg,
+      .ofs=cur - start,
+    };
+
+    r = walker->cb(&ctx);
+    if (r) {
+      return -1;
+    }
+  }
+  return r;
+}
 
 // The control register for stage 2 of the EL1&0 translation regime.
 static inline u64 read_vtcr_el2(void)
@@ -128,10 +225,25 @@ int picovm_pgtable_stage2_map(struct picovm_pgtable *pgt, u64 addr, u64 size,
 	return 0;
 }
 
-
+// TODO(note):based on linux/arch/arm64/kvm/hyp/pgtable.c::int kvm_pgtable_hyp_map(struct picovm_pgtable *pgt, u64 addr, u64 size, u64 phys,
+//			enum picovm_pgtable_prot prot)
 int picovm_pgtable_hyp_map(struct picovm_pgtable *pgt, u64 addr, u64 size, u64 phys,
 			enum picovm_pgtable_prot prot)
 {
-	// TODO
-	return 0;
+  int ret;
+  struct picovm_hyp_map_data map_data = {
+		.phys	= ALIGN_DOWN(phys, PAGE_SIZE),
+    .prot = prot,
+	};
+
+	struct picovm_pgtable_walker walker = {
+		.cb	= hyp_map_walker,
+		.arg	= &map_data,
+	};
+
+	ret = picovm_pgtable_walk(pgt, addr, size, &walker);
+  dsb(ishst);
+	isb();
+
+	return ret;
 }
