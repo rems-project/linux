@@ -12,7 +12,6 @@
 
 typedef u64 picovm_pte_t;
 #define PICOVM_PTE_VALID BIT(0)
-#define PICOVM_PTE_TABLE BIT(1)
 
 #define PICOVM_PTE_ADDR_MASK BITMASK(47, PAGE_SHIFT)
 #define PICOVM_PHYS_INVALID (-1ULL)
@@ -44,13 +43,6 @@ static inline u64 picovm_granule_shift(u32 level)
 	return ARM64_HW_PGTABLE_LEVEL_SHIFT(level);
 }
 
-// TODO(note):based on linux/arch/arm64/include/asm/kvm_pgtable.h::struct kvm_pgtable
-struct picovm_pgtable {
-	u32 ia_bits;
-	u32 start_level;
-	picovm_pte_t *pgd;
-};
-
 // TODO(note): based on linux/arch/arm64/include/asm/kvm_pgtable.h::enum kvm_pgtable_prot
 enum picovm_pgtable_prot {
 	PICOVM_PGTABLE_PROT_X = BIT(0),
@@ -71,10 +63,17 @@ enum picovm_pgtable_prot {
 #define PICOVM_HOST_MEM_PROT PICOVM_PGTABLE_PROT_RWX
 #define PAGE_HYP PICOVM_PGTABLE_PROT_RW
 
+// TODO(note): based on linux/arch/arm64/include/asm/kvm_pgtable:typedef bool (*kvm_pgtable_force_pte_cb_t)(u64 addr, u64 end,
+//					   enum kvm_pgtable_prot prot);
+typedef bool (*picovm_pgtable_force_pte_cb_t)(u64 addr, u64 end,
+					   enum picovm_pgtable_prot prot);
+
 // TODO(note): based on linux/arch/arm64/include/asm/kvm_pgtable.h::struct kvm_pgtable_visit_ctx
 struct picovm_pgtable_visit_ctx {
 	picovm_pte_t *ptep;
+  picovm_pte_t old;
 	void *arg;
+  u64 addr;
 	u64 ofs;
 };
 
@@ -86,6 +85,16 @@ typedef int (*picovm_pgtable_visitor_fn_t)(
 struct picovm_pgtable_walker {
 	const picovm_pgtable_visitor_fn_t cb;
 	void *const arg;
+};
+
+// TODO(note):based on linux/arch/arm64/include/asm/kvm_pgtable.h::struct kvm_pgtable
+struct picovm_pgtable {
+	u32 ia_bits;
+	u32 start_level;
+	picovm_pte_t *pgd;
+
+  /* Stage-2 only */
+	struct picovm_s2_mmu			*mmu;
 };
 
 int picovm_pgtable_stage2_map(struct picovm_pgtable *pgt, u64 addr, u64 size,
