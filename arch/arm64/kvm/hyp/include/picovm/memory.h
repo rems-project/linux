@@ -31,8 +31,8 @@ extern s64 hyp_physvirt_offset;
 #define PAGE_ALIGN_DOWN(addr) 	ALIGN_DOWN(addr, PAGE_SIZE)
 
 
-// TODO(picovm) was a macro in NVHE
-static inline void* __hyp_va(phys_addr_t phys)
+// TODO(picovm) was a macro in NVHE called __hyp_va + an inline function
+static inline void* hyp_phys_to_virt(phys_addr_t phys)
 {
 	return (void*)(phys - hyp_physvirt_offset);
 }

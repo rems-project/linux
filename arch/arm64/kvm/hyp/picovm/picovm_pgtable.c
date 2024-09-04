@@ -1,9 +1,8 @@
-#include "asm/memory.h"
-#include "linux/rtnetlink.h"
-#include <asm/tlbflush.h>
-
-#include "picovm/prelude.h"
 #include <picovm/config.h>
+#include <picovm/prelude.h>
+#include <picovm/memory.h>
+#include <picovm/linux/barrier.h>
+#include <picovm/linux/tlbflush.h>
 #include <picovm/picovm_pgtable.h>
 
 // TODO: how to import null and boolean true / false
@@ -25,9 +24,10 @@ static bool stage2_pte_is_locked(picovm_pte_t pte)
 	return !picovm_pte_valid(pte) && (pte & PICOVM_INVALID_PTE_LOCKED);
 }
 
-static bool stage2_try_set_pte(const struct picovm_pgtable_visit_ctx *ctx, kvm_pte_t new)
+static bool stage2_try_set_pte(const struct picovm_pgtable_visit_ctx *ctx, picovm_pte_t new)
 {
   WRITE_ONCE(*ctx->ptep, new);
+  return true; // TODO: yeji fix me
 }
 
 // TODO(note):based on linux/arch/arm64/kvm/hyp/pgtable.c::struct kvm_stage2_map_data
@@ -45,8 +45,8 @@ struct picovm_hyp_map_data {
 
 // TODO(note):based on linux/arch/arm64/kvm/hyp/pgtable.c::struct kvm_pgtable_walk_data
 struct picovm_pgtable_walk_data {
-  struct picovm_pgtable_walker *walker;
-  const u64			start;
+	struct picovm_pgtable_walker *walker;
+	const u64			start;
 	u64				addr;
 	const u64			end;
 };
@@ -118,6 +118,7 @@ static int hyp_unmap_walker(const struct picovm_pgtable_visit_ctx *ctx)
 {
   picovm_pte_t* ptep = ctx->ptep;
   *ptep = 0;
+  return true; // TODO: yeji fix me
 }
 
 picovm_pte_t* _picovm_pgtable_walk(struct picovm_pgtable *pgt, u64 ia) {
@@ -129,7 +130,7 @@ picovm_pte_t* _picovm_pgtable_walk(struct picovm_pgtable *pgt, u64 ia) {
   }
 
   phys_addr_t pud_phys = picovm_pte_to_phys(pgd_desc);
-  u64 *pud = phys_to_virt(pud_phys);
+  u64 *pud = hyp_phys_to_virt(pud_phys);
 
   // Level 1
   int pud_idx = picovm_pgtable_idx(ia, 1);
@@ -139,7 +140,7 @@ picovm_pte_t* _picovm_pgtable_walk(struct picovm_pgtable *pgt, u64 ia) {
   }
 
   phys_addr_t pmd_phys = picovm_pte_to_phys(pud_desc);
-  u64 *pmd = phys_to_virt(pmd_phys);
+  u64 *pmd = hyp_phys_to_virt(pmd_phys);
 
   // Level 2
   int pmd_idx = picovm_pgtable_idx(ia, 2);
@@ -150,7 +151,7 @@ picovm_pte_t* _picovm_pgtable_walk(struct picovm_pgtable *pgt, u64 ia) {
 
   // Level 3
   phys_addr_t pte_phys = picovm_pte_to_phys(pmd_desc);
-  picovm_pte_t *pte = phys_to_virt(pte_phys);
+  picovm_pte_t *pte = hyp_phys_to_virt(pte_phys);
   return &pte[picovm_pgtable_idx(ia, 3)];
 }
 
@@ -254,7 +255,7 @@ int picovm_pgtable_stage2_init(struct picovm_pgtable *pgt)
 
 */
 
-
+	return 0;
 }
 
 

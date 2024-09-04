@@ -56,7 +56,7 @@ int __picovm_host_share_hyp(u64 pfn)
 {
 	int ret;
 	u64 host_addr = hyp_pfn_to_phys(pfn);
-	u64 hyp_addr = (u64)__hyp_va(host_addr);
+	u64 hyp_addr = (u64)hyp_phys_to_virt(host_addr);
 
 	picovm_lock_component();
 
@@ -90,4 +90,10 @@ do_share:
 unlock:
 	picovm_unlock_component();
 	return ret;
+}
+
+int __picovm_host_unshare_hyp(u64 pfn)
+{
+	// TODO
+	return 0;
 }

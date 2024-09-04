@@ -32,7 +32,6 @@
 bool picovm_initialized;
 
 
-// DEFINE_PER_CPU(struct kvm_nvhe_init_params, kvm_init_params);
 
 
 

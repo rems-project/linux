@@ -20,13 +20,17 @@ HOST_EXTRACFLAGS += -I$(objtree)/include
 lib-objs := clear_page.o copy_page.o memcpy.o memset.o
 lib-objs := $(addprefix ../../../lib/, $(lib-objs))
 
-hyp-obj-y := host.o hyp-main.o mem_protect.o
-# hyp-obj-y +=  ../pgtable.o
-hyp-obj-$(CONFIG_DEBUG_LIST) += list_debug.o
+hyp-obj-y := host.o hyp-main.o mem_protect.o mm.o picovm_pgtable.o todo.o
 hyp-obj-y += $(lib-objs)
 
-ghost-lib-objs := strcmp.o strlen.o
-hyp-obj-$(CONFIG_NVHE_GHOST_SPEC) += $(addprefix ../../../lib/, $(ghost-lib-objs))
+# NVHE files we reuse
+nvhe-objs := hyp-init.o stacktrace.o hyp-smp.o sys_regs.o psci-relay.o
+hyp-obj-y += ${addprefix ../nvhe/, $(nvhe-objs)}
+
+hyp-obj-y += ../aarch32.o ../entry.o ../hyp-entry.o ../exception.o
+
+# ghost-lib-objs := strcmp.o strlen.o
+# hyp-obj-$(CONFIG_NVHE_GHOST_SPEC) += $(addprefix ../../../lib/, $(ghost-lib-objs))
 
 ##
 ## Build rules for compiling nVHE hyp code

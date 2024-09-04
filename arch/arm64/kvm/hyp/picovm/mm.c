@@ -3,7 +3,17 @@
 #include <picovm/spinlock.h>
 #include <picovm/picovm_pgtable.h>
 
+#include <picovm/linux/memblock.h>
+
 struct picovm_pgtable picovm_pgtable;
+
+// TODO: this comes from arch/arm64/include/asm/kvm_pkvm.h
+// need to make sure this does not go out of sync somehow
+#define HYP_MEMBLOCK_REGIONS	128
+
+struct memblock_region hyp_memory[HYP_MEMBLOCK_REGIONS];
+unsigned int hyp_memblock_nr;
+
 
 int picovm_create_mappings_locked(void *from, void *to, enum picovm_pgtable_prot prot)
 {
