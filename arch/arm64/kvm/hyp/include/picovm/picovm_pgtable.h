@@ -4,11 +4,12 @@
 #include <picovm/prelude.h>
 
 // TODO(note): based on linux/arch/arm64/include/asm/kvm_pgtable.h
+#define PICOVM_PGTABLE_MAX_LEVELS		4U
+
 #define PAGE_SHIFT 12
 #define PAGE_ALIGN(addr) ALIGN(addr, PAGE_SIZE)
 
 #define ARM64_HW_PGTABLE_LEVEL_SHIFT(n) ((PAGE_SHIFT - 3) * (4 - (n)) + 3)
-#define PICOVM_PGTABLE_MAX_LEVELS 4U
 
 typedef u64 picovm_pte_t;
 #define PICOVM_PTE_VALID BIT(0)
@@ -23,9 +24,9 @@ static inline bool picovm_pte_valid(picovm_pte_t pte)
 }
 
 // TODO(note):based on linux/arch/arm64/include/asm/kvm_pgtable.h::static inline u64 kvm_pte_to_phys
-static inline u64 picovm_pte_to_phys(picovm_pte_t pte)
+static inline phys_addr_t picovm_pte_to_phys(picovm_pte_t pte)
 {
-	u64 pa = pte & PICOVM_PTE_ADDR_MASK;
+	phys_addr_t pa = pte & PICOVM_PTE_ADDR_MASK;
 	return pa;
 }
 
@@ -102,5 +103,8 @@ int picovm_pgtable_stage2_map(struct picovm_pgtable *pgt, u64 addr, u64 size,
 
 int picovm_pgtable_hyp_map(struct picovm_pgtable *pgt, u64 addr, u64 size,
 			   u64 phys, enum picovm_pgtable_prot prot);
+
+int picovm_pgtable_hyp_unmap(struct picovm_pgtable *pgt, u64 addr, u64 size);
+
 
 #endif /* __PICOV_PGTABLE_H */

@@ -4,6 +4,7 @@
 #define __PICOVM_MM_H
 #include <picovm/picovm_pgtable.h>
 
+extern struct kvm_pgtable pkvm_pgtable;
 int picovm_create_mappings_locked(void *from, void *to, enum picovm_pgtable_prot prot);
 
 #endif /* __PICOVM_MM_H */

@@ -94,6 +94,37 @@ unlock:
 
 int __picovm_host_unshare_hyp(u64 pfn)
 {
+	int ret;
+	u64 host_addr = hyp_pfn_to_phys(pfn);
+	u64 hyp_addr = (u64)hyp_phys_to_virt(host_addr);
+
+	picovm_lock_component();
+
+	ret = __host_check_page_state_range(host_addr, PAGE_SIZE, PICOVM_PAGE_SHARED_OWNED);
+	if (ret)
+		goto unlock;
+
+	if ( !(IS_ENABLED(CONFIG_NVHE_EL2_DEBUG)) )
+		goto do_unshare;
+
+	ret = __hyp_check_page_state_range(hyp_addr, PAGE_SIZE, PICOVM_PAGE_SHARED_BORROWED);
+	if (ret)
+		goto unlock;
+
+do_unshare:
+	// BEGIN WARN_ON()
+	ret = __host_set_page_state_range(host_addr, PAGE_SIZE, PICOVM_PAGE_OWNED);
+	if (ret)
+		goto unlock;
+
+	{
+    ret = picovm_pgtable_hyp_unmap(&pkvm_pgtable, hyp_addr, PAGE_SIZE);
+	}
+	// END WARN_ON()
+unlock:
+	picovm_unlock_component();
+	return ret;
+
 	// TODO
 	return 0;
 }

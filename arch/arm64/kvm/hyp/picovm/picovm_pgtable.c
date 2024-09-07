@@ -13,22 +13,6 @@
 #define PICOVM_PTE_TYPE_BLOCK		0
 #define PICOVM_PTE_TYPE_PAGE		1
 #define PICOVM_PTE_TYPE_TABLE		1
-/*
- * Used to indicate a pte for which a 'break-before-make' sequence is in
- * progress.
- */
-#define PICOVM_INVALID_PTE_LOCKED		BIT(10)
-
-static bool stage2_pte_is_locked(picovm_pte_t pte)
-{
-	return !picovm_pte_valid(pte) && (pte & PICOVM_INVALID_PTE_LOCKED);
-}
-
-static bool stage2_try_set_pte(const struct picovm_pgtable_visit_ctx *ctx, picovm_pte_t new)
-{
-  WRITE_ONCE(*ctx->ptep, new);
-  return true; // TODO: yeji fix me
-}
 
 // TODO(note):based on linux/arch/arm64/kvm/hyp/pgtable.c::struct kvm_stage2_map_data
 struct picovm_stage2_map_data {
@@ -94,7 +78,7 @@ static int stage2_map_walker(const struct picovm_pgtable_visit_ctx *ctx)
   phys_addr_t pa = data->phys + ctx->ofs;
   picovm_pte_t new = pa | data->prot;
  
-  WRITE_ONCE(*ctx->ptep, PICOVM_INVALID_PTE_LOCKED);
+  WRITE_ONCE(ptep, 0);
   ret = break_pte(ctx);
   smp_store_release(ctx->ptep, new);
   return 0;
@@ -102,57 +86,49 @@ static int stage2_map_walker(const struct picovm_pgtable_visit_ctx *ctx)
 
 static int hyp_map_walker(const struct picovm_pgtable_visit_ctx *ctx)
 {
-  int ret;
   picovm_pte_t* ptep = ctx->ptep;
   struct picovm_hyp_map_data *data = ctx->arg; 
   phys_addr_t pa = data->phys + ctx->ofs;
   picovm_pte_t new = pa | data->prot;
 
-  WRITE_ONCE(*ctx->ptep, PICOVM_INVALID_PTE_LOCKED);
-  ret = break_pte(ctx);
-  smp_store_release(ctx->ptep, new);
+  smp_store_release(ptep, new);
   return 0;
 }
 
 static int hyp_unmap_walker(const struct picovm_pgtable_visit_ctx *ctx)
 {
   picovm_pte_t* ptep = ctx->ptep;
-  *ptep = 0;
-  return true; // TODO: yeji fix me
+  WRITE_ONCE(*ptep, 0);
+  return 0;
 }
 
 picovm_pte_t* _picovm_pgtable_walk(struct picovm_pgtable *pgt, u64 ia) {
+  int level, idx;
+  picovm_pte_t pte;
+  phys_addr_t child_phys;
+  u64 *childp;
+
   // Level 0
-  int pgd_idx = picovm_pgtable_idx(ia, 0);
-  picovm_pte_t pgd_desc = pgt->pgd[pgd_idx];
-  if (picovm_is_pte_invalid_or_block(pgd_desc)) {
+  idx = picovm_pgtable_idx(ia, 0);
+  pte = pgt->pgd[idx];
+  if (picovm_is_pte_invalid_or_block(pte)) {
     return NULL;
   }
+  child_phys = picovm_pte_to_phys(pte);
+  childp = hyp_phys_to_virt(child_phys);
 
-  phys_addr_t pud_phys = picovm_pte_to_phys(pgd_desc);
-  u64 *pud = hyp_phys_to_virt(pud_phys);
-
-  // Level 1
-  int pud_idx = picovm_pgtable_idx(ia, 1);
-  picovm_pte_t pud_desc = pud[pud_idx];
-  if (picovm_is_pte_invalid_or_block(pud_desc)) {
-    return NULL;
+  // Walkk down to PICOVM_PGTABLE_MAX_LEVELS-1
+  for (level = 1; level < PICOVM_PGTABLE_MAX_LEVELS-1; level++) {
+    int idx = picovm_pgtable_idx(ia, level);
+    pte = childp[idx];
+    if (picovm_is_pte_invalid_or_block(pte)) {
+      return NULL;
+    }
+    child_phys = picovm_pte_to_phys(pte);
+    childp = hyp_phys_to_virt(child_phys);
   }
 
-  phys_addr_t pmd_phys = picovm_pte_to_phys(pud_desc);
-  u64 *pmd = hyp_phys_to_virt(pmd_phys);
-
-  // Level 2
-  int pmd_idx = picovm_pgtable_idx(ia, 2);
-  picovm_pte_t pmd_desc = pmd[pmd_idx];
-  if (picovm_is_pte_invalid_or_block(pmd_desc)) {
-    return NULL;
-  }
-
-  // Level 3
-  phys_addr_t pte_phys = picovm_pte_to_phys(pmd_desc);
-  picovm_pte_t *pte = hyp_phys_to_virt(pte_phys);
-  return &pte[picovm_pgtable_idx(ia, 3)];
+  return &childp[picovm_pgtable_idx(ia, PICOVM_PGTABLE_MAX_LEVELS-1)];
 }
 
 // TODO(note):based on linux/arch/arm64/kvm/hyp/pgtable.c::int kvm_pgtable_walk(struct kvm_pgtable *pgt, u64 addr, u64 size,
@@ -259,36 +235,6 @@ int picovm_pgtable_stage2_init(struct picovm_pgtable *pgt)
 }
 
 
-/*
-TODO: remove this comment
-
- * kvm_pgtable_stage2_map() - Install a mapping in a guest stage-2 page-table.
- * @pgt:	Page-table structure initialised by kvm_pgtable_stage2_init*().
- * @addr:	Intermediate physical address at which to place the mapping.
- * @size:	Size of the mapping.
- * @phys:	Physical address of the memory to map.
- * @prot:	Permissions and attributes for the mapping.
- *
- * The offset of @addr within a page is ignored, @size is rounded-up to
- * the next page boundary and @phys is rounded-down to the previous page
- * boundary.
- *
- * If device attributes are not explicitly requested in @prot, then the
- * mapping will be normal, cacheable.
- *
- * Note that the update of a valid leaf PTE in this function will be aborted,
- * if it's trying to recreate the exact same mapping or only change the access
- * permissions. Instead, the vCPU will exit one more time from guest if still
- * needed and then go through the path of relaxing permissions.
- *
- * Note that this function will both coalesce existing table entries and split
- * existing block mappings, relying on page-faults to fault back areas outside
- * of the new mapping lazily.
- *
- * Return: 0 on success, negative error code on failure.
-
-*/
-
 // TODO(note):based on linux/arch/arm64/kvm/hyp/pgtable.c::int kvm_pgtable_stage2_map(struct picovm_pgtable *pgt, u64 addr, u64 size, 
 //      u64 phys, enum kvm_pgtable_prot prot, void *mc, enum kvm_pgtable_walk_flags flags)
 int picovm_pgtable_stage2_map(struct picovm_pgtable *pgt, u64 addr, u64 size,
@@ -331,4 +277,19 @@ int picovm_pgtable_hyp_map(struct picovm_pgtable *pgt, u64 addr, u64 size, u64 p
 	isb();
 
 	return ret;
+}
+
+int picovm_pgtable_hyp_unmap(struct picovm_pgtable *pgt, u64 addr, u64 size)
+{
+  int ret;
+  
+  struct picovm_pgtable_walker walker = {
+    .cb = hyp_unmap_walker,
+  };
+
+  ret = picovm_pgtable_walk(pgt, addr, size, &walker);
+  dsb(ishst);
+	isb();
+  
+  return 0;
 }
