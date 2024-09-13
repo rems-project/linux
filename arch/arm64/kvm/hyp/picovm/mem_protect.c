@@ -118,7 +118,7 @@ do_unshare:
 		goto unlock;
 
 	{
-    ret = picovm_pgtable_hyp_unmap(&pkvm_pgtable, hyp_addr, PAGE_SIZE);
+    ret = picovm_pgtable_hyp_unmap(&picovm_pgtable, hyp_addr, PAGE_SIZE);
 	}
 	// END WARN_ON()
 unlock:
