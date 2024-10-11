@@ -47,7 +47,7 @@ static int __pkvm_create_mappings(unsigned long start, unsigned long size,
 
 	hyp_spin_lock(&pkvm_pgd_lock);
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-	ghost_simplified_model_step_lock(GHOST_SIMPLIFIED_LOCK, hyp_virt_to_phys(&pkvm_pgd_lock));
+	ghost_simplified_model_step_lock(hyp_virt_to_phys(&pkvm_pgd_lock));
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	err = kvm_pgtable_hyp_map(&pkvm_pgtable, start, size, phys, prot);
 
@@ -55,7 +55,7 @@ static int __pkvm_create_mappings(unsigned long start, unsigned long size,
 	if (!err)
 		ghost_record_mapping_req(start, size, phys, prot, kind);
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-	ghost_simplified_model_step_lock(GHOST_SIMPLIFIED_UNLOCK, hyp_virt_to_phys(&pkvm_pgd_lock));
+	ghost_simplified_model_step_unlock(hyp_virt_to_phys(&pkvm_pgd_lock));
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 
@@ -81,7 +81,7 @@ int pkvm_alloc_private_va_range(size_t size, unsigned long *haddr)
 
 	hyp_spin_lock(&pkvm_pgd_lock);
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-	ghost_simplified_model_step_lock(GHOST_SIMPLIFIED_LOCK, hyp_virt_to_phys(&pkvm_pgd_lock));
+	ghost_simplified_model_step_lock(hyp_virt_to_phys(&pkvm_pgd_lock));
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 
 	/* Align the allocation based on the order of its size */
@@ -99,7 +99,7 @@ int pkvm_alloc_private_va_range(size_t size, unsigned long *haddr)
 	}
 
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-	ghost_simplified_model_step_lock(GHOST_SIMPLIFIED_UNLOCK, hyp_virt_to_phys(&pkvm_pgd_lock));
+	ghost_simplified_model_step_unlock(hyp_virt_to_phys(&pkvm_pgd_lock));
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	hyp_spin_unlock(&pkvm_pgd_lock);
 
@@ -171,14 +171,14 @@ int pkvm_create_mappings(void *from, void *to, enum kvm_pgtable_prot prot)
 
 	hyp_spin_lock(&pkvm_pgd_lock);
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-	ghost_simplified_model_step_lock(GHOST_SIMPLIFIED_LOCK, hyp_virt_to_phys(&pkvm_pgd_lock));
+	ghost_simplified_model_step_lock(hyp_virt_to_phys(&pkvm_pgd_lock));
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	ret = pkvm_create_mappings_locked(from, to, prot);
 #ifdef CONFIG_NVHE_GHOST_SPEC
 	if (!ret)
 		ghost_record_mapping_req_virt(from, to, prot, kind, cpu);
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-	ghost_simplified_model_step_lock(GHOST_SIMPLIFIED_UNLOCK, hyp_virt_to_phys(&pkvm_pgd_lock));
+	ghost_simplified_model_step_unlock(hyp_virt_to_phys(&pkvm_pgd_lock));
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_spin_unlock(&pkvm_pgd_lock);

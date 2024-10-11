@@ -96,7 +96,7 @@ static int divide_memory_pool(void *virt, unsigned long size)
 		return -ENOMEM;
 
 #if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
-	ghost_simplified_model_step_zalloc_exact(hyp_virt_to_phys(vmemmap_base), nr_pages);
+	ghost_simplified_model_step_init(hyp_virt_to_phys(vmemmap_base), nr_pages);
 #endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 
 	nr_pages = hyp_vm_table_pages();
@@ -108,7 +108,7 @@ static int divide_memory_pool(void *virt, unsigned long size)
 		return -ENOMEM;
 
 #if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
-	ghost_simplified_model_step_zalloc_exact(hyp_virt_to_phys(vm_table_base), nr_pages);
+	ghost_simplified_model_step_init(hyp_virt_to_phys(vm_table_base), nr_pages);
 #endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 
 	nr_pages = hyp_s1_pgtable_pages();
@@ -120,7 +120,7 @@ static int divide_memory_pool(void *virt, unsigned long size)
 		return -ENOMEM;
 
 #if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
-	ghost_simplified_model_step_zalloc_exact(hyp_virt_to_phys(hyp_pgt_base), nr_pages);
+	ghost_simplified_model_step_init(hyp_virt_to_phys(hyp_pgt_base), nr_pages);
 #endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 
 	nr_pages = host_s2_pgtable_pages();
@@ -132,7 +132,7 @@ static int divide_memory_pool(void *virt, unsigned long size)
 		return -ENOMEM;
 
 #if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
-	ghost_simplified_model_step_zalloc_exact(hyp_virt_to_phys(host_s2_pgt_base), nr_pages);
+	ghost_simplified_model_step_init(hyp_virt_to_phys(host_s2_pgt_base), nr_pages);
 #endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 
 	return 0;
@@ -248,7 +248,7 @@ static int recreate_hyp_mappings(phys_addr_t phys, unsigned long size,
 		 */
 		hyp_spin_lock(&pkvm_pgd_lock);
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-	ghost_simplified_model_step_lock(GHOST_SIMPLIFIED_LOCK, hyp_virt_to_phys(&pkvm_pgd_lock));
+	ghost_simplified_model_step_lock(hyp_virt_to_phys(&pkvm_pgd_lock));
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 		ret = kvm_pgtable_hyp_map(&pkvm_pgtable, hyp_addr + PAGE_SIZE,
 					EL2_STACKSIZE, params->stack_pa, PAGE_HYP);
@@ -257,7 +257,7 @@ static int recreate_hyp_mappings(phys_addr_t phys, unsigned long size,
 		ghost_record_mapping_req(hyp_addr + PAGE_SIZE,
 					EL2_STACKSIZE, params->stack_pa, PAGE_HYP, HYP_STACKS);
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-	ghost_simplified_model_step_lock(GHOST_SIMPLIFIED_UNLOCK, hyp_virt_to_phys(&pkvm_pgd_lock));
+	ghost_simplified_model_step_unlock(hyp_virt_to_phys(&pkvm_pgd_lock));
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 
@@ -417,6 +417,11 @@ void __noreturn __pkvm_init_finalise(void)
 	int ret;
 
 #ifdef CONFIG_NVHE_GHOST_SPEC
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	u64 sm_size = PAGE_ALIGN(2 * sizeof(struct ghost_simplified_model_state));
+	unsigned long sm_virt;
+#endif
+
 	GHOST_LOG_CONTEXT_ENTER();
 
 	if (ghost_print_on("setup")) {
@@ -472,8 +477,6 @@ void __noreturn __pkvm_init_finalise(void)
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
 	/* have to do the initial simplified model setup before recording the global pKVM pgtable state */
 	GHOST_LOG(pkvm_pgtable.start_level, u32);
-	u64 sm_size = PAGE_ALIGN(2 * sizeof(struct ghost_simplified_model_state));
-	unsigned long sm_virt;
 	// carve out some space just for us at the end, and hope it doesn't prevent the host making progress too much
 	BUG_ON(__pkvm_create_private_mapping(ghost__pkvm_init_phys+ghost__pkvm_init_size-sm_size, sm_size, PAGE_HYP, &sm_virt, HYP_WORKSPACE));
 	initialise_ghost_simplified_model(ghost__pkvm_init_phys, ghost__pkvm_init_size, sm_virt, sm_size);
@@ -509,10 +512,11 @@ int __pkvm_init(phys_addr_t phys, unsigned long size, unsigned long nr_cpus,
 	int ret;
 
 #ifdef CONFIG_NVHE_GHOST_SPEC
-	GHOST_LOG_CONTEXT_ENTER();
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
 	u64 sm_size = PAGE_ALIGN(2 * sizeof(struct ghost_simplified_model_state));
 #endif
+
+	GHOST_LOG_CONTEXT_ENTER();
 
 	if (ghost_print_on("setup")) {
 		ghost_printf(

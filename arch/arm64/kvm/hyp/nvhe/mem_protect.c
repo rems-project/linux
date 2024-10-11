@@ -57,7 +57,7 @@ static void guest_lock_component(struct pkvm_hyp_vm *vm)
 {
 	hyp_spin_lock(&vm->lock);
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-	ghost_simplified_model_step_lock(GHOST_SIMPLIFIED_LOCK, hyp_virt_to_phys(&vm->lock));
+	ghost_simplified_model_step_lock(hyp_virt_to_phys(&vm->lock));
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	current_vm = vm;
 #ifdef CONFIG_NVHE_GHOST_SPEC
@@ -72,7 +72,7 @@ static void guest_unlock_component(struct pkvm_hyp_vm *vm)
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 	current_vm = NULL;
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-	ghost_simplified_model_step_lock(GHOST_SIMPLIFIED_UNLOCK, hyp_virt_to_phys(&vm->lock));
+	ghost_simplified_model_step_unlock(hyp_virt_to_phys(&vm->lock));
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	hyp_spin_unlock(&vm->lock);
 }
@@ -82,7 +82,7 @@ static void host_lock_component(void)
 	hyp_spin_lock(&host_mmu.lock);
 #ifdef CONFIG_NVHE_GHOST_SPEC
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-	ghost_simplified_model_step_lock(GHOST_SIMPLIFIED_LOCK, hyp_virt_to_phys(&host_mmu.lock));
+	ghost_simplified_model_step_lock(hyp_virt_to_phys(&host_mmu.lock));
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 #ifdef CONFIG_NVHE_GHOST_SPEC_DUMP_STATE_RAW_HOST
 	if (__this_cpu_read(ghost_print_this_hypercall)) {
@@ -113,7 +113,7 @@ static void host_unlock_component(void)
 #endif /* CONFIG_NVHE_GHOST_SPEC_DUMP_STATE_RAW_HOST */
 	record_and_copy_abstraction_host_post();
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-	ghost_simplified_model_step_lock(GHOST_SIMPLIFIED_UNLOCK, hyp_virt_to_phys(&host_mmu.lock));
+	ghost_simplified_model_step_unlock(hyp_virt_to_phys(&host_mmu.lock));
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_spin_unlock(&host_mmu.lock);
@@ -126,7 +126,7 @@ static void hyp_lock_component(void)
 	hyp_spin_lock(&pkvm_pgd_lock);
 #ifdef CONFIG_NVHE_GHOST_SPEC
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-	ghost_simplified_model_step_lock(GHOST_SIMPLIFIED_LOCK, hyp_virt_to_phys(&pkvm_pgd_lock));
+	ghost_simplified_model_step_lock(hyp_virt_to_phys(&pkvm_pgd_lock));
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	record_and_check_abstraction_pkvm_pre();
 #endif /* CONFIG_NVHE_GHOST_SPEC */
@@ -137,7 +137,7 @@ static void hyp_unlock_component(void)
 #ifdef CONFIG_NVHE_GHOST_SPEC
 	record_and_copy_abstraction_pkvm_post();
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-	ghost_simplified_model_step_lock(GHOST_SIMPLIFIED_UNLOCK, hyp_virt_to_phys(&pkvm_pgd_lock));
+	ghost_simplified_model_step_unlock(hyp_virt_to_phys(&pkvm_pgd_lock));
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_spin_unlock(&pkvm_pgd_lock);
@@ -284,7 +284,7 @@ static void *guest_s2_zalloc_page(void *mc)
 
 	memset(addr, 0, PAGE_SIZE);
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-	ghost_simplified_model_step_write(GHOST_MEMSET_PAGE, hyp_virt_to_phys(addr), 0);
+	ghost_simplified_model_step_memset(hyp_virt_to_phys(addr), 0, PAGE_SIZE);
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	p = hyp_virt_to_page(addr);
 	memset(p, 0, sizeof(*p));
@@ -1980,7 +1980,7 @@ static int hyp_zero_page(phys_addr_t phys)
 
 	memset(addr, 0, PAGE_SIZE);
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-	ghost_simplified_model_step_write(GHOST_MEMSET_PAGE, hyp_virt_to_phys(addr), 0);
+	ghost_simplified_model_step_memset(hyp_virt_to_phys(addr), 0, PAGE_SIZE);
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 
 	/*

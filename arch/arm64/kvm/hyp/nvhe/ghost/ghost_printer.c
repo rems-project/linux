@@ -308,7 +308,7 @@ extern int kvm_nvhe_sym(gp_print_sm_trans)(gp_stream_t *out, struct ghost_simpli
 extern int kvm_nvhe_sym(gp_print_sm_pte_state)(gp_stream_t *out, struct sm_pte_state *st);
 extern int kvm_nvhe_sym(gp_print_sm_loc)(gp_stream_t *out, struct sm_location *loc);
 extern int kvm_nvhe_sym(gp_print_sm_state)(gp_stream_t *out, struct ghost_simplified_model_state *s);
-extern int kvm_nvhe_sym(gp_print_sm_locks)(gp_stream_t *out, struct owner_locks *locks);
+extern int kvm_nvhe_sym(gp_print_sm_locks)(gp_stream_t *out, struct lock_owner_map *locks);
 extern int kvm_nvhe_sym(gp_print_sm_blob_info)(gp_stream_t *out, struct ghost_memory_blob *b);
 extern int kvm_nvhe_sym(gp_print_sm_decoded_tlbi)(gp_stream_t *out, struct sm_tlbi_op *tlbi);
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
@@ -360,7 +360,7 @@ int put_ghost_obj(gp_stream_t *out, char **p, u64 arg0, u64 arg1)
 	} else if (GP_CASE("sm_state")) {
 		return kvm_nvhe_sym(gp_print_sm_state)(out, (struct ghost_simplified_model_state*)arg0);
 	} else if (GP_CASE("sm_locks")) {
-		return kvm_nvhe_sym(gp_print_sm_locks)(out, (struct owner_locks *) arg0);
+		return kvm_nvhe_sym(gp_print_sm_locks)(out, (struct lock_owner_map *) arg0);
 	} else if (GP_CASE("sm_tlbi")) {
 		return kvm_nvhe_sym(gp_print_sm_decoded_tlbi)(out, (struct sm_tlbi_op*)arg0);
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */

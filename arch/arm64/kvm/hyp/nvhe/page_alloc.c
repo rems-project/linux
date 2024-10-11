@@ -108,9 +108,7 @@ static void __hyp_attach_page(struct hyp_pool *pool,
 
 	memset(hyp_page_to_virt(p), 0, PAGE_SIZE << p->order);
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-	for (int i = 0; i < 1 << p->order; i++) {
-		ghost_simplified_model_step_write(GHOST_MEMSET_PAGE, hyp_page_to_phys(p)+i*PAGE_SIZE, 0);
-	}
+	ghost_simplified_model_step_memset(hyp_page_to_phys(p), 0, PAGE_SIZE << p->order);
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 
 	/* Skip coalescing for 'external' pages being freed into the pool. */
