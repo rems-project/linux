@@ -15,6 +15,7 @@ static const char* kind_str[ALLOC_KIND_NR] = {
 	[ALLOC_VCPU]= "ALLOC_VCPU",
 	[ALLOC_VM]= "ALLOC_VM",
 	[ALLOC_KVM_CPU_CONTEXT]= "ALLOC_KVM_CPU_CONTEXT"
+	[ALLOC_CASEMATE] = "ALLOC_CASEMATE",
 };
 #endif
 

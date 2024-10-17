@@ -1,7 +1,7 @@
 #ifndef GHOST_ASSERTS_H
 #define GHOST_ASSERTS_H
 
-#include <asm-generic/bug.h>
+#include <linux/bug.h>
 #include <nvhe/ghost/ghost_context.h>
 
 // assertion to check invariants of the ghost instrumentation, which should never fail

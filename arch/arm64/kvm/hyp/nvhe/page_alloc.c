@@ -81,7 +81,7 @@ static inline void page_remove_from_list(struct hyp_page *p)
 	memset(node, 0, sizeof(*node));
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
 	for (u64 *p = (u64*)node; p < (u64*)node + sizeof(*node)/sizeof(u64); p += 1) {
-		ghost_simplified_model_step_write(WMO_plain, hyp_virt_to_phys(p), 0);
+		casemate_model_step_write(WMO_plain, hyp_virt_to_phys(p), 0);
 	}
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 }
@@ -108,7 +108,7 @@ static void __hyp_attach_page(struct hyp_pool *pool,
 
 	memset(hyp_page_to_virt(p), 0, PAGE_SIZE << p->order);
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-	ghost_simplified_model_step_memset(hyp_page_to_phys(p), 0, PAGE_SIZE << p->order);
+	casemate_model_step_memset(hyp_page_to_phys(p), 0, PAGE_SIZE << p->order);
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 
 	/* Skip coalescing for 'external' pages being freed into the pool. */

@@ -48,7 +48,11 @@
 
 struct host_mmu host_mmu;
 
+#ifdef CONFIG_NVHE_GHOST_SPEC
+/*static*/ struct hyp_pool host_s2_pool;
+#else /* CONFIG_NVHE_GHOST_SPEC */
 static struct hyp_pool host_s2_pool;
+#endif
 
 static DEFINE_PER_CPU(struct pkvm_hyp_vm *, __current_vm);
 #define current_vm (*this_cpu_ptr(&__current_vm))
@@ -57,7 +61,7 @@ static void guest_lock_component(struct pkvm_hyp_vm *vm)
 {
 	hyp_spin_lock(&vm->lock);
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-	ghost_simplified_model_step_lock(hyp_virt_to_phys(&vm->lock));
+	casemate_model_step_lock(hyp_virt_to_phys(&vm->lock));
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	current_vm = vm;
 #ifdef CONFIG_NVHE_GHOST_SPEC
@@ -72,7 +76,7 @@ static void guest_unlock_component(struct pkvm_hyp_vm *vm)
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 	current_vm = NULL;
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-	ghost_simplified_model_step_unlock(hyp_virt_to_phys(&vm->lock));
+	casemate_model_step_unlock(hyp_virt_to_phys(&vm->lock));
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	hyp_spin_unlock(&vm->lock);
 }
@@ -82,7 +86,7 @@ static void host_lock_component(void)
 	hyp_spin_lock(&host_mmu.lock);
 #ifdef CONFIG_NVHE_GHOST_SPEC
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-	ghost_simplified_model_step_lock(hyp_virt_to_phys(&host_mmu.lock));
+	casemate_model_step_lock(hyp_virt_to_phys(&host_mmu.lock));
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 #ifdef CONFIG_NVHE_GHOST_SPEC_DUMP_STATE_RAW_HOST
 	if (__this_cpu_read(ghost_print_this_hypercall)) {
@@ -113,7 +117,7 @@ static void host_unlock_component(void)
 #endif /* CONFIG_NVHE_GHOST_SPEC_DUMP_STATE_RAW_HOST */
 	record_and_copy_abstraction_host_post();
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-	ghost_simplified_model_step_unlock(hyp_virt_to_phys(&host_mmu.lock));
+	casemate_model_step_unlock(hyp_virt_to_phys(&host_mmu.lock));
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_spin_unlock(&host_mmu.lock);
@@ -126,7 +130,7 @@ static void hyp_lock_component(void)
 	hyp_spin_lock(&pkvm_pgd_lock);
 #ifdef CONFIG_NVHE_GHOST_SPEC
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-	ghost_simplified_model_step_lock(hyp_virt_to_phys(&pkvm_pgd_lock));
+	casemate_model_step_lock(hyp_virt_to_phys(&pkvm_pgd_lock));
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	record_and_check_abstraction_pkvm_pre();
 #endif /* CONFIG_NVHE_GHOST_SPEC */
@@ -137,7 +141,7 @@ static void hyp_unlock_component(void)
 #ifdef CONFIG_NVHE_GHOST_SPEC
 	record_and_copy_abstraction_pkvm_post();
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-	ghost_simplified_model_step_unlock(hyp_virt_to_phys(&pkvm_pgd_lock));
+	casemate_model_step_unlock(hyp_virt_to_phys(&pkvm_pgd_lock));
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_spin_unlock(&pkvm_pgd_lock);
@@ -284,7 +288,7 @@ static void *guest_s2_zalloc_page(void *mc)
 
 	memset(addr, 0, PAGE_SIZE);
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-	ghost_simplified_model_step_memset(hyp_virt_to_phys(addr), 0, PAGE_SIZE);
+	casemate_model_step_memset(hyp_virt_to_phys(addr), 0, PAGE_SIZE);
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	p = hyp_virt_to_page(addr);
 	memset(p, 0, sizeof(*p));
@@ -344,7 +348,7 @@ int kvm_guest_prepare_stage2(struct pkvm_hyp_vm *vm, void *pgd)
 	ret = __kvm_pgtable_stage2_init(mmu->pgt, mmu, &vm->mm_ops, 0,
 					guest_stage2_force_pte_cb);
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-	ghost_simplified_model_step_hint(GHOST_HINT_SET_ROOT_LOCK, hyp_virt_to_phys(mmu->pgt->pgd), hyp_virt_to_phys(&vm->lock));
+	casemate_model_step_hint(GHOST_HINT_SET_ROOT_LOCK, hyp_virt_to_phys(mmu->pgt->pgd), hyp_virt_to_phys(&vm->lock));
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	guest_unlock_component(vm);
 	if (ret)
@@ -395,7 +399,7 @@ void reclaim_guest_pages(struct pkvm_hyp_vm *vm, struct kvm_hyp_memcache *mc)
 
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
 	// TODO: BS: fold this into the stage2 table free?
-	ghost_simplified_model_step_hint(GHOST_HINT_RELEASE_TABLE, vm->kvm.arch.mmu.pgd_phys, 0);
+	casemate_model_step_hint(GHOST_HINT_RELEASE_TABLE, vm->kvm.arch.mmu.pgd_phys, 0);
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 
 	/* Reclaim all guest pages and dump all pgtable pages in the hyp_pool */
@@ -448,15 +452,15 @@ int __pkvm_prot_finalize(void)
 	/* Invalidate stale HCR bits that may be cached in TLBs */
 	__tlbi(vmalls12e1);
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-	ghost_simplified_model_step_tlbi1(TLBI_vmalls12e1);
+	casemate_model_step_tlbi1(TLBI_vmalls12e1);
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	dsb(nsh);
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-	ghost_simplified_model_step_dsb(DSB_nsh);
+	casemate_model_step_dsb(DxB_nsh);
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	isb();
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-	ghost_simplified_model_step_isb();
+	casemate_model_step_isb();
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 
 #ifdef CONFIG_NVHE_GHOST_SPEC
@@ -1980,7 +1984,7 @@ static int hyp_zero_page(phys_addr_t phys)
 
 	memset(addr, 0, PAGE_SIZE);
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-	ghost_simplified_model_step_memset(hyp_virt_to_phys(addr), 0, PAGE_SIZE);
+	casemate_model_step_memset(hyp_virt_to_phys(addr), 0, PAGE_SIZE);
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 
 	/*

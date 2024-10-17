@@ -33,7 +33,7 @@ static void enter_vmid_context(struct kvm_s2_mmu *mmu,
 
 #if defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) && defined(CONFIG_NVHE_GHOST_SPEC_INJECT_FIX_stage2_try_break_pte_MISSING_DSB)
 	dsb(ish);
-	ghost_simplified_model_step_dsb(DSB_ish);
+	casemate_model_step_dsb(DxB_ish);
 #endif
 
 	/*
@@ -77,9 +77,9 @@ static void enter_vmid_context(struct kvm_s2_mmu *mmu,
 		dsb(ish);
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
 	if (nsh)
-		ghost_simplified_model_step_dsb(DSB_nsh);
+		casemate_model_step_dsb(DxB_nsh);
 	else
-		ghost_simplified_model_step_dsb(DSB_ish);
+		casemate_model_step_dsb(DxB_ish);
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 
 	if (cpus_have_final_cap(ARM64_WORKAROUND_SPECULATIVE_AT)) {
@@ -174,7 +174,7 @@ void __kvm_tlb_flush_vmid_ipa(struct kvm_s2_mmu *mmu,
 	ipa >>= 12;
 	__tlbi_level(ipas2e1is, ipa, level);
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-	ghost_simplified_model_step_tlbi3(TLBI_ipas2e1is, ipa, level);
+	casemate_model_step_tlbi3(TLBI_ipas2e1is, ipa, level);
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	/*
 	 * We have to ensure completion of the invalidation at Stage-2,
@@ -184,21 +184,21 @@ void __kvm_tlb_flush_vmid_ipa(struct kvm_s2_mmu *mmu,
 	 */
 	dsb(ish);
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-	ghost_simplified_model_step_dsb(DSB_ish);
+	casemate_model_step_dsb(DxB_ish);
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	__tlbi(vmalle1is);
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
 #ifndef CONFIG_NVHE_GHOST_SPEC_INJECT_ERROR___kvm_tlb_flush_vmid_ipa_MISSING_TLBI
-	ghost_simplified_model_step_tlbi1(TLBI_vmalle1is);
+	casemate_model_step_tlbi1(TLBI_vmalle1is);
 #endif /* CONFIG_NVHE_GHOST_SPEC_INJECT_ERROR___kvm_tlb_flush_vmid_ipa_MISSING_TLBI */
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	dsb(ish);
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-	ghost_simplified_model_step_dsb(DSB_ish);
+	casemate_model_step_dsb(DxB_ish);
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	isb();
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-	ghost_simplified_model_step_isb();
+	casemate_model_step_isb();
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 
 	/*
@@ -235,15 +235,15 @@ void __kvm_tlb_flush_vmid(struct kvm_s2_mmu *mmu)
 
 	__tlbi(vmalls12e1is);
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-	ghost_simplified_model_step_tlbi1(TLBI_vmalls12e1is);
+	casemate_model_step_tlbi1(TLBI_vmalls12e1is);
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	dsb(ish);
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-	ghost_simplified_model_step_dsb(DSB_ish);
+	casemate_model_step_dsb(DxB_ish);
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	isb();
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-	ghost_simplified_model_step_isb();
+	casemate_model_step_isb();
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 
 	exit_vmid_context(&cxt);
@@ -258,7 +258,7 @@ void __kvm_flush_cpu_context(struct kvm_s2_mmu *mmu)
 
 	__tlbi(vmalle1);
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-	ghost_simplified_model_step_tlbi1(TLBI_vmalle1);
+	casemate_model_step_tlbi1(TLBI_vmalle1);
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	asm volatile("ic iallu");
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
@@ -266,11 +266,11 @@ void __kvm_flush_cpu_context(struct kvm_s2_mmu *mmu)
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	dsb(nsh);
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-	ghost_simplified_model_step_dsb(DSB_nsh);
+	casemate_model_step_dsb(DxB_nsh);
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	isb();
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-	ghost_simplified_model_step_isb();
+	casemate_model_step_isb();
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 
 	exit_vmid_context(&cxt);
@@ -281,11 +281,11 @@ void __kvm_flush_vm_context(void)
 	/* Same remark as in __tlb_switch_to_guest() */
 	dsb(ish);
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-	ghost_simplified_model_step_dsb(DSB_ish);
+	casemate_model_step_dsb(DxB_ish);
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	__tlbi(alle1is);
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-	ghost_simplified_model_step_tlbi1(TLBI_alle1is);
+	casemate_model_step_tlbi1(TLBI_alle1is);
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 
 	/*
@@ -303,6 +303,6 @@ void __kvm_flush_vm_context(void)
 	dsb(ish);
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
 	// TODO: BS: no DSB in between tlbi and dsb ?
-	ghost_simplified_model_step_dsb(DSB_ish);
+	casemate_model_step_dsb(DxB_ish);
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 }

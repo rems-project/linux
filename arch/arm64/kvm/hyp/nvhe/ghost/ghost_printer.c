@@ -13,9 +13,6 @@
 #include <nvhe/ghost/ghost_pgtable.h>
 #include <nvhe/ghost/ghost_pfn_set.h>
 #include <nvhe/ghost/ghost_status.h>
-#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-#include <nvhe/ghost/ghost_simplified_model.h>
-#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 
 /*
  * The UART print stream
@@ -303,15 +300,6 @@ extern int gp_print_pfn_set(gp_stream_t *out, struct pfn_set *set);
 extern int gp_put_abstract_pgtable(gp_stream_t *out, abstract_pgtable *ap, u64 indent);
 extern int gp_put_status(gp_stream_t *out, enum ghost_status s);
 extern int gp_put_current_context_trace(gp_stream_t *out);
-#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-extern int kvm_nvhe_sym(gp_print_sm_trans)(gp_stream_t *out, struct ghost_simplified_model_transition *trans);
-extern int kvm_nvhe_sym(gp_print_sm_pte_state)(gp_stream_t *out, struct sm_pte_state *st);
-extern int kvm_nvhe_sym(gp_print_sm_loc)(gp_stream_t *out, struct sm_location *loc);
-extern int kvm_nvhe_sym(gp_print_sm_state)(gp_stream_t *out, struct ghost_simplified_model_state *s);
-extern int kvm_nvhe_sym(gp_print_sm_locks)(gp_stream_t *out, struct lock_owner_map *locks);
-extern int kvm_nvhe_sym(gp_print_sm_blob_info)(gp_stream_t *out, struct ghost_memory_blob *b);
-extern int kvm_nvhe_sym(gp_print_sm_decoded_tlbi)(gp_stream_t *out, struct sm_tlbi_op *tlbi);
-#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 
 static bool __gp_case(char **p, const char *name)
 {
@@ -346,24 +334,6 @@ int put_ghost_obj(gp_stream_t *out, char **p, u64 arg0, u64 arg1)
 		return gp_put_abstract_pgtable(out, (abstract_pgtable *)arg0, arg1);
 	} else if (GP_CASE("status")) {
 		return gp_put_status(out, (enum ghost_status)arg0);
-#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-	} else if (GP_CASE("sm_trans")) {
-		return kvm_nvhe_sym(gp_print_sm_trans)(out, (struct ghost_simplified_model_transition*)arg0);
-	} else if (GP_CASE("sm_pte_state")) {
-		return kvm_nvhe_sym(gp_print_sm_pte_state)(out, (struct sm_pte_state*)arg0);
-	} else if (GP_CASE("sm_loc")) {
-		return kvm_nvhe_sym(gp_print_sm_loc)(out, (struct sm_location*)arg0);
-#ifndef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL_LOG_ONLY
-	} else if (GP_CASE("sm_blob")) {
-		return kvm_nvhe_sym(gp_print_sm_blob_info)(out, (struct ghost_memory_blob*)arg0);
-#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL_LOG_ONLY */
-	} else if (GP_CASE("sm_state")) {
-		return kvm_nvhe_sym(gp_print_sm_state)(out, (struct ghost_simplified_model_state*)arg0);
-	} else if (GP_CASE("sm_locks")) {
-		return kvm_nvhe_sym(gp_print_sm_locks)(out, (struct lock_owner_map *) arg0);
-	} else if (GP_CASE("sm_tlbi")) {
-		return kvm_nvhe_sym(gp_print_sm_decoded_tlbi)(out, (struct sm_tlbi_op*)arg0);
-#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	} else {
 		return -EINVAL;
 	}

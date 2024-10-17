@@ -48,8 +48,18 @@ ghosts += ghost/ghost_alloc.o
 ghosts += ghost/ghost_control.o
 
 hyp-obj-$(CONFIG_NVHE_GHOST_SPEC) += $(ghosts)
-hyp-obj-$(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) += ghost/ghost_simplified_model.o
+hyp-obj-$(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) += ghost/ghost_sm_driver.o
 hyp-obj-$(CONFIG_NVHE_GHOST_DIFF) += ghost/ghost_abstraction_diff.o
+
+get-casemate:
+	git clone https://github.com/rems-project/casemate ghost/casemate
+.PHONY: get-casemate
+
+ifneq ($(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL),)
+  KBUILD_CFLAGS += -D__AARCH64__
+  CASEMATELIB = ghost/casemate/src/lib
+  include $(obj)/ghost/casemate/src/lib/Makefile.linux
+endif
 
 ghost-lib-objs := strcmp.o strlen.o
 hyp-obj-$(CONFIG_NVHE_GHOST_SPEC) += $(addprefix ../../../lib/, $(ghost-lib-objs))
