@@ -11,6 +11,7 @@ enum alloc_kind {
 	ALLOC_VCPU,
 	ALLOC_VM,
 	ALLOC_KVM_CPU_CONTEXT,
+	ALLOC_CASEMATE,
 	ALLOC_KIND_NR // keep this last
 };
 

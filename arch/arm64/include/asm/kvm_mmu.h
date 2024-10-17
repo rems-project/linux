@@ -304,7 +304,7 @@ static __always_inline void __load_stage2(struct kvm_s2_mmu *mmu,
 	write_sysreg(arch->vtcr, vtcr_el2);
 	write_sysreg(kvm_get_vttbr(mmu), vttbr_el2);
 #if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
-	ghost_simplified_model_step_msr(SYSREG_VTTBR, kvm_get_vttbr(mmu));
+	casemate_model_step_msr(SYSREG_VTTBR, kvm_get_vttbr(mmu));
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 
 	/*

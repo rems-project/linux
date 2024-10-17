@@ -19,6 +19,7 @@
 //#include <nvhe/ghost/ghost_check_pgtables.h>
 #include <nvhe/ghost/ghost_pgtable.h>
 #include <nvhe/ghost/ghost_control.h>
+#include <nvhe/ghost/ghost_asserts.h>
 
 #pragma GCC diagnostic ignored "-Wdeclaration-after-statement"
 
@@ -192,7 +193,7 @@ static void kvm_clear_pte(kvm_pte_t *ptep)
 	WRITE_ONCE(*ptep, 0);
 #if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
 #ifndef CONFIG_NVHE_GHOST_SPEC_INJECT_ERROR_kvm_clear_pte_MISSING_WRITE
-	ghost_simplified_model_step_write(WMO_plain, hyp_virt_to_phys(ptep), 0);
+	casemate_model_step_write(WMO_plain, hyp_virt_to_phys(ptep), 0);
 #endif /* CONFIG_NVHE_GHOST_SPEC_INJECT_ERROR_kvm_clear_pte_MISSING_WRITE */
 #endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 }
@@ -278,7 +279,7 @@ static inline int __kvm_pgtable_visit(struct kvm_pgtable_walk_data *data,
 	kvm_pte_t *ptep = kvm_dereference_pteref(data->walker, pteref);
 #if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
 	/* might be different to the other READ_ONCE below, but this is a best-effort sanity check anyway */
-	ghost_simplified_model_step_read(hyp_virt_to_phys(ptep), READ_ONCE(*ptep));
+	casemate_model_step_read(hyp_virt_to_phys(ptep), READ_ONCE(*ptep));
 #endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 	struct kvm_pgtable_visit_ctx ctx = {
 		.ptep	= ptep,
@@ -314,7 +315,7 @@ static inline int __kvm_pgtable_visit(struct kvm_pgtable_walk_data *data,
 	if (reload) {
 		ctx.old = READ_ONCE(*ptep);
 #if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
-	ghost_simplified_model_step_read(hyp_virt_to_phys(ctx.ptep), ctx.old);
+	casemate_model_step_read(hyp_virt_to_phys(ctx.ptep), ctx.old);
 #endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 		table = kvm_pte_table(ctx.old, level);
 	}
@@ -649,7 +650,7 @@ static bool hyp_map_walker_try_leaf(const struct kvm_pgtable_visit_ctx *ctx,
 
 	smp_store_release(ctx->ptep, new);
 #if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
-	ghost_simplified_model_step_write(WMO_release, hyp_virt_to_phys(ctx->ptep), new);
+	casemate_model_step_write(WMO_release, hyp_virt_to_phys(ctx->ptep), new);
 #endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 	return true;
 }
@@ -671,15 +672,15 @@ static int hyp_map_walker(const struct kvm_pgtable_visit_ctx *ctx,
 	if (!childp)
 		return -ENOMEM;
 #if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
-	ghost_simplified_model_step_init(hyp_virt_to_phys(childp), PAGE_SIZE);
-	ghost_simplified_model_step_hint(GHOST_HINT_SET_OWNER_ROOT, hyp_virt_to_phys(childp), hyp_virt_to_phys(pkvm_pgtable.pgd));
+	casemate_model_step_init(hyp_virt_to_phys(childp), PAGE_SIZE);
+	casemate_model_step_hint(GHOST_HINT_SET_OWNER_ROOT, hyp_virt_to_phys(childp), hyp_virt_to_phys(pkvm_pgtable.pgd));
 #endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 
 	new = kvm_init_table_pte(childp, mm_ops);
 	mm_ops->get_page(ctx->ptep);
 	smp_store_release(ctx->ptep, new);
 #if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
-	ghost_simplified_model_step_write(WMO_release, hyp_virt_to_phys(ctx->ptep), new);
+	casemate_model_step_write(WMO_release, hyp_virt_to_phys(ctx->ptep), new);
 #endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 
 	return 0;
@@ -705,11 +706,11 @@ int kvm_pgtable_hyp_map(struct kvm_pgtable *pgt, u64 addr, u64 size, u64 phys,
 	ret = kvm_pgtable_walk(pgt, addr, size, &walker);
 	dsb(ishst);
 #if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
-	ghost_simplified_model_step_dsb(DSB_ishst);
+	casemate_model_step_dsb(DxB_ishst);
 #endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 	isb();
 #if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
-	ghost_simplified_model_step_isb();
+	casemate_model_step_isb();
 #endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 	return ret;
 }
@@ -734,11 +735,11 @@ static int hyp_unmap_walker(const struct kvm_pgtable_visit_ctx *ctx,
 		kvm_clear_pte(ctx->ptep);
 		dsb(ishst);
 #if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
-	ghost_simplified_model_step_dsb(DSB_ishst);
+	casemate_model_step_dsb(DxB_ishst);
 #endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 		__tlbi_level(vae2is, __TLBI_VADDR(ctx->addr, 0), ctx->level);
 #if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
-	ghost_simplified_model_step_tlbi3(TLBI_vae2is, __TLBI_VADDR(ctx->addr, 0), ctx->level);
+	casemate_model_step_tlbi3(TLBI_vae2is, __TLBI_VADDR(ctx->addr, 0), ctx->level);
 #endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 	} else {
 		if (ctx->end - ctx->addr < granule)
@@ -747,22 +748,22 @@ static int hyp_unmap_walker(const struct kvm_pgtable_visit_ctx *ctx,
 		kvm_clear_pte(ctx->ptep);
 		dsb(ishst);
 #if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
-	ghost_simplified_model_step_dsb(DSB_ishst);
+	casemate_model_step_dsb(DxB_ishst);
 #endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 		__tlbi_level(vale2is, __TLBI_VADDR(ctx->addr, 0), ctx->level);
 #if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
-	ghost_simplified_model_step_tlbi3(TLBI_vale2is, __TLBI_VADDR(ctx->addr, 0), ctx->level);
+	casemate_model_step_tlbi3(TLBI_vale2is, __TLBI_VADDR(ctx->addr, 0), ctx->level);
 #endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 		*unmapped += granule;
 	}
 
 	dsb(ish);
 #if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
-	ghost_simplified_model_step_dsb(DSB_ish);
+	casemate_model_step_dsb(DxB_ish);
 #endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 	isb();
 #if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
-	ghost_simplified_model_step_isb();
+	casemate_model_step_isb();
 #endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 	mm_ops->put_page(ctx->ptep);
 
@@ -799,7 +800,7 @@ int kvm_pgtable_hyp_init(struct kvm_pgtable *pgt, u32 va_bits,
 
 
 #if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
-	ghost_simplified_model_step_init(hyp_virt_to_phys(pgt->pgd), PAGE_SIZE);
+	casemate_model_step_init(hyp_virt_to_phys(pgt->pgd), PAGE_SIZE);
 #endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 	pgt->ia_bits		= va_bits;
 	pgt->start_level	= KVM_PGTABLE_MAX_LEVELS - levels;
@@ -971,7 +972,7 @@ static bool stage2_try_set_pte(const struct kvm_pgtable_visit_ctx *ctx, kvm_pte_
 	if (!kvm_pgtable_walk_shared(ctx)) {
 		WRITE_ONCE(*ctx->ptep, new);
 #if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
-	ghost_simplified_model_step_write(WMO_plain, hyp_virt_to_phys(ctx->ptep), new);
+	casemate_model_step_write(WMO_plain, hyp_virt_to_phys(ctx->ptep), new);
 #endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 		return true;
 	}
@@ -1043,7 +1044,7 @@ static void stage2_make_pte(const struct kvm_pgtable_visit_ctx *ctx, kvm_pte_t n
 
 	smp_store_release(ctx->ptep, new);
 #if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
-	ghost_simplified_model_step_write(WMO_release, hyp_virt_to_phys(ctx->ptep), new);
+	casemate_model_step_write(WMO_release, hyp_virt_to_phys(ctx->ptep), new);
 #endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 }
 
@@ -1137,7 +1138,7 @@ static int stage2_map_walker_try_leaf(const struct kvm_pgtable_visit_ctx *ctx,
 	    !((ctx->old ^ new) & ~KVM_PTE_LEAF_ATTR_HI_SW)) {
 		WRITE_ONCE(*ctx->ptep, new);
 #if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
-	ghost_simplified_model_step_write(WMO_plain, hyp_virt_to_phys(ctx->ptep), new);
+	casemate_model_step_write(WMO_plain, hyp_virt_to_phys(ctx->ptep), new);
 #endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 		return 0;
 	}
@@ -1199,8 +1200,8 @@ static int stage2_map_walk_leaf(const struct kvm_pgtable_visit_ctx *ctx,
 	if (!childp)
 		return -ENOMEM;
 #if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
-	ghost_simplified_model_step_init(hyp_virt_to_phys(childp), PAGE_SIZE);
-	ghost_simplified_model_step_hint(GHOST_HINT_SET_OWNER_ROOT, hyp_virt_to_phys(childp), hyp_virt_to_phys(data->mmu->pgt->pgd));
+	casemate_model_step_init(hyp_virt_to_phys(childp), PAGE_SIZE);
+	casemate_model_step_hint(GHOST_HINT_SET_OWNER_ROOT, hyp_virt_to_phys(childp), hyp_virt_to_phys(data->mmu->pgt->pgd));
 #endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 
 	if (!stage2_try_break_pte(ctx, data->mmu)) {
@@ -1629,7 +1630,7 @@ int __kvm_pgtable_stage2_init(struct kvm_pgtable *pgt, struct kvm_s2_mmu *mmu,
 		return -ENOMEM;
 
 #if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
-	ghost_simplified_model_step_init(hyp_virt_to_phys(pgt->pgd), pgd_sz);
+	casemate_model_step_init(hyp_virt_to_phys(pgt->pgd), pgd_sz);
 #endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 	pgt->ia_bits		= ia_bits;
 	pgt->start_level	= start_level;

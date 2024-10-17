@@ -47,7 +47,7 @@ static int __pkvm_create_mappings(unsigned long start, unsigned long size,
 
 	hyp_spin_lock(&pkvm_pgd_lock);
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-	ghost_simplified_model_step_lock(hyp_virt_to_phys(&pkvm_pgd_lock));
+	casemate_model_step_lock(hyp_virt_to_phys(&pkvm_pgd_lock));
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	err = kvm_pgtable_hyp_map(&pkvm_pgtable, start, size, phys, prot);
 
@@ -55,7 +55,7 @@ static int __pkvm_create_mappings(unsigned long start, unsigned long size,
 	if (!err)
 		ghost_record_mapping_req(start, size, phys, prot, kind);
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-	ghost_simplified_model_step_unlock(hyp_virt_to_phys(&pkvm_pgd_lock));
+	casemate_model_step_unlock(hyp_virt_to_phys(&pkvm_pgd_lock));
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 
@@ -81,7 +81,7 @@ int pkvm_alloc_private_va_range(size_t size, unsigned long *haddr)
 
 	hyp_spin_lock(&pkvm_pgd_lock);
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-	ghost_simplified_model_step_lock(hyp_virt_to_phys(&pkvm_pgd_lock));
+	casemate_model_step_lock(hyp_virt_to_phys(&pkvm_pgd_lock));
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 
 	/* Align the allocation based on the order of its size */
@@ -99,7 +99,7 @@ int pkvm_alloc_private_va_range(size_t size, unsigned long *haddr)
 	}
 
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-	ghost_simplified_model_step_unlock(hyp_virt_to_phys(&pkvm_pgd_lock));
+	casemate_model_step_unlock(hyp_virt_to_phys(&pkvm_pgd_lock));
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	hyp_spin_unlock(&pkvm_pgd_lock);
 
@@ -171,14 +171,14 @@ int pkvm_create_mappings(void *from, void *to, enum kvm_pgtable_prot prot)
 
 	hyp_spin_lock(&pkvm_pgd_lock);
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-	ghost_simplified_model_step_lock(hyp_virt_to_phys(&pkvm_pgd_lock));
+	casemate_model_step_lock(hyp_virt_to_phys(&pkvm_pgd_lock));
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	ret = pkvm_create_mappings_locked(from, to, prot);
 #ifdef CONFIG_NVHE_GHOST_SPEC
 	if (!ret)
 		ghost_record_mapping_req_virt(from, to, prot, kind, cpu);
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-	ghost_simplified_model_step_unlock(hyp_virt_to_phys(&pkvm_pgd_lock));
+	casemate_model_step_unlock(hyp_virt_to_phys(&pkvm_pgd_lock));
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_spin_unlock(&pkvm_pgd_lock);
@@ -218,7 +218,7 @@ int hyp_back_vmemmap(phys_addr_t back)
 		memset(hyp_phys_to_virt(back), 0, size);
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
 		for (u64 p = back; p < back+size; p += sizeof(u64)) {
-			ghost_simplified_model_step_write(WMO_plain, (phys_addr_t)p, 0);
+			casemate_model_step_write(WMO_plain, (phys_addr_t)p, 0);
 		}
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 		back += size;
@@ -293,11 +293,11 @@ void *hyp_fixmap_map(phys_addr_t phys)
 	pte |= kvm_phys_to_pte(phys) | KVM_PTE_VALID;
 	WRITE_ONCE(*ptep, pte);
 #if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
-	ghost_simplified_model_step_write(WMO_plain, hyp_virt_to_phys(ptep), pte);
+	casemate_model_step_write(WMO_plain, hyp_virt_to_phys(ptep), pte);
 #endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 	dsb(ishst);
 #if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
-	ghost_simplified_model_step_dsb(DSB_ishst);
+	casemate_model_step_dsb(DxB_ishst);
 #endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 
 	return (void *)slot->addr;
@@ -311,7 +311,7 @@ static void fixmap_clear_slot(struct hyp_fixmap_slot *slot)
 #if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
 	u64 pte = *ptep & ~KVM_PTE_VALID;
 	WRITE_ONCE(*ptep, pte);
-	ghost_simplified_model_step_write(WMO_plain, hyp_virt_to_phys(ptep), pte);
+	casemate_model_step_write(WMO_plain, hyp_virt_to_phys(ptep), pte);
 #else /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 	WRITE_ONCE(*ptep, *ptep & ~KVM_PTE_VALID);
 #endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
@@ -327,19 +327,19 @@ static void fixmap_clear_slot(struct hyp_fixmap_slot *slot)
 	 */
 	dsb(ishst);
 #if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
-	ghost_simplified_model_step_dsb(DSB_ishst);
+	casemate_model_step_dsb(DxB_ishst);
 #endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 	__tlbi_level(vale2is, __TLBI_VADDR(addr, 0), (KVM_PGTABLE_MAX_LEVELS - 1));
 #if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
-	ghost_simplified_model_step_tlbi3(TLBI_vale2is, __TLBI_VADDR(addr, 0), (KVM_PGTABLE_MAX_LEVELS - 1));
+	casemate_model_step_tlbi3(TLBI_vale2is, __TLBI_VADDR(addr, 0), (KVM_PGTABLE_MAX_LEVELS - 1));
 #endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 	dsb(ish);
 #if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
-	ghost_simplified_model_step_dsb(DSB_ish);
+	casemate_model_step_dsb(DxB_ish);
 #endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 	isb();
 #if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
-	ghost_simplified_model_step_isb();
+	casemate_model_step_isb();
 #endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 }
 
@@ -359,7 +359,7 @@ static int __create_fixmap_slot_cb(const struct kvm_pgtable_visit_ctx *ctx,
 	slot->addr = ctx->addr;
 	slot->ptep = ctx->ptep;
 #if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
-		ghost_simplified_model_step_hint(GHOST_HINT_SET_PTE_THREAD_OWNER, hyp_virt_to_phys(slot->ptep), (u64)ctx->arg);
+		casemate_model_step_hint(GHOST_HINT_SET_PTE_THREAD_OWNER, hyp_virt_to_phys(slot->ptep), (u64)ctx->arg);
 #endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 
 	/*
@@ -481,7 +481,7 @@ void get_fixmap(void)
 	
 	for (int i = 0; i < hyp_nr_cpus; i++) {
 		slot = per_cpu_ptr(&fixmap_slots, (u64)i);
-		ghost_simplified_model_step_hint(GHOST_HINT_SET_PTE_THREAD_OWNER, hyp_virt_to_phys(slot->ptep), (u64)i);
+		casemate_model_step_hint(GHOST_HINT_SET_PTE_THREAD_OWNER, hyp_virt_to_phys(slot->ptep), (u64)i);
 	}
 }
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */

@@ -4,6 +4,8 @@
 #include <linux/types.h>
 #include <linux/stdarg.h>
 
+#include <nvhe/ghost/ghost_extra_debug-pl011.h>
+
 /*
  * A very minimal printf implementation, with extra features for ghost.
  *
@@ -59,10 +61,11 @@ typedef struct gp_stream {
 	u64 buf_rem;
 } gp_stream_t;
 
+extern gp_stream_t __GHOST_UART;
 #define STREAM_UART &__GHOST_UART
 #define NEW_STREAM_BUFFERED(buffer, n) ((gp_stream_t){.kind=GP_STREAM_BUF, .buf=(buffer), .buf_rem=(n)})
 
-//int ghost_vsprintf(gp_stream_t *out, const char *fmt, va_list ap);
+int ghost_vsprintf(gp_stream_t *out, const char *fmt, va_list ap);
 
 int ghost_snprintf(char *out, u64 n, const char *fmt, ...) __attribute__ ((format (printf, 3, 4)));
 int ghost_sprintf(gp_stream_t *out, const char *fmt, ...) __attribute__ ((format (printf, 2, 3)));
