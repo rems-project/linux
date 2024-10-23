@@ -32,6 +32,11 @@ static inline enum picovm_pgtable_prot picovm_mkstate(enum picovm_pgtable_prot p
 	return (prot & ~PICOVM_PAGE_STATE_PROT_MASK) | state;
 }
 
+static inline enum picovm_page_state picovm_getstate(enum picovm_pgtable_prot prot)
+{
+	return prot & PICOVM_PAGE_STATE_PROT_MASK;
+}
+
 
 int __picovm_host_share_hyp(u64 pfn);
 int __picovm_host_unshare_hyp(u64 pfn);

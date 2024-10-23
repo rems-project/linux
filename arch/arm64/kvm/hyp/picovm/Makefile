@@ -20,7 +20,7 @@ HOST_EXTRACFLAGS += -I$(objtree)/include
 lib-objs := clear_page.o copy_page.o memcpy.o memset.o
 lib-objs := $(addprefix ../../../lib/, $(lib-objs))
 
-hyp-obj-y := host.o hyp-main.o mem_protect.o mm.o picovm_pgtable.o todo.o
+hyp-obj-y := host.o hyp-main.o mem_protect.o mm.o picovm_pgtable.o setup.o todo.o
 hyp-obj-y += $(lib-objs)
 
 # NVHE files we reuse

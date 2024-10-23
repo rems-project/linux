@@ -32,31 +32,25 @@
 bool picovm_initialized;
 
 
+DEFINE_PER_CPU(struct picovm_nvhe_init_params, picovm_init_params);
 
 
+static void handle___picovm_init(struct host_cpu_context *host_ctxt)
+{
+	DECLARE_REG(phys_addr_t, phys, host_ctxt, 1);
+	DECLARE_REG(unsigned long, size, host_ctxt, 2);
+	DECLARE_REG(unsigned long, nr_cpus, host_ctxt, 3);
+	DECLARE_REG(unsigned long *, per_cpu_base, host_ctxt, 4);
+	DECLARE_REG(u32, hyp_va_bits, host_ctxt, 5);
 
-// static void handle___pkvm_init(struct host_cpu_context *host_ctxt)
-// {
-// 	DECLARE_REG(phys_addr_t, phys, host_ctxt, 1);
-// 	DECLARE_REG(unsigned long, size, host_ctxt, 2);
-// 	DECLARE_REG(unsigned long, nr_cpus, host_ctxt, 3);
-// 	DECLARE_REG(unsigned long *, per_cpu_base, host_ctxt, 4);
-// 	DECLARE_REG(u32, hyp_va_bits, host_ctxt, 5);
-
-// 	/*
-// 	 * __pkvm_init() will return only if an error occurred, otherwise it
-// 	 * will tail-call in __pkvm_init_finalise() which will have to deal
-// 	 * with the host context directly.
-// 	 */
-// 	cpu_reg(host_ctxt, 1) = __pkvm_init(phys, size, nr_cpus, per_cpu_base,
-// 					    hyp_va_bits);
-// }
-
-
-
-
-
-
+	/*
+	 * __picovm_init() will return only if an error occurred, otherwise it
+	 * will tail-call in __picovm_init_finalise() which will have to deal
+	 * with the host context directly.
+	 */
+	cpu_reg(host_ctxt, 1) = __picovm_init(phys, size, nr_cpus, per_cpu_base,
+					    hyp_va_bits);
+}
 
 static void handle___picovm_host_share_hyp(struct host_cpu_context *host_ctxt)
 {
@@ -123,7 +117,7 @@ typedef void (*hcall_t)(struct host_cpu_context *);
 #define HANDLE_FUNC(x)	[__PICOVM_HOST_SMCCC_FUNC_##x] = (hcall_t)handle_##x
 static const hcall_t host_hcall[] = {
 	/* ___kvm_hyp_init */
-	// HANDLE_FUNC(__pkvm_init),
+	HANDLE_FUNC(__picovm_init),
 	// HANDLE_FUNC(__pkvm_create_private_mapping),
 	// HANDLE_FUNC(__pkvm_prot_finalize),
 

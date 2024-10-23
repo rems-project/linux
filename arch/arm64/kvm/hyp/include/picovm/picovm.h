@@ -2,6 +2,7 @@
 #define __PICOVM_H
 #include <picovm/prelude.h>
 #include <picovm/memory.h>
+#include <picovm/picovm_pgtable.h>
 
 /* Global state **************************************************************/
 // s64 hyp_physvirt_offset;
@@ -43,7 +44,7 @@
 
 
 /* Exception syndrome register ***********************************************/
-// from: linux/archarm64/include/asm/esr.h
+// from: linux/arch/arm64/include/asm/esr.h
 #define ESR_ELx_EC_FP_ASIMD	(0x07)
 #define ESR_ELx_EC_HVC64	(0x16)
 #define ESR_ELx_EC_SMC64	(0x17)
@@ -63,16 +64,16 @@ static inline u64 read_esr_el2(void)
 	return reg;
 }
 
+#define PTRS_PER_PTE		(1 << (PAGE_SHIFT - 3))
 
+// from linux/arch/arm64/include/asm/kvm_pkvm.h
+/* Maximum number of VMs that can co-exist under pKVM. */
+#define PICOVM_MAX_PVMS 255
 
+#define HYP_MEMBLOCK_REGIONS 128
 
-
-
-
-
-
-
-
+#define EL2_STACK_NR_PAGES (CONFIG_NVHE_EL2_STACKSIZE)
+#define EL2_STACKSIZE (PAGE_SIZE * EL2_STACK_NR_PAGES)
 
 static inline void BUG(void)
 {
@@ -123,22 +124,23 @@ enum __picovm_host_smccc_func {
 	__PICOVM_HOST_SMCCC_FUNC___picovm_host_unshare_hyp,
 };
 
+extern struct memblock_region hyp_memory[];
+extern unsigned int hyp_memblock_nr;
 
-
-
-
-
-
-// TODO: hyp_virt_to_phys()
-
-static inline phys_addr_t hyp_pfn_to_phys(u64 pfn)
+static inline unsigned long __hyp_pgtable_max_pages(unsigned long nr_pages)
 {
-	return pfn << PAGE_SHIFT;
+	unsigned long total = 0, i;
+
+	/* Provision the worst case scenario */
+	for (i = 0; i < PICOVM_PGTABLE_MAX_LEVELS; i++) {
+		nr_pages = DIV_ROUND_UP(nr_pages, PTRS_PER_PTE);
+		total += nr_pages;
+	}
+
+	return total;
 }
 
-// static inline void* __hyp_va(phys_addr_t phys)
-// {
-// 	return (void*)(phys - hyp_physvirt_offset);
-// }
+int __picovm_init(phys_addr_t phys, unsigned long size, unsigned long nr_cpus,
+		unsigned long *per_cpu_base, u32 hyp_va_bits);
 
 #endif /* __PICOVM_H */

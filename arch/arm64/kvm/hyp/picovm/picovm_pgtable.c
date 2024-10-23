@@ -1,33 +1,50 @@
+#include "linux/fs.h"
 #include <picovm/config.h>
 #include <picovm/prelude.h>
 #include <picovm/memory.h>
-#include <picovm/linux/barrier.h>
-#include <picovm/linux/tlbflush.h>
+#include <picovm/picovm_host.h>
 #include <picovm/picovm_pgtable.h>
 
-// TODO: how to import null and boolean true / false
-#define NULL ((void *)0)
+#include <picovm/linux/barrier.h>
+#include <picovm/linux/tlbflush.h>
 
-// TODO(note):based on linux/arch/kvm/hyp/pgtable.c
+
+// NOTE: based on linux/arch/arm64/kvm/hyp/pgtable.c
 #define PICOVM_PTE_TYPE			BIT(1)
 #define PICOVM_PTE_TYPE_BLOCK		0
 #define PICOVM_PTE_TYPE_PAGE		1
 #define PICOVM_PTE_TYPE_TABLE		1
 
-// TODO(note):based on linux/arch/arm64/kvm/hyp/pgtable.c::struct kvm_stage2_map_data
+// NOTE: based on linux/arch/arm64/kvm/hyp/pgtable.c
+#define PICOVM_PTE_LEAF_ATTR_LO_S2_MEMATTR	GENMASK(5, 2)
+#define PICOVM_PTE_LEAF_ATTR_LO_S2_S2AP_R	BIT(6)
+#define PICOVM_PTE_LEAF_ATTR_LO_S2_S2AP_W	BIT(7)
+#define PICOVM_PTE_LEAF_ATTR_LO_S2_SH	GENMASK(9, 8)
+#define PICOVM_PTE_LEAF_ATTR_LO_S2_SH_IS	3
+#define PICOVM_PTE_LEAF_ATTR_LO_S2_AF	BIT(10)
+
+#define PICOVM_PTE_LEAF_ATTR_HI		GENMASK(63, 51)
+
+#define PICOVM_PTE_LEAF_ATTR_HI_SW		GENMASK(58, 55)
+
+#define PICOVM_PTE_LEAF_ATTR_HI_S1_XN	BIT(54)
+
+#define PICOVM_PTE_LEAF_ATTR_HI_S2_XN	BIT(54)
+
+// NOTE: based on linux/arch/arm64/kvm/hyp/pgtable.c::struct kvm_stage2_map_data
 struct picovm_stage2_map_data {
 	const u64 phys;
 	enum picovm_pgtable_prot prot;
 };
 
 
-// TODO(note):based on linux/arch/arm64/kvm/hyp/pgtable.c::struct kvm_hyp_map_data
+// NOTE: based on linux/arch/arm64/kvm/hyp/pgtable.c::struct kvm_hyp_map_data
 struct picovm_hyp_map_data {
 	const u64 phys;
 	enum picovm_pgtable_prot prot;
 };
 
-// TODO(note):based on linux/arch/arm64/kvm/hyp/pgtable.c::struct kvm_pgtable_walk_data
+// NOTE: based on linux/arch/arm64/kvm/hyp/pgtable.c::struct kvm_pgtable_walk_data
 struct picovm_pgtable_walk_data {
 	struct picovm_pgtable_walker *walker;
 	const u64			start;
@@ -45,14 +62,52 @@ static bool inline picovm_is_pte_invalid_or_block(picovm_pte_t pte)
   return !picovm_pte_valid(pte) || picovm_pte_block(pte);
 }
 
+// NOTE: based on linux/arch/arm64/kvm/hyp/pgtable.c::static kvm_pgtable_stage2_pte_rpot(kvm_pte_t pte)
+enum picovm_pgtable_prot picovm_pgtable_stage2_pte_prot(picovm_pte_t pte)
+{
+	enum picovm_pgtable_prot prot = pte & PICOVM_PTE_LEAF_ATTR_HI_SW;
 
-// TODO(note):based on linux/arch/arm64/kvm/hyp/pgtable.c::static kvm_pgtable_idx(u64 addr, u32 level)
+	if (!picovm_pte_valid(pte))
+		return prot;
+
+	if (pte & PICOVM_PTE_LEAF_ATTR_LO_S2_S2AP_R)
+		prot |= PICOVM_PGTABLE_PROT_R;
+	if (pte & PICOVM_PTE_LEAF_ATTR_LO_S2_S2AP_W)
+		prot |= PICOVM_PGTABLE_PROT_W;
+	if (!(pte & PICOVM_PTE_LEAF_ATTR_HI_S2_XN))
+		prot |= PICOVM_PGTABLE_PROT_X;
+
+	return prot;
+}
+
+
+// NOTE: based on linux/arch/arm64/kvm/hyp/pgtable.c::static kvm_pgtable_idx(u64 addr, u32 level)
 static u32 picovm_pgtable_idx(u64 addr, u32 level)
 {
 	u64 shift = picovm_granule_shift(level);
 	u64 mask = BIT(PAGE_SHIFT - 3) - 1;
 
 	return (addr >> shift) & mask;
+}
+
+// NOTE: based on linux/arch/arm64/kvm/hyp/pgtable.c::static kvm_pgd_page_idx(struct kvm_pgtable *pgt, u64 addr)
+static u32 picovm_pgd_page_idx(struct picovm_pgtable *pgt, u64 addr)
+{
+	u64 shift = picovm_granule_shift(pgt->start_level - 1); /* May underflow */
+	u64 mask = BIT(pgt->ia_bits) - 1;
+
+	return (addr & mask) >> shift;
+}
+
+// NOTE: based on linux/arch/arm64/kvm/hyp/pgtable.c::static kvm_pgd_pages(u32 ia_bits, u32 start_level)
+static u32 picovm_pgd_pages(u32 ia_bits, u32 start_level)
+{
+	struct picovm_pgtable pgt = {
+		.ia_bits	= ia_bits,
+		.start_level	= start_level,
+	};
+
+	return picovm_pgd_page_idx(&pgt, -1ULL) + 1;
 }
 
 static int break_pte(const struct picovm_pgtable_visit_ctx *ctx)
@@ -69,6 +124,22 @@ static int break_pte(const struct picovm_pgtable_visit_ctx *ctx)
 
   return 0;
 }
+
+int picovm_pgtable_hyp_init(struct picovm_pgtable *pgt, u32 va_bits)
+{
+	u64 levels = 4;
+
+	pgt->pgd = (picovm_pteref_t)malloc(NULL);
+	if (!pgt->pgd)
+		return ENOMEM;
+
+	pgt->ia_bits		= va_bits;
+	pgt->start_level	= PICOVM_PGTABLE_MAX_LEVELS - levels;
+	pgt->mmu		= NULL;
+
+	return 0;
+}
+
 
 static int stage2_map_walker(const struct picovm_pgtable_visit_ctx *ctx)
 {
@@ -131,7 +202,7 @@ picovm_pte_t* _picovm_pgtable_walk(struct picovm_pgtable *pgt, u64 ia) {
   return &childp[picovm_pgtable_idx(ia, PICOVM_PGTABLE_MAX_LEVELS-1)];
 }
 
-// TODO(note):based on linux/arch/arm64/kvm/hyp/pgtable.c::int kvm_pgtable_walk(struct kvm_pgtable *pgt, u64 addr, u64 size,
+// NOTE: based on linux/arch/arm64/kvm/hyp/pgtable.c::int kvm_pgtable_walk(struct kvm_pgtable *pgt, u64 addr, u64 size,
 //		     struct kvm_pgtable_walker *walker)
 int picovm_pgtable_walk(struct picovm_pgtable *pgt, u64 addr, u64 size,
 		     struct picovm_pgtable_walker *walker)
@@ -200,20 +271,23 @@ void check_stage2_configuration(void)
 }
 
 
-/**
-TODO: remove this comment
-
- * __kvm_pgtable_stage2_init() - Initialise a guest stage-2 page-table.
- * @pgt:	Uninitialised page-table structure to initialise.
- * @mmu:	S2 MMU context for this S2 translation
- *
- * Return: 0 on success, negative error code on failure.
- */
+// NOTE: based on linux/arch/arm64/kvm/hyp/pgtable.c::int __kvm_pgtable_stage2_init(struct kvm_pgtable *pgt, struct kvm_s2_mmu *mmu,
+//			    struct kvm_pgtable_mm_ops *mm_ops,
+//			    enum kvm_pgtable_stage2_flags flags,
+//			    kvm_pgtable_force_pte_cb_t force_pte_cb)
 int picovm_pgtable_stage2_init(struct picovm_pgtable *pgt)
 {
-	u64 addr = 0;
-
 	check_stage2_configuration();
+
+  pgt->ia_bits = PICOVM_CONFIG_IA_BITS;
+  pgt->start_level = PICOVM_CONFIG_STARTING_LEVEL;
+  size_t pgd_sz = picovm_pgd_pages(pgt->ia_bits, pgt->start_level) * PAGE_SIZE;
+  pgt->pgd = (picovm_pteref_t)malloc(pgd_sz);   // (picovm_pteref_t)host_s2_zalloc_pages_exact(pgd_sz);
+  if (!pgt->pgd)
+    return -ENOMEM;
+
+  dsb(ishst);
+  return 0;
 
 	// u64 idx_tbl0 = addr >> 
 	// u32 idx_tbl1 = (addr >> 30) & 0x1ff;
@@ -230,12 +304,9 @@ int picovm_pgtable_stage2_init(struct picovm_pgtable *pgt)
 // 134,480,385 pages
 
 */
-
-	return 0;
 }
 
-
-// TODO(note):based on linux/arch/arm64/kvm/hyp/pgtable.c::int kvm_pgtable_stage2_map(struct picovm_pgtable *pgt, u64 addr, u64 size, 
+// NOTE: based on linux/arch/arm64/kvm/hyp/pgtable.c::int kvm_pgtable_stage2_map(struct picovm_pgtable *pgt, u64 addr, u64 size, 
 //      u64 phys, enum kvm_pgtable_prot prot, void *mc, enum kvm_pgtable_walk_flags flags)
 int picovm_pgtable_stage2_map(struct picovm_pgtable *pgt, u64 addr, u64 size,
 			   u64 phys, enum picovm_pgtable_prot prot)
@@ -256,7 +327,7 @@ int picovm_pgtable_stage2_map(struct picovm_pgtable *pgt, u64 addr, u64 size,
 	return ret;
 }
 
-// TODO(note):based on linux/arch/arm64/kvm/hyp/pgtable.c::int kvm_pgtable_hyp_map(struct picovm_pgtable *pgt, u64 addr, u64 size, u64 phys,
+// NOTE: based on linux/arch/arm64/kvm/hyp/pgtable.c::int kvm_pgtable_hyp_map(struct picovm_pgtable *pgt, u64 addr, u64 size, u64 phys,
 //			enum picovm_pgtable_prot prot)
 int picovm_pgtable_hyp_map(struct picovm_pgtable *pgt, u64 addr, u64 size, u64 phys,
 			enum picovm_pgtable_prot prot)
@@ -293,3 +364,4 @@ int picovm_pgtable_hyp_unmap(struct picovm_pgtable *pgt, u64 addr, u64 size)
   
   return 0;
 }
+

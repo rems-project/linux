@@ -14,6 +14,7 @@
 #define __PICOVM_SPINLOCK_H
 #include <picovm/prelude.h>
 
+// from linux/arch/arm64/kvm/hyp/include/nvhe/spinlock.h
 typedef union hyp_spinlock {
 	u32	__val;
 	struct {
@@ -24,6 +25,78 @@ typedef union hyp_spinlock {
 #endif
 	};
 } hyp_spinlock_t;
+
+#define __HYP_SPIN_LOCK_INITIALIZER \
+	{ .__val = 0 }
+
+#define __HYP_SPIN_LOCK_UNLOCKED \
+	((hyp_spinlock_t) __HYP_SPIN_LOCK_INITIALIZER)
+
+#define DEFINE_HYP_SPINLOCK(x)	hyp_spinlock_t x = __HYP_SPIN_LOCK_UNLOCKED
+
+#define hyp_spin_lock_init(l)						\
+do {									\
+	*(l) = __HYP_SPIN_LOCK_UNLOCKED;				\
+} while (0)
+
+static inline void hyp_spin_lock(hyp_spinlock_t *lock)
+{
+	u32 tmp;
+	hyp_spinlock_t lockval, newval;
+
+  // TODO: import arm asm related headers
+// 	asm volatile(
+// 	/* Atomically increment the next ticket. */
+// 	ARM64_LSE_ATOMIC_INSN(
+// 	/* LL/SC */
+// "	prfm	pstl1strm, %3\n"
+// "1:	ldaxr	%w0, %3\n"
+// "	add	%w1, %w0, #(1 << 16)\n"
+// "	stxr	%w2, %w1, %3\n"
+// "	cbnz	%w2, 1b\n",
+// 	/* LSE atomics */
+// "	mov	%w2, #(1 << 16)\n"
+// "	ldadda	%w2, %w0, %3\n"
+// 	__nops(3))
+//
+// 	/* Did we get the lock? */
+// "	eor	%w1, %w0, %w0, ror #16\n"
+// "	cbz	%w1, 3f\n"
+// 	/*
+// 	 * No: spin on the owner. Send a local event to avoid missing an
+// 	 * unlock before the exclusive load.
+// 	 */
+// "	sevl\n"
+// "2:	wfe\n"
+// "	ldaxrh	%w2, %4\n"
+// "	eor	%w1, %w2, %w0, lsr #16\n"
+// "	cbnz	%w1, 2b\n"
+// 	/* We got the lock. Critical section starts here. */
+// "3:"
+// 	: "=&r" (lockval), "=&r" (newval), "=&r" (tmp), "+Q" (*lock)
+// 	: "Q" (lock->owner)
+// 	: "memory");
+}
+
+static inline void hyp_spin_unlock(hyp_spinlock_t *lock)
+{
+	u64 tmp;
+
+  // TODO: import arm asm related headers
+	// asm volatile(
+	// ARM64_LSE_ATOMIC_INSN(
+	// /* LL/SC */
+	// "	ldrh	%w1, %0\n"
+	// "	add	%w1, %w1, #1\n"
+	// "	stlrh	%w1, %0",
+	// /* LSE atomics */
+	// "	mov	%w1, #1\n"
+	// "	staddlh	%w1, %0\n"
+	// __nops(1))
+	// : "=Q" (lock->owner), "=&r" (tmp)
+	// :
+	// : "memory");
+}
 
 
 
