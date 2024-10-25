@@ -56,7 +56,6 @@ get-casemate:
 .PHONY: get-casemate
 
 ifneq ($(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL),)
-  KBUILD_CFLAGS += -D__AARCH64__
   CASEMATELIB = ghost/casemate/src/lib
   include $(obj)/ghost/casemate/src/lib/Makefile.linux
 endif
