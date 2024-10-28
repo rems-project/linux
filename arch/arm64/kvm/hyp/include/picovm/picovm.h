@@ -1,5 +1,6 @@
 #ifndef __PICOVM_H
 #define __PICOVM_H
+
 #include <picovm/prelude.h>
 #include <picovm/memory.h>
 #include <picovm/picovm_pgtable.h>
@@ -97,8 +98,18 @@ struct host_cpu_context {
 #define DECLARE_REG(type, name, ctxt, reg)	\
 				type name = (type)cpu_reg(ctxt, (reg))
 
-
-
+// NOTE: from include/asm/kvm_asm.h
+struct picovm_nvhe_init_params {
+	unsigned long mair_el2;
+	unsigned long tcr_el2;
+	unsigned long tpidr_el2;
+	unsigned long stack_hyp_va;
+	unsigned long stack_pa;
+	phys_addr_t pgd_pa;
+	unsigned long hcr_el2;
+	unsigned long vttbr;
+	unsigned long vtcr;
+};
 
 
 /* Hypervisor interface ******************************************************/

@@ -1,10 +1,85 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Partial copy of linux/percpu-defs.h - basic definitions for percpu areas
+ * and linux/percpu.h
  */
 
-#ifndef __PICOVM_LINUX_BARRIER_H
-#define __PICOVM_LINUX_BARRIER_H
+#ifndef __PICOVM_LINUX_PERCPU_DEFS_H
+#define __PICOVM_LINUX_PERCPU_DEFS_H
+
+#ifdef CONFIG_SMP
+
+#ifdef MODULE
+#define PER_CPU_SHARED_ALIGNED_SECTION ""
+#define PER_CPU_ALIGNED_SECTION ""
+#else
+#define PER_CPU_SHARED_ALIGNED_SECTION "..shared_aligned"
+#define PER_CPU_ALIGNED_SECTION "..shared_aligned"
+#endif
+#define PER_CPU_FIRST_SECTION "..first"
+
+#else
+
+#define PER_CPU_SHARED_ALIGNED_SECTION ""
+#define PER_CPU_ALIGNED_SECTION "..shared_aligned"
+#define PER_CPU_FIRST_SECTION ""
+
+#endif
+
+#ifndef PER_CPU_BASE_SECTION
+#ifdef CONFIG_SMP
+#define PER_CPU_BASE_SECTION ".data..percpu"
+#else
+#define PER_CPU_BASE_SECTION ".data"
+#endif
+#endif
+
+
+#ifndef PER_CPU_ATTRIBUTES
+#define PER_CPU_ATTRIBUTES
+#endif
+
+/*
+ * Base implementations of per-CPU variable declarations and definitions, where
+ * the section in which the variable is to be placed is provided by the
+ * 'sec' argument.  This may be used to affect the parameters governing the
+ * variable's storage.
+ *
+ * NOTE!  The sections for the DECLARE and for the DEFINE must match, last
+ * linkage errors occur due the compiler generating the wrong code to access
+ * that section.
+ */
+#define __PCPU_ATTRS(sec)						\
+	__percpu __attribute__((section(PER_CPU_BASE_SECTION sec)))	\
+	PER_CPU_ATTRIBUTES
+
+#define __PCPU_DUMMY_ATTRS						\
+	__section(".discard") __attribute__((unused))
+
+/*
+ * Normal declaration and definition macros.
+ */
+#define DECLARE_PER_CPU_SECTION(type, name, sec)			\
+	extern __PCPU_ATTRS(sec) __typeof__(type) name
+
+#define DEFINE_PER_CPU_SECTION(type, name, sec)				\
+	__PCPU_ATTRS(sec) __typeof__(type) name
+#endif
+
+/*
+ * Variant on the per-CPU variable declaration/definition theme used for
+ * ordinary per-CPU variables.
+ */
+#define DECLARE_PER_CPU(type, name)					\
+	DECLARE_PER_CPU_SECTION(type, name, "")
+
+#define DEFINE_PER_CPU(type, name)					\
+	DEFINE_PER_CPU_SECTION(type, name, "")
+
+/*
+ * Accessors and operations.
+ */
+#ifndef __ASSEMBLY__
 
 /*
  * __verify_pcpu_ptr() verifies @ptr is a percpu pointer without evaluating
@@ -70,4 +145,5 @@ do {									\
 
 #define per_cpu(var, cpu)	(*per_cpu_ptr(&(var), cpu))
 
-#endif
+#endif /* __ASSEMBLY__ */
+#endif /* _LINUX_PERCPU_DEFS_H */

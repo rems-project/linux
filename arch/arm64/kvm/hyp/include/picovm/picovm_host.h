@@ -3,7 +3,7 @@
  * Copyright (C) 2012,2013 - ARM Ltd
  * Author: Marc Zyngier <marc.zyngier@arm.com>
  *
- * Derived from arch/arm/include/asm/picovm_host.h:
+ * Derived from arch/arm/include/asm/kvm_host.h:
  * Copyright (C) 2012 - Virtual Open Systems and Columbia University
  * Author: Christoffer Dall <c.dall@virtualopensystems.com>
  */
@@ -11,6 +11,64 @@
 #define __PICOVM_HOST_H__
 
 #include <picovm/prelude.h>
+
+struct picovm_hyp_memcache {
+	phys_addr_t head;
+	unsigned long nr_pages;
+};
+
+static inline void push_hyp_memcache(struct picovm_hyp_memcache *mc,
+				     phys_addr_t *p,
+				     phys_addr_t (*to_pa)(void *virt))
+{
+	*p = mc->head;
+	mc->head = to_pa(p);
+	mc->nr_pages++;
+}
+
+static inline void *pop_hyp_memcache(struct picovm_hyp_memcache *mc,
+				     void *(*to_va)(phys_addr_t phys))
+{
+	phys_addr_t *p = to_va(mc->head);
+
+	if (!mc->nr_pages)
+		return NULL;
+
+	mc->head = *p;
+	mc->nr_pages--;
+
+	return p;
+}
+
+static inline int __topup_hyp_memcache(struct picovm_hyp_memcache *mc,
+				       unsigned long min_pages,
+				       void *(*alloc_fn)(void *arg),
+				       phys_addr_t (*to_pa)(void *virt),
+				       void *arg)
+{
+	while (mc->nr_pages < min_pages) {
+		phys_addr_t *p = alloc_fn(arg);
+
+		if (!p)
+			return -ENOMEM;
+		push_hyp_memcache(mc, p, to_pa);
+	}
+
+	return 0;
+}
+
+static inline void __free_hyp_memcache(struct picovm_hyp_memcache *mc,
+				       void (*free_fn)(void *virt, void *arg),
+				       void *(*to_va)(phys_addr_t phys),
+				       void *arg)
+{
+	while (mc->nr_pages)
+		free_fn(pop_hyp_memcache(mc, to_va), arg);
+}
+
+void free_hyp_memcache(struct picovm_hyp_memcache *mc);
+int topup_hyp_memcache(struct picovm_hyp_memcache *mc, unsigned long min_pages);
+
 
 struct picovm_vmid {
 	u64 id; // TODO: into atomic64_t?
@@ -32,7 +90,40 @@ struct picovm_s2_mmu {
 	phys_addr_t	pgd_phys;
 	struct picovm_pgtable *pgt;
 
+	/* The last vcpu id that ran on each physical CPU */
+	int __percpu *last_vcpu_ran;
+
 	struct picovm_arch *arch;
+};
+
+struct picovm_arch_memory_slot {
+};
+
+/**
+ * struct picovm_smccc_features: Descriptor of the hypercall services exposed to the guests
+ *
+ * @std_bmap: Bitmap of standard secure service calls
+ * @std_hyp_bmap: Bitmap of standard hypervisor service calls
+ * @vendor_hyp_bmap: Bitmap of vendor specific hypervisor service calls
+ */
+struct picovm_smccc_features {
+	unsigned long std_bmap;
+	unsigned long std_hyp_bmap;
+	unsigned long vendor_hyp_bmap;
+};
+
+struct picovm_pinned_page {
+	struct list_head	link;
+	struct page		*page;
+};
+
+typedef unsigned int ppicovm_handle_t;
+
+struct picovm_protected_vm {
+	ppicovm_handle_t handle;
+	struct picovm_hyp_memcache teardown_mc;
+	struct list_head pinned_pages;
+	bool enabled;
 };
 
 struct picovm_arch {
@@ -40,6 +131,13 @@ struct picovm_arch {
 
 	/* VTCR_EL2 value for this VM */
 	u64    vtcr;
+	/*
+	 * For an untrusted host VM, 'pkvm.handle' is used to lookup
+	 * the associated pKVM instance in the hypervisor.
+	 */
+	struct picovm_protected_vm pkvm;
 };
+
+extern unsigned int __ro_after_init picovm_arm_vmid_bits;
 
 #endif /* __PICOVM_HOST_H__ */

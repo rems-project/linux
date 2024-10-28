@@ -3,6 +3,8 @@
 
 #include <picovm/asm/sections.h>
 #include <picovm/asm/errno-base.h>
+#include <picovm/linux/percpu-def.h>
+#include <picovm/linux/memblock.h>
 
 // TODO: handle memset and malloc
 
@@ -16,6 +18,11 @@ typedef unsigned char u8;
 // _Static_assert(sizeof(u64) == 8, "sizeof(u64) must be 8 bytes");
 // _Static_assert(sizeof(u32) == 4, "sizeof(u32) must be 4 bytes");
 // _Static_assert(sizeof(u16) == 2, "sizeof(u16) must be 2 bytes");
+
+// NOTE: from linux/types.h
+typedef struct {
+	s64 counter;
+} atomic64_t;
 
 #define U64(x)		(x ## ull)
 #define BIT(nr)		(1UL << (nr))
@@ -103,6 +110,11 @@ do {									\
 	compiletime_assert_rwonce_type(x);				\
 	__WRITE_ONCE(x, val);						\
 } while (0)
+
+// Note: from linux/types.h
+struct list_head {
+	struct list_head *next, *prev;
+};
 
 
 

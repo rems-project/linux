@@ -17,6 +17,9 @@
 
 #include <picovm/prelude.h>
 #include <picovm/mem_protect.h>
+#include <picovm/picovm_asm.h>
+#include <picovm/picovm.h>
+
 // #include <nvhe/mm.h>
 // #include <nvhe/pkvm.h>
 // #include <nvhe/trap_handler.h>
@@ -27,11 +30,7 @@
 // #include "../../sys_regs.h"
 
 
-#include <picovm/picovm.h>
-
 bool picovm_initialized;
-
-
 DEFINE_PER_CPU(struct picovm_nvhe_init_params, picovm_init_params);
 
 
@@ -51,6 +50,12 @@ static void handle___picovm_init(struct host_cpu_context *host_ctxt)
 	cpu_reg(host_ctxt, 1) = __picovm_init(phys, size, nr_cpus, per_cpu_base,
 					    hyp_va_bits);
 }
+
+static void handle___picovm_prot_finalize(struct host_cpu_context *host_ctxt)
+{
+	cpu_reg(host_ctxt, 1) = __picovm_prot_finalize();
+}
+
 
 static void handle___picovm_host_share_hyp(struct host_cpu_context *host_ctxt)
 {
@@ -73,7 +78,7 @@ static void handle___picovm_host_unshare_hyp(struct host_cpu_context *host_ctxt)
 // 	DECLARE_REG(phys_addr_t, phys, host_ctxt, 1);
 // 	DECLARE_REG(size_t, size, host_ctxt, 2);
 // 	DECLARE_REG(enum kvm_pgtable_prot, prot, host_ctxt, 3);
-
+//
 // 	/*
 // 	 * __pkvm_create_private_mapping() populates a pointer with the
 // 	 * hypervisor start address of the allocation.
@@ -90,24 +95,11 @@ static void handle___picovm_host_unshare_hyp(struct host_cpu_context *host_ctxt)
 // #else /* CONFIG_NVHE_GHOST_SPEC */
 // 	int err = __pkvm_create_private_mapping(phys, size, prot, &haddr);
 // #endif /* CONFIG_NVHE_GHOST_SPEC */
-
+//
 // 	if (err)
 // 		haddr = (unsigned long)ERR_PTR(err);
-
+//
 // 	cpu_reg(host_ctxt, 1) = haddr;
-// }
-
-// static void handle___pkvm_prot_finalize(struct host_cpu_context *host_ctxt)
-// {
-// #ifdef CONFIG_NVHE_GHOST_SPEC_NOISY
-// 	hyp_puts("\n__pkvm_prot_finalize:\n");
-// 	hyp_putsxnl("    CPU", hyp_smp_processor_id(), 32);
-// #endif /* CONFIG_NVHE_GHOST_SPEC_NOISY */
-// 	cpu_reg(host_ctxt, 1) = __pkvm_prot_finalize();
-// #ifdef CONFIG_NVHE_GHOST_SPEC
-// 	if (cpu_reg(host_ctxt, 1) == 0)
-// 		ghost_enable_this_cpu();
-// #endif /* CONFIG_NVHE_GHOST_SPEC */
 // }
 
 
@@ -119,7 +111,7 @@ static const hcall_t host_hcall[] = {
 	/* ___kvm_hyp_init */
 	HANDLE_FUNC(__picovm_init),
 	// HANDLE_FUNC(__pkvm_create_private_mapping),
-	// HANDLE_FUNC(__pkvm_prot_finalize),
+	HANDLE_FUNC(__picovm_prot_finalize),
 
 	HANDLE_FUNC(__picovm_host_share_hyp),
 	HANDLE_FUNC(__picovm_host_unshare_hyp),

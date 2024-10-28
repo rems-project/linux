@@ -129,7 +129,8 @@ int picovm_pgtable_hyp_init(struct picovm_pgtable *pgt, u32 va_bits)
 {
 	u64 levels = 4;
 
-	pgt->pgd = (picovm_pteref_t)malloc(NULL);
+  // TODO: use early alloc
+	pgt->pgd = (picovm_pteref_t) malloc(NULL);
 	if (!pgt->pgd)
 		return ENOMEM;
 

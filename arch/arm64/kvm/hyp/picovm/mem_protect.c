@@ -1,6 +1,11 @@
+#include <picovm/picovm_arm.h>
+#include <picovm/picovm_hyp.h>
+#include <picovm/picovm_host.h>
+#include <picovm/picovm_mmu.h>
 #include <picovm/picovm_pgtable.h>
 #include <picovm/mem_protect.h>
 #include <picovm/mm.h>
+#include <picovm/linux/tlbflush.h>
 
 // TODO(doc): the host Stage 2 page table
 struct picovm_pgtable host_pgt;
@@ -34,6 +39,44 @@ static void *host_s2_zalloc_pages_exact(size_t size)
 
 	return addr;
 }
+
+int __picovm_prot_finalize(void)
+{
+	struct picovm_s2_mmu *mmu = &host_mmu.arch.mmu;
+	struct picovm_nvhe_init_params *params = this_cpu_ptr(&picovm_init_params);
+
+	if (params->hcr_el2 & HCR_VM)
+		return -EPERM;
+
+	params->vttbr = picovm_get_vttbr(mmu);
+	params->vtcr = host_mmu.arch.vtcr;
+	params->hcr_el2 |= HCR_VM;
+
+	/*
+	 * The CMO below not only cleans the updated params to the
+	 * PoC, but also provides the DSB that ensures ongoing
+	 * page-table walks that have started before we trapped to EL2
+	 * have completed.
+	 */
+	picovm_flush_dcache_to_poc(params, sizeof(*params));
+
+	write_sysreg(params->hcr_el2, hcr_el2);
+	__load_stage2(&host_mmu.arch.mmu, &host_mmu.arch);
+
+	/*
+	 * Make sure to have an ISB before the TLB maintenance below but only
+	 * when __load_stage2() doesn't include one already.
+	 */
+	asm(ALTERNATIVE("isb", "nop", ARM64_WORKAROUND_SPECULATIVE_AT));
+
+	/* Invalidate stale HCR bits that may be cached in TLBs */
+	__tlbi(vmalls12e1);
+	dsb(nsh);
+	isb();
+
+	return 0;
+}
+
 
 struct check_walk_data {
 	enum picovm_page_state	desired;

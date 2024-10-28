@@ -41,12 +41,13 @@ void *hyp_early_alloc_contig(unsigned int nr_pages)
 		return NULL;
 
 	cur += size;
+  // TODO: include/asm...
 	memset(ret, 0, size);
 
 	return ret;
 }
 
-void *hyp_early_alloc_page(void *arg)
+void *hyp_early_alloc_page(void)
 {
 	return hyp_early_alloc_contig(1);
 }
@@ -223,6 +224,7 @@ static void update_nvhe_init_params(void)
 
 void __noreturn __picovm_init_finalise(void)
 {
+  // NOTE: called in EL2 - (second half of the 1st init)
   // TODO
 	// struct kvm_host_data *host_data = this_cpu_ptr(&kvm_host_data);
 	// struct kvm_cpu_context *host_ctxt = &host_data->host_ctxt;
@@ -280,7 +282,7 @@ out:
 int __picovm_init(phys_addr_t phys, unsigned long size, unsigned long nr_cpus,
 		unsigned long *per_cpu_base, u32 hyp_va_bits)
 {
-	struct kvm_nvhe_init_params *params;
+	struct picovm_nvhe_init_params *params;
 	void *virt = hyp_phys_to_virt(phys);
 	void (*fn)(phys_addr_t params_pa, void *finalize_fn_va);
 	int ret;
@@ -307,3 +309,6 @@ int __picovm_init(phys_addr_t phys, unsigned long size, unsigned long nr_cpus,
 
 	unreachable();
 }
+
+// TODO: prot_... + debug
+
