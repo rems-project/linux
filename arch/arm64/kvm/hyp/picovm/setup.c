@@ -1,3 +1,4 @@
+#include <picovm/early_alloc.h>
 #include <picovm/mem_protect.h>
 #include <picovm/mm.h>
 #include <picovm/memory.h>
@@ -14,52 +15,10 @@ unsigned long hyp_nr_cpus;
 			 (unsigned long)__per_cpu_start)
 
 
-// NOTE: based on linux/arch/arm64/kvm/hyp/nvhe/
-static unsigned long base;
-static unsigned long end;
-static unsigned long cur;
-
 static void *vmemmap_base;
 static void *vm_table_base;
 static void *hyp_pgt_base;
 static void *host_s2_pgt_base;
-
-unsigned long hyp_early_alloc_nr_used_pages(void)
-{
-	return (cur - base) >> PAGE_SHIFT;
-}
-
-void *hyp_early_alloc_contig(unsigned int nr_pages)
-{
-	unsigned long size = (nr_pages << PAGE_SHIFT);
-	void *ret = (void *)cur;
-
-	if (!nr_pages)
-		return NULL;
-
-	if (end - cur < size)
-		return NULL;
-
-	cur += size;
-  // TODO: include/asm...
-	memset(ret, 0, size);
-
-	return ret;
-}
-
-void *hyp_early_alloc_page(void)
-{
-	return hyp_early_alloc_contig(1);
-}
-
-static void hyp_early_alloc_get_page(void *addr) { }
-static void hyp_early_alloc_put_page(void *addr) { }
-
-void hyp_early_alloc_init(void *virt, unsigned long size)
-{
-	base = cur = (unsigned long)virt;
-	end = base + size;
-}
 
 static inline unsigned long __hyp_pgtable_total_pages(void)
 {
@@ -225,56 +184,55 @@ static void update_nvhe_init_params(void)
 void __noreturn __picovm_init_finalise(void)
 {
   // NOTE: called in EL2 - (second half of the 1st init)
-  // TODO
-	// struct kvm_host_data *host_data = this_cpu_ptr(&kvm_host_data);
-	// struct kvm_cpu_context *host_ctxt = &host_data->host_ctxt;
-	// unsigned long nr_pages, reserved_pages, pfn;
-	// int ret;
-	//
-	// /* Now that the vmemmap is backed, install the full-fledged allocator */
-	// pfn = hyp_virt_to_pfn(hyp_pgt_base);
-	// nr_pages = hyp_s1_pgtable_pages();
-	// reserved_pages = hyp_early_alloc_nr_used_pages();
-	// ret = hyp_pool_init(&hpool, pfn, nr_pages, reserved_pages);
-	// if (ret)
-	// 	goto out;
-	//
-	// ret = kvm_host_prepare_stage2(host_s2_pgt_base);
-	// if (ret)
-	// 	goto out;
-	//
-	// pkvm_pgtable_mm_ops = (struct kvm_pgtable_mm_ops) {
-	// 	.zalloc_page = hyp_zalloc_hyp_page,
-	// 	.phys_to_virt = hyp_phys_to_virt,
-	// 	.virt_to_phys = hyp_virt_to_phys,
-	// 	.get_page = hpool_get_page,
-	// 	.put_page = hpool_put_page,
-	// 	.page_count = hyp_page_count,
-	// };
-	// pkvm_pgtable.mm_ops = &pkvm_pgtable_mm_ops;
-	//
-	// ret = fix_host_ownership();
-	// if (ret)
-	// 	goto out;
-	//
-	// ret = fix_hyp_pgtable_refcnt();
-	// if (ret)
-	// 	goto out;
-	//
-	// ret = hyp_create_pcpu_fixmap();
-	// if (ret)
-	// 	goto out;
-	//
-	// pkvm_hyp_vm_table_init(vm_table_base);
+	struct picovm_host_data *host_data = this_cpu_ptr(&picovm_host_data);
+	struct picovm_cpu_context *host_ctxt = &host_data->host_ctxt;
+	unsigned long nr_pages, reserved_pages, pfn;
+	int ret;
+
+	/* Now that the vmemmap is backed, install the full-fledged allocator */
+	pfn = hyp_virt_to_pfn(hyp_pgt_base);
+	nr_pages = hyp_s1_pgtable_pages();
+	reserved_pages = hyp_early_alloc_nr_used_pages();
+	ret = hyp_pool_init(&hpool, pfn, nr_pages, reserved_pages);
+	if (ret)
+		goto out;
+
+	ret = picovm_host_prepare_stage2(host_s2_pgt_base);
+	if (ret)
+		goto out;
+
+	pkvm_pgtable_mm_ops = (struct kvm_pgtable_mm_ops) {
+		.zalloc_page = hyp_zalloc_hyp_page,
+		.phys_to_virt = hyp_phys_to_virt,
+		.virt_to_phys = hyp_virt_to_phys,
+		.get_page = hpool_get_page,
+		.put_page = hpool_put_page,
+		.page_count = hyp_page_count,
+	};
+	pkvm_pgtable.mm_ops = &pkvm_pgtable_mm_ops;
+
+	ret = fix_host_ownership();
+	if (ret)
+		goto out;
+
+	ret = fix_hyp_pgtable_refcnt();
+	if (ret)
+		goto out;
+
+	ret = hyp_create_pcpu_fixmap();
+	if (ret)
+		goto out;
+
+	picovm_hyp_vm_table_init(vm_table_base);
 
 out:
 	/*
 	 * We tail-called to here from handle___pkvm_init() and will not return,
 	 * so make sure to propagate the return value to the host.
 	 */
-	// cpu_reg(host_ctxt, 1) = ret;
-	//
-	// __host_enter(host_ctxt);
+	cpu_reg(host_ctxt, 1) = ret;
+
+	__host_enter(host_ctxt);
 }
 
 

@@ -72,9 +72,10 @@ enum picovm_pgtable_prot {
 #define PICOVM_PGTABLE_PROT_RW (PICOVM_PGTABLE_PROT_R | PICOVM_PGTABLE_PROT_W)
 #define PICOVM_PGTABLE_PROT_RWX (PICOVM_PGTABLE_PROT_RW | PICOVM_PGTABLE_PROT_X)
 #define PICOVM_HOST_MEM_PROT PICOVM_PGTABLE_PROT_RWX
+#define PICOVM_HOST_MMIO_PROT PICOVM_PGTABLE_PROT_RW
 #define PAGE_HYP PICOVM_PGTABLE_PROT_RW
-#define PAGE_HYP_EXEC		(PICOVM_PGTABLE_PROT_R | PICOVM_PGTABLE_PROT_X)
-#define PAGE_HYP_RO		(PICOVM_PGTABLE_PROT_R)
+#define PAGE_HYP_EXEC (PICOVM_PGTABLE_PROT_R | PICOVM_PGTABLE_PROT_X)
+#define PAGE_HYP_RO (PICOVM_PGTABLE_PROT_R)
 
 // TODO(note): based on linux/arch/arm64/include/asm/kvm_pgtable:typedef bool (*kvm_pgtable_force_pte_cb_t)(u64 addr, u64 end,
 //					   enum kvm_pgtable_prot prot);

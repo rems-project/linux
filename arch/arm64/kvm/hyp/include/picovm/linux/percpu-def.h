@@ -145,5 +145,4 @@ do {									\
 
 #define per_cpu(var, cpu)	(*per_cpu_ptr(&(var), cpu))
 
-#endif /* __ASSEMBLY__ */
 #endif /* _LINUX_PERCPU_DEFS_H */

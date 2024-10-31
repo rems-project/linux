@@ -7,7 +7,6 @@
 #ifndef __PICOVM_LINUX_BARRIER_H
 #define __PICOVM_LINUX_BARRIER_H
 
-#include <picovm/prelude.h>
 
 #define isb()		asm volatile("isb" : : : "memory")
 #define dmb(opt)	asm volatile("dmb " #opt : : : "memory")

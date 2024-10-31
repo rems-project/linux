@@ -1,4 +1,3 @@
-#include "linux/fs.h"
 #include <picovm/config.h>
 #include <picovm/prelude.h>
 #include <picovm/memory.h>
@@ -129,8 +128,7 @@ int picovm_pgtable_hyp_init(struct picovm_pgtable *pgt, u32 va_bits)
 {
 	u64 levels = 4;
 
-  // TODO: use early alloc
-	pgt->pgd = (picovm_pteref_t) malloc(NULL);
+	pgt->pgd = (picovm_pteref_t) hyp_early_alloc_page();
 	if (!pgt->pgd)
 		return ENOMEM;
 

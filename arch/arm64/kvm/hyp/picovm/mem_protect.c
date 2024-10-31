@@ -1,3 +1,4 @@
+#include <picovm/prelude.h>
 #include <picovm/picovm_arm.h>
 #include <picovm/picovm_hyp.h>
 #include <picovm/picovm_host.h>
@@ -5,11 +6,29 @@
 #include <picovm/picovm_pgtable.h>
 #include <picovm/mem_protect.h>
 #include <picovm/mm.h>
-#include <picovm/linux/tlbflush.h>
 
 // TODO(doc): the host Stage 2 page table
 struct picovm_pgtable host_pgt;
 
+static void guest_lock_component(struct picovm_hyp_vm *vm)
+{
+  // TODO
+}
+
+static void guest_unlock_component(struct picovm_hyp_vm *vm)
+{
+  // TODO
+}
+
+static void host_lock_component(void)
+{
+  // TODO
+}
+
+static void host_unlock_component(void)
+{
+  // TODO
+}
 
 static inline void picovm_lock_component(void)
 {
@@ -21,23 +40,151 @@ static inline void picovm_unlock_component(void)
 	// TODO
 }
 
-// TODO: how to implement zalloc pages
-static void *host_s2_zalloc_pages_exact(size_t size)
-{
-  // TODO
-  void *addr;
-	// void *addr = hyp_alloc_pages(&host_s2_pool, get_order(size));
-	//
-	// hyp_split_page(hyp_virt_to_page(addr));
-	//
-	// /*
-	//  * The size of concatenated PGDs is always a power of two of PAGE_SIZE,
-	//  * so there should be no need to free any of the tail pages to make the
-	//  * allocation exact.
-	//  */
-	// WARN_ON(size != (PAGE_SIZE << get_order(size)));
+struct picovm_mem_range {
+	u64 start;
+	u64 end;
+};
 
-	return addr;
+static struct memblock_region *find_mem_range(phys_addr_t addr, struct picovm_mem_range *range)
+{
+	int cur, left = 0, right = hyp_memblock_nr;
+	struct memblock_region *reg;
+	phys_addr_t end;
+
+	range->start = 0;
+	range->end = ULONG_MAX;
+
+	/* The list of memblock regions is sorted, binary search it */
+	while (left < right) {
+		cur = (left + right) >> 1;
+		reg = &hyp_memory[cur];
+		end = reg->base + reg->size;
+		if (addr < reg->base) {
+			right = cur;
+			range->end = reg->base;
+		} else if (addr >= end) {
+			left = cur + 1;
+			range->start = end;
+		} else {
+			range->start = reg->base;
+			range->end = end;
+			return reg;
+		}
+	}
+
+	return NULL;
+}
+
+bool addr_is_memory(phys_addr_t phys)
+{
+	struct picovm_mem_range range;
+
+	return !!find_mem_range(phys, &range);
+}
+
+static bool addr_is_allowed_memory(phys_addr_t phys)
+{
+	struct memblock_region *reg;
+	struct picovm_mem_range range;
+
+	reg = find_mem_range(phys, &range);
+
+	return reg && !(reg->flags & MEMBLOCK_NOMAP);
+}
+
+static bool is_in_mem_range(u64 addr, struct picovm_mem_range *range)
+{
+	return range->start <= addr && addr < range->end;
+}
+
+static bool range_is_memory(u64 start, u64 end)
+{
+	struct picovm_mem_range r;
+
+	if (!find_mem_range(start, &r))
+		return false;
+
+	return is_in_mem_range(end - 1, &r);
+}
+
+static int host_stage2_idmap(u64 addr)
+{
+	struct picovm_mem_range range;
+
+	bool is_memory = !!find_mem_range(addr, &range);
+	enum picovm_pgtable_prot prot;
+	int ret;
+
+	prot = is_memory ? PICOVM_HOST_MEM_PROT : PICOVM_HOST_MMIO_PROT;
+
+	host_lock_component();
+  ret = picovm_pgtable_stage2_map(&host_mmu.pgt, range.start, range.end - range.start, addr, prot);
+	host_unlock_component();
+
+	return ret;
+}
+
+// static void host_inject_abort(struct host_cpu_context *host_ctxt)
+// {
+// 	u64 spsr = read_sysreg_el2(SYS_SPSR);
+// 	u64 esr = read_sysreg_el2(SYS_ESR);
+// 	u64 ventry, ec;
+//
+// 	/* Repaint the ESR to report a same-level fault if taken from EL1 */
+// 	if ((spsr & PSR_MODE_MASK) != PSR_MODE_EL0t) {
+// 		ec = ESR_ELx_EC(esr);
+// 		if (ec == ESR_ELx_EC_DABT_LOW)
+// 			ec = ESR_ELx_EC_DABT_CUR;
+// 		else if (ec == ESR_ELx_EC_IABT_LOW)
+// 			ec = ESR_ELx_EC_IABT_CUR;
+// 		else
+// 			WARN_ON(1);
+// 		esr &= ~ESR_ELx_EC_MASK;
+// 		esr |= ec << ESR_ELx_EC_SHIFT;
+// 	}
+//
+// 	/*
+// 	 * Since S1PTW should only ever be set for stage-2 faults, we're pretty
+// 	 * much guaranteed that it won't be set in ESR_EL1 by the hardware. So,
+// 	 * let's use that bit to allow the host abort handler to differentiate
+// 	 * this abort from normal userspace faults.
+// 	 *
+// 	 * Note: although S1PTW is RES0 at EL1, it is guaranteed by the
+// 	 * architecture to be backed by flops, so it should be safe to use.
+// 	 */
+// 	esr |= ESR_ELx_S1PTW;
+//
+// 	write_sysreg_el1(esr, SYS_ESR);
+// 	write_sysreg_el1(spsr, SYS_SPSR);
+// 	write_sysreg_el1(read_sysreg_el2(SYS_ELR), SYS_ELR);
+// 	write_sysreg_el1(read_sysreg_el2(SYS_FAR), SYS_FAR);
+//
+// 	ventry = read_sysreg_el1(SYS_VBAR);
+// 	ventry += get_except64_offset(spsr, PSR_MODE_EL1h, except_type_sync);
+// 	write_sysreg_el2(ventry, SYS_ELR);
+//
+// 	spsr = get_except64_cpsr(spsr, system_supports_mte(),
+// 				 read_sysreg_el1(SYS_SCTLR), PSR_MODE_EL1h);
+// 	write_sysreg_el2(spsr, SYS_SPSR);
+// }
+
+void handle_host_mem_abort(struct host_cpu_context *host_ctxt)
+{
+	struct picovm_vcpu_fault_info fault;
+	u64 esr, addr;
+	int ret = 0;
+
+	esr = read_sysreg_el2(SYS_ESR);
+	// BUG_ON(!__get_fault_info(esr, &fault));
+
+	addr = (fault.hpfar_el2 & HPFAR_MASK) << 8;
+	ret = host_stage2_idmap(addr);
+
+  // TODO: what does host_inject_abort do?
+	// if (ret == -EPERM)
+	// 	host_inject_abort(host_ctxt);
+	// else
+	// 	BUG_ON(ret && ret != -EAGAIN);
 }
 
 int __picovm_prot_finalize(void)
@@ -227,7 +374,4 @@ do_unshare:
 unlock:
 	picovm_unlock_component();
 	return ret;
-
-	// TODO
-	return 0;
 }

@@ -6,6 +6,7 @@
  * Partial code from pkvm.c
  */
 
-/* Used by kvm_get_vttbr(). */
-unsigned int kvm_arm_vmid_bits;
+/* Used by picovm_get_vttbr(). */
+unsigned int picovm_arm_vmid_bits;
+unsigned long __icache_flags;
 

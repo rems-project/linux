@@ -6,7 +6,8 @@
  */
 #ifndef __PICOVM_LINUX_MEMBLOCK_H
 #define __PICOVM_LINUX_MEMBLOCK_H
-#include <picovm/prelude.h>
+
+#include "types.h"
 
 /**
  * enum memblock_flags - definition of memory region attributes

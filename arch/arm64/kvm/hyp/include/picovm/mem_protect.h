@@ -7,7 +7,6 @@
 #ifndef __PICOVM_MEM_PROTECT_H
 #define __PICOVM_MEM_PROTECT_H
 
-#include <picovm/prelude.h>
 #include <picovm/picovm_host.h>
 #include <picovm/picovm_pgtable.h>
 #include <picovm/picovm.h>

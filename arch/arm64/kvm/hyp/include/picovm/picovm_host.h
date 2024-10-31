@@ -17,6 +17,13 @@ struct picovm_hyp_memcache {
 	unsigned long nr_pages;
 };
 
+struct picovm_vcpu_fault_info {
+	u64 esr_el2;		/* Hyp Syndrom Register */
+	u64 far_el2;		/* Hyp Fault Address Register */
+	u64 hpfar_el2;		/* Hyp IPA Fault Address Register */
+	u64 disr_el1;		/* Deferred [SError] Status Register */
+};
+
 static inline void push_hyp_memcache(struct picovm_hyp_memcache *mc,
 				     phys_addr_t *p,
 				     phys_addr_t (*to_pa)(void *virt))
@@ -71,7 +78,7 @@ int topup_hyp_memcache(struct picovm_hyp_memcache *mc, unsigned long min_pages);
 
 
 struct picovm_vmid {
-	u64 id; // TODO: into atomic64_t?
+	atomic64_t id;
 };
 
 struct picovm_s2_mmu {
