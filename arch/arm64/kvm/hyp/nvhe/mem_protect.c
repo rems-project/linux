@@ -288,7 +288,7 @@ static void *guest_s2_zalloc_page(void *mc)
 
 	memset(addr, 0, PAGE_SIZE);
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-	casemate_model_step_memset(hyp_virt_to_phys(addr), 0, PAGE_SIZE);
+	casemate_model_step_init(hyp_virt_to_phys(addr), PAGE_SIZE);
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	p = hyp_virt_to_page(addr);
 	memset(p, 0, sizeof(*p));
@@ -1984,7 +1984,7 @@ static int hyp_zero_page(phys_addr_t phys)
 
 	memset(addr, 0, PAGE_SIZE);
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-	casemate_model_step_memset(hyp_virt_to_phys(addr), 0, PAGE_SIZE);
+	casemate_model_step_init(hyp_virt_to_phys(addr), PAGE_SIZE);
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 
 	/*
