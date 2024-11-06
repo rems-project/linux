@@ -128,6 +128,11 @@ void ghost_initialise_sm(u64 phys, u64 size)
 
 	opts.enable_tracing = ghost_control_print_enabled("casemate_model_step");
 
+	/* for now, pretend all the unsupported DSBs and TLBIs are stronger */
+	opts.check_opts.promote_DSB_nsh = true;
+	opts.check_opts.promote_TLBI_nsh = true;
+	opts.check_opts.promote_TLBI_by_id = true;
+
 	GHOST_LOG_CONTEXT_ENTER();
 
 	/* have to do the initial simplified model setup before recording the global pKVM pgtable state */
