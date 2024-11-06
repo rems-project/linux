@@ -100,6 +100,27 @@ static int pool_init(struct hyp_pool *pool)
 	return 0;
 }
 
+/* TODO: BS: these were defined statically in mm.c
+ * but now we want to reference them here.
+ *
+ * Maybe move them?
+ */
+struct hyp_fixmap_slot {
+	u64 addr;
+	kvm_pte_t *ptep;
+};
+DECLARE_PER_CPU(struct hyp_fixmap_slot, fixmap_slots);
+
+static void fixmap_init(void)
+{
+	struct hyp_fixmap_slot *slot;
+
+	for (int i = 0; i < hyp_nr_cpus; i++) {
+		slot = per_cpu_ptr(&fixmap_slots, (u64)i);
+		casemate_model_step_hint(GHOST_HINT_SET_PTE_THREAD_OWNER, hyp_virt_to_phys(slot->ptep), (u64)i);
+	}
+}
+
 void ghost_initialise_sm(u64 phys, u64 size)
 {
 	struct casemate_options opts = CASEMATE_DEFAULT_OPTS;
@@ -157,6 +178,9 @@ void ghost_initialise_sm(u64 phys, u64 size)
 	/* we've already created the host's pgtable and will switch to it soon
 	 * so initialise it now */
 	casemate_model_step_hint(GHOST_HINT_SET_ROOT_LOCK, hyp_virt_to_phys(host_mmu.pgt.pgd), hyp_virt_to_phys(&host_mmu.lock));
+
+	/* Initialise the thread-locally owned parts of the pgtable */
+	fixmap_init();
 
 	GHOST_LOG_CONTEXT_EXIT();
 }

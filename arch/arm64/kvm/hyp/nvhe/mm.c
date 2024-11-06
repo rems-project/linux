@@ -34,8 +34,11 @@ struct hyp_fixmap_slot {
 	u64 addr;
 	kvm_pte_t *ptep;
 };
+#ifdef CONFIG_NVHE_GHOST_SPEC
+/* static */ DEFINE_PER_CPU(struct hyp_fixmap_slot, fixmap_slots);
+#else /* CONFIG_NVHE_GHOST_SPEC */
 static DEFINE_PER_CPU(struct hyp_fixmap_slot, fixmap_slots);
-
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 static int __pkvm_create_mappings(unsigned long start, unsigned long size,
 #ifdef CONFIG_NVHE_GHOST_SPEC
 				  unsigned long phys, enum kvm_pgtable_prot prot, enum mapping_req_kind kind)
@@ -473,15 +476,3 @@ int refill_memcache(struct kvm_hyp_memcache *mc, unsigned long min_pages,
 
 	return ret;
 }
-
-#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-void get_fixmap(void)
-{
-	struct hyp_fixmap_slot *slot;
-	
-	for (int i = 0; i < hyp_nr_cpus; i++) {
-		slot = per_cpu_ptr(&fixmap_slots, (u64)i);
-		casemate_model_step_hint(GHOST_HINT_SET_PTE_THREAD_OWNER, hyp_virt_to_phys(slot->ptep), (u64)i);
-	}
-}
-#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
