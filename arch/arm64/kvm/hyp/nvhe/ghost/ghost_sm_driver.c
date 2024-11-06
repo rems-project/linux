@@ -25,6 +25,7 @@ static void ghost_cm_abort(const char *msg)
 	BUG();
 }
 
+__attribute__((unused))
 static u64 ghost_cm_read_physmem(u64 phys)
 {
 	return *(u64*)hyp_phys_to_virt(phys);
