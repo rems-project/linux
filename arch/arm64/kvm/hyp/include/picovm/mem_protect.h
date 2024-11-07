@@ -7,8 +7,8 @@
 #ifndef __PICOVM_MEM_PROTECT_H
 #define __PICOVM_MEM_PROTECT_H
 
-#include <picovm/picovm_host.h>
-#include <picovm/picovm_pgtable.h>
+#include <picovm/host.h>
+#include <picovm/pgtable.h>
 #include <picovm/picovm.h>
 #include <picovm/spinlock.h>
 
@@ -17,21 +17,18 @@ enum picovm_page_state {
 	PICOVM_PAGE_OWNED		= 0ULL,
 	PICOVM_PAGE_SHARED_OWNED	= PICOVM_PGTABLE_PROT_SW0,
 	PICOVM_PAGE_SHARED_BORROWED	= PICOVM_PGTABLE_PROT_SW1,
-	__PICOVM_PAGE_RESERVED		= PICOVM_PGTABLE_PROT_SW0 |
-					  PICOVM_PGTABLE_PROT_SW1,
+	__PICOVM_PAGE_RESERVED		= PICOVM_PGTABLE_PROT_SW0 | PICOVM_PGTABLE_PROT_SW1,
 
 	/* Meta-states which aren't encoded directly in the PTE's SW bits */
 	PICOVM_NOPAGE,
 };
 
-// TODO(doc/license): based on linux/arch/arm64/kvm/hyp/include/nvhe/mem_protect.h::struct host_mmu
 struct host_mmu {
 	struct picovm_arch arch;
 	struct picovm_pgtable pgt;
 	hyp_spinlock_t lock;
 };
 extern struct host_mmu host_mmu;
-
 
 // TODO(doc/license): based on linux/arch/arm64/kvm/hyp/include/nvhe/mem_protect.h
 #define PICOVM_PAGE_STATE_PROT_MASK	(PICOVM_PGTABLE_PROT_SW0 | PICOVM_PGTABLE_PROT_SW1)

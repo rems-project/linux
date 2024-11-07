@@ -9,13 +9,7 @@
 #ifndef __PICOVM_MMU_H__
 #define __PICOVM_MMU_H__
 
-#include <asm/page.h>
-#include <asm/memory.h>
-#include <asm/mmu.h>
-#include <asm/cpufeature.h>
-
-#include <picovm/picovm_arm.h>
-#include <picovm/picovm_host.h>
+#include <picovm/prelude.h>
 
 /*
  * NOTE: from include/asm/cacheflush.h

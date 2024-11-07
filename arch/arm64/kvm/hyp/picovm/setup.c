@@ -1,7 +1,8 @@
+#include <picovm/prelude.h>
 #include <picovm/early_alloc.h>
 #include <picovm/mem_protect.h>
 #include <picovm/mm.h>
-#include <picovm/memory.h>
+#include <picovm/hyp.h>
 #include <picovm/picovm.h>
 #include <picovm/spinlock.h>
 
@@ -14,6 +15,8 @@ unsigned long hyp_nr_cpus;
 #define hyp_percpu_size ((unsigned long)__per_cpu_end - \
 			 (unsigned long)__per_cpu_start)
 
+#define EL2_STACK_NR_PAGES (PICOVM_CONFIG_NVHE_EL2_STACKSIZE)
+#define EL2_STACKSIZE (PAGE_SIZE * EL2_STACK_NR_PAGES)
 
 static void *vmemmap_base;
 static void *vm_table_base;
@@ -65,9 +68,8 @@ static inline unsigned long host_s2_pgtable_pages(void)
 static int divide_memory_pool(void *virt, unsigned long size)
 {
 	unsigned long nr_pages;
-  base = cur = (unsigned long)virt;
-	end = base + size;
-
+	hyp_early_alloc_init(virt, size);
+  	
 	nr_pages = hyp_s1_pgtable_pages();
 	hyp_pgt_base = hyp_early_alloc_contig(nr_pages);
 	if (!hyp_pgt_base)
@@ -96,18 +98,14 @@ static int recreate_hyp_mappings(phys_addr_t phys, unsigned long size,
 	if (ret)
 		return ret;
 
-  // TODO: uncomment when they are needed
-	// ret = hyp_create_idmap(hyp_va_bits);
-	// if (ret)
-	// 	return ret;
-	//
-	// ret = hyp_map_vectors();
-	// if (ret)
-	// 	return ret;
-	//
-	// ret = hyp_back_vmemmap(hyp_virt_to_phys(vmemmap_base));
-	// if (ret)
-	// 	return ret;
+	ret = hyp_create_idmap(hyp_va_bits);
+	if (ret)
+		return ret;
+	
+	ret = hyp_map_vectors();
+	if (ret)
+		return ret;
+	
 
 	ret = picovm_create_mappings(__hyp_text_start, __hyp_text_end, PAGE_HYP_EXEC);
 	if (ret)
@@ -170,7 +168,7 @@ static int recreate_hyp_mappings(phys_addr_t phys, unsigned long size,
 
 static void update_nvhe_init_params(void)
 {
-	struct kvm_nvhe_init_params *params;
+	struct picovm_nvhe_init_params *params;
 	unsigned long i;
 
 	for (i = 0; i < hyp_nr_cpus; i++) {
@@ -189,33 +187,11 @@ void __noreturn __picovm_init_finalise(void)
 	unsigned long nr_pages, reserved_pages, pfn;
 	int ret;
 
-	/* Now that the vmemmap is backed, install the full-fledged allocator */
-	pfn = hyp_virt_to_pfn(hyp_pgt_base);
-	nr_pages = hyp_s1_pgtable_pages();
-	reserved_pages = hyp_early_alloc_nr_used_pages();
-	ret = hyp_pool_init(&hpool, pfn, nr_pages, reserved_pages);
-	if (ret)
-		goto out;
-
 	ret = picovm_host_prepare_stage2(host_s2_pgt_base);
 	if (ret)
 		goto out;
 
-	pkvm_pgtable_mm_ops = (struct kvm_pgtable_mm_ops) {
-		.zalloc_page = hyp_zalloc_hyp_page,
-		.phys_to_virt = hyp_phys_to_virt,
-		.virt_to_phys = hyp_virt_to_phys,
-		.get_page = hpool_get_page,
-		.put_page = hpool_put_page,
-		.page_count = hyp_page_count,
-	};
-	pkvm_pgtable.mm_ops = &pkvm_pgtable_mm_ops;
-
 	ret = fix_host_ownership();
-	if (ret)
-		goto out;
-
-	ret = fix_hyp_pgtable_refcnt();
 	if (ret)
 		goto out;
 

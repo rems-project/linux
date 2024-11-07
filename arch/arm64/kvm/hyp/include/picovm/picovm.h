@@ -3,7 +3,7 @@
 
 #include <picovm/prelude.h>
 #include <picovm/memory.h>
-#include <picovm/picovm_pgtable.h>
+#include <picovm/pgtable.h>
 
 /* Global state **************************************************************/
 // s64 hyp_physvirt_offset;
@@ -73,15 +73,10 @@ static inline u64 read_esr_el2(void)
 
 #define HYP_MEMBLOCK_REGIONS 128
 
-#define EL2_STACK_NR_PAGES (CONFIG_NVHE_EL2_STACKSIZE)
-#define EL2_STACKSIZE (PAGE_SIZE * EL2_STACK_NR_PAGES)
-
 static inline void BUG(void)
 {
 	for(;;); // __builtin_unreachable();
-}
-
-
+};
 
 struct user_pt_regs {
 	u64 regs[31];

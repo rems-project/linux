@@ -5,7 +5,7 @@
  */
 
 #include <picovm/prelude.h>
-#include <picovm/picovm_pgtable.h>
+#include <picovm/pgtable.h>
 #include <picovm/early_alloc.h>
 #include <picovm/memory.h>
 
@@ -34,7 +34,7 @@ void *hyp_early_alloc_contig(unsigned int nr_pages)
 		return NULL;
 
 	cur += size;
-  // TODO: include/asm...
+  	// TODO: include/asm...
 	memset(ret, 0, size);
 
 	return ret;
@@ -45,12 +45,8 @@ void *hyp_early_alloc_page(void)
 	return hyp_early_alloc_contig(1);
 }
 
-static void hyp_early_alloc_get_page(void *addr) { }
-static void hyp_early_alloc_put_page(void *addr) { }
-
 void hyp_early_alloc_init(void *virt, unsigned long size)
 {
 	base = cur = (unsigned long)virt;
 	end = base + size;
 }
-

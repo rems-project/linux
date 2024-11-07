@@ -3,9 +3,9 @@
 #ifndef __PICOVM_MEMORY_H
 #define __PICOVM_MEMORY_H
 
-#include <linux/log2.h>
+#include <picovm/prelude.h>
 
-// TODO: duplicating for the linux header to remain standalone
+// NOTE: duplicating for the linux header to remain standalone
 #ifndef __ro_after_init
 #define __ro_after_init __attribute__((__section__(".data..ro_after_init")))
 #endif
@@ -18,7 +18,7 @@ extern s64 hyp_physvirt_offset;
 #define __hyp_pa(x) (((phys_addr_t)(x)) + hyp_physvirt_offset)
 
 
-// TODO: based on linux/arch/arm64/include/asm/page-def.h
+// NOTE: based on linux/arch/arm64/include/asm/page-def.h
 // TODO(note): we fix page size to 4K
 #define PAGE_SHIFT	12
 #define PAGE_SIZE	(1UL << PAGE_SHIFT)
@@ -49,6 +49,24 @@ static inline phys_addr_t hyp_virt_to_phys(void *addr)
 // #define hyp_page_to_virt(page)	__hyp_va(hyp_page_to_phys(page))
 // #define hyp_page_to_pool(page)	(((struct hyp_page *)page)->pool)
 
+static inline int ilog2(unsigned long x)
+{
+    int log = 0;
+    while (x >>= 1) ++log;
+    return log;
+}
+
+static inline int fls64(unsigned long x)
+{
+    int position = 0;
+    while (x != 0) {
+        x >>= 1;
+        position++;
+    }
+    return position;
+}
+
+
 /**
  * get_order - Determine the allocation order of a memory size
  * @size: The size for which to get the order
@@ -68,7 +86,7 @@ static inline phys_addr_t hyp_virt_to_phys(void *addr)
  *
  * The result is undefined if the size is 0.
  */
-static __always_inline __attribute_const__ int get_order(unsigned long size)
+static inline const int get_order(unsigned long size)
 {
 	if (__builtin_constant_p(size)) {
 		if (!size)

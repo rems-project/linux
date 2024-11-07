@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note */
 // from linux/arch/arm64/include/asm/errno-base.h
-#ifndef _PICOVM_ASM_GENERIC_ERRNO_BASE_H
-#define _PICOVM_ASM_GENERIC_ERRNO_BASE_H
+#ifndef _PICOVM_GENERIC_ERRNO_BASE_H
+#define _PICOVM_GENERIC_ERRNO_BASE_H
 
 #define	EPERM		 1	/* Operation not permitted */
 #define	ENOENT		 2	/* No such file or directory */
@@ -38,4 +38,4 @@
 #define	EDOM		33	/* Math argument out of domain of func */
 #define	ERANGE		34	/* Math result not representable */
 
-#endif
+#endif /* _PICOVM_GENERIC_ERRNO_BASE_H */

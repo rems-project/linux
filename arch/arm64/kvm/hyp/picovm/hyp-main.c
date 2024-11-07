@@ -17,7 +17,6 @@
 
 #include <picovm/prelude.h>
 #include <picovm/mem_protect.h>
-#include <picovm/picovm_asm.h>
 #include <picovm/picovm.h>
 
 // #include <nvhe/mm.h>

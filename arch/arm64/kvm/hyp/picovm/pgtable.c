@@ -1,12 +1,10 @@
 #include <picovm/config.h>
 #include <picovm/prelude.h>
+
 #include <picovm/memory.h>
-#include <picovm/picovm_host.h>
-#include <picovm/picovm_pgtable.h>
-
-#include <picovm/linux/barrier.h>
-#include <picovm/linux/tlbflush.h>
-
+#include <picovm/asm/arm.h>
+#include <picovm/host.h>
+#include <picovm/pgtable.h>
 
 // NOTE: based on linux/arch/arm64/kvm/hyp/pgtable.c
 #define PICOVM_PTE_TYPE			BIT(1)
@@ -23,11 +21,8 @@
 #define PICOVM_PTE_LEAF_ATTR_LO_S2_AF	BIT(10)
 
 #define PICOVM_PTE_LEAF_ATTR_HI		GENMASK(63, 51)
-
 #define PICOVM_PTE_LEAF_ATTR_HI_SW		GENMASK(58, 55)
-
 #define PICOVM_PTE_LEAF_ATTR_HI_S1_XN	BIT(54)
-
 #define PICOVM_PTE_LEAF_ATTR_HI_S2_XN	BIT(54)
 
 // NOTE: based on linux/arch/arm64/kvm/hyp/pgtable.c::struct kvm_stage2_map_data
@@ -229,15 +224,6 @@ int picovm_pgtable_walk(struct picovm_pgtable *pgt, u64 addr, u64 size,
   return r;
 }
 
-// The control register for stage 2 of the EL1&0 translation regime.
-static inline u64 read_vtcr_el2(void)
-{
-	u64 reg;
-	asm volatile("mrs %0, vtcr_el2": "=r" (reg));
-	return reg;
-}
-
-
 #define VTCR_EL2_TG0_SHIFT	14
 #define VTCR_EL2_TG0_MASK	0b11 << VTCR_EL2_TG0_SHIFT // bits[15:14]
 
@@ -274,12 +260,14 @@ void check_stage2_configuration(void)
 //			    struct kvm_pgtable_mm_ops *mm_ops,
 //			    enum kvm_pgtable_stage2_flags flags,
 //			    kvm_pgtable_force_pte_cb_t force_pte_cb)
-int picovm_pgtable_stage2_init(struct picovm_pgtable *pgt)
+int picovm_pgtable_stage2_init(struct picovm_pgtable *pgt, struct picovm_s2_mmu *mmu)
 {
 	check_stage2_configuration();
 
   pgt->ia_bits = PICOVM_CONFIG_IA_BITS;
   pgt->start_level = PICOVM_CONFIG_STARTING_LEVEL;
+  pgt->mmu = mmu;
+  
   size_t pgd_sz = picovm_pgd_pages(pgt->ia_bits, pgt->start_level) * PAGE_SIZE;
   pgt->pgd = (picovm_pteref_t)malloc(pgd_sz);   // (picovm_pteref_t)host_s2_zalloc_pages_exact(pgd_sz);
   if (!pgt->pgd)
@@ -333,13 +321,13 @@ int picovm_pgtable_hyp_map(struct picovm_pgtable *pgt, u64 addr, u64 size, u64 p
 {
   int ret;
   struct picovm_hyp_map_data map_data = {
-		.phys	= ALIGN_DOWN(phys, PAGE_SIZE),
-    .prot = prot,
+		.phys = ALIGN_DOWN(phys, PAGE_SIZE),
+    	.prot = prot,
 	};
 
 	struct picovm_pgtable_walker walker = {
 		.cb	= hyp_map_walker,
-		.arg	= &map_data,
+		.arg = &map_data,
 	};
 
 	ret = picovm_pgtable_walk(pgt, addr, size, &walker);

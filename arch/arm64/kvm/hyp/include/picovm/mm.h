@@ -3,7 +3,7 @@
 #ifndef __PICOVM_MM_H
 #define __PICOVM_MM_H
 
-#include <picovm/picovm_pgtable.h>
+#include <picovm/pgtable.h>
 #include <picovm/spinlock.h>
 
 extern struct picovm_pgtable picovm_pgtable;

@@ -6,10 +6,11 @@
  * Partial copy from include/asm/kvm_hyp.h
  */
 
-#include <picovm/prelude.h>
-
 #ifndef __PICOVM_HYP_H__
 #define __PICOVM_HYP_H__
+
+#include <picovm/prelude.h>
+#include <picovm/picovm.h>
 
 extern unsigned int __ro_after_init picovm_arm_vmid_bits;
 

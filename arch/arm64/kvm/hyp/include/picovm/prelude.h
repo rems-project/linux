@@ -1,11 +1,9 @@
 #ifndef __PICOVM_PRELUDE_H
 #define __PICOVM_PRELUDE_H
 
+#include <picovm/asm/emulate.h>
 #include <picovm/asm/errno-base.h>
-#include <picovm/asm/ptrace.h>
-#include <picovm/asm/sections.h>
 
-#include <picovm/linux/tlbflush.h>
 #include <picovm/linux/memblock.h>
 #include <picovm/linux/percpu-def.h>
 #include <picovm/linux/types.h>
@@ -22,8 +20,8 @@
 
 /* TODO(license) from: linux/include/uapi/linux/const.h */
 /* SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note */
-#define __ALIGN_KERNEL(x, a)		__ALIGN_KERNEL_MASK(x, (typeof(x))(a) - 1)
 #define __ALIGN_KERNEL_MASK(x, mask)	(((x) + (mask)) & ~(mask))
+#define __ALIGN_KERNEL(x, a)		__ALIGN_KERNEL_MASK(x, (typeof(x))(a) - 1)
 
 /* TODO(license) from: linux/include/linux/align.h */
 /* SPDX-License-Identifier: GPL-2.0 */
@@ -33,19 +31,16 @@
 
 static inline void picovm_assert(u64 x)
 {
-	// TODO
+	// TOODO
 }
 
-// TODO(license) copied from: include/linux/compiler_types.h
-/* SPDX-License-Identifier: GPL-2.0 */
-/* Is this type a native word size -- useful for atomic operations */
-// #define __native_word(t) \
-// 	(sizeof(t) == sizeof(char) || sizeof(t) == sizeof(short) || \
-// 	 sizeof(t) == sizeof(int) || sizeof(t) == sizeof(long))
-// #define compiletime_assert_atomic_type(t)				\
-// 	_Static_assert(__native_word(t),				\
-// 		"Need native word sized stores/loads for atomicity.")
-
+// NOTE: from include/asm/sections.h
+extern char __hyp_idmap_text_start[], __hyp_idmap_text_end[];
+extern char __hyp_text_start[], __hyp_text_end[];
+extern char __hyp_rodata_start[], __hyp_rodata_end[];
+extern char __hyp_reloc_begin[], __hyp_reloc_end[];
+extern char __hyp_bss_start[], __hyp_bss_end[];
+extern char __idmap_text_start[], __idmap_text_end[];
 
 // TODO(license) copied from: include/asm-generic/rwonce.h
 /* SPDX-License-Identifier: GPL-2.0 */
@@ -84,11 +79,89 @@ do {									\
 	__WRITE_ONCE(x, val);						\
 } while (0)
 
-// Note: from linux/types.h
-struct list_head {
-	struct list_head *next, *prev;
-};
+/*
+ * Raw TLBI operations.
+ *
+ * Where necessary, use the __tlbi() macro to avoid asm()
+ * boilerplate. Drivers and most kernel code should use the TLB
+ * management routines in preference to the macro below.
+ *
+ * The macro can be used as __tlbi(op) or __tlbi(op, arg), depending
+ * on whether a particular TLBI operation takes an argument or
+ * not. The macros handles invoking the asm with or without the
+ * register argument as appropriate.
+ */
+// TODO: hardcoding in __TLBI_0 and __TLBI_1 the ARM64_WORKAROUND_REPEAT_TLBI
+// patch to avoid depending on alternative in picovm
+#define __TLBI_0(op, arg) asm (ARM64_ASM_PREAMBLE			       \
+			       "tlbi " #op "\n"				       \
+			       "dsb ish\n				       \
+			       tlbi " #op	 			       \
+			    : : )
 
+#define __TLBI_1(op, arg) asm (ARM64_ASM_PREAMBLE			       \
+			       "tlbi " #op ", %0\n"			       \
+			       "dsb ish\n				       \
+			       tlbi " #op ", %0"			       \
+			    : : "r" (arg))
+
+#define __TLBI_N(op, arg, n, ...) __TLBI_##n(op, arg)
+
+#define __tlbi(op, ...)		__TLBI_N(op, ##__VA_ARGS__, 1, 0)
+#define __tlbi_level(op, addr, level) do {				\
+	u64 arg = addr;							\
+	__tlbi(op, arg);						\
+} while(0)
+
+// NOTE: from include/asm-generic/barrier.h
+#define dsb(option) __asm__ volatile("dsb " #option : : : "memory")
+
+#define isb()		asm volatile("isb" : : : "memory")
+#define dmb(opt)	asm volatile("dmb " #opt : : : "memory")
+#define dsb(opt)	asm volatile("dsb " #opt : : : "memory")
+
+
+#define __smp_mb()	dmb(ish)
+
+// TODO(note): this copy removes the call to kasan_check_write() and changes
+// the occurences of types __uN to uN from picovm/prelude.h
+#define __smp_store_release(p, v)					\
+do {									\
+	typeof(p) __p = (p);						\
+	union { __unqual_scalar_typeof(*p) __val; char __c[1]; } __u =	\
+		{ .__val = (__force __unqual_scalar_typeof(*p)) (v) };	\
+	compiletime_assert_atomic_type(*p);				\
+	switch (sizeof(*p)) {						\
+	case 1:								\
+		asm volatile ("stlrb %w1, %0"				\
+				: "=Q" (*__p)				\
+				: "rZ" (*(u8 *)__u.__c)		\
+				: "memory");				\
+		break;							\
+	case 2:								\
+		asm volatile ("stlrh %w1, %0"				\
+				: "=Q" (*__p)				\
+				: "rZ" (*(u16 *)__u.__c)		\
+				: "memory");				\
+		break;							\
+	case 4:								\
+		asm volatile ("stlr %w1, %0"				\
+				: "=Q" (*__p)				\
+				: "rZ" (*(u32 *)__u.__c)		\
+				: "memory");				\
+		break;							\
+	case 8:								\
+		asm volatile ("stlr %x1, %0"				\
+				: "=Q" (*__p)				\
+				: "rZ" (*(u64 *)__u.__c)		\
+				: "memory");				\
+		break;							\
+	}								\
+} while (0)
+
+#ifndef smp_store_release
+#define smp_store_release(p, v) do { __smp_store_release(p, v); } while (0)
+#endif
 
 
 #endif /* __PICOVM_PRELUDE_H */

@@ -2,17 +2,14 @@
 // that are needed for linking a whole kernel
 
 // for struct kvm_host_data and struct kvm_cpu_context
-#include <linux/kvm_host.h>
+#include <picovm/picovm_host.h>
 
-// from arch/arm64/kvm/hyp/nvhe/ghost/ghost_recording.c
-// originally from arch/arm64/kvm/va_layout.c
+// NOTE: from arch/arm64/kvm/hyp/nvhe/ghost/ghost_recording.c
+// originally NOTE: from arch/arm64/kvm/va_layout.c
 u64 tag_val;
 u8 tag_lsb;
 
-// from arch/arm64/kvm/hyp/nvhe/early_alloc.c
-s64 __ro_after_init hyp_physvirt_offset;
-
-// from arch/arm64/kvm/hyp/nvhe/setup.c
+// NOTE: from arch/arm64/kvm/hyp/nvhe/setup.c
 unsigned long arm64_kvm_hyp_debug_uart_addr;
 
 asmlinkage void __noreturn hyp_panic(void)

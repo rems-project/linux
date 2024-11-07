@@ -1,14 +1,15 @@
 #include <picovm/prelude.h>
-#include <picovm/picovm_arm.h>
-#include <picovm/picovm_hyp.h>
-#include <picovm/picovm_host.h>
-#include <picovm/picovm_mmu.h>
-#include <picovm/picovm_pgtable.h>
-#include <picovm/mem_protect.h>
+
 #include <picovm/mm.h>
+#include <picovm/hyp.h>
+#include <picovm/mm.h>
+#include <picovm/mmu.h>
+#include <picovm/pgtable.h>
+#include <picovm/mem_protect.h>
+
 
 // TODO(doc): the host Stage 2 page table
-struct picovm_pgtable host_pgt;
+struct host_mmu host_mmu;
 
 static void guest_lock_component(struct picovm_hyp_vm *vm)
 {
@@ -22,12 +23,12 @@ static void guest_unlock_component(struct picovm_hyp_vm *vm)
 
 static void host_lock_component(void)
 {
-  // TODO
+  hyp_spin_lock(&host_mmu.lock);
 }
 
 static void host_unlock_component(void)
 {
-  // TODO
+  hyp_spin_unlock(&host_mmu.lock);
 }
 
 static inline void picovm_lock_component(void)
@@ -107,6 +108,27 @@ static bool range_is_memory(u64 start, u64 end)
 	return is_in_mem_range(end - 1, &r);
 }
 
+static void write_vtcr_el2(u64 val)
+{
+  asm volatile("msr vtcr_el2, %0" : : "r" (val));
+}
+
+
+int picovm_host_prepare_stage2(void)
+{
+	struct picovm_s2_mmu *mmu = &host_mmu.arch.mmu;
+	int ret;
+
+	prepare_host_vtcr();
+	hyp_spin_lock_init(&host_mmu.lock);
+	ret = picovm_pgtable_stage2_init(&host_mmu.pgt, mmu);
+	if (ret)
+		return ret;
+
+	return 0;
+}
+
+
 static int host_stage2_idmap(u64 addr)
 {
 	struct picovm_mem_range range;
@@ -118,55 +140,55 @@ static int host_stage2_idmap(u64 addr)
 	prot = is_memory ? PICOVM_HOST_MEM_PROT : PICOVM_HOST_MMIO_PROT;
 
 	host_lock_component();
-  ret = picovm_pgtable_stage2_map(&host_mmu.pgt, range.start, range.end - range.start, addr, prot);
+  	ret = picovm_pgtable_stage2_map(&host_mmu.pgt, range.start, range.end - range.start, addr, prot);
 	host_unlock_component();
 
 	return ret;
 }
 
-// static void host_inject_abort(struct host_cpu_context *host_ctxt)
-// {
-// 	u64 spsr = read_sysreg_el2(SYS_SPSR);
-// 	u64 esr = read_sysreg_el2(SYS_ESR);
-// 	u64 ventry, ec;
-//
-// 	/* Repaint the ESR to report a same-level fault if taken from EL1 */
-// 	if ((spsr & PSR_MODE_MASK) != PSR_MODE_EL0t) {
-// 		ec = ESR_ELx_EC(esr);
-// 		if (ec == ESR_ELx_EC_DABT_LOW)
-// 			ec = ESR_ELx_EC_DABT_CUR;
-// 		else if (ec == ESR_ELx_EC_IABT_LOW)
-// 			ec = ESR_ELx_EC_IABT_CUR;
-// 		else
-// 			WARN_ON(1);
-// 		esr &= ~ESR_ELx_EC_MASK;
-// 		esr |= ec << ESR_ELx_EC_SHIFT;
-// 	}
-//
-// 	/*
-// 	 * Since S1PTW should only ever be set for stage-2 faults, we're pretty
-// 	 * much guaranteed that it won't be set in ESR_EL1 by the hardware. So,
-// 	 * let's use that bit to allow the host abort handler to differentiate
-// 	 * this abort from normal userspace faults.
-// 	 *
-// 	 * Note: although S1PTW is RES0 at EL1, it is guaranteed by the
-// 	 * architecture to be backed by flops, so it should be safe to use.
-// 	 */
-// 	esr |= ESR_ELx_S1PTW;
-//
-// 	write_sysreg_el1(esr, SYS_ESR);
-// 	write_sysreg_el1(spsr, SYS_SPSR);
-// 	write_sysreg_el1(read_sysreg_el2(SYS_ELR), SYS_ELR);
-// 	write_sysreg_el1(read_sysreg_el2(SYS_FAR), SYS_FAR);
-//
-// 	ventry = read_sysreg_el1(SYS_VBAR);
-// 	ventry += get_except64_offset(spsr, PSR_MODE_EL1h, except_type_sync);
-// 	write_sysreg_el2(ventry, SYS_ELR);
-//
-// 	spsr = get_except64_cpsr(spsr, system_supports_mte(),
-// 				 read_sysreg_el1(SYS_SCTLR), PSR_MODE_EL1h);
-// 	write_sysreg_el2(spsr, SYS_SPSR);
-// }
+static void host_inject_abort(struct host_cpu_context *host_ctxt)
+{
+	u64 spsr = read_sysreg_el2(SYS_SPSR);
+	u64 esr = read_sysreg_el2(SYS_ESR);
+	u64 ventry, ec;
+
+	/* Repaint the ESR to report a same-level fault if taken from EL1 */
+	if ((spsr & PSR_MODE_MASK) != PSR_MODE_EL0t) {
+		ec = ESR_ELx_EC(esr);
+		if (ec == ESR_ELx_EC_DABT_LOW)
+			ec = ESR_ELx_EC_DABT_CUR;
+		else if (ec == ESR_ELx_EC_IABT_LOW)
+			ec = ESR_ELx_EC_IABT_CUR;
+		else
+			WARN_ON(1);
+		esr &= ~ESR_ELx_EC_MASK;
+		esr |= ec << ESR_ELx_EC_SHIFT;
+	}
+
+	/*
+	 * Since S1PTW should only ever be set for stage-2 faults, we're pretty
+	 * much guaranteed that it won't be set in ESR_EL1 by the hardware. So,
+	 * let's use that bit to allow the host abort handler to differentiate
+	 * this abort from normal userspace faults.
+	 *
+	 * Note: although S1PTW is RES0 at EL1, it is guaranteed by the
+	 * architecture to be backed by flops, so it should be safe to use.
+	 */
+	esr |= ESR_ELx_S1PTW;
+
+	write_sysreg_el1(esr, SYS_ESR);
+	write_sysreg_el1(spsr, SYS_SPSR);
+	write_sysreg_el1(read_sysreg_el2(SYS_ELR), SYS_ELR);
+	write_sysreg_el1(read_sysreg_el2(SYS_FAR), SYS_FAR);
+
+	ventry = read_sysreg_el1(SYS_VBAR);
+	ventry += get_except64_offset(spsr, PSR_MODE_EL1h, except_type_sync);
+	write_sysreg_el2(ventry, SYS_ELR);
+
+	spsr = get_except64_cpsr(spsr, system_supports_mte(),
+				 read_sysreg_el1(SYS_SCTLR), PSR_MODE_EL1h);
+	write_sysreg_el2(spsr, SYS_SPSR);
+}
 
 void handle_host_mem_abort(struct host_cpu_context *host_ctxt)
 {
@@ -180,11 +202,10 @@ void handle_host_mem_abort(struct host_cpu_context *host_ctxt)
 	addr = (fault.hpfar_el2 & HPFAR_MASK) << 8;
 	ret = host_stage2_idmap(addr);
 
-  // TODO: what does host_inject_abort do?
-	// if (ret == -EPERM)
-	// 	host_inject_abort(host_ctxt);
-	// else
-	// 	BUG_ON(ret && ret != -EAGAIN);
+	if (ret == -EPERM)
+		host_inject_abort(host_ctxt);
+	else
+		BUG_ON(ret && ret != -EAGAIN);
 }
 
 int __picovm_prot_finalize(void)
@@ -269,15 +290,14 @@ static int __host_check_page_state_range(u64 addr, u64 size,
   };
   
   // hyp_assert_lock_held(&host_mmu.lock);
-	return check_page_state_range(&host_pgt, addr, size, &d);
+	return check_page_state_range(&host_mmu.pgt, addr, size, &d);
 }
 
 int host_stage2_idmap_locked(phys_addr_t addr, u64 size,
 			     enum picovm_pgtable_prot prot)
 {
-	// TODO
 	// TODO(doc) we don't do the host_stage2_try from actual pKVM
-	return picovm_pgtable_stage2_map(&host_pgt, addr, size, addr,
+	return picovm_pgtable_stage2_map(&host_mmu.pgt, addr, size, addr,
 					 prot /*, &host_s2_pool, 0 */);
 }
 
@@ -313,9 +333,6 @@ int __picovm_host_share_hyp(u64 pfn)
 	ret = __host_check_page_state_range(host_addr, PAGE_SIZE, PICOVM_PAGE_OWNED);
 	if (ret)
 		goto unlock;
-
-	if ( !(IS_ENABLED(CONFIG_NVHE_EL2_DEBUG)) )
-		goto do_share;
 
 	ret = __hyp_check_page_state_range(hyp_addr, PAGE_SIZE, PICOVM_NOPAGE);
 	if (ret)
@@ -353,9 +370,6 @@ int __picovm_host_unshare_hyp(u64 pfn)
 	ret = __host_check_page_state_range(host_addr, PAGE_SIZE, PICOVM_PAGE_SHARED_OWNED);
 	if (ret)
 		goto unlock;
-
-	if ( !(IS_ENABLED(CONFIG_NVHE_EL2_DEBUG)) )
-		goto do_unshare;
 
 	ret = __hyp_check_page_state_range(hyp_addr, PAGE_SIZE, PICOVM_PAGE_SHARED_BORROWED);
 	if (ret)
