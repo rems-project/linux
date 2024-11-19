@@ -45,7 +45,7 @@ def cerberus(cmd, filename):
 
 def cerberus_cn(cmd, filename):
     return re.sub(f'-include', f'--include',
-            'cn -include cerb_work_around.h ' + ' '.join(x.group() for x in re.finditer(r'(-I|-include )\S+', cmd)) + ' ' + filename)
+            'cn verify -include cerb_work_around.h ' + ' '.join(x.group() for x in re.finditer(r'(-I|-include )\S+', cmd)) + ' ' + filename)
 
 def create_command(data, args):
     result = []

@@ -74,7 +74,7 @@ extern void hyp_get_page(void *addr);
 */
 
 /*@
-predicate {bool exists} Cond_Zero_Page (pointer p) {
+predicate {boolean exists} Cond_Zero_Page (pointer p) {
   if (p == NULL) {
     return {exists: false};
   }
@@ -91,7 +91,7 @@ predicate {bool exists} Cond_Zero_Page (pointer p) {
 /*@
 function (u64) phys_virt_offset ()
 
-function (bool) valid_phys_virt_offset ()
+function (boolean) valid_phys_virt_offset ()
 { mod(phys_virt_offset (), 4096u64) == 0u64 }
 
 function (pointer) hyp_phys_to_virt (u64 phys)
@@ -99,38 +99,38 @@ function (pointer) hyp_phys_to_virt (u64 phys)
   ((pointer) (phys - phys_virt_offset ()))
 }
 
-spec hyp_phys_to_virt (u64 phys)
-  requires true
+spec hyp_phys_to_virt (u64 phys);
+  requires true;
   ensures
-    return == hyp_phys_to_virt (phys)
+    return == hyp_phys_to_virt (phys);
 
 function (u64) hyp_virt_to_phys (pointer virt)
 {
   ((u64) virt) + phys_virt_offset ()
 }
 
-spec hyp_virt_to_phys (pointer virt)
-  requires true
+spec hyp_virt_to_phys (pointer virt);
+  requires true;
   ensures
-    return == hyp_virt_to_phys (virt)
+    return == hyp_virt_to_phys (virt);
 @*/
 
 /*@
-function (bool) valid_hyp_virt_page (pointer p)
+function (boolean) valid_hyp_virt_page (pointer p)
 {
   (mod(((u64) p), 4096u64) == 0u64) &&
   (hyp_virt_to_phys(p) < power(2u64, 48u64))
 }
 
-spec hyp_zalloc_hyp_page (pointer arg)
-  requires true
+spec hyp_zalloc_hyp_page (pointer arg);
+  requires true;
   ensures
     take P = Cond_Zero_Page (return);
-    valid_hyp_virt_page(return)
+    valid_hyp_virt_page(return);
 
-spec hyp_get_page (pointer arg)
-  requires true
-  ensures true
+spec hyp_get_page (pointer arg);
+  requires true;
+  ensures true;
 @*/
 
 
@@ -147,7 +147,7 @@ predicate (void) MM_Ops(pointer p) {
 
 /* constraints on level, see arch/arm64/include/asm/pgtable-hwdef.h */
 /*@
-function (bool) valid_pgtable_level (u32 level)
+function (boolean) valid_pgtable_level (u32 level)
 {
   0u32 <= level && level <= 3u32
 }
@@ -192,7 +192,7 @@ function (pointer) decode_table_entry_pointer (u64 encoded)
   hyp_phys_to_virt (decode_table_entry_phys (encoded))
 }
 
-predicate {bool x} Indirect_Page_Table_Entries (pointer p, u32 level, u64 encoded) {
+predicate {boolean x} Indirect_Page_Table_Entries (pointer p, u32 level, u64 encoded) {
   if (is_table_entry_at (encoded, level)) {
     assert (valid_pgtable_level(level));
     assert (good<kvm_pte_t *> (decode_table_entry_pointer (encoded)));
@@ -290,14 +290,14 @@ struct kvm_pgtable_walk_data {
 /*@ function (u8) kvm_phys_is_valid(u64 phys) @*/
 
 static bool kvm_phys_is_valid(u64 phys)
-/*@ cn_function kvm_phys_is_valid @*/
-/*@ ensures return == kvm_phys_is_valid(phys) @*/
+/*@ cn_function kvm_phys_is_valid; @*/
+/*@ ensures return == kvm_phys_is_valid(phys); @*/
 {
 	return phys < BIT(id_aa64mmfr0_parange_to_phys_shift(ID_AA64MMFR0_EL1_PARANGE_MAX));
 }
 
 /*@
-function (bool) pure_kvm_block_mapping_supported(u64 addr, u64 end, u64 phys, u32 level)
+function (boolean) pure_kvm_block_mapping_supported(u64 addr, u64 end, u64 phys, u32 level)
 {
   kvm_level_supports_block_mapping(level) != 0u8 &&
   (! (kvm_granule_size(level) > (end - addr))) &&
@@ -307,12 +307,12 @@ function (bool) pure_kvm_block_mapping_supported(u64 addr, u64 end, u64 phys, u3
 @*/
 
 static bool kvm_block_mapping_supported(const struct kvm_pgtable_visit_ctx *ctx, u64 phys)
-/*@ requires take Ctx = Owned(ctx) @*/
-/*@ requires valid_pgtable_level(Ctx.level) @*/
-/*@ ensures take Ctx2 = Owned(ctx) @*/
-/*@ ensures Ctx2 == Ctx @*/
+/*@ requires take Ctx = Owned(ctx); @*/
+/*@ requires valid_pgtable_level(Ctx.level); @*/
+/*@ ensures take Ctx2 = Owned(ctx); @*/
+/*@ ensures Ctx2 == Ctx; @*/
 /*@ ensures return == (pure_kvm_block_mapping_supported(Ctx.addr, Ctx.end, phys, Ctx.level)
-  ? 1u8 : 0u8) @*/
+  ? 1u8 : 0u8); @*/
 {
 	u64 granule = kvm_granule_size(ctx->level);
 
@@ -330,18 +330,18 @@ static bool kvm_block_mapping_supported(const struct kvm_pgtable_visit_ctx *ctx,
 
 
 /*@
-cn_function (u32) purekvm_pgtable_idx(u64 addr, u32 level) {
+function (u32) purekvm_pgtable_idx(u64 addr, u32 level) {
   (u32) (bw_and_uf((u64) ((u32) shift_right (addr, kvm_granule_shift(level))), 511u64))
 }
 @*/
 
 static u32 kvm_pgtable_idx(struct kvm_pgtable_walk_data *data, u32 level)
-/*@ requires take Data = Owned (data) @*/
-/*@ requires valid_pgtable_level(level) @*/
-/*@ ensures take Data2 = Owned (data) @*/
-/*@ ensures 0u32 <= return && return < power(2u32, 12u32 - 3u32) @*/
-/*@ ensures Data2 == Data @*/
-/*@ ensures return == purekvm_pgtable_idx(Data.addr, level) @*/
+/*@ requires take Data = Owned (data); @*/
+/*@ requires valid_pgtable_level(level); @*/
+/*@ ensures take Data2 = Owned (data); @*/
+/*@ ensures 0u32 <= return && return < power(2u32, 12u32 - 3u32); @*/
+/*@ ensures Data2 == Data; @*/
+/*@ ensures return == purekvm_pgtable_idx(Data.addr, level); @*/
 {
 	u64 shift = kvm_granule_shift(level);
 	u64 mask = BIT(PAGE_SHIFT - 3) - 1;
@@ -359,15 +359,15 @@ function (u32) pure__kvm_pgd_page_idx(u32 ia_bits, u32 start_level, u64 addr) {
 @*/
 
 static u32 kvm_pgd_page_idx(struct kvm_pgtable *pgt, u64 addr)
-/*@ requires take PTStruct = Owned<struct kvm_pgtable>(pgt) @*/
-/*@ requires ((0u32 < PTStruct.ia_bits) && (PTStruct.ia_bits < 64u32)) @*/
-/*@ requires valid_pgtable_level(PTStruct.start_level) @*/
-/*@ requires let extra_bits = pgd_extra_bits(PTStruct.ia_bits, PTStruct.start_level) @*/
-/*@ requires 0u32 <= extra_bits; extra_bits <= 4u32 @*/
-/*@ ensures shift_right(return, extra_bits) == 0u32 @*/
-/*@ ensures take PTStruct2 = Owned<struct kvm_pgtable>(pgt) @*/
-/*@ ensures PTStruct2 == PTStruct @*/
-/*@ ensures return == pure__kvm_pgd_page_idx(PTStruct.ia_bits, PTStruct.start_level, addr) @*/
+/*@ requires take PTStruct = Owned<struct kvm_pgtable>(pgt); @*/
+/*@ requires ((0u32 < PTStruct.ia_bits) && (PTStruct.ia_bits < 64u32)); @*/
+/*@ requires valid_pgtable_level(PTStruct.start_level); @*/
+/*@ requires let extra_bits = pgd_extra_bits(PTStruct.ia_bits, PTStruct.start_level); @*/
+/*@ requires 0u32 <= extra_bits; extra_bits <= 4u32; @*/
+/*@ ensures shift_right(return, extra_bits) == 0u32; @*/
+/*@ ensures take PTStruct2 = Owned<struct kvm_pgtable>(pgt); @*/
+/*@ ensures PTStruct2 == PTStruct; @*/
+/*@ ensures return == pure__kvm_pgd_page_idx(PTStruct.ia_bits, PTStruct.start_level, addr); @*/
 {
 	u64 shift = kvm_granule_shift(pgt->start_level - 1); /* May underflow */
 	u64 mask = BIT(pgt->ia_bits) - 1;
@@ -386,9 +386,9 @@ static u32 kvm_pgd_pages(u32 ia_bits, u32 start_level)
 }
 
 static bool kvm_pte_table(kvm_pte_t pte, u32 level)
-/*@ cn_function kvm_pte_table @*/
-/*@ requires valid_pgtable_level(level) @*/
-/*@ ensures return == (is_table_entry_at(pte, level) ? 1u8 : 0u8) @*/
+/*@ cn_function kvm_pte_table; @*/
+/*@ requires valid_pgtable_level(level); @*/
+/*@ ensures return == (is_table_entry_at(pte, level) ? 1u8 : 0u8); @*/
 {
 	if (level == KVM_PGTABLE_MAX_LEVELS - 1)
 		return false;
@@ -403,10 +403,10 @@ static bool kvm_pte_table(kvm_pte_t pte, u32 level)
 }
 
 static kvm_pte_t *kvm_pte_follow(kvm_pte_t pte, struct kvm_pgtable_mm_ops *mm_ops)
-/*@ requires good<kvm_pte_t *>(decode_table_entry_pointer (pte)) @*/
-/*@ requires take Ops = MM_Ops(mm_ops) @*/
-/*@ ensures take Ops2 = MM_Ops(mm_ops) @*/
-/*@ ensures return == decode_table_entry_pointer (pte) @*/
+/*@ requires good<kvm_pte_t *>(decode_table_entry_pointer (pte)); @*/
+/*@ requires take Ops = MM_Ops(mm_ops); @*/
+/*@ ensures take Ops2 = MM_Ops(mm_ops); @*/
+/*@ ensures return == decode_table_entry_pointer (pte); @*/
 {
 	return mm_ops->phys_to_virt(kvm_pte_to_phys(pte));
 }
@@ -417,12 +417,12 @@ static void kvm_clear_pte(kvm_pte_t *ptep)
 }
 
 static kvm_pte_t kvm_init_table_pte(kvm_pte_t *childp, struct kvm_pgtable_mm_ops *mm_ops)
-/*@ requires take Ops = MM_Ops(mm_ops) @*/
-/*@ requires valid_phys_virt_offset () @*/
-/*@ requires valid_hyp_virt_page(childp) @*/
-/*@ ensures take Ops2 = MM_Ops(mm_ops) @*/
-/*@ ensures is_possible_table_entry(return) @*/
-/*@ ensures decode_table_entry_pointer(return) == childp @*/
+/*@ requires take Ops = MM_Ops(mm_ops); @*/
+/*@ requires valid_phys_virt_offset (); @*/
+/*@ requires valid_hyp_virt_page(childp); @*/
+/*@ ensures take Ops2 = MM_Ops(mm_ops); @*/
+/*@ ensures is_possible_table_entry(return); @*/
+/*@ ensures decode_table_entry_pointer(return) == childp; @*/
 {
 	kvm_pte_t pte = kvm_phys_to_pte(mm_ops->virt_to_phys(childp));
 
@@ -443,9 +443,9 @@ function (kvm_pte_t) kvm_init_valid_leaf_pte (u64 pa, kvm_pte_t attr, u32 level)
 @*/
 
 static kvm_pte_t kvm_init_valid_leaf_pte(u64 pa, kvm_pte_t attr, u32 level)
-/*@ cn_function kvm_init_valid_leaf_pte @*/
-/*@ requires valid_pgtable_level(level) @*/
-/*@ ensures not (is_table_entry_at (return, level)) @*/
+/*@ cn_function kvm_init_valid_leaf_pte; @*/
+/*@ requires valid_pgtable_level(level); @*/
+/*@ ensures not (is_table_entry_at (return, level)); @*/
 {
 	kvm_pte_t pte = kvm_phys_to_pte(pa);
 	u64 type = (level == KVM_PGTABLE_MAX_LEVELS - 1) ? KVM_PTE_TYPE_PAGE :
@@ -465,7 +465,7 @@ static kvm_pte_t kvm_init_invalid_leaf_owner(u8 owner_id)
 }
 
 /*@
-function (bool) flag_in_flags (i32 flag, i32 flags) {
+function (boolean) flag_in_flags (i32 flag, i32 flags) {
   ((flag == KVM_PGTABLE_WALK_LEAF
         || flag == KVM_PGTABLE_WALK_TABLE_PRE
         || flag == KVM_PGTABLE_WALK_TABLE_POST)
@@ -484,27 +484,27 @@ function (bool) flag_in_flags (i32 flag, i32 flags) {
 static int kvm_pgtable_visitor_cb(struct kvm_pgtable_walk_data *data,
 				  const struct kvm_pgtable_visit_ctx *ctx,
 				  enum kvm_pgtable_walk_flags visit)
-/*@ requires take Data = KVM_PgTable_Walk_Data(data) @*/
-/*@ requires take Ctx = Owned(ctx) @*/
-/*@ requires valid_pgtable_level(Ctx.level) @*/
-/*@ requires valid_phys_virt_offset () @*/
-/*@ requires take pte = Owned(Ctx.ptep) @*/
-/*@ requires take IPT = Indirect_Page_Table_Entries (Ctx.ptep, Ctx.level, pte) @*/
-/*@ requires take Ops = MM_Ops(Ctx.mm_ops) @*/
-/*@ requires flag_in_flags ((i32) visit, (i32) (Data.flags)) @*/
+/*@ requires take Data = KVM_PgTable_Walk_Data(data); @*/
+/*@ requires take Ctx = Owned(ctx); @*/
+/*@ requires valid_pgtable_level(Ctx.level); @*/
+/*@ requires valid_phys_virt_offset (); @*/
+/*@ requires take pte = Owned(Ctx.ptep); @*/
+/*@ requires take IPT = Indirect_Page_Table_Entries (Ctx.ptep, Ctx.level, pte); @*/
+/*@ requires take Ops = MM_Ops(Ctx.mm_ops); @*/
+/*@ requires flag_in_flags ((i32) visit, (i32) (Data.flags)); @*/
 /*@ requires (visit == (u32)KVM_PGTABLE_WALK_LEAF) ==
-    (not(is_table_entry_at(pte, Ctx.level))) @*/
-/*@ requires Ctx.arg == Data.walker.arg @*/
-/*@ ensures take Data2 = KVM_PgTable_Walk_Data (data) @*/
-/*@ ensures Data2 == Data @*/
-/*@ ensures take Ctx2 = Owned(ctx) @*/
-/*@ ensures Ctx2 == Ctx @*/
-/*@ ensures take pte2 = Owned(Ctx.ptep) @*/
-/*@ ensures take IPT2 = Indirect_Page_Table_Entries (Ctx.ptep, Ctx.level, pte2) @*/
-/*@ ensures take Ops2 = MM_Ops(Ctx.mm_ops) @*/
-/*@ ensures Ops2 == Ops @*/
+    (not(is_table_entry_at(pte, Ctx.level))); @*/
+/*@ requires Ctx.arg == Data.walker.arg; @*/
+/*@ ensures take Data2 = KVM_PgTable_Walk_Data (data); @*/
+/*@ ensures Data2 == Data; @*/
+/*@ ensures take Ctx2 = Owned(ctx); @*/
+/*@ ensures Ctx2 == Ctx; @*/
+/*@ ensures take pte2 = Owned(Ctx.ptep); @*/
+/*@ ensures take IPT2 = Indirect_Page_Table_Entries (Ctx.ptep, Ctx.level, pte2); @*/
+/*@ ensures take Ops2 = MM_Ops(Ctx.mm_ops); @*/
+/*@ ensures Ops2 == Ops; @*/
 /*@ ensures visit == ((u32)KVM_PGTABLE_WALK_TABLE_PRE)
-    ? pte2 == pte : true @*/
+    ? pte2 == pte : true; @*/
 {
 	struct kvm_pgtable_walker *walker = data->walker;
 	WARN_ON_ONCE(kvm_pgtable_walk_shared(ctx) && !kvm_pgtable_walk_lock_held());
@@ -512,7 +512,7 @@ static int kvm_pgtable_visitor_cb(struct kvm_pgtable_walk_data *data,
 }
 
 /*@
-function (bool) walk_again_case(i32 r, u32 flags)
+function (boolean) walk_again_case(i32 r, u32 flags)
   { r == (0i32 - enum_EAGAIN) &&
     bw_and_uf(flags, (u32) KVM_PGTABLE_WALK_HANDLE_FAULT) == 0u32
   }
@@ -520,10 +520,10 @@ function (bool) walk_again_case(i32 r, u32 flags)
 
 static bool kvm_pgtable_walk_continue(const struct kvm_pgtable_walker *walker,
 				      int r)
-/*@ requires take Walker = KVM_PgTable_Walker (walker) @*/
-/*@ ensures take Walker2 = KVM_PgTable_Walker (walker) @*/
-/*@ ensures Walker2 == Walker @*/
-/*@ ensures return == ((r == 0i32) || walk_again_case(r, Walker.flags) ? 1u8 : 0u8) @*/
+/*@ requires take Walker = KVM_PgTable_Walker (walker); @*/
+/*@ ensures take Walker2 = KVM_PgTable_Walker (walker); @*/
+/*@ ensures Walker2 == Walker; @*/
+/*@ ensures return == ((r == 0i32) || walk_again_case(r, Walker.flags) ? 1u8 : 0u8); @*/
 {
 	/*
 	 * Visitor callbacks return EAGAIN when the conditions that led to a
@@ -547,26 +547,26 @@ static int __kvm_pgtable_walk(struct kvm_pgtable_walk_data *data,
 static inline int __kvm_pgtable_visit(struct kvm_pgtable_walk_data *data,
 				      struct kvm_pgtable_mm_ops *mm_ops,
 				      kvm_pteref_t pteref, u32 level)
-/*@ requires take Data = KVM_PgTable_Walk_Data (data) @*/
-/*@ requires valid_pgtable_level(level) @*/
-/*@ requires valid_phys_virt_offset () @*/
-/*@ requires take pte = Owned<kvm_pte_t>(pteref) @*/
-/*@ requires take IPT = Indirect_Page_Table_Entries (pteref, level, pte) @*/
-/*@ requires take Ops = MM_Ops(mm_ops) @*/
-/*@ requires Data.addr <= Data.end @*/
-/*@ ensures take Data2 = KVM_PgTable_Walk_Data (data) @*/
-/*@ ensures Data2.end == Data.end @*/
-/*@ ensures Data2.walker == Data.walker @*/
-/*@ ensures Data2.flags == Data.flags @*/
-/*@ ensures take pte2 = Owned<kvm_pte_t>(pteref) @*/
-/*@ ensures take IPT2 = Indirect_Page_Table_Entries (pteref, level, pte2) @*/
-/*@ ensures take Ops2 = MM_Ops(mm_ops) @*/
-/*@ ensures Ops2 == Ops @*/
+/*@ requires take Data = KVM_PgTable_Walk_Data (data); @*/
+/*@ requires valid_pgtable_level(level); @*/
+/*@ requires valid_phys_virt_offset (); @*/
+/*@ requires take pte = Owned<kvm_pte_t>(pteref); @*/
+/*@ requires take IPT = Indirect_Page_Table_Entries (pteref, level, pte); @*/
+/*@ requires take Ops = MM_Ops(mm_ops); @*/
+/*@ requires Data.addr <= Data.end; @*/
+/*@ ensures take Data2 = KVM_PgTable_Walk_Data (data); @*/
+/*@ ensures Data2.end == Data.end; @*/
+/*@ ensures Data2.walker == Data.walker; @*/
+/*@ ensures Data2.flags == Data.flags; @*/
+/*@ ensures take pte2 = Owned<kvm_pte_t>(pteref); @*/
+/*@ ensures take IPT2 = Indirect_Page_Table_Entries (pteref, level, pte2); @*/
+/*@ ensures take Ops2 = MM_Ops(mm_ops); @*/
+/*@ ensures Ops2 == Ops; @*/
 /*@ ensures ((Data2.addr < Data2.end) && (return == 0i32)) ?
         (Data2.addr == (align_u64 (Data.addr, kvm_granule_shift(level)) +
             shift_left(1u64, kvm_granule_shift(level))))
-        : true @*/
-/*@ ensures ! walk_again_case(return, Data.flags) @*/
+        : true; @*/
+/*@ ensures ! walk_again_case(return, Data.flags); @*/
 {
 	enum kvm_pgtable_walk_flags flags = data->walker->flags;
 	kvm_pte_t *ptep = kvm_dereference_pteref(data->walker, pteref);
@@ -632,27 +632,27 @@ out:
 
 static int __kvm_pgtable_walk(struct kvm_pgtable_walk_data *data,
 			      struct kvm_pgtable_mm_ops *mm_ops, kvm_pteref_t pgtable, u32 level)
-/*@ requires take Data = KVM_PgTable_Walk_Data (data) @*/
-/*@ requires take PTEs = Page_Table_Entries (pgtable, level) @*/
-/*@ requires let orig_data = data @*/
-/*@ requires let orig_pgtable = pgtable @*/
-/*@ requires let orig_mm_ops = mm_ops @*/
-/*@ requires take Ops = MM_Ops(mm_ops) @*/
-/*@ requires valid_pgtable_level(level) @*/
-/*@ requires valid_phys_virt_offset () @*/
-/*@ requires let orig_level = level @*/
-/*@ ensures take Data2 = KVM_PgTable_Walk_Data (data) @*/
-/*@ ensures Data2.end == Data.end @*/
-/*@ ensures Data2.walker == Data.walker @*/
-/*@ ensures Data2.flags == Data.flags @*/
-/*@ ensures take PTEs2 = Page_Table_Entries (pgtable, level) @*/
-/*@ ensures take Ops2 = MM_Ops(mm_ops) @*/
-/*@ ensures Ops2 == Ops @*/
+/*@ requires take Data = KVM_PgTable_Walk_Data (data); @*/
+/*@ requires take PTEs = Page_Table_Entries (pgtable, level); @*/
+/*@ requires let orig_data = data; @*/
+/*@ requires let orig_pgtable = pgtable; @*/
+/*@ requires let orig_mm_ops = mm_ops; @*/
+/*@ requires take Ops = MM_Ops(mm_ops); @*/
+/*@ requires valid_pgtable_level(level); @*/
+/*@ requires valid_phys_virt_offset (); @*/
+/*@ requires let orig_level = level; @*/
+/*@ ensures take Data2 = KVM_PgTable_Walk_Data (data); @*/
+/*@ ensures Data2.end == Data.end; @*/
+/*@ ensures Data2.walker == Data.walker; @*/
+/*@ ensures Data2.flags == Data.flags; @*/
+/*@ ensures take PTEs2 = Page_Table_Entries (pgtable, level); @*/
+/*@ ensures take Ops2 = MM_Ops(mm_ops); @*/
+/*@ ensures Ops2 == Ops; @*/
 /*@ ensures ((Data2.addr < Data2.end) && (return == 0i32)) ?
     (Data2.addr == (align_u64 (Data.addr, kvm_granule_shift(level - 1u32)) +
         shift_left(1u64, kvm_granule_shift(level - 1u32))))
-    : true @*/
-/*@ ensures ! walk_again_case(return, Data.flags) @*/
+    : true; @*/
+/*@ ensures ! walk_again_case(return, Data.flags); @*/
 {
 	u32 idx;
 	int ret = 0;
@@ -663,25 +663,25 @@ static int __kvm_pgtable_walk(struct kvm_pgtable_walk_data *data,
 		return -EINVAL;
 
 	for (idx = kvm_pgtable_idx(data, level); idx < PTRS_PER_PTE; ++idx)
-	/*@ inv take Data3 = KVM_PgTable_Walk_Data (data) @*/
-	/*@ inv take PTEs3 = Page_Table_Entries (pgtable, level) @*/
-	/*@ inv 0u32 <= idx && idx <= ((u32)enum_PTRS_PER_PTE) @*/
-	/*@ inv data == orig_data @*/
-	/*@ inv pgtable == orig_pgtable @*/
-	/*@ inv level == orig_level @*/
-	/*@ inv Data3.end == Data.end @*/
-	/*@ inv Data3.walker == Data.walker @*/
-	/*@ inv Data3.flags == Data.flags @*/
-	/*@ inv mm_ops == orig_mm_ops @*/
-	/*@ inv take Ops3 = MM_Ops(mm_ops) @*/
-	/*@ inv ret == 0i32 @*/
+	/*@ inv take Data3 = KVM_PgTable_Walk_Data (data); @*/
+	/*@ inv take PTEs3 = Page_Table_Entries (pgtable, level); @*/
+	/*@ inv 0u32 <= idx && idx <= ((u32)enum_PTRS_PER_PTE); @*/
+	/*@ inv data == orig_data; @*/
+	/*@ inv pgtable == orig_pgtable; @*/
+	/*@ inv level == orig_level; @*/
+	/*@ inv Data3.end == Data.end; @*/
+	/*@ inv Data3.walker == Data.walker; @*/
+	/*@ inv Data3.flags == Data.flags; @*/
+	/*@ inv mm_ops == orig_mm_ops; @*/
+	/*@ inv take Ops3 = MM_Ops(mm_ops); @*/
+	/*@ inv ret == 0i32; @*/
 	/*@ inv ((Data3.addr == Data.addr) && (idx == purekvm_pgtable_idx(Data.addr, level)))
 		||
 		(Data3.addr >= Data.end)
 		||
 		((Data.addr < Data.end) && Data3.addr ==
 			(align_u64 (Data.addr, kvm_granule_shift(level - 1u32)) +
-				shift_left((u64)idx, kvm_granule_shift(level)))) @*/
+				shift_left((u64)idx, kvm_granule_shift(level)))); @*/
 	{
 		kvm_pteref_t pteref = &pgtable[idx];
 
@@ -703,17 +703,17 @@ static int __kvm_pgtable_walk(struct kvm_pgtable_walk_data *data,
 }
 
 static int _kvm_pgtable_walk(struct kvm_pgtable *pgt, struct kvm_pgtable_walk_data *data)
-/*@ requires take Data = KVM_PgTable_Walk_Data (data) @*/
-/*@ requires take PT = Pg_Table (pgt) @*/
-/*@ requires let orig_data = data @*/
-/*@ requires let orig_pgt = pgt @*/
-/*@ requires take Ops = MM_Ops(PT.data.mm_ops) @*/
-/*@ requires valid_phys_virt_offset () @*/
-/*@ ensures take Data2 = KVM_PgTable_Walk_Data (data) @*/
-/*@ ensures take PT2 = Pg_Table (pgt) @*/
-/*@ ensures PT2 == PT @*/
-/*@ ensures take Ops2 = MM_Ops(PT.data.mm_ops) @*/
-/*@ ensures Data2.walker == Data.walker @*/
+/*@ requires take Data = KVM_PgTable_Walk_Data (data); @*/
+/*@ requires take PT = Pg_Table (pgt); @*/
+/*@ requires let orig_data = data; @*/
+/*@ requires let orig_pgt = pgt; @*/
+/*@ requires take Ops = MM_Ops(PT.data.mm_ops); @*/
+/*@ requires valid_phys_virt_offset (); @*/
+/*@ ensures take Data2 = KVM_PgTable_Walk_Data (data); @*/
+/*@ ensures take PT2 = Pg_Table (pgt); @*/
+/*@ ensures PT2 == PT; @*/
+/*@ ensures take Ops2 = MM_Ops(PT.data.mm_ops); @*/
+/*@ ensures Data2.walker == Data.walker; @*/
 {
 	u32 idx;
 	int ret = 0;
@@ -726,19 +726,19 @@ static int _kvm_pgtable_walk(struct kvm_pgtable *pgt, struct kvm_pgtable_walk_da
 		return -EINVAL;
 
 	for (idx = kvm_pgd_page_idx(pgt, data->addr); data->addr < data->end; ++idx)
-	/*@ inv take Data3 = KVM_PgTable_Walk_Data (data) @*/
-	/*@ inv take PT3 = Pg_Table(pgt) @*/
-	/*@ inv take Ops3 = MM_Ops(PT.data.mm_ops) @*/
-	/*@ inv data == orig_data @*/
-	/*@ inv pgt == orig_pgt @*/
-	/*@ inv PT3 == PT @*/
-	/*@ inv Ops3 == Ops @*/
-	/*@ inv Data3.end == Data.end @*/
-	/*@ inv Data3.walker == Data.walker @*/
-	/*@ inv Data3.flags == Data.flags @*/
-	/*@ inv Data.end <= shift_left(1u64, (u64) PT.data.ia_bits) @*/
+	/*@ inv take Data3 = KVM_PgTable_Walk_Data (data); @*/
+	/*@ inv take PT3 = Pg_Table(pgt); @*/
+	/*@ inv take Ops3 = MM_Ops(PT.data.mm_ops); @*/
+	/*@ inv data == orig_data; @*/
+	/*@ inv pgt == orig_pgt; @*/
+	/*@ inv PT3 == PT; @*/
+	/*@ inv Ops3 == Ops; @*/
+	/*@ inv Data3.end == Data.end; @*/
+	/*@ inv Data3.walker == Data.walker; @*/
+	/*@ inv Data3.flags == Data.flags; @*/
+	/*@ inv Data.end <= shift_left(1u64, (u64) PT.data.ia_bits); @*/
 	/*@ inv (! (Data3.addr < Data.end)) || (idx == pure__kvm_pgd_page_idx(PT.data.ia_bits,
-			PT.data.start_level, Data3.addr)) @*/
+			PT.data.start_level, Data3.addr)); @*/
 	{
 		kvm_pteref_t pteref = &pgt->pgd[idx * PTRS_PER_PTE];
 
@@ -754,15 +754,15 @@ static int _kvm_pgtable_walk(struct kvm_pgtable *pgt, struct kvm_pgtable_walk_da
 
 int kvm_pgtable_walk(struct kvm_pgtable *pgt, u64 addr, u64 size,
 		     struct kvm_pgtable_walker *walker)
-/*@ requires take PT = Pg_Table (pgt) @*/
-/*@ requires take W = KVM_PgTable_Walker (walker) @*/
-/*@ requires take Ops = MM_Ops(PT.data.mm_ops) @*/
-/*@ requires valid_phys_virt_offset () @*/
-/*@ ensures take PT2 = Pg_Table (pgt) @*/
-/*@ ensures PT2 == PT @*/
-/*@ ensures take Ops2 = MM_Ops(PT.data.mm_ops) @*/
-/*@ ensures take W2 = KVM_PgTable_Walker (walker) @*/
-/*@ ensures W2.arg == W.arg @*/
+/*@ requires take PT = Pg_Table (pgt); @*/
+/*@ requires take W = KVM_PgTable_Walker (walker); @*/
+/*@ requires take Ops = MM_Ops(PT.data.mm_ops); @*/
+/*@ requires valid_phys_virt_offset (); @*/
+/*@ ensures take PT2 = Pg_Table (pgt); @*/
+/*@ ensures PT2 == PT; @*/
+/*@ ensures take Ops2 = MM_Ops(PT.data.mm_ops); @*/
+/*@ ensures take W2 = KVM_PgTable_Walker (walker); @*/
+/*@ ensures W2.arg == W.arg; @*/
 {
 	/* CN modification: align addr first, avoid self-referential init */
 	u64 addr2 = ALIGN_DOWN(addr, PAGE_SIZE);
@@ -830,8 +830,8 @@ struct hyp_map_data {
 
 static int hyp_set_prot_attr(enum kvm_pgtable_prot prot, kvm_pte_t *ptep)
 /* not much to prove for (C) safety of this function */
-/*@ requires take P = Owned(ptep) @*/
-/*@ ensures take P2 = Owned(ptep) @*/
+/*@ requires take P = Owned(ptep); @*/
+/*@ ensures take P2 = Owned(ptep); @*/
 {
 	bool device = prot & KVM_PGTABLE_PROT_DEVICE;
 	u32 mtype = device ? MT_DEVICE_nGnRE : MT_NORMAL;
@@ -892,19 +892,19 @@ enum kvm_pgtable_prot kvm_pgtable_hyp_pte_prot(kvm_pte_t pte)
 
 static bool hyp_map_walker_try_leaf(const struct kvm_pgtable_visit_ctx *ctx,
 				    struct hyp_map_data *data)
-/*@ requires take Ctx = Owned(ctx) @*/
-/*@ requires valid_pgtable_level(Ctx.level) @*/
-/*@ requires take D = Hyp_Map_Data(data) @*/
-/*@ requires take pte = Owned<kvm_pte_t>(Ctx.ptep) @*/
-/*@ requires not (is_table_entry_at (pte, Ctx.level)) @*/
-/*@ requires take Ops = MM_Ops(Ctx.mm_ops) @*/
-/*@ ensures take Ctx2 = Owned(ctx) @*/
-/*@ ensures Ctx2 == Ctx @*/
-/*@ ensures take D2 = Hyp_Map_Data(data) @*/
-/*@ ensures D2 == D @*/
-/*@ ensures take pte2 = Owned<kvm_pte_t>(Ctx.ptep) @*/
-/*@ ensures take Ops2 = MM_Ops(Ctx.mm_ops) @*/
-/*@ ensures not (is_table_entry_at (pte2, Ctx.level)) @*/
+/*@ requires take Ctx = Owned(ctx); @*/
+/*@ requires valid_pgtable_level(Ctx.level); @*/
+/*@ requires take D = Hyp_Map_Data(data); @*/
+/*@ requires take pte = Owned<kvm_pte_t>(Ctx.ptep); @*/
+/*@ requires not (is_table_entry_at (pte, Ctx.level)); @*/
+/*@ requires take Ops = MM_Ops(Ctx.mm_ops); @*/
+/*@ ensures take Ctx2 = Owned(ctx); @*/
+/*@ ensures Ctx2 == Ctx; @*/
+/*@ ensures take D2 = Hyp_Map_Data(data); @*/
+/*@ ensures D2 == D; @*/
+/*@ ensures take pte2 = Owned<kvm_pte_t>(Ctx.ptep); @*/
+/*@ ensures take Ops2 = MM_Ops(Ctx.mm_ops); @*/
+/*@ ensures not (is_table_entry_at (pte2, Ctx.level)); @*/
 {
 	u64 phys = data->phys + (ctx->addr - ctx->start);
 	kvm_pte_t new;
@@ -926,40 +926,40 @@ static bool hyp_map_walker_try_leaf(const struct kvm_pgtable_visit_ctx *ctx,
 
 
 static inline void coerce_page_to_ptes(kvm_pte_t *ptep)
-/*@ trusted @*/
-/*@ requires take ZP = Cond_Zero_Page (ptep) @*/
-/*@ requires ZP.exists @*/
-/*@ ensures take ptes = PTE_Array (ptep) @*/
-/*@ ensures each (i32 i; i <= 0i32 && i < 4096i32) {ptes[i] == 0u64} @*/
+/*@ trusted; @*/
+/*@ requires take ZP = Cond_Zero_Page (ptep); @*/
+/*@ requires ZP.exists; @*/
+/*@ ensures take ptes = PTE_Array (ptep); @*/
+/*@ ensures each (i32 i; i <= 0i32 && i < 4096i32) {ptes[i] == 0u64}; @*/
 {
 }
 
 static inline void coerce_null_ptes_to_IPT(kvm_pte_t *ptep, u32 level)
-/*@ trusted @*/
-/*@ requires take ptes = PTE_Array (ptep) @*/
-/*@ requires each (i32 i; i <= 0i32 && i < 4096i32) {ptes[i] == 0u64} @*/
-/*@ requires valid_pgtable_level(level) @*/
-/*@ ensures take ptes2 = Page_Table_Entries (ptep, level) @*/
+/*@ trusted; @*/
+/*@ requires take ptes = PTE_Array (ptep); @*/
+/*@ requires each (i32 i; i <= 0i32 && i < 4096i32) {ptes[i] == 0u64}; @*/
+/*@ requires valid_pgtable_level(level); @*/
+/*@ ensures take ptes2 = Page_Table_Entries (ptep, level); @*/
 {
 }
 
 
 static int hyp_map_walker(const struct kvm_pgtable_visit_ctx *ctx,
 			  enum kvm_pgtable_walk_flags visit)
-/*@ requires take Ctx = Owned(ctx) @*/
-/*@ requires valid_pgtable_level(Ctx.level) @*/
-/*@ requires valid_phys_virt_offset () @*/
-/*@ requires take D = Hyp_Map_Data(Ctx.arg) @*/
-/*@ requires take pte = Owned<kvm_pte_t>(Ctx.ptep) @*/
-/*@ requires not(is_table_entry_at(pte, Ctx.level)) @*/
-/*@ requires take Ops = MM_Ops(Ctx.mm_ops) @*/
-/*@ ensures take Ctx2 = Owned(ctx) @*/
-/*@ ensures Ctx2 == Ctx @*/
-/*@ ensures take D2 = Hyp_Map_Data(Ctx.arg) @*/
-/*@ ensures take pte2 = Owned<kvm_pte_t>(Ctx.ptep) @*/
-/*@ ensures take IPT2 = Indirect_Page_Table_Entries(Ctx.ptep, Ctx.level, pte2) @*/
-/*@ ensures D2 == D @*/
-/*@ ensures take Ops2 = MM_Ops(Ctx.mm_ops) @*/
+/*@ requires take Ctx = Owned(ctx); @*/
+/*@ requires valid_pgtable_level(Ctx.level); @*/
+/*@ requires valid_phys_virt_offset (); @*/
+/*@ requires take D = Hyp_Map_Data(Ctx.arg); @*/
+/*@ requires take pte = Owned<kvm_pte_t>(Ctx.ptep); @*/
+/*@ requires not(is_table_entry_at(pte, Ctx.level)); @*/
+/*@ requires take Ops = MM_Ops(Ctx.mm_ops); @*/
+/*@ ensures take Ctx2 = Owned(ctx); @*/
+/*@ ensures Ctx2 == Ctx; @*/
+/*@ ensures take D2 = Hyp_Map_Data(Ctx.arg); @*/
+/*@ ensures take pte2 = Owned<kvm_pte_t>(Ctx.ptep); @*/
+/*@ ensures take IPT2 = Indirect_Page_Table_Entries(Ctx.ptep, Ctx.level, pte2); @*/
+/*@ ensures D2 == D; @*/
+/*@ ensures take Ops2 = MM_Ops(Ctx.mm_ops); @*/
 {
 	kvm_pte_t *childp, new;
 	struct hyp_map_data *data = ctx->arg;
@@ -1005,13 +1005,13 @@ predicate (void) Hyp_Walker_Cases
 
 int kvm_pgtable_hyp_map(struct kvm_pgtable *pgt, u64 addr, u64 size, u64 phys,
 			enum kvm_pgtable_prot prot)
-/*@ requires take PT = Pg_Table(pgt) @*/
-/*@ requires take Ops = MM_Ops(PT.data.mm_ops) @*/
-/*@ requires valid_phys_virt_offset () @*/
-/*@ ensures take PT2 = Pg_Table(pgt) @*/
-/*@ ensures PT2.extra_bits == PT.extra_bits @*/
-/*@ ensures PT2.data == PT.data @*/
-/*@ ensures take Ops2 = MM_Ops(PT.data.mm_ops) @*/
+/*@ requires take PT = Pg_Table(pgt); @*/
+/*@ requires take Ops = MM_Ops(PT.data.mm_ops); @*/
+/*@ requires valid_phys_virt_offset (); @*/
+/*@ ensures take PT2 = Pg_Table(pgt); @*/
+/*@ ensures PT2.extra_bits == PT.extra_bits; @*/
+/*@ ensures PT2.data == PT.data; @*/
+/*@ ensures take Ops2 = MM_Ops(PT.data.mm_ops); @*/
 {
 	int ret;
 	struct hyp_map_data map_data = {
