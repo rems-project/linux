@@ -1,9 +1,19 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
+/*
+ * Based on
+ *	include/linux/arm-smccc.h
+ *	include/asm/kvm_asm.h
+ *	arch/arm64/include/asm/esr.h
+ *	arch/arm64/include/asm/kvm_pkvm.h
+ */
+
 #ifndef __PICOVM_H
 #define __PICOVM_H
 
 #include <picovm/prelude.h>
-#include <picovm/memory.h>
+#include <picovm/host.h>
 #include <picovm/pgtable.h>
+#include <picovm/spinlock.h>
 
 /* Global state **************************************************************/
 // s64 hyp_physvirt_offset;
@@ -44,20 +54,6 @@
 #define SMCCC_RET_NOT_SUPPORTED		1
 
 
-/* Exception syndrome register ***********************************************/
-// from: linux/arch/arm64/include/asm/esr.h
-#define ESR_ELx_EC_FP_ASIMD	(0x07)
-#define ESR_ELx_EC_HVC64	(0x16)
-#define ESR_ELx_EC_SMC64	(0x17)
-#define ESR_ELx_EC_SVE		(0x19)
-#define ESR_ELx_EC_IABT_LOW	(0x20)
-#define ESR_ELx_EC_DABT_LOW	(0x24)
-
-#define ESR_ELx_EC_SHIFT	(26)
-#define ESR_ELx_EC_WIDTH	(6)
-#define ESR_ELx_EC_MASK		(U64(0x3F) << ESR_ELx_EC_SHIFT)
-#define ESR_ELx_EC(esr)		(((esr) & ESR_ELx_EC_MASK) >> ESR_ELx_EC_SHIFT)
-
 static inline u64 read_esr_el2(void)
 {
 	u64 reg;
@@ -73,25 +69,10 @@ static inline u64 read_esr_el2(void)
 
 #define HYP_MEMBLOCK_REGIONS 128
 
-static inline void BUG(void)
-{
-	for(;;); // __builtin_unreachable();
-};
-
-struct user_pt_regs {
-	u64 regs[31];
-	u64 sp;
-	u64 pc;
-	u64 pstate;
-};
-
-struct host_cpu_context {
-	struct user_pt_regs regs;	/* sp = sp_el0 */
-};
-
-#define cpu_reg(ctxt, r)	(ctxt)->regs.regs[r]
-#define DECLARE_REG(type, name, ctxt, reg)	\
-				type name = (type)cpu_reg(ctxt, (reg))
+/*static inline void BUG(void)*/
+/*{*/
+/*	for(;;); // __builtin_unreachable();*/
+/*};*/
 
 // NOTE: from include/asm/kvm_asm.h
 struct picovm_nvhe_init_params {
@@ -106,22 +87,73 @@ struct picovm_nvhe_init_params {
 	unsigned long vtcr;
 };
 
+/*
+ * Holds the relevant data for maintaining the vcpu state completely at hyp.
+ */
+struct picovm_hyp_vcpu {
+	struct picovm_vcpu vcpu;
+
+	/* Backpointer to the host's (untrusted) vCPU instance. */
+	struct picovm_vcpu *host_vcpu;
+
+	/*
+	 * If this hyp vCPU is loaded, then this is a backpointer to the
+	 * per-cpu pointer tracking us. Otherwise, NULL if not loaded.
+	 */
+	struct pkvm_hyp_vcpu **loaded_hyp_vcpu;
+
+	/* Tracks exit code for the protected guest. */
+	u32 exit_code;
+
+	/*
+	 * Track the power state transition of a protected vcpu.
+	 * Can be in one of three states:
+	 * PSCI_0_2_AFFINITY_LEVEL_ON
+	 * PSCI_0_2_AFFINITY_LEVEL_OFF
+	 * PSCI_0_2_AFFINITY_LEVEL_PENDING
+	 */
+	int power_state;
+};
+
+/*
+ * Holds the relevant data for running a protected vm.
+ */
+struct picovm_hyp_vm {
+	struct picovm picovm;
+
+	/* Backpointer to the host's (untrusted) KVM instance. */
+	struct picovm *host_picovm;
+
+	/* The guest's stage-2 page-table managed by the hypervisor. */
+	struct picovm_pgtable pgt;
+	hyp_spinlock_t lock;
+
+	/*
+	 * The number of vcpus initialized and ready to run.
+	 * Modifying this is protected by 'vm_table_lock'.
+	 */
+	unsigned int nr_vcpus;
+
+	/* Array of the hyp vCPU structures for this VM. */
+	struct pkvm_hyp_vcpu *vcpus[];
+};
+
 
 /* Hypervisor interface ******************************************************/
 // from: linux/arch/arm64/include/asm/kvm_asm.h
-#define KVM_HOST_SMCCC_ID(id)						\
+#define PICOVM_HOST_SMCCC_ID(id)						\
 	ARM_SMCCC_CALL_VAL(ARM_SMCCC_FAST_CALL,				\
 			   ARM_SMCCC_SMC_64,				\
 			   ARM_SMCCC_OWNER_VENDOR_HYP,			\
 			   (id))
 
 
-#define __PICOVM_HOST_SMCCC_FUNC___kvm_hyp_init			0
+#define __PICOVM_HOST_SMCCC_FUNC___picovm_hyp_init			0
 
 enum __picovm_host_smccc_func {
 	/* Hypercalls available only prior to pKVM finalisation */
 	/* __PICOVM_HOST_SMCCC_FUNC___kvm_hyp_init */
-	__PICOVM_HOST_SMCCC_FUNC___picovm_init = __PICOVM_HOST_SMCCC_FUNC___kvm_hyp_init + 1,
+	__PICOVM_HOST_SMCCC_FUNC___picovm_init = __PICOVM_HOST_SMCCC_FUNC___picovm_hyp_init + 1,
 	__PICOVM_HOST_SMCCC_FUNC___picovm_create_private_mapping,
 	__PICOVM_HOST_SMCCC_FUNC___picovm_prot_finalize,
 
@@ -145,8 +177,5 @@ static inline unsigned long __hyp_pgtable_max_pages(unsigned long nr_pages)
 
 	return total;
 }
-
-int __picovm_init(phys_addr_t phys, unsigned long size, unsigned long nr_cpus,
-		unsigned long *per_cpu_base, u32 hyp_va_bits);
 
 #endif /* __PICOVM_H */

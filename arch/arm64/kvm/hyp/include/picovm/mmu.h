@@ -1,30 +1,24 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
- * Copyright (C) 2012,2013 - ARM Ltd
- * Author: Marc Zyngier <marc.zyngier@arm.com>
- *
- * Partial copy from include/asm/kvm_mmu.h
+ * Based on
+ *	include/asm/kvm_mmu.h
+ *	include/asm/pgtable.h
  */
 
 #ifndef __PICOVM_MMU_H__
 #define __PICOVM_MMU_H__
 
 #include <picovm/prelude.h>
+#include <picovm/host.h>
 
 /*
- * NOTE: from include/asm/cacheflush.h
- *	MM Cache Management
- *	===================
+ * The picovm/cache.S implements these methods.
  *
- *	The arch/arm64/mm/cache.S implements these methods.
- *
- *	Start addresses are inclusive and end addresses are exclusive; start
- *	addresses should be rounded down, end addresses up.
+ * Start addresses are inclusive and end addresses are exclusive; start
+ * addresses should be rounded down, end addresses up.
  */
 extern void dcache_clean_inval_poc(unsigned long start, unsigned long end);
 
-
-// NOTE: from include/asm/pgtable.h
 #define phys_to_ttbr(addr)	(addr)
 #define picovm_phys_to_vttbr(addr)		phys_to_ttbr(addr)
 
@@ -39,7 +33,8 @@ extern void dcache_clean_inval_poc(unsigned long start, unsigned long end);
 static __always_inline u64 picovm_get_vttbr(struct picovm_s2_mmu *mmu) {
 	struct picovm_vmid *vmid = &mmu->vmid;
 	u64 vmid_field, baddr;
-	u64 cnp = system_supports_cnp() ? VTTBR_CNP_BIT : 0;
+	
+	u64 cnp = VTTBR_CNP_BIT;
 
 	baddr = mmu->pgd_phys;
 	vmid_field = atomic64_read(&vmid->id) << VTTBR_VMID_SHIFT;
@@ -56,12 +51,7 @@ static __always_inline void __load_stage2(struct picovm_s2_mmu *mmu,
 {
 	write_sysreg(arch->vtcr, vtcr_el2);
 	write_sysreg(picovm_get_vttbr(mmu), vttbr_el2);
-	/*
-	 * ARM errata 1165522 and 1530923 require the actual execution of the
-	 * above before we can switch to the EL1/EL0 translation regime used by
-	 * the guest.
-	 */
-	asm(ALTERNATIVE("nop", "isb", ARM64_WORKAROUND_SPECULATIVE_AT));
+	isb();
 }
 
 #endif /* __PICOVM_MMU_H__ */

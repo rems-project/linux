@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (C) 2020 - Google Inc
- * Author: Andrew Scull <ascull@google.com>
+ * Based on
+ *	arch/arm64/kvm/hyp/nvhe/hyp-main.c
  */
 
 // #include <kvm/arm_hypercalls.h>
@@ -33,7 +33,7 @@ bool picovm_initialized;
 DEFINE_PER_CPU(struct picovm_nvhe_init_params, picovm_init_params);
 
 
-static void handle___picovm_init(struct host_cpu_context *host_ctxt)
+static void handle___picovm_init(struct picovm_cpu_context *host_ctxt)
 {
 	DECLARE_REG(phys_addr_t, phys, host_ctxt, 1);
 	DECLARE_REG(unsigned long, size, host_ctxt, 2);
@@ -50,20 +50,20 @@ static void handle___picovm_init(struct host_cpu_context *host_ctxt)
 					    hyp_va_bits);
 }
 
-static void handle___picovm_prot_finalize(struct host_cpu_context *host_ctxt)
+static void handle___picovm_prot_finalize(struct picovm_cpu_context *host_ctxt)
 {
 	cpu_reg(host_ctxt, 1) = __picovm_prot_finalize();
 }
 
 
-static void handle___picovm_host_share_hyp(struct host_cpu_context *host_ctxt)
+static void handle___picovm_host_share_hyp(struct picovm_cpu_context *host_ctxt)
 {
 	DECLARE_REG(u64, pfn, host_ctxt, 1);
 
 	cpu_reg(host_ctxt, 1) = __picovm_host_share_hyp(pfn);
 }
 
-static void handle___picovm_host_unshare_hyp(struct host_cpu_context *host_ctxt)
+static void handle___picovm_host_unshare_hyp(struct picovm_cpu_context *host_ctxt)
 {
 	DECLARE_REG(u64, pfn, host_ctxt, 1);
 
@@ -103,7 +103,7 @@ static void handle___picovm_host_unshare_hyp(struct host_cpu_context *host_ctxt)
 
 
 
-typedef void (*hcall_t)(struct host_cpu_context *);
+typedef void (*hcall_t)(struct picovm_cpu_context *);
 
 #define HANDLE_FUNC(x)	[__PICOVM_HOST_SMCCC_FUNC_##x] = (hcall_t)handle_##x
 static const hcall_t host_hcall[] = {
@@ -116,7 +116,7 @@ static const hcall_t host_hcall[] = {
 	HANDLE_FUNC(__picovm_host_unshare_hyp),
 };
 
-static void handle_host_hcall(struct host_cpu_context *host_ctxt)
+static void handle_host_hcall(struct picovm_cpu_context *host_ctxt)
 {
 	DECLARE_REG(unsigned long, id, host_ctxt, 0);
 	unsigned long hcall_min = 0;
@@ -134,7 +134,7 @@ static void handle_host_hcall(struct host_cpu_context *host_ctxt)
 	if (picovm_initialized)
 		hcall_min = __PICOVM_HOST_SMCCC_FUNC___picovm_prot_finalize;
 
-	id -= KVM_HOST_SMCCC_ID(0);
+	id -= PICOVM_HOST_SMCCC_ID(0);
 
 	if (id < hcall_min || id >= ARRAY_SIZE(host_hcall))
 		goto inval;
@@ -152,7 +152,7 @@ inval:
 }
 
 
-void handle_trap(struct host_cpu_context *host_ctxt)
+void handle_trap(struct picovm_cpu_context *host_ctxt)
 {
 	u64 esr = read_esr_el2();
 	switch (ESR_ELx_EC(esr)) {
@@ -170,5 +170,4 @@ void handle_trap(struct host_cpu_context *host_ctxt)
 	default:
 		BUG();
 	}
-
 }

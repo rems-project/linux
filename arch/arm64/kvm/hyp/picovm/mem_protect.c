@@ -1,44 +1,100 @@
-#include <picovm/prelude.h>
+/* SPDX-License-Identifier: GPL-2.0-only */
+/* 
+ * Based on linux/arch/arm64/kvm/hyp/nvhe/mem_protect.c
+ */
 
-#include <picovm/mm.h>
-#include <picovm/hyp.h>
+#include <picovm/prelude.h>
 #include <picovm/mm.h>
 #include <picovm/mmu.h>
-#include <picovm/pgtable.h>
 #include <picovm/mem_protect.h>
+#include <picovm/picovm.h>
+#include <picovm/hyp.h>
 
-
-// TODO(doc): the host Stage 2 page table
+// the host Stage 2 page table
 struct host_mmu host_mmu;
+
+static DEFINE_PER_CPU(struct picovm_hyp_vm *, __current_vm);
+#define current_vm (*this_cpu_ptr(&__current_vm))
 
 static void guest_lock_component(struct picovm_hyp_vm *vm)
 {
-  // TODO
+	hyp_spin_lock(&vm->lock);
+	current_vm = vm;
 }
 
 static void guest_unlock_component(struct picovm_hyp_vm *vm)
 {
-  // TODO
-}
+	current_vm = NULL;
+	hyp_spin_unlock(&vm->lock);
+} 
 
 static void host_lock_component(void)
 {
-  hyp_spin_lock(&host_mmu.lock);
+	hyp_spin_lock(&host_mmu.lock);
 }
 
 static void host_unlock_component(void)
 {
-  hyp_spin_unlock(&host_mmu.lock);
+	hyp_spin_unlock(&host_mmu.lock);
 }
 
-static inline void picovm_lock_component(void)
+static inline void hyp_lock_component(void)
 {
-	// TODO
+	hyp_spin_lock(&picovm_pgd_lock);
 }
 
-static inline void picovm_unlock_component(void)
+static inline void hyp_unlock_component(void)
 {
-	// TODO
+	hyp_spin_unlock(&picovm_pgd_lock);
+}
+
+static void prepare_host_vtcr(void)
+{
+	u32 parange, phys_shift;
+
+	/* The host stage 2 is id-mapped, so use parange for T0SZ */
+	parange = picovm_get_parange(id_aa64mmfr0_el1_sys_val);
+	phys_shift = id_aa64mmfr0_parange_to_phys_shift(parange);
+
+	host_mmu.arch.vtcr = picovm_get_vtcr(id_aa64mmfr0_el1_sys_val,
+					     id_aa64mmfr1_el1_sys_val, phys_shift);
+}
+
+int __picovm_prot_finalize(void)
+{
+	struct picovm_s2_mmu *mmu = &host_mmu.arch.mmu;
+	struct picovm_nvhe_init_params *params = this_cpu_ptr(&picovm_init_params);
+
+	if (params->hcr_el2 & HCR_VM)
+		return -EPERM;
+
+	params->vttbr = picovm_get_vttbr(mmu);
+	params->vtcr = host_mmu.arch.vtcr;
+	params->hcr_el2 |= HCR_VM;
+
+	/*
+	 * The CMO below not only cleans the updated params to the
+	 * PoC, but also provides the DSB that ensures ongoing
+	 * page-table walks that have started before we trapped to EL2
+	 * have completed.
+	 */
+	picovm_flush_dcache_to_poc(params, sizeof(*params));
+
+	write_sysreg(params->hcr_el2, hcr_el2);
+	__load_stage2(&host_mmu.arch.mmu, &host_mmu.arch);
+
+	/*
+	 * Make sure to have an ISB before the TLB maintenance below but only
+	 * when __load_stage2() doesn't include one already.
+	 */
+	isb();
+
+	/* Invalidate stale HCR bits that may be cached in TLBs */
+	__tlbi(vmalls12e1);
+	dsb(nsh);
+	isb();
+
+	return 0;
 }
 
 struct picovm_mem_range {
@@ -108,26 +164,13 @@ static bool range_is_memory(u64 start, u64 end)
 	return is_in_mem_range(end - 1, &r);
 }
 
-static void write_vtcr_el2(u64 val)
+int host_stage2_idmap_locked(phys_addr_t addr, u64 size,
+			     enum picovm_pgtable_prot prot)
 {
-  asm volatile("msr vtcr_el2, %0" : : "r" (val));
+	// TODO(doc) we don't do the host_stage2_try from actual pKVM
+	return picovm_pgtable_stage2_map(&host_mmu.pgt, addr, size, addr,
+					 prot /*, &host_s2_pool, 0 */);
 }
-
-
-int picovm_host_prepare_stage2(void)
-{
-	struct picovm_s2_mmu *mmu = &host_mmu.arch.mmu;
-	int ret;
-
-	prepare_host_vtcr();
-	hyp_spin_lock_init(&host_mmu.lock);
-	ret = picovm_pgtable_stage2_init(&host_mmu.pgt, mmu);
-	if (ret)
-		return ret;
-
-	return 0;
-}
-
 
 static int host_stage2_idmap(u64 addr)
 {
@@ -146,7 +189,7 @@ static int host_stage2_idmap(u64 addr)
 	return ret;
 }
 
-static void host_inject_abort(struct host_cpu_context *host_ctxt)
+static void host_inject_abort(struct picovm_cpu_context *host_ctxt)
 {
 	u64 spsr = read_sysreg_el2(SYS_SPSR);
 	u64 esr = read_sysreg_el2(SYS_ESR);
@@ -190,7 +233,7 @@ static void host_inject_abort(struct host_cpu_context *host_ctxt)
 	write_sysreg_el2(spsr, SYS_SPSR);
 }
 
-void handle_host_mem_abort(struct host_cpu_context *host_ctxt)
+void handle_host_mem_abort(struct picovm_cpu_context *host_ctxt)
 {
 	struct picovm_vcpu_fault_info fault;
 	u64 esr, addr;
@@ -208,42 +251,6 @@ void handle_host_mem_abort(struct host_cpu_context *host_ctxt)
 		BUG_ON(ret && ret != -EAGAIN);
 }
 
-int __picovm_prot_finalize(void)
-{
-	struct picovm_s2_mmu *mmu = &host_mmu.arch.mmu;
-	struct picovm_nvhe_init_params *params = this_cpu_ptr(&picovm_init_params);
-
-	if (params->hcr_el2 & HCR_VM)
-		return -EPERM;
-
-	params->vttbr = picovm_get_vttbr(mmu);
-	params->vtcr = host_mmu.arch.vtcr;
-	params->hcr_el2 |= HCR_VM;
-
-	/*
-	 * The CMO below not only cleans the updated params to the
-	 * PoC, but also provides the DSB that ensures ongoing
-	 * page-table walks that have started before we trapped to EL2
-	 * have completed.
-	 */
-	picovm_flush_dcache_to_poc(params, sizeof(*params));
-
-	write_sysreg(params->hcr_el2, hcr_el2);
-	__load_stage2(&host_mmu.arch.mmu, &host_mmu.arch);
-
-	/*
-	 * Make sure to have an ISB before the TLB maintenance below but only
-	 * when __load_stage2() doesn't include one already.
-	 */
-	asm(ALTERNATIVE("isb", "nop", ARM64_WORKAROUND_SPECULATIVE_AT));
-
-	/* Invalidate stale HCR bits that may be cached in TLBs */
-	__tlbi(vmalls12e1);
-	dsb(nsh);
-	isb();
-
-	return 0;
-}
 
 
 struct check_walk_data {
@@ -293,15 +300,6 @@ static int __host_check_page_state_range(u64 addr, u64 size,
 	return check_page_state_range(&host_mmu.pgt, addr, size, &d);
 }
 
-int host_stage2_idmap_locked(phys_addr_t addr, u64 size,
-			     enum picovm_pgtable_prot prot)
-{
-	// TODO(doc) we don't do the host_stage2_try from actual pKVM
-	return picovm_pgtable_stage2_map(&host_mmu.pgt, addr, size, addr,
-					 prot /*, &host_s2_pool, 0 */);
-}
-
-
 static int __host_set_page_state_range(u64 addr, u64 size,
 				       enum picovm_page_state state)
 {
@@ -328,7 +326,8 @@ int __picovm_host_share_hyp(u64 pfn)
 	u64 host_addr = hyp_pfn_to_phys(pfn);
 	u64 hyp_addr = (u64)hyp_phys_to_virt(host_addr);
 
-	picovm_lock_component();
+	host_lock_component();
+	hyp_lock_component();
 
 	ret = __host_check_page_state_range(host_addr, PAGE_SIZE, PICOVM_PAGE_OWNED);
 	if (ret)
@@ -355,7 +354,8 @@ do_share:
 	}
 	// END WARN_ON()
 unlock:
-	picovm_unlock_component();
+	hyp_unlock_component();
+	host_unlock_component();
 	return ret;
 }
 
@@ -365,7 +365,8 @@ int __picovm_host_unshare_hyp(u64 pfn)
 	u64 host_addr = hyp_pfn_to_phys(pfn);
 	u64 hyp_addr = (u64)hyp_phys_to_virt(host_addr);
 
-	picovm_lock_component();
+	host_lock_component();
+	hyp_lock_component();
 
 	ret = __host_check_page_state_range(host_addr, PAGE_SIZE, PICOVM_PAGE_SHARED_OWNED);
 	if (ret)
@@ -382,10 +383,11 @@ do_unshare:
 		goto unlock;
 
 	{
-    ret = picovm_pgtable_hyp_unmap(&picovm_pgtable, hyp_addr, PAGE_SIZE);
+		ret = picovm_pgtable_hyp_unmap(&picovm_pgtable, hyp_addr, PAGE_SIZE);
 	}
 	// END WARN_ON()
 unlock:
-	picovm_unlock_component();
+	hyp_unlock_component();
+	host_unlock_component();
 	return ret;
 }

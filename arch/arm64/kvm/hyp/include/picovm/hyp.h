@@ -1,20 +1,29 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
- * Copyright (C) 2015 - ARM Ltd
- * Author: Marc Zyngier <marc.zyngier@arm.com>
- *
- * Partial copy from include/asm/kvm_hyp.h
+ * Based on
+ *	include/asm/kvm_hyp.h
  */
 
 #ifndef __PICOVM_HYP_H__
 #define __PICOVM_HYP_H__
 
 #include <picovm/prelude.h>
-#include <picovm/picovm.h>
+
+// Check sys_regs.c
+extern u64 id_aa64pfr0_el1_sys_val;
+extern u64 id_aa64pfr1_el1_sys_val;
+extern u64 id_aa64isar0_el1_sys_val;
+extern u64 id_aa64isar1_el1_sys_val;
+extern u64 id_aa64isar2_el1_sys_val;
+extern u64 id_aa64mmfr0_el1_sys_val;
+extern u64 id_aa64mmfr1_el1_sys_val;
+extern u64 id_aa64mmfr2_el1_sys_val;
+extern u64 id_aa64smfr0_el1_sys_val;
+
 
 extern unsigned int __ro_after_init picovm_arm_vmid_bits;
 
-DECLARE_PER_CPU(struct host_cpu_context, picovm_hyp_ctxt);
+DECLARE_PER_CPU(struct picovm_cpu_context, picovm_hyp_ctxt);
 DECLARE_PER_CPU(unsigned long, picovm_hyp_vector);
 DECLARE_PER_CPU(struct picovm_nvhe_init_params, picovm_init_params);
 
@@ -50,5 +59,9 @@ DECLARE_PER_CPU(struct picovm_nvhe_init_params, picovm_init_params);
 #define read_sysreg_el2(r)	read_sysreg_elx(r, _EL2, _EL1)
 #define write_sysreg_el2(v,r)	write_sysreg_elx(v, r, _EL2, _EL1)
 
-
+void __picovm_init_switch_pgd(phys_addr_t phys, unsigned long size,
+			      phys_addr_t pgd, void *sp, void *cont_fn);
+int __picovm_init(phys_addr_t phys, unsigned long size, unsigned long nr_cpus,
+		  unsigned long *per_cpu_base, u32 hyp_va_bits);
+void __noreturn __host_enter(struct picovm_cpu_context *host_ctxt);
 #endif /* __PICOVM_HYP_H__ */

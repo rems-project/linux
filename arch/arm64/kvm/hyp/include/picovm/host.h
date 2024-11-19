@@ -1,19 +1,12 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
- * Copyright (C) 2012,2013 - ARM Ltd
- * Author: Marc Zyngier <marc.zyngier@arm.com>
- *
- * Derived from arch/arm/include/asm/kvm_host.h:
- * Copyright (C) 2012 - Virtual Open Systems and Columbia University
- * Author: Christoffer Dall <c.dall@virtualopensystems.com>
+ * Based on arch/arm64/include/asm/kvm_host.h:
  */
 #ifndef __PICOVM_HOST_H__
 #define __PICOVM_HOST_H__
 
 #include <picovm/prelude.h>
-#include <picovm/picovm.h>
 
-// NOTE: based on include/asm/kvm_host.h::enum vcpu_sysreg
 #define NR_SYS_REGS 157
 
 struct picovm_vcpu_fault_info {
@@ -38,6 +31,10 @@ struct picovm_vcpu {
 	int vcpu_idx; /* index into kvm->vcpu_array */
 };
 
+#define cpu_reg(ctxt, r)	(ctxt)->regs.regs[r]
+#define DECLARE_REG(type, name, ctxt, reg)	\
+				type name = (type)cpu_reg(ctxt, (reg))
+
 struct picovm_cpu_context {
 	struct user_pt_regs regs; /* sp = sp_el0 */
 
@@ -55,8 +52,12 @@ struct picovm_host_data {
 	struct picovm_cpu_context host_ctxt;
 };
 
+struct picovm_vmid {
+	atomic64_t id;
+};
+
 struct picovm_s2_mmu {
-	atomic64_t vmid;
+	struct picovm_vmid vmid;
 
 	/*
 	 * stage2 entry level table
@@ -95,5 +96,7 @@ struct picovm_arch {
 };
 
 unsigned int __ro_after_init picovm_arm_vmid_bits;
+
+DECLARE_KVM_HYP_PER_CPU(struct picovm_host_data, picovm_host_data);
 
 #endif /* __PICOVM_HOST_H__ */

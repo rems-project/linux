@@ -1,12 +1,18 @@
+/*
+ * Based on arch/arm64/kvm/hyp/nvhe/setup.c
+ */
+
 #include <picovm/prelude.h>
+
+#include <picovm/config.h>
 #include <picovm/early_alloc.h>
-#include <picovm/mem_protect.h>
 #include <picovm/mm.h>
+#include <picovm/mmu.h>
+#include <picovm/mem_protect.h>
 #include <picovm/hyp.h>
 #include <picovm/picovm.h>
 #include <picovm/spinlock.h>
 
-// NOTE: based on linux/arch/arm64/kvm/hyp/nvhe/setup.c
 s64 __ro_after_init hyp_physvirt_offset;
 
 unsigned long hyp_nr_cpus;
@@ -18,8 +24,6 @@ unsigned long hyp_nr_cpus;
 #define EL2_STACK_NR_PAGES (PICOVM_CONFIG_NVHE_EL2_STACKSIZE)
 #define EL2_STACKSIZE (PAGE_SIZE * EL2_STACK_NR_PAGES)
 
-static void *vmemmap_base;
-static void *vm_table_base;
 static void *hyp_pgt_base;
 static void *host_s2_pgt_base;
 
@@ -80,7 +84,7 @@ static int divide_memory_pool(void *virt, unsigned long size)
 	if (!host_s2_pgt_base)
 		return -ENOMEM;
 
-  return 0;
+	return 0;
 }
 
 static int recreate_hyp_mappings(phys_addr_t phys, unsigned long size,
@@ -89,7 +93,6 @@ static int recreate_hyp_mappings(phys_addr_t phys, unsigned long size,
 {
 	void *start, *end, *virt = hyp_phys_to_virt(phys);
 	unsigned long pgt_size = hyp_s1_pgtable_pages() << PAGE_SHIFT;
-	enum picovm_pgtable_prot prot;
 	int ret, i;
 
 	/* Recreate the hyp page-table using the early page allocator */
@@ -106,7 +109,6 @@ static int recreate_hyp_mappings(phys_addr_t phys, unsigned long size,
 	if (ret)
 		return ret;
 	
-
 	ret = picovm_create_mappings(__hyp_text_start, __hyp_text_end, PAGE_HYP_EXEC);
 	if (ret)
 		return ret;
@@ -125,7 +127,7 @@ static int recreate_hyp_mappings(phys_addr_t phys, unsigned long size,
 
 	for (i = 0; i < hyp_nr_cpus; i++) {
 		struct picovm_nvhe_init_params *params = per_cpu_ptr(&picovm_init_params, i);
-    unsigned long hyp_addr;
+		unsigned long hyp_addr;
 
 		start = (void *)kern_hyp_va(per_cpu_base[i]);
 		end = start + PAGE_ALIGN(hyp_percpu_size);
@@ -179,12 +181,65 @@ static void update_nvhe_init_params(void)
 	}
 }
 
+static int fix_host_ownership_walker(const struct picovm_pgtable_visit_ctx *ctx)
+{
+	enum picovm_pgtable_prot prot;
+	enum picovm_page_state state;
+	phys_addr_t phys;
+
+	if (!picovm_pte_valid(ctx->old))
+		return 0;
+
+	phys = picovm_pte_to_phys(ctx->old);
+	if (!addr_is_memory(phys))
+		return -EINVAL;
+
+	/*
+	 * Adjust the host stage-2 mappings to match the ownership attributes
+	 * configured in the hypervisor stage-1.
+	 */
+	state = picovm_getstate(picovm_pgtable_hyp_pte_prot(ctx->old));
+	switch (state) {
+	case PICOVM_PAGE_OWNED:
+		return host_stage2_set_owner_locked(phys, PAGE_SIZE, PICOVM_ID_HYP);
+	case PICOVM_PAGE_SHARED_OWNED:
+		prot = picovm_mkstate(PICOVM_HOST_MEM_PROT, PICOVM_PAGE_SHARED_BORROWED);
+		break;
+	case PICOVM_PAGE_SHARED_BORROWED:
+		prot = picovm_mkstate(PICOVM_HOST_MEM_PROT, PICOVM_PAGE_SHARED_OWNED);
+		break;
+	default:
+		return -EINVAL;
+	}
+
+	return host_stage2_idmap_locked(phys, PAGE_SIZE, prot);
+}
+
+static int fix_host_ownership(void)
+{
+	struct picovm_pgtable_walker walker = {
+		.cb	= fix_host_ownership_walker,
+	};
+	int i, ret;
+
+	for (i = 0; i < hyp_memblock_nr; i++) {
+		struct memblock_region *reg = &hyp_memory[i];
+		u64 start = (u64)hyp_phys_to_virt(reg->base);
+
+		ret = picovm_pgtable_walk(&picovm_pgtable, start, reg->size, &walker);
+		if (ret)
+			return ret;
+	}
+
+	return 0;
+}
+
+
 void __noreturn __picovm_init_finalise(void)
 {
-  // NOTE: called in EL2 - (second half of the 1st init)
+	// NOTE: called in EL2 - (second half of the 1st init)
 	struct picovm_host_data *host_data = this_cpu_ptr(&picovm_host_data);
 	struct picovm_cpu_context *host_ctxt = &host_data->host_ctxt;
-	unsigned long nr_pages, reserved_pages, pfn;
 	int ret;
 
 	ret = picovm_host_prepare_stage2(host_s2_pgt_base);
@@ -199,7 +254,7 @@ void __noreturn __picovm_init_finalise(void)
 	if (ret)
 		goto out;
 
-	picovm_hyp_vm_table_init(vm_table_base);
+	/*picovm_hyp_vm_table_init(vm_table_base);*/
 
 out:
 	/*
@@ -230,7 +285,7 @@ int __picovm_init(phys_addr_t phys, unsigned long size, unsigned long nr_cpus,
 	if (ret)
 		return ret;
 
-  ret = recreate_hyp_mappings(phys, size, per_cpu_base, hyp_va_bits);
+	ret = recreate_hyp_mappings(phys, size, per_cpu_base, hyp_va_bits);
 	if (ret)
 		return ret;
 
@@ -244,5 +299,4 @@ int __picovm_init(phys_addr_t phys, unsigned long size, unsigned long nr_cpus,
 	unreachable();
 }
 
-// TODO: prot_... + debug
 

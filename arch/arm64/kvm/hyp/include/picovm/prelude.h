@@ -1,40 +1,61 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
+/*
+ * Based on
+ *	include/uapi/linux/const.h
+ *	include/linux/cache.h
+ *	include/linux/align.h
+ *	include/asm/sections.h
+ *	include/asm-generic/barrier.h
+ *	arch/arm64/include/asm/kvm_emulate.h
+ */
 #ifndef __PICOVM_PRELUDE_H
 #define __PICOVM_PRELUDE_H
 
-#include <picovm/asm/emulate.h>
-#include <picovm/asm/errno-base.h>
+/*
+ * NOTE: List of header files external to PicoVM.
+ * Completely detaching PicoVM from the Linux kernel presents some challenges:
+ * - Many header files depend on low-level code, which ultimately relies on linux/types.
+ * - CPU feature handling uses data structures initialized outside of KVM.
+ */
+#include <linux/types.h>
+#include <linux/memblock.h>
 
-#include <picovm/linux/memblock.h>
-#include <picovm/linux/percpu-def.h>
-#include <picovm/linux/types.h>
+#include <asm-generic/percpu.h>
+#include <asm/cpufeature.h>
+#include <asm/page.h>
+#include <asm/memory.h>
+#include <asm/mmu.h>
+#include <asm/esr.h>
+#include <asm/ptrace.h>
+#include <asm/kvm_asm.h>
 
-#define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
+#include <picovm/linux/errno-base.h>
+#include <picovm/linux/sys_regs.h>
 
 #define BITS 64
 #define BITS_PER_LONG 64
-#define __GENMASK(h, l) \
-  (((~0UL) << (l)) & (~0UL >> (BITS - 1 - (h))))
 
-#define GENMASK(h, l) \
-	(((l) > (h)) ? __GENMASK(l, h) : __GENMASK(h, l))
+typedef uint8_t  BYTE;
+typedef uint8_t  U8;
+typedef int8_t   S8;
+typedef uint16_t U16;
+typedef int16_t  S16;
+typedef uint32_t U32;
+typedef int32_t  S32;
+typedef uint64_t U64;
+typedef int64_t  S64;
 
-/* TODO(license) from: linux/include/uapi/linux/const.h */
-/* SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note */
-#define __ALIGN_KERNEL_MASK(x, mask)	(((x) + (mask)) & ~(mask))
-#define __ALIGN_KERNEL(x, a)		__ALIGN_KERNEL_MASK(x, (typeof(x))(a) - 1)
 
-/* TODO(license) from: linux/include/linux/align.h */
-/* SPDX-License-Identifier: GPL-2.0 */
 #define ALIGN(x, a)		__ALIGN_KERNEL((x), (a))
 #define ALIGN_DOWN(x, a)	__ALIGN_KERNEL((x) - ((a) - 1), (a))
 #define IS_ALIGNED(x, a)		(((x) & ((typeof(x))(a) - 1)) == 0)
 
+// TODO
 static inline void picovm_assert(u64 x)
 {
-	// TOODO
+
 }
 
-// NOTE: from include/asm/sections.h
 extern char __hyp_idmap_text_start[], __hyp_idmap_text_end[];
 extern char __hyp_text_start[], __hyp_text_end[];
 extern char __hyp_rodata_start[], __hyp_rodata_end[];
@@ -42,42 +63,14 @@ extern char __hyp_reloc_begin[], __hyp_reloc_end[];
 extern char __hyp_bss_start[], __hyp_bss_end[];
 extern char __idmap_text_start[], __idmap_text_end[];
 
-// TODO(license) copied from: include/asm-generic/rwonce.h
-/* SPDX-License-Identifier: GPL-2.0 */
 /*
- * Yes, this permits 64-bit accesses on 32-bit architectures. These will
- * actually be atomic in some cases (namely Armv7 + LPAE), but for others we
- * rely on the access being split into 2x32-bit accesses for a 32-bit quantity
- * (e.g. a virtual address) and a strong prevailing wind.
+ * __ro_after_init is used to mark things that are read-only after init (i.e.
+ * after mark_rodata_ro() has been called). These are effectively read-only,
+ * but may get written to during init, so can't live in .rodata (via "const").
  */
-#define compiletime_assert_rwonce_type(t)					\
-	_Static_assert(__native_word(t) || sizeof(t) == sizeof(long long),	\
-		"Unsupported access size for {READ,WRITE}_ONCE().")
-
-/*
- * Use __READ_ONCE() instead of READ_ONCE() if you do not require any
- * atomicity. Note that this may result in tears!
- */
-#ifndef __READ_ONCE
-#define __READ_ONCE(x)	(*(const volatile __unqual_scalar_typeof(x) *)&(x))
+#ifndef __ro_after_init
+#define __ro_after_init __section(".data..ro_after_init")
 #endif
-
-#define READ_ONCE(x)							\
-({									\
-	compiletime_assert_rwonce_type(x);				\
-	__READ_ONCE(x);							\
-})
-
-#define __WRITE_ONCE(x, val)						\
-do {									\
-	*(volatile typeof(x) *)&(x) = (val);				\
-} while (0)
-
-#define WRITE_ONCE(x, val)						\
-do {									\
-	compiletime_assert_rwonce_type(x);				\
-	__WRITE_ONCE(x, val);						\
-} while (0)
 
 /*
  * Raw TLBI operations.
@@ -113,14 +106,9 @@ do {									\
 	__tlbi(op, arg);						\
 } while(0)
 
-// NOTE: from include/asm-generic/barrier.h
-#define dsb(option) __asm__ volatile("dsb " #option : : : "memory")
-
 #define isb()		asm volatile("isb" : : : "memory")
 #define dmb(opt)	asm volatile("dmb " #opt : : : "memory")
 #define dsb(opt)	asm volatile("dsb " #opt : : : "memory")
-
-
 #define __smp_mb()	dmb(ish)
 
 // TODO(note): this copy removes the call to kasan_check_write() and changes
@@ -162,6 +150,93 @@ do {									\
 #ifndef smp_store_release
 #define smp_store_release(p, v) do { __smp_store_release(p, v); } while (0)
 #endif
+
+/// Exceptions
+
+#define CURRENT_EL_SP_EL0_VECTOR	0x0
+#define CURRENT_EL_SP_ELx_VECTOR	0x200
+#define LOWER_EL_AArch64_VECTOR		0x400
+#define LOWER_EL_AArch32_VECTOR		0x600
+
+enum exception_type {
+	except_type_sync	= 0,
+	except_type_irq		= 0x80,
+	except_type_fiq		= 0x100,
+	except_type_serror	= 0x180,
+};
+
+#define picovm_exception_type_names		\
+	{ except_type_sync,	"SYNC"   },	\
+	{ except_type_irq,	"IRQ"    },	\
+	{ except_type_fiq,	"FIQ"    },	\
+	{ except_type_serror,	"SERROR" }
+
+unsigned long get_except64_offset(unsigned long psr, unsigned long target_mode,
+				  enum exception_type type)
+{
+	u64 mode = psr & (PSR_MODE_MASK | PSR_MODE32_BIT);
+	u64 exc_offset;
+
+	if      (mode == target_mode)
+		exc_offset = CURRENT_EL_SP_ELx_VECTOR;
+	else if ((mode | PSR_MODE_THREAD_BIT) == target_mode)
+		exc_offset = CURRENT_EL_SP_EL0_VECTOR;
+	else if (!(mode & PSR_MODE32_BIT))
+		exc_offset = LOWER_EL_AArch64_VECTOR;
+	else
+		exc_offset = LOWER_EL_AArch32_VECTOR;
+
+	return exc_offset + type;
+}
+
+unsigned long get_except64_cpsr(unsigned long old, bool has_mte,
+				unsigned long sctlr, unsigned long target_mode)
+{
+	u64 new = 0;
+
+	new |= (old & PSR_N_BIT);
+	new |= (old & PSR_Z_BIT);
+	new |= (old & PSR_C_BIT);
+	new |= (old & PSR_V_BIT);
+
+	if (has_mte)
+		new |= PSR_TCO_BIT;
+
+	new |= (old & PSR_DIT_BIT);
+
+	// PSTATE.UAO is set to zero upon any exception to AArch64
+	// See ARM DDI 0487E.a, page D5-2579.
+
+	// PSTATE.PAN is unchanged unless SCTLR_ELx.SPAN == 0b0
+	// SCTLR_ELx.SPAN is RES1 when ARMv8.1-PAN is not implemented
+	// See ARM DDI 0487E.a, page D5-2578.
+	new |= (old & PSR_PAN_BIT);
+	if (!(sctlr & SCTLR_EL1_SPAN))
+		new |= PSR_PAN_BIT;
+
+	// PSTATE.SS is set to zero upon any exception to AArch64
+	// See ARM DDI 0487E.a, page D2-2452.
+
+	// PSTATE.IL is set to zero upon any exception to AArch64
+	// See ARM DDI 0487E.a, page D1-2306.
+
+	// PSTATE.SSBS is set to SCTLR_ELx.DSSBS upon any exception to AArch64
+	// See ARM DDI 0487E.a, page D13-3258
+	if (sctlr & SCTLR_ELx_DSSBS)
+		new |= PSR_SSBS_BIT;
+
+	// PSTATE.BTYPE is set to zero upon any exception to AArch64
+	// See ARM DDI 0487E.a, pages D1-2293 to D1-2294.
+
+	new |= PSR_D_BIT;
+	new |= PSR_A_BIT;
+	new |= PSR_I_BIT;
+	new |= PSR_F_BIT;
+
+	new |= target_mode;
+
+	return new;
+}
 
 
 #endif /* __PICOVM_PRELUDE_H */
