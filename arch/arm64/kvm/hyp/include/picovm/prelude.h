@@ -106,6 +106,14 @@ extern char __idmap_text_start[], __idmap_text_end[];
 	__tlbi(op, arg);						\
 } while(0)
 
+#define __TLBI_VADDR(addr, asid)				\
+	({							\
+		unsigned long __ta = (addr) >> 12;		\
+		__ta &= GENMASK_ULL(43, 0);			\
+		__ta |= (unsigned long)(asid) << 48;		\
+		__ta;						\
+	})
+
 #define isb()		asm volatile("isb" : : : "memory")
 #define dmb(opt)	asm volatile("dmb " #opt : : : "memory")
 #define dsb(opt)	asm volatile("dsb " #opt : : : "memory")

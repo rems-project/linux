@@ -102,8 +102,6 @@ enum picovm_pgtable_prot picovm_pgtable_hyp_pte_prot(picovm_pte_t pte)
 	return prot;
 }
 
-
-
 // NOTE: based on linux/arch/arm64/kvm/hyp/pgtable.c::static kvm_pgtable_idx(u64 addr, u32 level)
 static u32 picovm_pgtable_idx(u64 addr, u32 level)
 {
@@ -133,21 +131,6 @@ static u32 picovm_pgd_pages(u32 ia_bits, u32 start_level)
 	return picovm_pgd_page_idx(&pgt, -1ULL) + 1;
 }
 
-static int break_pte(const struct picovm_pgtable_visit_ctx *ctx)
-{
-	if (picovm_pte_valid(ctx->old)) {
-		phys_addr_t ipa = ctx->addr;
-		ipa >>= 12;
-		__tlbi_level(ipas2e1is, ipa, PICOVM_PGTABLE_MAX_LEVELS-1);
-		dsb(ish);
-		__tlbi(vmalle1is);
-		dsb(ish);
-		isb();
-	}
-
-	return 0;
-}
-
 int picovm_pgtable_hyp_init(struct picovm_pgtable *pgt, u32 va_bits)
 {
 	u64 levels = 4;
@@ -166,14 +149,23 @@ int picovm_pgtable_hyp_init(struct picovm_pgtable *pgt, u32 va_bits)
 
 static int stage2_map_walker(const struct picovm_pgtable_visit_ctx *ctx)
 {
-	int ret;
 	picovm_pte_t* ptep = ctx->ptep;
 	struct picovm_stage2_map_data *data = ctx->arg;
 	phys_addr_t pa = data->phys + ctx->ofs;
 	picovm_pte_t new = pa | data->prot;
 
-	WRITE_ONCE(ptep, 0);
-	ret = break_pte(ctx);
+	WRITE_ONCE(*ptep, 0);
+	if (picovm_pte_valid(ctx->old)) {
+		phys_addr_t ipa = ctx->addr;
+		dsb(ishst);
+		ipa >>= 12;
+		__tlbi_level(ipas2e1is, ipa, PICOVM_PGTABLE_MAX_LEVELS-1);
+		dsb(ish);
+		__tlbi(vmalle1is);
+		dsb(ish);
+		isb();
+	}
+
 	smp_store_release(ctx->ptep, new);
 	return 0;
 }
@@ -193,6 +185,10 @@ static int hyp_unmap_walker(const struct picovm_pgtable_visit_ctx *ctx)
 {
 	picovm_pte_t* ptep = ctx->ptep;
 	WRITE_ONCE(*ptep, 0);
+	dsb(ishst);
+	__tlbi_level(vale2is, __TLBI_VADDR(ctx->addr, 0), PICOVM_PGTABLE_MAX_LEVELS-1);
+	dsb(ish);
+	isb();
 	return 0;
 }
 
@@ -230,18 +226,18 @@ picovm_pte_t* _picovm_pgtable_walk(struct picovm_pgtable *pgt, u64 ia)
 int picovm_pgtable_walk(struct picovm_pgtable *pgt, u64 addr, u64 size, struct picovm_pgtable_walker *walker)
 {
 	int r;
-	u64 start	= ALIGN_DOWN(addr, PAGE_SIZE);
-	u64 end	= PAGE_ALIGN(addr + size);
+	u64 start = ALIGN_DOWN(addr, PAGE_SIZE);
+	u64 end = PAGE_ALIGN(addr + size);
 
 	for (u64 cur = start; cur < end; cur += PAGE_SIZE) {
 		picovm_pte_t *ptep = _picovm_pgtable_walk(pgt, cur);
 
 		struct picovm_pgtable_visit_ctx ctx = {
-			.ptep = ptep,
+			.ptep	= ptep,
 			.old	= READ_ONCE(*ptep),
-			.arg = walker->arg,
-			.addr = cur,
-			.ofs = cur - start,
+			.arg	= walker->arg,
+			.addr	= cur,
+			.ofs	= cur - start,
 		};
 
 		r = walker->cb(&ctx);
@@ -287,16 +283,17 @@ void check_stage2_configuration(void)
  */
 int picovm_pgtable_stage2_init(struct picovm_pgtable *pgt, struct picovm_s2_mmu *mmu)
 {
+	size_t pgd_sz;
 	check_stage2_configuration();
 	pgt->ia_bits = PICOVM_CONFIG_IA_BITS;
 	pgt->start_level = PICOVM_CONFIG_STARTING_LEVEL;
 	pgt->mmu = mmu;
 
-	size_t pgd_sz = picovm_pgd_pages(pgt->ia_bits, pgt->start_level) * PAGE_SIZE;
+	pgd_sz = picovm_pgd_pages(pgt->ia_bits, pgt->start_level) * PAGE_SIZE;
+	// TODO: use picovm_early_alloc?
 	pgt->pgd = (picovm_pteref_t)alloc_pages_exact(pgd_sz, GFP_KERNEL_ACCOUNT | __GFP_ZERO); // (picovm_pteref_t)host_s2_zalloc_pages_exact(pgd_sz);
 	if (!pgt->pgd)
 		return -ENOMEM;
-
 	dsb(ishst);
 	return 0;
 }
@@ -350,10 +347,7 @@ int picovm_pgtable_hyp_unmap(struct picovm_pgtable *pgt, u64 addr, u64 size)
 	};
 
 	ret = picovm_pgtable_walk(pgt, addr, size, &walker);
-	dsb(ishst);
-	isb();
-
-	return 0;
+	return ret;
 }
 
 u64 picovm_get_vtcr(u64 mmfr0, u64 mmfr1, u32 phys_shift)
