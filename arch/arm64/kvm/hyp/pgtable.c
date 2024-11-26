@@ -87,9 +87,9 @@ predicate {boolean exists} Cond_Zero_Page (pointer p)
     return {exists: true};
   }
 }
-@*/
 
-/*@
+
+
 function (u64) phys_virt_offset ()
 
 function (boolean) valid_phys_virt_offset ()
@@ -114,9 +114,9 @@ function (u64) hyp_virt_to_phys (pointer virt)
 spec hyp_virt_to_phys (pointer virt);
   requires true;
   ensures  return == hyp_virt_to_phys (virt);
-@*/
 
-/*@
+
+
 function (boolean) valid_hyp_virt_page (pointer p)
 {
   mod((u64) p, 4096u64) == 0u64 
@@ -187,14 +187,17 @@ function [rec] (boolean) is_possible_table_entry1 (u64 encoded)
 { 
   kvm_pte_table(encoded, 0u32) == 1u8 
 }
+
 function (boolean) is_possible_table_entry (u64 encoded)
 { 
   is_valid_pte_entry(encoded) && is_possible_table_entry1(encoded) 
 }
+
 function (boolean) level_has_tables (u32 level)
 { 
   valid_pgtable_level(level + 1u32) 
 }
+
 function (boolean) is_table_entry_at (u64 encoded, u32 level)
 { 
   is_possible_table_entry(encoded) && level_has_tables(level) 
@@ -210,16 +213,14 @@ predicate {boolean x} Indirect_Page_Table_Entries (pointer p, u32 level, u64 enc
   if (is_table_entry_at (encoded, level)) {
     assert (valid_pgtable_level(level));
     assert (good<kvm_pte_t *>(decode_table_entry_pointer (encoded)));
-    take x = Page_Table_Entries (decode_table_entry_pointer (encoded), level + 1u32);
+    take x = Page_Table_Entries(decode_table_entry_pointer (encoded), level + 1u32);
     return {x: true};
   }
   else {
     return {x: false};
   }
 }
-@*/
 
-/*@
 function (u64) align_u64 (u64 x, u64 n)
 { 
   shift_left (shift_right (x, n), n) 
@@ -249,8 +250,7 @@ function (u32) pgd_extra_bits(u32 ia_bits, u32 start_level)
   extra_bits
 }
 
-predicate {u32 extra_bits, struct kvm_pgtable data}
-        Pg_Table (pointer p) 
+predicate {u32 extra_bits, struct kvm_pgtable data} Pg_Table (pointer p) 
 {
   take Data = Owned<struct kvm_pgtable>(p);
 
@@ -336,7 +336,7 @@ static bool kvm_block_mapping_supported(const struct kvm_pgtable_visit_ctx *ctx,
     ensures  take Ctx2 = Owned(ctx); 
              Ctx2 == Ctx; 
              return == (pure_kvm_block_mapping_supported(Ctx.addr, Ctx.end, phys, Ctx.level)
-  ? 1u8 : 0u8); 
+                        ? 1u8 : 0u8); 
 @*/
 {
 	u64 granule = kvm_granule_size(ctx->level);
@@ -1017,8 +1017,7 @@ static int hyp_map_walker(const struct kvm_pgtable_visit_ctx *ctx,
 }
 
 /*@
-predicate (void) Hyp_Map_Walker_Case
-        (pointer f, pointer x, u32 flags) 
+predicate (void) Hyp_Map_Walker_Case(pointer f, pointer x, u32 flags) 
 {
   assert (f == &hyp_map_walker);
   assert (flags == ((u32) KVM_PGTABLE_WALK_LEAF));
@@ -1026,8 +1025,7 @@ predicate (void) Hyp_Map_Walker_Case
   return;
 }
 
-predicate (void) Hyp_Walker_Cases
-        (pointer f, pointer x, u32 flags) 
+predicate (void) Hyp_Walker_Cases(pointer f, pointer x, u32 flags) 
 {
   take X = Hyp_Map_Walker_Case (f, x, flags);
   return X;
