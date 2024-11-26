@@ -74,16 +74,27 @@ extern void hyp_get_page(void *addr);
 */
 
 /*@
+predicate (void) Byte(pointer p, u8 v)
+{
+  take v_ = Owned<char>(p);
+  assert(v_ == v);
+  return;
+}
+
+predicate (void) Zero_Page(pointer p)
+{
+    take us = each (i32 i; 0i32 <= i && i < 4096i32)
+                   {Byte(array_shift<char>(p, i), 0u8)};
+    return;
+}
+
 predicate {boolean exists} Cond_Zero_Page (pointer p) 
 {
   if (p == NULL) {
     return {exists: false};
   }
   else {
-    take X = each (i32 i; 0i32 <= i && i < 4096i32)
-                  {Owned<char>(array_shift<char>(p, i))};
-    assert (each (i32 i; 0i32 <= i && i < 4096i32)
-                 {X[i] == 0u8});
+    take u = Zero_Page(p);
     return {exists: true};
   }
 }
@@ -131,10 +142,10 @@ spec hyp_zalloc_hyp_page (pointer arg);
 spec hyp_get_page (pointer arg);
   requires true;
   ensures  true;
+@*/
 
 
-
-
+/*@
 predicate (void) MM_Ops(pointer p) 
 {
   take data = Owned<struct kvm_pgtable_mm_ops>(p);
