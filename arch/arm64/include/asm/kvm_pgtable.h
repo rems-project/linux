@@ -44,32 +44,37 @@ typedef u64 kvm_pte_t;
 
 #define KVM_PHYS_INVALID		(-1ULL)
 
-/* CN functions that will be converted from C functions below */
 /*@
+// CN functions that will be converted from C functions below
 function (u8) kvm_pte_valid (kvm_pte_t pte)
 function (u64) kvm_pte_to_phys (kvm_pte_t pte)
-@*/
 
 
-/* more abstract CN counterparts */
-/*@
+
+// more abstract CN counterparts 
+
 function [rec] (boolean) is_valid_pte_entry (u64 encoded)
-  { kvm_pte_valid(encoded) == 1u8 }
+{ 
+  kvm_pte_valid(encoded) == 1u8 
+}
+
 function [rec] (u64) decode_table_entry_phys (u64 encoded)
-  { kvm_pte_to_phys(encoded) }
+{ 
+  kvm_pte_to_phys(encoded) 
+}
 @*/
 
 static inline bool kvm_pte_valid(kvm_pte_t pte)
-/*@ cn_function kvm_pte_valid; @*/
-/*@ ensures return == (is_valid_pte_entry(pte) ? 1u8 : 0u8); @*/
+/*@ cn_function kvm_pte_valid; 
+    ensures return == (is_valid_pte_entry(pte) ? 1u8 : 0u8); @*/
 {
 	/*@ unfold is_valid_pte_entry(pte); @*/
 	return pte & KVM_PTE_VALID;
 }
 
 static inline u64 kvm_pte_to_phys(kvm_pte_t pte)
-/*@ cn_function kvm_pte_to_phys; @*/
-/*@ ensures return == decode_table_entry_phys (pte); @*/
+/*@ cn_function kvm_pte_to_phys; 
+    ensures return == decode_table_entry_phys (pte); @*/
 {
 	u64 pa = pte & KVM_PTE_ADDR_MASK;
 
@@ -83,8 +88,8 @@ static inline u64 kvm_pte_to_phys(kvm_pte_t pte)
 /*@ function (kvm_pte_t) kvm_phys_to_pte(u64 pa) @*/
 
 static inline kvm_pte_t kvm_phys_to_pte(u64 pa)
-/*@ cn_function kvm_phys_to_pte; @*/
-/*@ ensures return == kvm_phys_to_pte(pa); @*/
+/*@ cn_function kvm_phys_to_pte; 
+    ensures return == kvm_phys_to_pte(pa); @*/
 {
 	kvm_pte_t pte = pa & KVM_PTE_ADDR_MASK;
 
@@ -104,10 +109,10 @@ static inline kvm_pfn_t kvm_pte_to_pfn(kvm_pte_t pte)
 /*@ function (u64) kvm_granule_shift (u32 level) @*/
 
 static inline u64 kvm_granule_shift(u32 level)
-/*@ cn_function kvm_granule_shift; @*/
-/*@ requires valid_pgtable_level(level) || level == (0u32 - 1u32); @*/
-/*@ ensures 0u64 <= return && return < 64u64; @*/
-/*@ ensures return == kvm_granule_shift(level); @*/
+/*@ cn_function kvm_granule_shift; 
+    requires valid_pgtable_level(level) || level == (0u32 - 1u32); 
+    ensures  0u64 <= return && return < 64u64; 
+             return == kvm_granule_shift(level); @*/
 {
 	/* Assumes KVM_PGTABLE_MAX_LEVELS is 4 */
 	return ARM64_HW_PGTABLE_LEVEL_SHIFT(level);
@@ -116,9 +121,9 @@ static inline u64 kvm_granule_shift(u32 level)
 /*@ function (u64) kvm_granule_size(u32 level) @*/
 
 static inline u64 kvm_granule_size(u32 level)
-/*@ cn_function kvm_granule_size; @*/
-/*@ requires valid_pgtable_level(level); @*/
-/*@ ensures return == kvm_granule_size(level); @*/
+/*@ cn_function kvm_granule_size; 
+    requires valid_pgtable_level(level); 
+    ensures return == kvm_granule_size(level); @*/
 {
 	return BIT(kvm_granule_shift(level));
 }
@@ -126,8 +131,8 @@ static inline u64 kvm_granule_size(u32 level)
 /*@ function (u8) kvm_level_supports_block_mapping(u32 level) @*/
 
 static inline bool kvm_level_supports_block_mapping(u32 level)
-/*@ cn_function kvm_level_supports_block_mapping; @*/
-/*@ ensures return == kvm_level_supports_block_mapping(level); @*/
+/*@ cn_function kvm_level_supports_block_mapping;
+    ensures return == kvm_level_supports_block_mapping(level); @*/
 {
 	return level >= KVM_PGTABLE_MIN_BLOCK_LEVEL;
 }
@@ -263,9 +268,9 @@ typedef int (*kvm_pgtable_visitor_fn_t)(const struct kvm_pgtable_visit_ctx *ctx,
 					enum kvm_pgtable_walk_flags visit);
 
 static inline bool kvm_pgtable_walk_shared(const struct kvm_pgtable_visit_ctx *ctx)
-/*@ requires take Ctx = Owned(ctx); @*/
-/*@ ensures take Ctx2 = Owned(ctx); @*/
-/*@ ensures Ctx2 == Ctx; @*/
+/*@ requires take Ctx = Owned(ctx); 
+    ensures  take Ctx2 = Owned(ctx); 
+             Ctx2 == Ctx; @*/
 {
 	return ctx->flags & KVM_PGTABLE_WALK_SHARED;
 }
@@ -300,9 +305,9 @@ static inline kvm_pte_t *kvm_dereference_pteref(struct kvm_pgtable_walker *walke
 }
 
 static inline int kvm_pgtable_walk_begin(struct kvm_pgtable_walker *walker)
-/*@ requires take W = Owned(walker); @*/
-/*@ ensures take W2 = Owned(walker); @*/
-/*@ ensures W2 == W; @*/
+/*@ requires take W = Owned(walker); 
+    ensures  take W2 = Owned(walker); 
+             W2 == W; @*/
 {
 	/*
 	 * Due to the lack of RCU (or a similar protection scheme), only
