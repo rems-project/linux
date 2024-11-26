@@ -299,7 +299,7 @@ typedef kvm_pte_t *kvm_pteref_t;
 
 static inline kvm_pte_t *kvm_dereference_pteref(struct kvm_pgtable_walker *walker,
 						kvm_pteref_t pteref)
-/*@ ensures return == pteref; @*/
+/*@ ensures ptr_eq(return,pteref); @*/
 {
 	return pteref;
 }
