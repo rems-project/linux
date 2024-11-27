@@ -165,28 +165,6 @@ function (boolean) valid_pgtable_level (u32 level)
 }
 
 
-// see struct kvm_pgtable defn in arch/arm64/include/asm/kvm_pgtable.h 
-
-predicate (map <u64, u64>) PTE_Array (pointer p) 
-{
-  assert (mod((u64)p, 4096u64) == 0u64);
-  take ptes = each (u64 i; 0u64 <= i && i < 512u64)
-                   {Owned<kvm_pte_t>(array_shift<kvm_pte_t>(p, i))};
-  return ptes;
-}
-
-predicate (void) Page_Table_Entries (pointer p, u32 level) 
-{
-  assert (valid_pgtable_level(level));
-  take ptes = PTE_Array (p);
-  take children = each (u64 i; 0u64 <= i && i < 512u64)
-                       {Indirect_Page_Table_Entries (array_shift<kvm_pte_t>(p, i), level, ptes[i])};
-  return;
-}
-
-
-
-
 function (u8) kvm_pte_table (kvm_pte_t pte, u32 level) 
 
 
@@ -219,19 +197,6 @@ function (pointer) decode_table_entry_pointer (u64 encoded)
   hyp_phys_to_virt (decode_table_entry_phys (encoded))
 }
 
-predicate {boolean x} Indirect_Page_Table_Entries (pointer p, u32 level, u64 encoded) 
-{
-  if (is_table_entry_at (encoded, level)) {
-    assert (valid_pgtable_level(level));
-    assert (good<kvm_pte_t *>(decode_table_entry_pointer (encoded)));
-    take x = Page_Table_Entries(decode_table_entry_pointer (encoded), level + 1u32);
-    return {x: true};
-  }
-  else {
-    return {x: false};
-  }
-}
-
 function (u64) align_u64 (u64 x, u64 n)
 { 
   shift_left (shift_right (x, n), n) 
@@ -241,6 +206,7 @@ function (boolean) aligned_u64 (u64 x, u64 n)
 { 
   align_u64 (x, n) == x 
 }
+
 @*/
 
 /* Page tables are 4096 bytes in size (2 ^ 12), which is 512 entries on a
@@ -261,6 +227,34 @@ function (u32) pgd_extra_bits(u32 ia_bits, u32 start_level)
   extra_bits
 }
 
+
+// see struct kvm_pgtable defn in arch/arm64/include/asm/kvm_pgtable.h 
+type_synonym pte = u64
+
+predicate (void) Page_Table_Entries (pointer p, u32 level) 
+{
+  assert (valid_pgtable_level(level));
+  assert (mod((u64)p, 4096u64) == 0u64);
+  take ptes = each (u64 i; 0u64 <= i && i < 512u64)
+                   {Owned<kvm_pte_t>(array_shift<kvm_pte_t>(p, i))};
+  take children = each (u64 i; 0u64 <= i && i < 512u64)
+                       {Indirect_Page_Table_Entries (array_shift<kvm_pte_t>(p, i), level, ptes[i])};
+  return;
+}
+
+predicate {boolean x} Indirect_Page_Table_Entries (pointer p, u32 level, u64 encoded) 
+{
+  if (is_table_entry_at (encoded, level)) {
+    assert (valid_pgtable_level(level));
+    assert (good<kvm_pte_t *>(decode_table_entry_pointer (encoded)));
+    take x = Page_Table_Entries(decode_table_entry_pointer (encoded), level + 1u32);
+    return {x: true};
+  }
+  else {
+    return {x: false};
+  }
+}
+
 predicate {u32 extra_bits, struct kvm_pgtable data} Pg_Table (pointer p) 
 {
   take Data = Owned<struct kvm_pgtable>(p);
@@ -271,17 +265,12 @@ predicate {u32 extra_bits, struct kvm_pgtable data} Pg_Table (pointer p)
   assert (aligned_u64 ((u64) Data.pgd, 12u64 + ((u64) extra_bits)));
   assert (valid_pgtable_level(Data.start_level));
 
-  take Entries = Pg_Table_Toplevel (Data.pgd, Data.start_level, extra_bits);
+  take Entries = each (u64 i; 0u64 <= i && i < (u64) (shift_left(6i32, (i32)extra_bits)))
+                      {Page_Table_Entries(array_shift<kvm_pte_t[enum_PTRS_PER_PTE]>(Data.pgd, i), Data.start_level)};
 
   return {extra_bits: extra_bits, data: Data};
 }
 
-predicate (void) Pg_Table_Toplevel (pointer p, u32 start_level, u32 extra_bits) 
-{
-  take Toplevel_Table = each (u64 i; 0u64 <= i && i < (u64) (shift_left(6i32, (i32)extra_bits)))
-                             {Page_Table_Entries(array_shift<kvm_pte_t[enum_PTRS_PER_PTE]>(p, i), start_level)};
-  return;
-}
 
 datatype possible_mm_ops {
   No_MM_Ops {},
@@ -965,6 +954,16 @@ static bool hyp_map_walker_try_leaf(const struct kvm_pgtable_visit_ctx *ctx,
 	return true;
 }
 
+
+/*@
+predicate (map <u64, pte>) PTE_Array (pointer p) 
+{
+  assert (mod((u64)p, 4096u64) == 0u64);
+  take ptes = each (u64 i; 0u64 <= i && i < 512u64)
+                   {Owned<kvm_pte_t>(array_shift<kvm_pte_t>(p, i))};
+  return ptes;
+}
+@*/
 
 static inline void coerce_page_to_ptes(kvm_pte_t *ptep)
 /*@ trusted; 
