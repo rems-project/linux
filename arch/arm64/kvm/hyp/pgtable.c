@@ -209,11 +209,48 @@ function (boolean) aligned_u64 (u64 x, u64 n)
 
 @*/
 
-/* Page tables are 4096 bytes in size (2 ^ 12), which is 512 entries on a
- * 64-bit platform, resolving 9 bits, however, the top-level variant (called a
- * page directory) resolves some excess bits and is a little bigger, thus the
- * extra_bits output argument. A max-size 4-level page table resolves 48 bits,
- * 9 less per level, leaving 12 bits (the page size) unresolved.
+/* We assume a setup where pages, and hence individual page tables,
+ * are 4096 bytes in size (2^12). On a 64-bit platform (with pointers
+ * of 2^3 bytes size) that means an individual page table can fit
+ * 2^9=512 entries. An overall page table has maximum depth of four
+ * levels (levels 0 -- 3). For any given 64-bit pointer, to be
+ * address-translated, only a portion of up to 48 bits are the actual
+ * address (the *input address*). In the most basic setup, these 48
+ * bits are divided into four times 9 bits, which are taken as indices
+ * into page table levels 0 through 3, with the remaining 12 bits used
+ * as an offset into the page of physical memory obtained from the
+ * page table lookup (if the address is mapped).
+ * 
+ * Different configurations from this basic setup are possible: input
+ * addresses can be made smaller by setting an appropriate hardware
+ * register, and the page table depth can be reduced by setting the
+ * initial translation level to be greater than 0.
+ *
+ * For small input address sizes (relative to the number of
+ * translation levels), the default table encoding would lead to
+ * wasted space and pointer indirection, due to mostly-empty top level
+ * page tables (i.e. 12 bits, plus 9 bits times the number of
+ * translation levels, could encode significantly larger addresses
+ * than the chosen input address size). 
+ * 
+ * When the input address size is sufficiently small for that, it is
+ * then possible to optimise and use *concatenated page tables*:
+ * instead of a regular level-n page-table setup, using the
+ * concatenated-page-table scheme, one gets a level-(n-1) page table
+ * where the top level becomes *an array of page tables* that
+ * effectively represents the two upper levels of the page table
+ * within a single page: the part of the input address dedicated for
+ * the initial level of the address translation is used to index the
+ * page-table array, the resulting page-table is indexed using the
+ * next 9-bit index. When the input address size permits, the
+ * concatenated scheme is selected by chosing an initial translation
+ * level that is one greater than what one would have chosen
+ * otherwise.
+ *
+ * Note: Armv8.2 introduced an architecture extension that allows for
+ * input addresses of larger sizes, up to 52 bits, and initial address
+ * translation levels of -1, which our specification does not handle
+ * yet.
  */
 enum {
   enum_PTRS_PER_PTE = PTRS_PER_PTE,
@@ -222,9 +259,10 @@ enum {
 /*@
 function (u32) pgd_extra_bits(u32 ia_bits, u32 start_level)
 {
-  let pt_bits_resolved = 48u32 - (9u32 * start_level);
-  let extra_bits = ia_bits - pt_bits_resolved;
-  extra_bits
+  let levels = 4u32 - start_level;
+  let bits_covered = levels * 9u32 + 12u32;
+  let bits_missing = (ia_bits <= bits_covered) ? 0u32 : (ia_bits - bits_covered);
+  bits_missing
 }
 
 
@@ -258,14 +296,14 @@ predicate {boolean x} Indirect_Page_Table_Entries (pointer p, u32 level, u64 enc
 predicate {u32 extra_bits, struct kvm_pgtable data} Pg_Table (pointer p) 
 {
   take Data = Owned<struct kvm_pgtable>(p);
-
-  assert ((0u32 < Data.ia_bits) && (Data.ia_bits <= 52u32));
   let extra_bits = pgd_extra_bits(Data.ia_bits, Data.start_level);
-  assert (extra_bits == 0u32 || extra_bits == 2u32 || extra_bits == 4u32);
-  assert (aligned_u64 ((u64) Data.pgd, 12u64 + ((u64) extra_bits)));
+
+  assert (0u32 < Data.ia_bits && Data.ia_bits <= 52u32);
+  assert (0u32 <= extra_bits && extra_bits <= 4u32);
+  // assert (aligned_u64 ((u64) Data.pgd, 12u64 + ((u64) extra_bits)));
   assert (valid_pgtable_level(Data.start_level));
 
-  take Entries = each (u64 i; 0u64 <= i && i < (u64) (shift_left(6i32, (i32)extra_bits)))
+  take Entries = each (u64 i; 0u64 <= i && i < (u64) shift_left(1u32,extra_bits))
                       {Page_Table_Entries(array_shift<kvm_pte_t[enum_PTRS_PER_PTE]>(Data.pgd, i), Data.start_level)};
 
   return {extra_bits: extra_bits, data: Data};
@@ -531,8 +569,7 @@ static int kvm_pgtable_visitor_cb(struct kvm_pgtable_walk_data *data,
              take IPT2 = Indirect_Page_Table_Entries (Ctx.ptep, Ctx.level, pte2); 
              take Ops2 = MM_Ops(Ctx.mm_ops); 
              Ops2 == Ops; 
-             visit == ((u32)KVM_PGTABLE_WALK_TABLE_PRE)
-    ? pte2 == pte : true; @*/
+             visit == ((u32)KVM_PGTABLE_WALK_TABLE_PRE) ? pte2 == pte : true; @*/
 {
 	struct kvm_pgtable_walker *walker = data->walker;
 	WARN_ON_ONCE(kvm_pgtable_walk_shared(ctx) && !kvm_pgtable_walk_lock_held());
@@ -591,10 +628,9 @@ static inline int __kvm_pgtable_visit(struct kvm_pgtable_walk_data *data,
              take IPT2 = Indirect_Page_Table_Entries (pteref, level, pte2); 
              take Ops2 = MM_Ops(mm_ops); 
              Ops2 == Ops; 
-             ((Data2.addr < Data2.end) && (return == 0i32)) ?
-        (Data2.addr == (align_u64 (Data.addr, kvm_granule_shift(level)) +
-            shift_left(1u64, kvm_granule_shift(level))))
-        : true; 
+             ((Data2.addr < Data2.end) && (return == 0i32)) implies
+               (Data2.addr == (align_u64 (Data.addr, kvm_granule_shift(level)) +
+            shift_left(1u64, kvm_granule_shift(level))));
              ! walk_again_case(return, Data.flags); @*/
 {
 	enum kvm_pgtable_walk_flags flags = data->walker->flags;
