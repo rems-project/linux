@@ -27,7 +27,13 @@ cp $LINUX_DIR/cerb_work_around.h .
 # hacks
 touch ./include/linux/compiler-version.h
 
-if [[ $1 == '-i' ]]
+if [[ $# < 1 ]]
+then
+  echo 'Illegal number of arguments: supply [cn|i|coq] as first argument.'
+  exit 1
+fi
+
+if [[ $1 == 'i' ]]
 then
 
   $CPP -o step1.c 2> pp_warnings.txt
@@ -36,15 +42,22 @@ then
   echo 'entering interactive shell in carver dir'
   bash
 
-elif [[ $1 == '--coq' ]]
+elif [[ $1 == 'coq' ]]
 then
 
   $CN --lemmata $LINUX_DIR/coq_lemmas/theories/Gen_Spec.v
   make -C $LINUX_DIR/coq_lemmas
 
+elif [[ $1 == 'cn' ]]
+then
+
+  shift
+  $CN "$@"
+
 else
 
-  $CN $1
+  echo 'Illegal first argument: supply [cn|i|coq].'
+  exit 1
 
 fi
 
