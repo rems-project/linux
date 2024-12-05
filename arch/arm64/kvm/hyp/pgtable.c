@@ -298,7 +298,7 @@ predicate {u32 extra_bits, struct kvm_pgtable data} Pg_Table (pointer p)
   take Data = Owned<struct kvm_pgtable>(p);
   let extra_bits = pgd_extra_bits(Data.ia_bits, Data.start_level);
 
-  assert (0u32 < Data.ia_bits && Data.ia_bits <= 52u32);
+  assert (39u32 <= Data.ia_bits && Data.ia_bits <= 48u32);
   assert (0u32 <= extra_bits && extra_bits <= 4u32);
   // assert (aligned_u64 ((u64) Data.pgd, 12u64 + ((u64) extra_bits)));
   assert (valid_pgtable_level(Data.start_level));
