@@ -25,6 +25,9 @@
  *  %ld = long signed decimal (s64)
  *  %lu = long unsigned decimal (u64)
  *  %lx = long hex (u64)
+ *  %lld = long long signed decimal (s64)
+ *  %llu = long long unsigned decimal (u64)
+ *  %llx = long long hex (u64)
  *  %I  = indent (u64)
  *  %g(KIND) = ghost object
  *      Where KIND one of:

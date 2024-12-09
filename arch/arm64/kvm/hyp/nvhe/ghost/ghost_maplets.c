@@ -228,7 +228,7 @@ static u64 alloc_counter, free_counter;
 void ghost_maplets_print_stats(const char *str)
 {
 	ghost_assert_maplets_locked();
-	ghost_printf("[%s] alloc: %lu -- free: %lu ==> diff: %ld\n", str, alloc_counter, free_counter, (s64)(alloc_counter - free_counter));
+	ghost_printf("[%s] alloc: %llu -- free: %llu ==> diff: %lld\n", str, alloc_counter, free_counter, (s64)(alloc_counter - free_counter));
 }
 
 /* alloc: move the head of the free list in @maplets_pool (if it exists) to become the new last entry of maplets_list, and return a pointer to its enclosing maplet */
@@ -441,7 +441,7 @@ int gp_put_maplet_target(gp_stream_t *out, struct maplet_target *target)
 		// each name is 5, and the
 		return ghost_sprintf(
 			out,
-			"%s:%lx %s:%lx %s %s %s (raw_arch_prot %lx)",
+			"%s:%llx %s:%llx %s %s %s (raw_arch_prot %llx)",
 			oa_name_kind, oa, oa_post_name_kind, oa_end,
 			page_state, perms, memty,
 			attrs.raw_arch_attrs
@@ -518,7 +518,7 @@ int gp_put_maplet(gp_stream_t *out, struct maplet *maplet)
 	ia_end = ia_range_end(*maplet);
 
 	return ghost_sprintf_ext(
-		out, "%s %s:%lx %s:%lx nr_pages:%x %g(maplet_target)",
+		out, "%s %s:%llx %s:%llx nr_pages:%x %g(maplet_target)",
 		stage, ia_name_kind, ia, ia_post_name_kind, ia_end, (u32)maplet->ia_range_nr_pages, &maplet->target
 	);
 }

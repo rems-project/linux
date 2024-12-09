@@ -817,7 +817,7 @@ void check_abstraction_refined_register(int idx, struct ghost_register *gc_reg, 
 		GHOST_INFO("gc_reg");
 		GHOST_INFO("gr_post_pre");
 		if(!check_abstraction_equals_register(gc_reg, gr_post_reg, /*TODO*/true))
-			ghost_printf("\x1b[30;41mWARNING register X%d mismatch ==> computed: %lx -- post: %lx\x1b[0m\n", idx, gc_reg->value, gr_post_reg->value);
+			ghost_printf("\x1b[30;41mWARNING register X%d mismatch ==> computed: %llx -- post: %llx\x1b[0m\n", idx, gc_reg->value, gr_post_reg->value);
 	}
 	else if (gr_post_reg->status == GHOST_ABSENT && gc_reg->status == GHOST_PRESENT) {
 		ghost_assert(false);
@@ -1133,7 +1133,7 @@ void ghost_dump_vms(struct ghost_vms *vms)
 	ghost_printf("    vm_table_data: ");
 	if (vms->table_data.present) {
 		ghost_printf("\n");
-		ghost_printf("        nr_vms:%lx\n", vms->table_data.nr_vms);
+		ghost_printf("        nr_vms:%llx\n", vms->table_data.nr_vms);
 
 	} else {
 		ghost_printf(GHOST_MISSING_FIELD "\n");
@@ -1153,10 +1153,10 @@ void ghost_dump_globals(struct ghost_constant_globals *globals)
 {
 	ghost_printf(
 		"globals:\n"
-		"  hyp_nr_cpus:%lx\n"
-		"  hyp_physvirt_offset:%lx\n"
-		"  tag_lsb:%lx\n"
-		"  tag_val:%lx\n",
+		"  hyp_nr_cpus:%llx\n"
+		"  hyp_physvirt_offset:%llx\n"
+		"  tag_lsb:%llx\n"
+		"  tag_val:%llx\n",
 		globals->hyp_nr_cpus,
 		globals->hyp_physvirt_offset,
 		globals->tag_lsb,
@@ -1179,7 +1179,7 @@ void ghost_dump_loaded_vcpu_status(struct ghost_loaded_vcpu_status *loaded_vcpu_
 	if (!loaded_vcpu_status->loaded) {
 		ghost_printf("<no loaded vCPU>\n");
 	} else {
-		ghost_printf("<loaded vm_handle:%x vcpu_index:%lu>\n", loaded_vcpu_status->vm_handle, loaded_vcpu_status->loaded_vcpu->vcpu_index);
+		ghost_printf("<loaded vm_handle:%x vcpu_index:%llu>\n", loaded_vcpu_status->vm_handle, loaded_vcpu_status->loaded_vcpu->vcpu_index);
 	}
 }
 
@@ -1191,7 +1191,7 @@ void ghost_dump_running_state(struct ghost_running_state *run, u64 i)
 	if (!run->guest_running) {
 		ghost_printf("<host running>\n");
 	} else {
-		ghost_printf("<VM running, vm_handle:%x vcpu_index:%lu exit_code:%lu>\n", run->vm_handle, run->vcpu_index, run->guest_exit_code);
+		ghost_printf("<VM running, vm_handle:%x vcpu_index:%llu exit_code:%llu>\n", run->vm_handle, run->vcpu_index, run->guest_exit_code);
 	}
 }
 

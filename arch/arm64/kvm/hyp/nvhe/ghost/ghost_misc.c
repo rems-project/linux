@@ -164,20 +164,20 @@ void ghost_dump_setup(void)
 
 	ghost_printf(
 		"  ghost_setup:\n"
-		"    ghost__pkvm_init_virt:%lx\n"
-		"    virt':................%lx\n"
-		"    ghost__pkvm_init_phys:%lx\n"
-		"    phys':................%lx\n"
-		"    size:.................%lx\n"
+		"    ghost__pkvm_init_virt:%llx\n"
+		"    virt':................%llx\n"
+		"    ghost__pkvm_init_phys:%llx\n"
+		"    phys':................%llx\n"
+		"    size:.................%llx\n"
 		"\n"
 		"    vmemmap_base:.........%p\n"
-		"    size:.................%lx\n"
+		"    size:.................%llx\n"
 		"\n"
 		"    hyp_pgt_base:.........%p\n"
-		"    size:.................%lx\n"
+		"    size:.................%llx\n"
 		"\n"
 		"    host_s2_pgt_base:.....%p\n"
-		"    size:.................%lx\n"
+		"    size:.................%llx\n"
 		"\n",
 		ghost__pkvm_init_virt,
 		ghost__pkvm_init_virt+ghost__pkvm_init_size,

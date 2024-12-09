@@ -177,7 +177,7 @@ enum arg_length {
 	LENGTH_hh = 8,
 	LENGTH_h = 16,
 	LENGTH_none = 32,
-	LENGTH_l = 64,
+	LENGTH_l_ll = 64,
 };
 
 int put_char(gp_stream_t *out, char **p, int arg)
@@ -391,7 +391,9 @@ enum arg_length slice_off_length(char **p)
 
 	if (__matches(*p, "l")) {
 		*p += 1;
-		return LENGTH_l;
+		if (__matches(*p, "l"))
+			*p += 1;
+		return LENGTH_l_ll;
 	}
 
 	return LENGTH_none;
@@ -423,8 +425,8 @@ int partition_padding(char *p)
  * VA_INT_ARG(AP) is like va_arg(ap, int)
  * but substitutes `int` for whatever the `length` specifier says
  */
-#define VA_INT_ARG(AP) (len == LENGTH_l ? va_arg(AP, u64) : (u64)va_arg(AP, int))
-#define VA_UINT_ARG(AP) (len == LENGTH_l ? (u64)va_arg(AP, s64) : (u64)va_arg(AP, unsigned int))
+#define VA_INT_ARG(AP) (len == LENGTH_l_ll ? va_arg(AP, u64) : (u64)va_arg(AP, int))
+#define VA_UINT_ARG(AP) (len == LENGTH_l_ll ? (u64)va_arg(AP, s64) : (u64)va_arg(AP, unsigned int))
 
 int ghost_vsprintf(gp_stream_t *out, const char *fmt, va_list ap)
 {

@@ -298,14 +298,14 @@ static void __trace_ghost_event(const char *prefix, enum ghost_trace_event event
 		// TODO: assuming that the frequency remains constant
 		ts = counter / (freq / 1000000);
 		ghost_printf(
-			"TRACING {\"name\": \"%s\", \"cat\": \"PKVM\", \"ph\": \"%s\", \"pid\": %d, \"tid\": 0, \"ts\": %lu}\n",
+			"TRACING {\"name\": \"%s\", \"cat\": \"PKVM\", \"ph\": \"%s\", \"pid\": %d, \"tid\": 0, \"ts\": %llu}\n",
 			event_name,
 			prefix,
 			hyp_smp_processor_id(),
 			ts
 		);
 	} else {
-		ghost_printf(GHOST_WHITE_ON_YELLOW "[%lu] TRACE (%s) - %s" GHOST_NORMAL "\n", counter, prefix, event_name);
+		ghost_printf(GHOST_WHITE_ON_YELLOW "[%llu] TRACE (%s) - %s" GHOST_NORMAL "\n", counter, prefix, event_name);
 	}
 }
 
@@ -2212,7 +2212,7 @@ static void ghost_print_call_data(void)
 		ghost_printf("[relaxed_reads]");
 		for (int i = 0; i < call->relaxed_reads.len; i++) {
 			struct ghost_read *r = &call->relaxed_reads.read_slots[i];
-			ghost_printf(" <addr:%p value:%lx width:%hhu>", (void*)r->phys_addr, r->value, r->width);
+			ghost_printf(" <addr:%p value:%llx width:%hhu>", (void*)r->phys_addr, r->value, r->width);
 			if (i < call->memcache_donations.len - 1)
 				ghost_printf(",");
 		}
@@ -2511,8 +2511,8 @@ void ghost_post(struct kvm_cpu_context *ctxt)
 		ghost_printf(GHOST_WHITE_ON_BLUE "%s" GHOST_NORMAL "\n", __this_cpu_read(ghost_this_trap));
 
 		ghost_print_call_data();
-		ghost_printf("[r0] %lx\n", ctxt->regs.regs[0]);
-		ghost_printf("[r1] %lx\n", ctxt->regs.regs[1]);
+		ghost_printf("[r0] %llx\n", ctxt->regs.regs[0]);
+		ghost_printf("[r1] %llx\n", ctxt->regs.regs[1]);
 	}
 
 	// The global shared state is not stable until pKVM has fully initialised

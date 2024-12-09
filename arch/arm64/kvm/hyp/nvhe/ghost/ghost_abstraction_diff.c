@@ -139,7 +139,7 @@ static int __put_val_string(struct diff_val val, char *buf, u64 n)
 {
 	switch (val.kind) {
 	case Tu64:
-		return ghost_snprintf(buf, n, "%lx", val.n);
+		return ghost_snprintf(buf, n, "%llx", val.n);
 	case Tstr:
 		return ghost_snprintf(buf, n, "%s", val.s);
 	case Tbool:
@@ -148,7 +148,7 @@ static int __put_val_string(struct diff_val val, char *buf, u64 n)
 		else
 			return ghost_snprintf(buf, n, "false");
 	case Tgpr:
-		return ghost_snprintf(buf, n, "r%lu", val.n);
+		return ghost_snprintf(buf, n, "r%llu", val.n);
 	case Tgprint:
 		return ghost_snprintf(buf, n, val.gp.fmt, val.gp.val);
 	default:
@@ -195,7 +195,7 @@ static void __put_val(struct diff_val val, u64 indent)
 {
 	switch (val.kind) {
 	case Tu64:
-		ghost_printf("%lx", val.n);
+		ghost_printf("%llx", val.n);
 		break;
 	case Tstr:
 		ghost_printf("%s", val.s);
@@ -207,7 +207,7 @@ static void __put_val(struct diff_val val, u64 indent)
 			ghost_printf("false");
 		break;
 	case Tgpr:
-		ghost_printf("r%lu", val.n);
+		ghost_printf("r%llu", val.n);
 		break;
 	case Tgprint:
 		ghost_printf_ext(val.gp.fmt, val.gp.val);

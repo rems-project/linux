@@ -530,13 +530,13 @@ int __pkvm_init(phys_addr_t phys, unsigned long size, unsigned long nr_cpus,
 			"    hyp_va_bits:..........%x\n"
 			"\n"
 			"  interesting globals:\n"
-			"    hyp_physvirt_offset:..%lx\n"
+			"    hyp_physvirt_offset:..%llx\n"
 			"\n"
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
 			"  simplified model:\n"
 			"    phys:.................%p\n"
 			"    virt:.................%p\n"
-			"    size:.................%lx\n"
+			"    size:.................%llx\n"
 			"\n"
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 			,
