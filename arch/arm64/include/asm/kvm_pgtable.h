@@ -11,10 +11,6 @@
 #include <linux/kvm_host.h>
 #include <linux/types.h>
 
-#if defined(CONFIG_NVHE_GHOST_SPEC) && defined(__KVM_NVHE_HYPERVISOR__)
-#include <nvhe/ghost/ghost_maplets.h>
-#endif /* CONFIG_NVHE_GHOST_SPEC */
-
 #define KVM_PGTABLE_MAX_LEVELS		4U
 
 /*
@@ -316,7 +312,6 @@ static inline bool kvm_pgtable_walk_lock_held(void)
  * @flags:		Stage-2 page-table flags.
  * @force_pte_cb:	Function that returns true if page level mappings must
  *			be used instead of block mappings.
- * @ghost_mapping:      Ghost state recording the interpretation of the mapping
  */
 struct kvm_pgtable {
 	u32					ia_bits;
@@ -328,10 +323,6 @@ struct kvm_pgtable {
 	struct kvm_s2_mmu			*mmu;
 	enum kvm_pgtable_stage2_flags		flags;
 	kvm_pgtable_force_pte_cb_t		force_pte_cb;
-
-#if defined(CONFIG_NVHE_GHOST_SPEC) && defined(__KVM_NVHE_HYPERVISOR__)
-	mapping ghost_mapping;
-#endif /* CONFIG_NVHE_GHOST_SPEC */
 };
 
 /**

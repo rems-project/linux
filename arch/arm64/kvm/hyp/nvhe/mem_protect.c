@@ -241,6 +241,12 @@ int kvm_host_prepare_stage2(void *pgt_pool_base)
 	if (ret)
 		return ret;
 
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	ghost_lock_maplets();
+	host_mmu.ghost_mapping = mapping_empty_();
+	ghost_unlock_maplets();
+#endif /* CONFIG_NVHE_GHOST_SPEC */
+
 	mmu->pgd_phys = __hyp_pa(host_mmu.pgt.pgd);
 	mmu->pgt = &host_mmu.pgt;
 	atomic64_set(&mmu->vmid.id, 0);
@@ -353,6 +359,12 @@ int kvm_guest_prepare_stage2(struct pkvm_hyp_vm *vm, void *pgd)
 	guest_unlock_component(vm);
 	if (ret)
 		return ret;
+
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	ghost_lock_maplets();
+	vm->ghost_mapping = mapping_empty_();
+	ghost_unlock_maplets();
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 
 	vm->kvm.arch.mmu.pgd_phys = __hyp_pa(vm->pgt.pgd);
 
@@ -700,7 +712,7 @@ static int host_stage2_idmap(u64 addr)
 
 	if (ghost_check) {
 		ghost_lock_maplets();
-		mapping_pre = ghost_record_pgtable_and_check(host_mmu.pgt.ghost_mapping, &host_mmu.pgt, true/*dump*/, "host_mmu.pgt", i+2);
+		mapping_pre = ghost_record_pgtable_and_check(host_mmu.ghost_mapping, &host_mmu.pgt, true/*dump*/, "host_mmu.pgt", i+2);
 		ghost_dump_pgtable_locked(&host_mmu.pgt,"before: host_mmu.pgt", i);
 		ghost_unlock_maplets();
 	}
@@ -754,8 +766,8 @@ static int host_stage2_idmap(u64 addr)
 		mapping_equal(mapping_pre_annot, mapping_post_annot, "host_stage2_idmap post annot equal", "mapping_pre_annot", "mapping_post_annot", i+2);
 
 		// record updated interpretation
-                free_mapping(host_mmu.pgt.ghost_mapping);
-		host_mmu.pgt.ghost_mapping = mapping_post;
+                free_mapping(host_mmu.ghost_mapping);
+		host_mmu.ghost_mapping = mapping_post;
 
 		free_mapping(mapping_pre);
 		/* NOT:	free_mapping(mapping_post);*/
@@ -1949,11 +1961,11 @@ int __pkvm_host_donate_guest(u64 pfn, u64 gfn, struct pkvm_hyp_vcpu *vcpu)
 		hyp_putsxn("\n__pkvm_host_donate_guest host_addr",host_addr,64); hyp_putc('\n');
 		hyp_putsxn("__pkvm_host_donate_guest guest_addr",guest_addr,64); hyp_putc('\n');
 		// record host pgtable
-		mapping_host_pre = ghost_record_pgtable_and_check(host_mmu.pgt.ghost_mapping, &host_mmu.pgt,/*dump*/true, "host_mmu.pgt", i);
+		mapping_host_pre = ghost_record_pgtable_and_check(host_mmu.ghost_mapping, &host_mmu.pgt,/*dump*/true, "host_mmu.pgt", i);
 
 
 		// record guest pgtable
-		mapping_guest_pre = ghost_record_pgtable_and_check(vm->pgt.ghost_mapping, &vm->pgt,/*dump*/true, "vm->pgt", i);
+		mapping_guest_pre = ghost_record_pgtable_and_check(vm->ghost_mapping, &vm->pgt,/*dump*/true, "vm->pgt", i);
 
 	}
 

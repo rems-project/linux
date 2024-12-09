@@ -45,11 +45,19 @@ static inline enum pkvm_page_state pkvm_getstate(enum kvm_pgtable_prot prot)
 	return prot & PKVM_PAGE_STATE_PROT_MASK;
 }
 
+#if defined(CONFIG_NVHE_GHOST_SPEC)
+/*
+ * @ghost_mapping: Ghost state recording the interpretation of the mapping
+ */
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 struct host_mmu {
 	struct kvm_arch arch;
 	struct kvm_pgtable pgt;
 	struct kvm_pgtable_mm_ops mm_ops;
 	hyp_spinlock_t lock;
+#if defined(CONFIG_NVHE_GHOST_SPEC)
+	mapping ghost_mapping;
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 };
 extern struct host_mmu host_mmu;
 
