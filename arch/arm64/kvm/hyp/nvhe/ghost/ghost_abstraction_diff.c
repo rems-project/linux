@@ -23,10 +23,6 @@
 
 #include <nvhe/ghost/ghost_abstraction_diff.h>
 
-#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-#include <nvhe/ghost/ghost_simplified_model.h>
-#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
-
 #pragma GCC diagnostic ignored "-Wdeclaration-after-statement"
 
 #define MAX_PRINT_DIFF_PER_SUBFIELDS CONFIG_NVHE_GHOST_DIFF_MAX_DIFFS_PER_NODE
@@ -95,11 +91,6 @@ struct diff_val {
 #define TGPRINT(FMT, VAL) (struct diff_val){.kind=Tgprint, .gp=(struct gprint_data){.fmt=FMT, .val=(VAL)}}
 
 #define TMAPLET(M) TGPRINT("%g(maplet)", (u64)(M))
-
-#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-#define TSMLOC(LOC) TGPRINT("%g(sm_loc)", (u64)(LOC))
-#define TSMBLOB(BLOB) TGPRINT("%g(sm_blob)", (u64)(BLOB))
-#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 
 #define EMPTY_KEY TSTR(NULL)
 
@@ -830,100 +821,6 @@ static void ghost_diff_state(struct diff_container *node, struct ghost_state *s1
 	ghost_diff_local_state(node, ghost_this_cpu_local_state(s1), ghost_this_cpu_local_state(s2));
 }
 
-/************************************/
-// Simplified model diffing
-
-#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL_DIFF_ON_TRANS
-
-#define TSMLOC_TRACK(LOC) TGPRINT("track %g(sm_loc)", (LOC))
-
-static void one_way_diff_blob_slots(struct diff_container *container, struct ghost_memory_blob *b1, struct ghost_memory_blob *b2, bool add)
-{
-	bool saw_unclean = false;
-
-	for (u64 i = 0; i < SLOTS_PER_PAGE; i++) {
-		struct sm_location *loc1 = &b1->slots[i];
-		struct sm_location *loc2 = &b2->slots[i];
-
-		// only show the diffs if one side is unclean
-		if (loc1->state.kind == STATE_PTE_INVALID_UNCLEAN || loc2->state.kind == STATE_PTE_INVALID_UNCLEAN) {
-			if (loc1->is_pte && loc2->is_pte)
-				ghost_diff_attach(container, diff_pair(TSMLOC((u64)loc1), TSMLOC((u64)loc2)));
-			else if (loc1->is_pte)
-				ghost_diff_attach(container, diff_pm(add, TSMLOC_TRACK((u64)loc1)));
-			else if (loc2->is_pte)
-				ghost_diff_attach(container, diff_pm(!add, TSMLOC_TRACK((u64)loc2)));
-			saw_unclean = true;
-		}
-	}
-}
-
-static void one_way_diff_blobs(struct diff_container *container, struct ghost_simplified_memory *m1, struct ghost_simplified_memory *m2, bool add, bool skip_eq)
-{
-	bool found;
-	for (u64 bi = 0; bi < m1->nr_allocated_blobs; bi++) {
-		struct ghost_memory_blob *b1 = blob_of(m1, bi);
-		struct ghost_memory_blob *b2 = find_blob(m2, b1->phys);
-
-		if (b2) {
-			found = true;
-
-			// only in one direction should we try diff the blobs themselves
-			if (!skip_eq) {
-				one_way_diff_blob_slots(container, b1, b2, add);
-			}
-		} else if (!sm_print_condensed() || blob_unclean(b1)) {
-			ghost_diff_attach(container, diff_pm(add, TSMBLOB(b1)));
-		}
-	}
-}
-
-static void ghost_diff_sm_mem(struct diff_container *node, struct ghost_simplified_memory *m1, struct ghost_simplified_memory *m2)
-{
-	ghost_diff_enter_subfield(node, "mem");
-	one_way_diff_blobs(node, m1, m2, false, false);
-	one_way_diff_blobs(node, m2, m1, true, true);
-	ghost_diff_pop_subfield(node);
-}
-
-static void one_way_diff_roots(struct diff_container *container, u64 len, u64 *lhs, u64 *rhs, bool add)
-{
-	bool found;
-	for (u64 i = 0; i < len; i++) {
-		u64 r = lhs[i];
-		found = false;
-		for (u64 j = 0; j < len; j++) {
-			if (rhs[j] == r)
-				found = true;
-		}
-
-		// something was removed
-		if (!found)
-			ghost_diff_attach(container, diff_pm(add, TU64(r)));
-	}
-}
-
-static void ghost_diff_sm_roots(struct diff_container *node, const char *name, u64 len, u64 *roots1, u64 *roots2)
-{
-	ghost_diff_enter_subfield(node, name);
-	// roots are unordered
-	one_way_diff_roots(node, len, roots1, roots2, false);
-	one_way_diff_roots(node, len, roots2, roots1, true);
-	ghost_diff_pop_subfield(node);
-}
-
-static void ghost_diff_sm_state(struct diff_container *node, struct ghost_simplified_model_state *s1, struct ghost_simplified_model_state *s2)
-{
-	ghost_diff_field(node, "base", diff_pair(TU64(s1->base_addr), TU64(s2->base_addr)));
-	ghost_diff_field(node, "size", diff_pair(TU64(s1->size), TU64(s2->size)));
-
-	ghost_diff_sm_roots(node, "s1_roots", s1->nr_s1_roots, s1->s1_roots, s2->s1_roots);
-	ghost_diff_sm_roots(node, "s2_roots", s1->nr_s2_roots, s1->s2_roots, s2->s2_roots);
-
-	ghost_diff_sm_mem(node, &s1->memory, &s2->memory);
-}
-#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL_DIFF_ON_TRANS */
-
 static struct diff_container container(void)
 {
 	struct diff_container n;
@@ -953,15 +850,3 @@ void ghost_diff_and_print_pgtable(abstract_pgtable *ap1, abstract_pgtable *ap2)
 		ghost_printf("<identical>");
 	ghost_print_exit();
 }
-
-#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL_DIFF_ON_TRANS
-void ghost_diff_and_print_sm_state(struct ghost_simplified_model_state *s1, struct ghost_simplified_model_state *s2)
-{
-	struct diff_container node = container();
-	ghost_print_enter();
-	ghost_diff_sm_state(&node, s1, s2);
-	if (!node.saw_diff)
-		ghost_printf("<identical>");
-	ghost_print_exit();
-}
-#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL_DIFF_ON_TRANS */
