@@ -53,12 +53,12 @@ function (u64) kvm_pte_to_phys (kvm_pte_t pte)
 
 // more abstract CN counterparts 
 
-function [rec] (boolean) is_valid_pte_entry (u64 encoded)
+function (boolean) is_valid_pte_entry (u64 encoded)
 { 
   kvm_pte_valid(encoded) == 1u8 
 }
 
-function [rec] (u64) decode_table_entry_phys (u64 encoded)
+function (u64) decode_table_entry_phys (u64 encoded)
 { 
   kvm_pte_to_phys(encoded) 
 }

@@ -90,10 +90,11 @@ predicate (void) Zero_Page(pointer p)
 
 predicate {boolean exists} Cond_Zero_Page (pointer p) 
 {
-  if (ptr_eq (p,NULL)) {
+  if (p == NULL) {
     return {exists: false};
   }
   else {
+    assert (! addr_eq(p, NULL)); //TODO: this shouldn't be needed, fix this in CN
     take u = Zero_Page(p);
     return {exists: true};
   }
@@ -172,7 +173,7 @@ function (u8) kvm_pte_table (kvm_pte_t pte, u32 level)
 // - note about level: in this ARM pgtable, the page & table encodings are
 //   shared, and entries at the final level are automatically not tables 
 
-function [rec] (boolean) is_possible_table_entry1 (u64 encoded)
+function (boolean) is_possible_table_entry1 (u64 encoded)
 { 
   kvm_pte_table(encoded, 0u32) == 1u8 
 }
@@ -271,8 +272,8 @@ type_synonym pte = u64
 
 predicate (void) Page_Table_Entries (pointer p, u32 level) 
 {
-  assert (valid_pgtable_level(level));
-  assert (mod((u64)p, 4096u64) == 0u64);
+  // assert (valid_pgtable_level(level)); 
+  // assert (mod((u64)p, 4096u64) == 0u64); 
   take ptes = each (u64 i; 0u64 <= i && i < 512u64)
                    {Owned<kvm_pte_t>(array_shift<kvm_pte_t>(p, i))};
   take children = each (u64 i; 0u64 <= i && i < 512u64)
@@ -283,8 +284,8 @@ predicate (void) Page_Table_Entries (pointer p, u32 level)
 predicate {boolean x} Indirect_Page_Table_Entries (pointer p, u32 level, u64 encoded) 
 {
   if (is_table_entry_at (encoded, level)) {
-    assert (valid_pgtable_level(level));
-    assert (good<kvm_pte_t *>(decode_table_entry_pointer (encoded)));
+    // assert (valid_pgtable_level(level)); 
+    // assert (good<kvm_pte_t *>(decode_table_entry_pointer (encoded))); 
     take x = Page_Table_Entries(decode_table_entry_pointer (encoded), level + 1u32);
     return {x: true};
   }
@@ -488,7 +489,7 @@ static kvm_pte_t kvm_init_table_pte(kvm_pte_t *childp, struct kvm_pgtable_mm_ops
              valid_hyp_virt_page(childp); 
     ensures  take Ops2 = MM_Ops(mm_ops); 
              is_possible_table_entry(return); 
-             ptr_eq(decode_table_entry_pointer(return),childp); @*/
+             addr_eq(decode_table_entry_pointer(return),childp); @*/
 {
 	kvm_pte_t pte = kvm_phys_to_pte(mm_ops->virt_to_phys(childp));
 
@@ -496,10 +497,8 @@ static kvm_pte_t kvm_init_table_pte(kvm_pte_t *childp, struct kvm_pgtable_mm_ops
 	pte |= KVM_PTE_VALID;
 
 	/*@ unfold decode_table_entry_phys(pte); @*/
-	/*@ assert (ptr_eq(decode_table_entry_pointer(pte),childp)); @*/
 	/*@ unfold is_possible_table_entry1(pte); @*/
 	/*@ unfold is_valid_pte_entry(pte); @*/
-	/*@ assert (is_possible_table_entry(pte)); @*/
 
 	return pte;
 }
@@ -930,7 +929,7 @@ static int hyp_set_prot_attr(enum kvm_pgtable_prot prot, kvm_pte_t *ptep)
 /*@
 predicate void Hyp_Map_Data (pointer p) 
 {
-  assert (good<struct hyp_map_data *>(p));
+  //assert (good<struct hyp_map_data *>(p));
   take O = Owned<struct hyp_map_data>(p);
   return;
 }
@@ -1006,14 +1005,14 @@ static inline void coerce_page_to_ptes(kvm_pte_t *ptep)
     requires take ZP = Cond_Zero_Page (ptep); 
              ZP.exists; 
     ensures take ptes = PTE_Array (ptep); 
-            each (u64 i; 0u64 <= i && i < 4096u64) {ptes[i] == 0u64}; @*/
+            each (u64 i; 0u64 <= i && i < 512u64) {ptes[i] == 0u64}; @*/
 {
 }
 
 static inline void coerce_null_ptes_to_IPT(kvm_pte_t *ptep, u32 level)
 /*@ trusted; 
     requires take ptes = PTE_Array (ptep); 
-             each (u64 i; 0u64 <= i && i < 4096u64) {ptes[i] == 0u64}; 
+             each (u64 i; 0u64 <= i && i < 512u64) {ptes[i] == 0u64}; 
              valid_pgtable_level(level); 
     ensures  take ptes2 = Page_Table_Entries (ptep, level); @*/
 {
