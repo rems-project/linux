@@ -443,7 +443,7 @@ int gp_put_maplet_target(gp_stream_t *out, struct maplet_target *target)
 			out,
 			"%s:%lx %s:%lx %s %s %s (raw_arch_prot %lx)",
 			oa_name_kind, oa, oa_post_name_kind, oa_end,
-			&page_state, &perms, &memty,
+			page_state, perms, memty,
 			attrs.raw_arch_attrs
 		);
 	};
@@ -517,7 +517,7 @@ int gp_put_maplet(gp_stream_t *out, struct maplet *maplet)
 	ia = maplet->ia_range_start;
 	ia_end = ia_range_end(*maplet);
 
-	return ghost_sprintf(
+	return ghost_sprintf_ext(
 		out, "%s %s:%lx %s:%lx nr_pages:%x %g(maplet_target)",
 		stage, ia_name_kind, ia, ia_post_name_kind, ia_end, (u32)maplet->ia_range_nr_pages, &maplet->target
 	);

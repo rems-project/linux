@@ -265,7 +265,7 @@ void ghost_log_context_traceback(void)
 					ghost_printf("<inacessible>@NULL");
 				// also check we can read it.
 				} else {
-					ghost_printf("[%p]=", va);
+					ghost_printf("[%p]=", (void*)va);
 					data->fn(data->data_ptr);
 				}
 				ghost_printf("%s\n", msg_close_for(data->level));

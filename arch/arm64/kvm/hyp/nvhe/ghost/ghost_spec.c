@@ -2191,7 +2191,7 @@ static void ghost_print_call_data(void)
 		ghost_printf("[at_translations]");
 		for (int i = 0; i < call->at_translations.len; i++) {
 			struct ghost_at_translation *t = &call->at_translations.translations[i];
-			ghost_printf(" <va:%p ipa:%p success:%b>", t->va, t->ipa, t->success);
+			ghost_printf(" <va:%p ipa:%p success:%b>", (void*)t->va, (void*)t->ipa, t->success);
 			if (i < call->at_translations.len - 1)
 				ghost_printf(",");
 		}
@@ -2201,7 +2201,7 @@ static void ghost_print_call_data(void)
 	if (call->memcache_donations.len) {
 		ghost_printf("[memcache_donations]");
 		for (int i = 0; i < call->memcache_donations.len; i++) {
-			ghost_printf(" %p", call->memcache_donations.pages[i]);
+			ghost_printf(" %p", (void*)call->memcache_donations.pages[i]);
 			if (i < call->memcache_donations.len - 1)
 				ghost_printf(",");
 		}
@@ -2212,7 +2212,7 @@ static void ghost_print_call_data(void)
 		ghost_printf("[relaxed_reads]");
 		for (int i = 0; i < call->relaxed_reads.len; i++) {
 			struct ghost_read *r = &call->relaxed_reads.read_slots[i];
-			ghost_printf(" <addr:%p value:%lx width:%hhu>", r->phys_addr, r->value, r->width);
+			ghost_printf(" <addr:%p value:%lx width:%hhu>", (void*)r->phys_addr, r->value, r->width);
 			if (i < call->memcache_donations.len - 1)
 				ghost_printf(",");
 		}

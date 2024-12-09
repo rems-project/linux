@@ -525,7 +525,7 @@ int __pkvm_init(phys_addr_t phys, unsigned long size, unsigned long nr_cpus,
 			"  arguments:\n"
 			"    phys:.................%p\n"
 			"    size:.................%lx\n"
-			"    nr_cpus:..............%d\n"
+			"    nr_cpus:..............%lu\n"
 			"    per_cpu_base:.........%p\n"
 			"    hyp_va_bits:..........%x\n"
 			"\n"
@@ -540,12 +540,12 @@ int __pkvm_init(phys_addr_t phys, unsigned long size, unsigned long nr_cpus,
 			"\n"
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 			,
-			hyp_smp_processor_id(), phys, size, nr_cpus,
+			hyp_smp_processor_id(), (void*)phys, size, nr_cpus,
 			per_cpu_base, hyp_va_bits, hyp_physvirt_offset
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
 			,
-			phys+size-sm_size,
-			virt+size-sm_size,
+			(void*)(phys+size-sm_size),
+			(void*)(virt+size-sm_size),
 			sm_size
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 		);
