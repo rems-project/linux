@@ -926,15 +926,6 @@ static int hyp_set_prot_attr(enum kvm_pgtable_prot prot, kvm_pte_t *ptep)
 	return 0;
 }
 
-/*@
-predicate void Hyp_Map_Data (pointer p) 
-{
-  //assert (good<struct hyp_map_data *>(p));
-  take O = Owned<struct hyp_map_data>(p);
-  return;
-}
-@*/
-
 enum kvm_pgtable_prot kvm_pgtable_hyp_pte_prot(kvm_pte_t pte)
 {
 	enum kvm_pgtable_prot prot = pte & KVM_PTE_LEAF_ATTR_HI_SW;
@@ -959,13 +950,13 @@ static bool hyp_map_walker_try_leaf(const struct kvm_pgtable_visit_ctx *ctx,
 				    struct hyp_map_data *data)
 /*@ requires take Ctx = Owned(ctx); 
              valid_pgtable_level(Ctx.level); 
-             take D = Hyp_Map_Data(data); 
+             take D = Owned<struct hyp_map_data>(data); 
              take pte = Owned<kvm_pte_t>(Ctx.ptep); 
              not (is_table_entry_at (pte, Ctx.level)); 
              take Ops = MM_Ops(Ctx.mm_ops); 
     ensures  take Ctx2 = Owned(ctx); 
              Ctx2 == Ctx; 
-             take D2 = Hyp_Map_Data(data); 
+             take D2 = Owned<struct hyp_map_data>(data); 
              D2 == D; 
              take pte2 = Owned<kvm_pte_t>(Ctx.ptep); 
              take Ops2 = MM_Ops(Ctx.mm_ops); 
@@ -1024,13 +1015,13 @@ static int hyp_map_walker(const struct kvm_pgtable_visit_ctx *ctx,
 /*@ requires take Ctx = Owned(ctx); 
              valid_pgtable_level(Ctx.level); 
              valid_phys_virt_offset (); 
-             take D = Hyp_Map_Data(Ctx.arg); 
+             take D = Owned<struct hyp_map_data>(Ctx.arg); 
              take pte = Owned<kvm_pte_t>(Ctx.ptep); 
              not(is_table_entry_at(pte, Ctx.level)); 
              take Ops = MM_Ops(Ctx.mm_ops); 
     ensures  take Ctx2 = Owned(ctx); 
              Ctx2 == Ctx; 
-             take D2 = Hyp_Map_Data(Ctx.arg); 
+             take D2 = Owned<struct hyp_map_data>(Ctx.arg); 
              take pte2 = Owned<kvm_pte_t>(Ctx.ptep); 
              take IPT2 = Indirect_Page_Table_Entries(Ctx.ptep, Ctx.level, pte2); 
              D2 == D; 
@@ -1066,7 +1057,7 @@ predicate (void) Hyp_Map_Walker_Case(pointer f, pointer x, u32 flags)
 {
   assert (ptr_eq(f,&hyp_map_walker));
   assert (flags == ((u32) KVM_PGTABLE_WALK_LEAF));
-  take D = Hyp_Map_Data(x);
+  take D = Owned<struct hyp_map_data>(x);
   return;
 }
 
