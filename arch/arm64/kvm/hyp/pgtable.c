@@ -283,7 +283,7 @@ predicate {boolean x} Indirect_Page_Table_Entries(pointer parent, u32 level, u64
     // assert (valid_pgtable_level(level)); 
     // assert (good<kvm_pte_t *>(decode_table_entry_pointer (encoded)));
     let base_pointer = decode_table_entry_pointer (pte);
-    take ptes = Page_Table_Entries(base_pointer, level + 1u32);
+    take ptes = Page_Table_Entries(base_pointer, level + 1u32, 0u64, 512u64);
     return {x: true};
   }
   else {
@@ -291,12 +291,30 @@ predicate {boolean x} Indirect_Page_Table_Entries(pointer parent, u32 level, u64
   }
 }
 
-predicate (void) Page_Table_Entries(pointer base, u32 level)
+predicate (void) Page_Table_Entries(pointer base, u32 level, u64 from, u64 to)
 {
-  take ptes = each (u64 i; 0u64 <= i && i < 512u64)
-                   {Page_Table_Entry(array_shift<kvm_pte_t>(base, i), level)};
-  return;
+  if (from < to) {
+    take pte = Page_Table_Entry(array_shift<kvm_pte_t>(base, from), level);
+    take ptes = Page_Table_Entries(base, level, from + 1u64, to);
+    return;
+  }
+  else {
+    return;
+  }
 }
+
+predicate (void) Top_Level_Page_Table_Entries(pointer base, u32 level, u32 i, u32 extra_bits)
+{
+  if (i < shift_left(1u32, extra_bits)) {
+    take pt = Page_Table_Entries(array_shift<kvm_pte_t[enum_PTRS_PER_PTE]>(base, i), level, 0u64, 512u64);
+    take pts = Top_Level_Page_Table_Entries(base, level, i + 1u32, extra_bits);
+    return;
+  }
+  else {
+    return;
+  }
+}
+
 
 
 
@@ -311,8 +329,10 @@ predicate {u32 extra_bits, struct kvm_pgtable data} Pg_Table (pointer p)
   // assert (aligned_u64 ((u64) Data.pgd, 12u64 + ((u64) extra_bits)));
   assert (valid_pgtable_level(Data.start_level));
 
-  take Entries = each (u64 i; 0u64 <= i && i < (u64) shift_left(1u32,extra_bits))
-                      {Page_Table_Entries(array_shift<kvm_pte_t[enum_PTRS_PER_PTE]>(Data.pgd, i), Data.start_level)};
+  take Entries = Top_Level_Page_Table_Entries(Data.pgd, Data.start_level, 0u64, extra_bits);
+
+  //each (u64 i; 0u64 <= i && i < (u64) shift_left(1u32,extra_bits))
+  //{Page_Table_Entries(array_shift<kvm_pte_t[enum_PTRS_PER_PTE]>(Data.pgd, i), Data.start_level)};
 
   return {extra_bits: extra_bits, data: Data};
 }
