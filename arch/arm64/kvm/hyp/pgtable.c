@@ -270,29 +270,60 @@ function (u32) pgd_extra_bits(u32 ia_bits, u32 start_level)
 // see struct kvm_pgtable defn in arch/arm64/include/asm/kvm_pgtable.h 
 type_synonym pte = u64
 
-predicate (void) Page_Table_Entries (pointer p, u32 level) 
+predicate (pte) Page_Table_Entry(pointer p, u32 level) 
 {
-  // assert (valid_pgtable_level(level)); 
-  // assert (mod((u64)p, 4096u64) == 0u64); 
-  take ptes = each (u64 i; 0u64 <= i && i < 512u64)
-                   {Owned<kvm_pte_t>(array_shift<kvm_pte_t>(p, i))};
-  take children = each (u64 i; 0u64 <= i && i < 512u64)
-                       {Indirect_Page_Table_Entries (array_shift<kvm_pte_t>(p, i), level, ptes[i])};
-  return;
+   take pte = Owned<kvm_pte_t>(p);
+   take children = Indirect_Page_Table_Entries(p,level,pte);
+   return pte;
 }
 
-predicate {boolean x} Indirect_Page_Table_Entries (pointer p, u32 level, u64 encoded) 
+predicate {boolean x} Indirect_Page_Table_Entries(pointer parent, u32 level, u64 pte)
 {
-  if (is_table_entry_at (encoded, level)) {
+  if (is_table_entry_at (pte, level)) {
     // assert (valid_pgtable_level(level)); 
-    // assert (good<kvm_pte_t *>(decode_table_entry_pointer (encoded))); 
-    take x = Page_Table_Entries(decode_table_entry_pointer (encoded), level + 1u32);
+    // assert (good<kvm_pte_t *>(decode_table_entry_pointer (encoded)));
+    let base_pointer = decode_table_entry_pointer (pte);
+    take ptes = Page_Table_Entries(base_pointer, level + 1u32);
     return {x: true};
   }
   else {
     return {x: false};
   }
 }
+
+predicate (void) Page_Table_Entries(pointer base, u32 level)
+{
+  take ptes = each (u64 i; 0u64 <= i && i < 512u64)
+                   {Page_Table_Entry(array_shift<kvm_pte_t>(base, i), level)};
+  return;
+}
+
+
+
+
+//  predicate (void) Page_Table_Entries (pointer p, u32 level) 
+//  {
+//    // assert (valid_pgtable_level(level)); 
+//    // assert (mod((u64)p, 4096u64) == 0u64); 
+//    take ptes = each (u64 i; 0u64 <= i && i < 512u64)
+//                     {Owned<kvm_pte_t>(array_shift<kvm_pte_t>(p, i))};
+//    take children = each (u64 i; 0u64 <= i && i < 512u64)
+//                         {Indirect_Page_Table_Entries (array_shift<kvm_pte_t>(p, i), level, ptes[i])};
+//    return;
+//  }
+//  
+//  predicate {boolean x} Indirect_Page_Table_Entries (pointer p, u32 level, u64 encoded) 
+//  {
+//    if (is_table_entry_at (encoded, level)) {
+//      // assert (valid_pgtable_level(level)); 
+//      // assert (good<kvm_pte_t *>(decode_table_entry_pointer (encoded))); 
+//      take x = Page_Table_Entries(decode_table_entry_pointer (encoded), level + 1u32);
+//      return {x: true};
+//    }
+//    else {
+//      return {x: false};
+//    }
+//  }
 
 predicate {u32 extra_bits, struct kvm_pgtable data} Pg_Table (pointer p) 
 {
@@ -615,16 +646,18 @@ static inline int __kvm_pgtable_visit(struct kvm_pgtable_walk_data *data,
 /*@ requires take Data = KVM_PgTable_Walk_Data (data); 
              valid_pgtable_level(level); 
              valid_phys_virt_offset (); 
-             take pte = Owned<kvm_pte_t>(pteref); 
-             take IPT = Indirect_Page_Table_Entries (pteref, level, pte); 
+             //take pte = Owned<kvm_pte_t>(pteref); 
+             //take IPT = Indirect_Page_Table_Entries (pteref, level, pte); 
+             take pte = Page_Table_Entry(pteref, level);
              take Ops = MM_Ops(mm_ops); 
              Data.addr <= Data.end; 
     ensures  take Data2 = KVM_PgTable_Walk_Data (data); 
              Data2.end == Data.end; 
              Data2.walker == Data.walker; 
              Data2.flags == Data.flags; 
-             take pte2 = Owned<kvm_pte_t>(pteref); 
-             take IPT2 = Indirect_Page_Table_Entries (pteref, level, pte2); 
+             //take pte2 = Owned<kvm_pte_t>(pteref); 
+             //take IPT2 = Indirect_Page_Table_Entries (pteref, level, pte2); 
+             take pte2 = Page_Table_Entry(pteref, level);
              take Ops2 = MM_Ops(mm_ops); 
              Ops2 == Ops; 
              ((Data2.addr < Data2.end) && (return == 0i32)) implies
@@ -753,9 +786,7 @@ static int __kvm_pgtable_walk(struct kvm_pgtable_walk_data *data,
 		if (data->addr >= data->end)
 			break;
 
-		/*@ extract Owned<kvm_pte_t>, (u64)idx; @*/
-		/*@ instantiate good<kvm_pte_t>, (u64)idx; @*/
-		/*@ extract Indirect_Page_Table_Entries, (u64)idx; @*/
+		/*@ extract Page_Table_Entry, (u64)idx; @*/
 
 		ret = __kvm_pgtable_visit(data, mm_ops, pteref, level);
 
@@ -1016,14 +1047,16 @@ static int hyp_map_walker(const struct kvm_pgtable_visit_ctx *ctx,
              valid_pgtable_level(Ctx.level); 
              valid_phys_virt_offset (); 
              take D = Owned<struct hyp_map_data>(Ctx.arg); 
-             take pte = Owned<kvm_pte_t>(Ctx.ptep); 
+             //take pte = Owned<kvm_pte_t>(Ctx.ptep); 
+             take pte = Page_Table_Entry(Ctx.ptep, Ctx.level);
              not(is_table_entry_at(pte, Ctx.level)); 
              take Ops = MM_Ops(Ctx.mm_ops); 
     ensures  take Ctx2 = Owned(ctx); 
              Ctx2 == Ctx; 
              take D2 = Owned<struct hyp_map_data>(Ctx.arg); 
-             take pte2 = Owned<kvm_pte_t>(Ctx.ptep); 
-             take IPT2 = Indirect_Page_Table_Entries(Ctx.ptep, Ctx.level, pte2); 
+             //take pte2 = Owned<kvm_pte_t>(Ctx.ptep); 
+             //take IPT2 = Indirect_Page_Table_Entries(Ctx.ptep, Ctx.level, pte2); 
+             take new = Page_Table_Entry(Ctx.ptep, Ctx.level);
              D2 == D; 
              take Ops2 = MM_Ops(Ctx.mm_ops); @*/
 {
