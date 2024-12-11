@@ -283,7 +283,7 @@ predicate {boolean x} Indirect_Page_Table_Entries(pointer parent, u32 level, u64
     // assert (valid_pgtable_level(level)); 
     // assert (good<kvm_pte_t *>(decode_table_entry_pointer (encoded)));
     let base_pointer = decode_table_entry_pointer (pte);
-    take ptes = Page_Table_Entries(base_pointer, level + 1u32, 0u64, 512u64);
+    take ptes = Page_Table_Entries(base_pointer, level + 1u32);
     return {x: true};
   }
   else {
@@ -291,11 +291,11 @@ predicate {boolean x} Indirect_Page_Table_Entries(pointer parent, u32 level, u64
   }
 }
 
-predicate (void) Page_Table_Entries(pointer base, u32 level, u64 from, u64 to)
+predicate (void) Page_Table_Entries_Aux(pointer base, u32 level, u32 from, u32 to)
 {
   if (from < to) {
     take pte = Page_Table_Entry(array_shift<kvm_pte_t>(base, from), level);
-    take ptes = Page_Table_Entries(base, level, from + 1u64, to);
+    take ptes = Page_Table_Entries_Aux(base, level, from + 1u32, to);
     return;
   }
   else {
@@ -303,10 +303,16 @@ predicate (void) Page_Table_Entries(pointer base, u32 level, u64 from, u64 to)
   }
 }
 
+predicate (void) Page_Table_Entries(pointer base, u32 level) 
+{
+  take Entries = Page_Table_Entries_Aux(base, level, 0u32, 512u32);
+  return Entries;
+}
+
 predicate (void) Top_Level_Page_Table_Entries(pointer base, u32 level, u32 i, u32 extra_bits)
 {
   if (i < shift_left(1u32, extra_bits)) {
-    take pt = Page_Table_Entries(array_shift<kvm_pte_t[enum_PTRS_PER_PTE]>(base, i), level, 0u64, 512u64);
+    take pt = Page_Table_Entries(array_shift<kvm_pte_t[enum_PTRS_PER_PTE]>(base, i), level);
     take pts = Top_Level_Page_Table_Entries(base, level, i + 1u32, extra_bits);
     return;
   }
@@ -329,7 +335,7 @@ predicate {u32 extra_bits, struct kvm_pgtable data} Pg_Table (pointer p)
   // assert (aligned_u64 ((u64) Data.pgd, 12u64 + ((u64) extra_bits)));
   assert (valid_pgtable_level(Data.start_level));
 
-  take Entries = Top_Level_Page_Table_Entries(Data.pgd, Data.start_level, 0u64, extra_bits);
+  take Entries = Top_Level_Page_Table_Entries(Data.pgd, Data.start_level, 0u32, extra_bits);
 
   //each (u64 i; 0u64 <= i && i < (u64) shift_left(1u32,extra_bits))
   //{Page_Table_Entries(array_shift<kvm_pte_t[enum_PTRS_PER_PTE]>(Data.pgd, i), Data.start_level)};
@@ -704,6 +710,7 @@ static inline int __kvm_pgtable_visit(struct kvm_pgtable_walk_data *data,
 		goto out;
 	}
 
+        /*@ pack Indirect_Page_Table_Entries(pteref, level, *ptep); @*/
 	childp = (kvm_pteref_t)kvm_pte_follow(ctx.old, mm_ops);
 	ret = __kvm_pgtable_walk(data, mm_ops, childp, level + 1);
 	if (!kvm_pgtable_walk_continue(data->walker, ret))
