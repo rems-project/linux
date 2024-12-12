@@ -65,6 +65,9 @@ extern void hyp_get_page(void *addr);
 #include "cn_allocator_spec.h"
 
 /*@
+
+// --- mm_ops specification ----------------------------------------------------
+
 predicate (void) MM_Ops(pointer p) 
 {
   take data = Owned<struct kvm_pgtable_mm_ops>(p);
@@ -74,6 +77,73 @@ predicate (void) MM_Ops(pointer p)
   assert (ptr_eq(data.get_page,&hyp_get_page));
   return;
 }
+
+datatype possible_mm_ops {
+  No_MM_Ops {},
+  Has_MM_Ops {pointer mm_ops}
+}
+
+function (boolean) possible_mm_ops_agree (possible_mm_ops o, pointer m) 
+{
+  match o {
+    No_MM_Ops {} => {true}
+    Has_MM_Ops {mm_ops: m2} => {ptr_eq (m,m2)}
+  }
+}
+@*/
+
+
+
+
+
+/*@ 
+
+// --- page table definitions --------------------------------------------------
+
+// We assume a setup where pages, and hence individual page tables,
+// are 4096 bytes in size (2^12). On a 64-bit platform (with pointers
+// of 2^3 bytes size) that means an individual page table can fit
+// 2^9=512 entries. An overall page table has maximum depth of four
+// levels (levels 0 -- 3). For any given 64-bit pointer, to be
+// address-translated, only a portion of up to 48 bits are the actual
+// address (the *input address*). In the most basic setup, these 48
+// bits are divided into four times 9 bits, which are taken as indices
+// into page table levels 0 through 3, with the remaining 12 bits used
+// as an offset into the page of physical memory obtained from the
+// page table lookup (if the address is mapped).
+// 
+// Different configurations from this basic setup are possible: input
+// addresses can be made smaller by setting an appropriate hardware
+// register, and the page table depth can be reduced by setting the
+// initial translation level to be greater than 0.
+//
+// For small input address sizes (relative to the number of
+// translation levels), the default table encoding would lead to
+// wasted space and pointer indirection, due to mostly-empty top level
+// page tables (i.e. 12 bits, plus 9 bits times the number of
+// translation levels, could encode significantly larger addresses
+// than the chosen input address size). 
+// 
+// When the input address size is sufficiently small for that, it is
+// then possible to optimise and use *concatenated page tables*:
+// instead of a regular level-n page-table setup, using the
+// concatenated-page-table scheme, one gets a level-(n-1) page table
+// where the top level becomes *an array of page tables* that
+// effectively represents the two upper levels of the page table
+// within a single page: the part of the input address dedicated for
+// the initial level of the address translation is used to index the
+// page-table array, the resulting page-table is indexed using the
+// next 9-bit index. When the input address size permits, the
+// concatenated scheme is selected by chosing an initial translation
+// level that is one greater than what one would have chosen
+// otherwise.
+//
+// Note: Armv8.2 introduced an architecture extension that allows for
+// input addresses of larger sizes, up to 52 bits, and initial address
+// translation levels of -1, which our specification does not handle
+// yet.
+
+
 
 
 // constraints on level, see arch/arm64/include/asm/pgtable-hwdef.h 
@@ -127,50 +197,6 @@ function (boolean) aligned_u64 (u64 x, u64 n)
 }
 
 @*/
-
-/* We assume a setup where pages, and hence individual page tables,
- * are 4096 bytes in size (2^12). On a 64-bit platform (with pointers
- * of 2^3 bytes size) that means an individual page table can fit
- * 2^9=512 entries. An overall page table has maximum depth of four
- * levels (levels 0 -- 3). For any given 64-bit pointer, to be
- * address-translated, only a portion of up to 48 bits are the actual
- * address (the *input address*). In the most basic setup, these 48
- * bits are divided into four times 9 bits, which are taken as indices
- * into page table levels 0 through 3, with the remaining 12 bits used
- * as an offset into the page of physical memory obtained from the
- * page table lookup (if the address is mapped).
- * 
- * Different configurations from this basic setup are possible: input
- * addresses can be made smaller by setting an appropriate hardware
- * register, and the page table depth can be reduced by setting the
- * initial translation level to be greater than 0.
- *
- * For small input address sizes (relative to the number of
- * translation levels), the default table encoding would lead to
- * wasted space and pointer indirection, due to mostly-empty top level
- * page tables (i.e. 12 bits, plus 9 bits times the number of
- * translation levels, could encode significantly larger addresses
- * than the chosen input address size). 
- * 
- * When the input address size is sufficiently small for that, it is
- * then possible to optimise and use *concatenated page tables*:
- * instead of a regular level-n page-table setup, using the
- * concatenated-page-table scheme, one gets a level-(n-1) page table
- * where the top level becomes *an array of page tables* that
- * effectively represents the two upper levels of the page table
- * within a single page: the part of the input address dedicated for
- * the initial level of the address translation is used to index the
- * page-table array, the resulting page-table is indexed using the
- * next 9-bit index. When the input address size permits, the
- * concatenated scheme is selected by chosing an initial translation
- * level that is one greater than what one would have chosen
- * otherwise.
- *
- * Note: Armv8.2 introduced an architecture extension that allows for
- * input addresses of larger sizes, up to 52 bits, and initial address
- * translation levels of -1, which our specification does not handle
- * yet.
- */
 enum {
   enum_PTRS_PER_PTE = PTRS_PER_PTE,
   enum_EAGAIN = EAGAIN,
@@ -216,9 +242,6 @@ predicate (void) Page_Table_Entries(pointer base, u32 level)
   return;
 }
 
-
-
-
 predicate {u32 extra_bits, struct kvm_pgtable data} Pg_Table (pointer p) 
 {
   take Data = Owned<struct kvm_pgtable>(p);
@@ -235,19 +258,20 @@ predicate {u32 extra_bits, struct kvm_pgtable data} Pg_Table (pointer p)
   return {extra_bits: extra_bits, data: Data};
 }
 
+@*/
 
-datatype possible_mm_ops {
-  No_MM_Ops {},
-  Has_MM_Ops {pointer mm_ops}
-}
 
-function (boolean) possible_mm_ops_agree (possible_mm_ops o, pointer m) 
-{
-  match o {
-    No_MM_Ops {} => {true}
-    Has_MM_Ops {mm_ops: m2} => {ptr_eq (m,m2)}
-  }
-}
+struct kvm_pgtable_walk_data {
+	struct kvm_pgtable_walker	*walker;
+
+	const u64			start;
+	u64				addr;
+	const u64			end;
+};
+
+/*@
+
+// --- parameterisation of page-table walker -----------------------------------
 
 predicate {u32 flags, pointer arg} KVM_PgTable_Walker (pointer p) 
 {
@@ -266,13 +290,9 @@ predicate {u64 addr, u64 end, {pointer walker, pointer arg} walker, u32 flags}
 }
 @*/
 
-struct kvm_pgtable_walk_data {
-	struct kvm_pgtable_walker	*walker;
 
-	const u64			start;
-	u64				addr;
-	const u64			end;
-};
+
+
 
 /*@ function (u8) kvm_phys_is_valid(u64 phys) @*/
 
