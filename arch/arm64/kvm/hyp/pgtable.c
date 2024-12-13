@@ -62,7 +62,7 @@ extern void *hyp_phys_to_virt(phys_addr_t phys);
 extern phys_addr_t hyp_virt_to_phys(void *virt);
 extern void hyp_get_page(void *addr);
 
-#include "cn_allocator_spec.h"
+#include <asm/allocator_spec.cn.h>
 
 /*@
 
