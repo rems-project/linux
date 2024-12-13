@@ -44,36 +44,39 @@ typedef u64 kvm_pte_t;
 
 #define KVM_PHYS_INVALID		(-1ULL)
 
+
+
+// --- CN auxiliaries ----------------------------------------------------------
+
+/*@
+type_synonym pte = kvm_pte_t
+type_synonym phys = u64
+@*/
+enum {
+  enum_KVM_PGTABLE_MIN_BLOCK_LEVEL = KVM_PGTABLE_MIN_BLOCK_LEVEL,
+};
+// --- end CN auxiliaries ------------------------------------------------------
+
+
 /*@
 // CN functions that will be converted from C functions below
 function (u8) kvm_pte_valid (kvm_pte_t pte)
-function (u64) kvm_pte_to_phys (kvm_pte_t pte)
-
-
-
-// more abstract CN counterparts 
-
-function (boolean) is_valid_pte_entry (u64 encoded)
-{ 
-  kvm_pte_valid(encoded) == 1u8 
-}
-
-function (u64) decode_table_entry_phys (u64 encoded)
-{ 
-  kvm_pte_to_phys(encoded) 
-}
 @*/
+
+
+/*@ function (boolean) cn_pte_valid (pte pte) { bw_and_uf(pte, 1u64) == 1u64 } @*/
 
 static inline bool kvm_pte_valid(kvm_pte_t pte)
 /*@ cn_function kvm_pte_valid; 
-    ensures return == (is_valid_pte_entry(pte) ? 1u8 : 0u8); @*/
+    ensures return == (cn_pte_valid(pte) ? 1u8 : 0u8); @*/
 {
 	return pte & KVM_PTE_VALID;
 }
 
+/*@ function (phys) cn_pte_to_phys (pte pte) { bw_and_uf(pte, 0xfffffffff000u64) } @*/
+
 static inline u64 kvm_pte_to_phys(kvm_pte_t pte)
-/*@ cn_function kvm_pte_to_phys; 
-    ensures return == decode_table_entry_phys (pte); @*/
+/*@ ensures return == cn_pte_to_phys(pte); @*/
 {
 	u64 pa = pte & KVM_PTE_ADDR_MASK;
 
@@ -85,9 +88,11 @@ static inline u64 kvm_pte_to_phys(kvm_pte_t pte)
 
 /*@ function (kvm_pte_t) kvm_phys_to_pte(u64 pa) @*/
 
+/*@ function (phys) cn_phys_to_pte (pte pte) { bw_and_uf(pte, 0xfffffffff000u64) } @*/
+
 static inline kvm_pte_t kvm_phys_to_pte(u64 pa)
 /*@ cn_function kvm_phys_to_pte; 
-    ensures return == kvm_phys_to_pte(pa); @*/
+    ensures return == cn_phys_to_pte(pa); @*/
 {
 	kvm_pte_t pte = pa & KVM_PTE_ADDR_MASK;
 
@@ -104,33 +109,32 @@ static inline kvm_pfn_t kvm_pte_to_pfn(kvm_pte_t pte)
 	return __phys_to_pfn(kvm_pte_to_phys(pte));
 }
 
-/*@ function (u64) kvm_granule_shift (u32 level) @*/
+
+
+// copied from ARM64_HW_PGTABLE_LEVEL_SHIFT
+/*@ function (u64) cn_granule_shift(u32 level) { (u64) ((9u32 * (4u32 - level)) + 3u32) } @*/
 
 static inline u64 kvm_granule_shift(u32 level)
-/*@ cn_function kvm_granule_shift; 
-    requires valid_pgtable_level(level) || level == (0u32 - 1u32); 
-    ensures  0u64 <= return && return < 64u64; 
-             return == kvm_granule_shift(level); @*/
+/*@ ensures return == cn_granule_shift(level); @*/
 {
 	/* Assumes KVM_PGTABLE_MAX_LEVELS is 4 */
 	return ARM64_HW_PGTABLE_LEVEL_SHIFT(level);
 }
 
-/*@ function (u64) kvm_granule_size(u32 level) @*/
+/*@ function (u64) cn_granule_size (u32 level) { shift_left(1u64, cn_granule_shift(level)) } @*/
 
 static inline u64 kvm_granule_size(u32 level)
-/*@ cn_function kvm_granule_size; 
-    requires valid_pgtable_level(level); 
-    ensures return == kvm_granule_size(level); @*/
+/*@ requires valid_pgtable_level(level);
+    ensures  return == cn_granule_size(level); @*/
 {
 	return BIT(kvm_granule_shift(level));
 }
 
-/*@ function (u8) kvm_level_supports_block_mapping(u32 level) @*/
+
+/*@ function (boolean) cn_level_supports_block_mapping (u32 level) { level >= (u32) enum_KVM_PGTABLE_MIN_BLOCK_LEVEL } @*/
 
 static inline bool kvm_level_supports_block_mapping(u32 level)
-/*@ cn_function kvm_level_supports_block_mapping;
-    ensures return == kvm_level_supports_block_mapping(level); @*/
+/*@ ensures return == (cn_level_supports_block_mapping(level) ? 1u8 : 0u8); @*/
 {
 	return level >= KVM_PGTABLE_MIN_BLOCK_LEVEL;
 }

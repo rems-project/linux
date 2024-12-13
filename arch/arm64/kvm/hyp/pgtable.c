@@ -93,65 +93,33 @@ function (boolean) possible_mm_ops_agree (possible_mm_ops o, pointer m)
 @*/
 
 
-
+#include <asm/page_table_definitions.cn.h>
 
 
 /*@ 
-
-// --- page table definitions --------------------------------------------------
-
-// We assume a setup where pages, and hence individual page tables,
-// are 4096 bytes in size (2^12). On a 64-bit platform (with pointers
-// of 2^3 bytes size) that means an individual page table can fit
-// 2^9=512 entries. An overall page table has maximum depth of four
-// levels (levels 0 -- 3). For any given 64-bit pointer, to be
-// address-translated, only a portion of up to 48 bits are the actual
-// address (the *input address*). In the most basic setup, these 48
-// bits are divided into four times 9 bits, which are taken as indices
-// into page table levels 0 through 3, with the remaining 12 bits used
-// as an offset into the page of physical memory obtained from the
-// page table lookup (if the address is mapped).
-// 
-// Different configurations from this basic setup are possible: input
-// addresses can be made smaller by setting an appropriate hardware
-// register, and the page table depth can be reduced by setting the
-// initial translation level to be greater than 0.
-//
-// For small input address sizes (relative to the number of
-// translation levels), the default table encoding would lead to
-// wasted space and pointer indirection, due to mostly-empty top level
-// page tables (i.e. 12 bits, plus 9 bits times the number of
-// translation levels, could encode significantly larger addresses
-// than the chosen input address size). 
-// 
-// When the input address size is sufficiently small for that, it is
-// then possible to optimise and use *concatenated page tables*:
-// instead of a regular level-n page-table setup, using the
-// concatenated-page-table scheme, one gets a level-(n-1) page table
-// where the top level becomes *an array of page tables* that
-// effectively represents the two upper levels of the page table
-// within a single page: the part of the input address dedicated for
-// the initial level of the address translation is used to index the
-// page-table array, the resulting page-table is indexed using the
-// next 9-bit index. When the input address size permits, the
-// concatenated scheme is selected by chosing an initial translation
-// level that is one greater than what one would have chosen
-// otherwise.
-//
-// Note: Armv8.2 introduced an architecture extension that allows for
-// input addresses of larger sizes, up to 52 bits, and initial address
-// translation levels of -1, which our specification does not handle
-// yet.
-
-
+@*/
+enum {
+  enum_PTRS_PER_PTE = PTRS_PER_PTE,
+  enum_EAGAIN = EAGAIN,
+  enum_KVM_PGTABLE_MAX_LEVELS = KVM_PGTABLE_MAX_LEVELS,
+};
+/*@
 
 
 // constraints on level, see arch/arm64/include/asm/pgtable-hwdef.h 
+
+// copying part of kvm_pte_table
+function (boolean) is_max_level (u32 level)
+{
+  level == (u32) enum_KVM_PGTABLE_MAX_LEVELS - 1u32
+}
+
 
 function (boolean) valid_pgtable_level (u32 level)
 {
   0u32 <= level && level <= 3u32
 }
+
 
 
 function (u8) kvm_pte_table (kvm_pte_t pte, u32 level) 
@@ -168,7 +136,7 @@ function (boolean) is_possible_table_entry1 (u64 encoded)
 
 function (boolean) is_possible_table_entry (u64 encoded)
 { 
-  is_valid_pte_entry(encoded) && is_possible_table_entry1(encoded) 
+  cn_pte_valid(encoded) && is_possible_table_entry1(encoded) 
 }
 
 function (boolean) level_has_tables (u32 level)
@@ -183,7 +151,7 @@ function (boolean) is_table_entry_at (u64 encoded, u32 level)
 
 function (pointer) decode_table_entry_pointer (u64 encoded)
 {
-  hyp_phys_to_virt (decode_table_entry_phys (encoded))
+  hyp_phys_to_virt (cn_pte_to_phys (encoded))
 }
 
 function (u64) align_u64 (u64 x, u64 n)
@@ -196,12 +164,6 @@ function (boolean) aligned_u64 (u64 x, u64 n)
   align_u64 (x, n) == x 
 }
 
-@*/
-enum {
-  enum_PTRS_PER_PTE = PTRS_PER_PTE,
-  enum_EAGAIN = EAGAIN,
-};
-/*@
 function (u32) pgd_extra_bits(u32 ia_bits, u32 start_level)
 {
   let levels = 4u32 - start_level;
@@ -212,7 +174,7 @@ function (u32) pgd_extra_bits(u32 ia_bits, u32 start_level)
 
 
 // see struct kvm_pgtable defn in arch/arm64/include/asm/kvm_pgtable.h 
-type_synonym pte = u64
+
 
 predicate (pte) Page_Table_Entry(pointer p, u32 level) 
 {
@@ -294,11 +256,11 @@ predicate {u64 addr, u64 end, {pointer walker, pointer arg} walker, u32 flags}
 
 
 
-/*@ function (u8) kvm_phys_is_valid(u64 phys) @*/
+
+/*@ function (boolean) cn_phys_is_valid(u64 phys) { phys < 0x1000000000000u64 } @*/
 
 static bool kvm_phys_is_valid(u64 phys)
-/*@ cn_function kvm_phys_is_valid; 
-    ensures return == kvm_phys_is_valid(phys); 
+/*@ ensures return == (cn_phys_is_valid(phys) ? 1u8 : 0u8);
 @*/
 {
 	return phys < BIT(id_aa64mmfr0_parange_to_phys_shift(ID_AA64MMFR0_EL1_PARANGE_MAX));
@@ -307,10 +269,10 @@ static bool kvm_phys_is_valid(u64 phys)
 /*@
 function (boolean) pure_kvm_block_mapping_supported(u64 addr, u64 end, u64 phys, u32 level)
 {
-  kvm_level_supports_block_mapping(level) != 0u8 
-  && (! (kvm_granule_size(level) > (end - addr))) 
-  && (! ((kvm_phys_is_valid(phys) != 0u8) && (! aligned_u64(phys, kvm_granule_shift(level))))) 
-  && aligned_u64(addr, kvm_granule_shift(level))
+  cn_level_supports_block_mapping(level) 
+  && (! (cn_granule_size(level) > (end - addr))) 
+  && (! (cn_phys_is_valid(phys) && (! aligned_u64(phys, cn_granule_shift(level))))) 
+  && aligned_u64(addr, cn_granule_shift(level))
 }
 @*/
 
@@ -341,7 +303,7 @@ static bool kvm_block_mapping_supported(const struct kvm_pgtable_visit_ctx *ctx,
 /*@
 function (u32) purekvm_pgtable_idx(u64 addr, u32 level) 
 {
-  (u32) (bw_and_uf((u64) ((u32) shift_right (addr, kvm_granule_shift(level))), 511u64))
+  (u32) (bw_and_uf((u64) ((u32) shift_right (addr, cn_granule_shift(level))), 511u64))
 }
 @*/
 
@@ -365,7 +327,7 @@ function (u32) pure__kvm_pgd_page_idx(u32 ia_bits, u32 start_level, u64 addr)
 {
   (u32) shift_right (
     bw_and_uf(addr, (shift_left(1u64, (u64)(ia_bits))) - 1u64),
-    kvm_granule_shift(start_level - 1u32)
+    cn_granule_shift(start_level - 1u32)
   )
 }
 @*/
@@ -565,8 +527,8 @@ static inline int __kvm_pgtable_visit(struct kvm_pgtable_walk_data *data,
              take Ops2 = MM_Ops(mm_ops); 
              Ops2 == Ops; 
              ((Data2.addr < Data2.end) && (return == 0i32)) implies
-               (Data2.addr == (align_u64 (Data.addr, kvm_granule_shift(level)) +
-            shift_left(1u64, kvm_granule_shift(level))));
+               (Data2.addr == (align_u64 (Data.addr, cn_granule_shift(level)) +
+            shift_left(1u64, cn_granule_shift(level))));
              ! walk_again_case(return, Data.flags); @*/
 {
 	enum kvm_pgtable_walk_flags flags = data->walker->flags;
@@ -650,8 +612,8 @@ static int __kvm_pgtable_walk(struct kvm_pgtable_walk_data *data,
              take Ops2 = MM_Ops(mm_ops); 
              Ops2 == Ops; 
              ((Data2.addr < Data2.end) && (return == 0i32)) ?
-    (Data2.addr == (align_u64 (Data.addr, kvm_granule_shift(level - 1u32)) +
-        shift_left(1u64, kvm_granule_shift(level - 1u32))))
+    (Data2.addr == (align_u64 (Data.addr, cn_granule_shift(level - 1u32)) +
+        shift_left(1u64, cn_granule_shift(level - 1u32))))
     : true; 
     ensures ! walk_again_case(return, Data.flags); @*/
 {
@@ -681,8 +643,8 @@ static int __kvm_pgtable_walk(struct kvm_pgtable_walk_data *data,
 		(Data3.addr >= Data.end)
 		||
 		((Data.addr < Data.end) && Data3.addr ==
-			(align_u64 (Data.addr, kvm_granule_shift(level - 1u32)) +
-				shift_left((u64)idx, kvm_granule_shift(level)))); @*/
+			(align_u64 (Data.addr, cn_granule_shift(level - 1u32)) +
+				shift_left((u64)idx, cn_granule_shift(level)))); @*/
 	{
 		kvm_pteref_t pteref = &pgtable[idx];
 
@@ -1892,12 +1854,14 @@ void kvm_pgtable_stage2_free_removed(struct kvm_pgtable_mm_ops *mm_ops, void *pg
 
 /* more verification hacks */
 int verification_deps (void) {
-  (void) include_cn_allocator_spec;
+  (void) include_allocator_spec;
+  (void) include_page_table_definitions;
   (void) hyp_zalloc_hyp_page;
   (void) hyp_phys_to_virt;
   (void) hyp_virt_to_phys;
   (void) hyp_get_page;
   (void) enum_PTRS_PER_PTE;
+  (void) enum_KVM_PGTABLE_MIN_BLOCK_LEVEL;
   return 9;
 }
 

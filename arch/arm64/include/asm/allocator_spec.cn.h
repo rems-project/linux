@@ -82,4 +82,4 @@ spec hyp_get_page (pointer arg);
 @*/
 
 
-/*for tree carver*/ void include_cn_allocator_spec(void) {}
+/*for tree carver*/ void include_allocator_spec(void) {}
