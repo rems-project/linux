@@ -58,17 +58,13 @@ enum {
 // --- end CN auxiliaries ------------------------------------------------------
 
 
-/*@
-// CN functions that will be converted from C functions below
-function (u8) kvm_pte_valid (kvm_pte_t pte)
-@*/
+
 
 
 /*@ function (boolean) cn_pte_valid (pte pte) { bw_and_uf(pte, 1u64) == 1u64 } @*/
 
 static inline bool kvm_pte_valid(kvm_pte_t pte)
-/*@ cn_function kvm_pte_valid; 
-    ensures return == (cn_pte_valid(pte) ? 1u8 : 0u8); @*/
+/*@ ensures return == (cn_pte_valid(pte) ? 1u8 : 0u8); @*/
 {
 	return pte & KVM_PTE_VALID;
 }
@@ -91,8 +87,7 @@ static inline u64 kvm_pte_to_phys(kvm_pte_t pte)
 /*@ function (phys) cn_phys_to_pte (pte pte) { bw_and_uf(pte, 0xfffffffff000u64) } @*/
 
 static inline kvm_pte_t kvm_phys_to_pte(u64 pa)
-/*@ cn_function kvm_phys_to_pte; 
-    ensures return == cn_phys_to_pte(pa); @*/
+/*@ ensures return == cn_phys_to_pte(pa); @*/
 {
 	kvm_pte_t pte = pa & KVM_PTE_ADDR_MASK;
 
