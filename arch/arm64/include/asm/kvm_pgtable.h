@@ -68,7 +68,6 @@ static inline bool kvm_pte_valid(kvm_pte_t pte)
 /*@ cn_function kvm_pte_valid; 
     ensures return == (is_valid_pte_entry(pte) ? 1u8 : 0u8); @*/
 {
-	/*@ unfold is_valid_pte_entry(pte); @*/
 	return pte & KVM_PTE_VALID;
 }
 
@@ -81,7 +80,6 @@ static inline u64 kvm_pte_to_phys(kvm_pte_t pte)
 	if (PAGE_SHIFT == 16)
 		pa |= FIELD_GET(KVM_PTE_ADDR_51_48, pte) << 48;
 
-	/*@ unfold decode_table_entry_phys(pte); @*/
 	return pa;
 }
 

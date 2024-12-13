@@ -405,8 +405,6 @@ static bool kvm_pte_table(kvm_pte_t pte, u32 level)
 	if (level == KVM_PGTABLE_MAX_LEVELS - 1)
 		return false;
 
-	/*@ unfold is_possible_table_entry1(pte); @*/
-	/*@ unfold is_valid_pte_entry(pte); @*/
 	if (!kvm_pte_valid(pte)) {
 		return false;
 	}
@@ -441,9 +439,6 @@ static kvm_pte_t kvm_init_table_pte(kvm_pte_t *childp, struct kvm_pgtable_mm_ops
 	pte |= FIELD_PREP(KVM_PTE_TYPE, KVM_PTE_TYPE_TABLE);
 	pte |= KVM_PTE_VALID;
 
-	/*@ unfold decode_table_entry_phys(pte); @*/
-	/*@ unfold is_possible_table_entry1(pte); @*/
-	/*@ unfold is_valid_pte_entry(pte); @*/
 
 	return pte;
 }
@@ -465,7 +460,6 @@ static kvm_pte_t kvm_init_valid_leaf_pte(u64 pa, kvm_pte_t attr, u32 level)
 	pte |= FIELD_PREP(KVM_PTE_TYPE, type);
 	pte |= KVM_PTE_VALID;
 
-	/*@ unfold is_possible_table_entry1(pte); @*/
 	return pte;
 }
 
