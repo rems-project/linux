@@ -34,7 +34,8 @@ picovm-obj-y += setup.o
 # picovm-obj-y += switch.o
 
 picovm-lib-objs := memset.o
-picovm-lib-objs := $(addprefix lib/, $(picovm-lib-objs))
+# picovm-lib-objs := $(addprefix lib/, $(picovm-lib-objs))
+picovm-lib-objs := $(addprefix ../../../lib/, $(picovm-lib-objs))
 
 hyp-obj-y := ${addprefix ../, $(reused-hyp-objs)} ${addprefix ../nvhe/, $(reused-nvhe-objs)}
 hyp-obj-y += ${picovm-obj-y} $(picovm-lib-objs)
