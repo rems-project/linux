@@ -1,23 +1,93 @@
 /*
  * Based on arch/arm64/kvm/hyp/nvhe/setup.c
  */
+#include <picovm/asm/errno-base.h>
 
-#include <picovm/prelude.h>
+#include <picovm/per-cpu.h>
+#include <picovm/page.h>
+#include <picovm/memory.h>
 
 #include <picovm/config.h>
-#include <picovm/early_alloc.h>
-#include <picovm/mm.h>
-#include <picovm/mmu.h>
-#include <picovm/mem_protect.h>
-#include <picovm/hyp.h>
-#include <picovm/picovm.h>
-#include <picovm/spinlock.h>
+#include <picovm/kvm_hyp.h>
+#include <picovm/kvm_picovm.h>
 
-s64 __ro_after_init hyp_physvirt_offset;
+#include <picovm/early_alloc.h>
+#include <picovm/spinlock.h>
+#include <picovm/mem_protect.h>
+#include <picovm/mm.h>
+#include <picovm/trap_handler.h>
+
+// DEFINED IN kvm_interface.c
+extern s64 hyp_physvirt_offset;
+extern struct memblock_region hyp_memory[];
+extern unsigned int hyp_memblock_nr;
+
+// DEFINED by linker script
+extern char __per_cpu_start[];
+extern char __per_cpu_end[];
+
+// DEFINED IN cache.s
+extern void dcache_clean_inval_poc(unsigned long start, unsigned long end);
 
 unsigned long hyp_nr_cpus;
 
-#define kern_hyp_va(v) v
+// Simplified from arch/arm64/include/asm/kvm_mmu.h and deps
+// BEGIN **********************************************************************
+#define ARM64_CB_SHIFT	15
+#define ARM64_ALWAYS_SYSTEM                 	1 // TODO this is from a generated file
+#define __stringify_1(x...)	#x
+#define __stringify(x...)	__stringify_1(x)
+
+#define ALTINSTR_ENTRY_CB(feature, cb)					      \
+	" .word 661b - .\n"				/* label           */ \
+	" .word " __stringify(cb) "- .\n"		/* callback */	      \
+	" .hword " __stringify(feature) "\n"		/* feature bit     */ \
+	" .byte 662b-661b\n"				/* source len      */ \
+	" .byte 664f-663f\n"				/* replacement len */
+
+#define __ALTERNATIVE_CFG_CB(oldinstr, feature, cfg_enabled, cb)	\
+	".if "__stringify(cfg_enabled)" == 1\n"				\
+	"661:\n\t"							\
+	oldinstr "\n"							\
+	"662:\n"							\
+	".pushsection .altinstructions,\"a\"\n"				\
+	ALTINSTR_ENTRY_CB(feature, cb)					\
+	".popsection\n"							\
+	"663:\n\t"							\
+	"664:\n\t"							\
+	".endif\n"
+
+#define ALTERNATIVE_CB(oldinstr, feature, cb) \
+	__ALTERNATIVE_CFG_CB(oldinstr, (1 << ARM64_CB_SHIFT) | (feature), 1, cb)
+
+struct alt_instr {
+	s32 orig_offset;	/* offset to original instruction */
+	s32 alt_offset;		/* offset to replacement instruction */
+	u16 cpufeature;		/* cpufeature bit set for replacement */
+	u8  orig_len;		/* size of original instruction(s) */
+	u8  alt_len;		/* size of new instruction(s), <= orig_len */
+};
+void kvm_update_va_mask(struct alt_instr *alt,
+			u32 *origptr, u32 *updptr, int nr_inst);
+
+static __always_inline unsigned long __kern_hyp_va(unsigned long v)
+{
+#ifndef __KVM_VHE_HYPERVISOR__
+	asm volatile(ALTERNATIVE_CB("and %0, %0, #1\n"
+				    "ror %0, %0, #1\n"
+				    "add %0, %0, #0\n"
+				    "add %0, %0, #0, lsl 12\n"
+				    "ror %0, %0, #63\n",
+				    ARM64_ALWAYS_SYSTEM,
+				    kvm_update_va_mask)
+		     : "+r" (v));
+#endif
+	return v;
+}
+#define kern_hyp_va(v) 	((typeof(v))(__kern_hyp_va((unsigned long)(v))))
+// END ************************************************************************
+
+
 #define hyp_percpu_size ((unsigned long)__per_cpu_end - \
 			 (unsigned long)__per_cpu_start)
 
@@ -40,6 +110,7 @@ static inline unsigned long __hyp_pgtable_total_pages(void)
 	return res;
 }
 
+#define SZ_1G	0x40000000
 static inline unsigned long hyp_s1_pgtable_pages(void)
 {
 	unsigned long res;
@@ -126,7 +197,7 @@ static int recreate_hyp_mappings(phys_addr_t phys, unsigned long size,
 		return ret;
 
 	for (i = 0; i < hyp_nr_cpus; i++) {
-		struct picovm_nvhe_init_params *params = per_cpu_ptr(&picovm_init_params, i);
+		struct kvm_nvhe_init_params *params = per_cpu_ptr(&kvm_init_params, i);
 		unsigned long hyp_addr;
 
 		start = (void *)kern_hyp_va(per_cpu_base[i]);
@@ -170,11 +241,11 @@ static int recreate_hyp_mappings(phys_addr_t phys, unsigned long size,
 
 static void update_nvhe_init_params(void)
 {
-	struct picovm_nvhe_init_params *params;
+	struct kvm_nvhe_init_params *params;
 	unsigned long i;
 
 	for (i = 0; i < hyp_nr_cpus; i++) {
-		params = per_cpu_ptr(&picovm_init_params, i);
+		params = per_cpu_ptr(&kvm_init_params, i);
 		params->pgd_pa = __hyp_pa(picovm_pgtable.pgd);
 		dcache_clean_inval_poc((unsigned long)params,
 				    (unsigned long)params + sizeof(*params));
@@ -238,8 +309,8 @@ static int fix_host_ownership(void)
 void __noreturn __picovm_init_finalise(void)
 {
 	// NOTE: called in EL2 - (second half of the 1st init)
-	struct picovm_host_data *host_data = this_cpu_ptr(&picovm_host_data);
-	struct picovm_cpu_context *host_ctxt = &host_data->host_ctxt;
+	struct kvm_host_data *host_data = this_cpu_ptr(&kvm_host_data);
+	struct kvm_cpu_context *host_ctxt = &host_data->host_ctxt;
 	int ret;
 
 	ret = picovm_host_prepare_stage2(host_s2_pgt_base);
@@ -268,10 +339,10 @@ out:
 
 
 // from arch/arm64/kvm/hyp/nvhe/setup.c
-int __picovm_init(phys_addr_t phys, unsigned long size, unsigned long nr_cpus,
+int __pkvm_init(phys_addr_t phys, unsigned long size, unsigned long nr_cpus,
 		unsigned long *per_cpu_base, u32 hyp_va_bits)
 {
-	struct picovm_nvhe_init_params *params;
+	struct kvm_nvhe_init_params *params;
 	void *virt = hyp_phys_to_virt(phys);
 	void (*fn)(phys_addr_t params_pa, void *finalize_fn_va);
 	int ret;
@@ -292,11 +363,9 @@ int __picovm_init(phys_addr_t phys, unsigned long size, unsigned long nr_cpus,
 	update_nvhe_init_params();
 
 	/* Jump in the idmap page to switch to the new page-tables */
-	params = this_cpu_ptr(&picovm_init_params);
-	fn = (typeof(fn))__hyp_pa(__picovm_init_switch_pgd);
+	params = this_cpu_ptr(&kvm_init_params);
+	fn = (typeof(fn))__hyp_pa(__pkvm_init_switch_pgd);
 	fn(__hyp_pa(params), __picovm_init_finalise);
 
-	unreachable();
+	__builtin_unreachable();
 }
-
-

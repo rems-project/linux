@@ -3,22 +3,24 @@
  * Based on arch/arm64/kvm/hyp/nvhe/mm.c
  *
  */
+#include <picovm/asm/errno-base.h>
 
-#include <picovm/prelude.h>
+#include <picovm/per-cpu.h>
+#include <picovm/asm/rwonce.h>
+#include <picovm/asm/barrier.h>
+#include <picovm/asm/tlbflush.h>
+#include <picovm/getorder.h>
 
+#include <picovm/page.h>
 #include <picovm/memory.h>
-#include <picovm/mm.h>
+
+#include <picovm/spinlock.h>
 #include <picovm/mem_protect.h>
+#include <picovm/pgtable.h>
+
 
 struct picovm_pgtable picovm_pgtable;
 hyp_spinlock_t picovm_pgd_lock;
-
-// TODO: this comes from arch/arm64/include/asm/kvm_pkvm.h
-// need to make sure this does not go out of sync somehow
-#define HYP_MEMBLOCK_REGIONS	128
-
-struct memblock_region hyp_memory[HYP_MEMBLOCK_REGIONS];
-unsigned int hyp_memblock_nr;
 
 static u64 __io_map_base;
 struct hyp_fixmap_slot {
@@ -62,7 +64,7 @@ int picovm_alloc_private_va_range(size_t size, unsigned long *haddr)
 	return ret;
 }
 
-int __picovm_create_private_mapping(phys_addr_t phys, size_t size,
+static int __picovm_create_private_mapping(phys_addr_t phys, size_t size,
 				  enum picovm_pgtable_prot prot,
 				  unsigned long *haddr)
 {
@@ -89,8 +91,6 @@ int picovm_create_mappings_locked(void *from, void *to, enum picovm_pgtable_prot
 	unsigned long end = (unsigned long)to;
 	unsigned long virt_addr;
 	phys_addr_t phys;
-
-	//TODO(picovm):(don't need this?) hyp_assert_lock_held(&picovm_pgd_lock);
 
 	start = start & PAGE_MASK;
 	end = PAGE_ALIGN(end);
@@ -192,6 +192,7 @@ int hyp_create_pcpu_fixmap(void)
 
 	return 0;
 }
+
 int hyp_create_idmap(u32 hyp_va_bits)
 {
 	unsigned long start, end;
@@ -204,6 +205,14 @@ int hyp_create_idmap(u32 hyp_va_bits)
 
 	return __picovm_create_mappings(start, end - start, start, PAGE_HYP_EXEC);
 }
+
+// DEFINED IN arch/arm64/kvm/hyp/hyp-entry.S
+extern unsigned char __bp_harden_hyp_vecs[];
+
+// Copied from arch/arm64/include/asm/spectre.h
+#define SZ_2K	0x00000800
+#define BP_HARDEN_EL2_SLOTS 4
+#define __BP_HARDEN_HYP_VECS_SZ	((BP_HARDEN_EL2_SLOTS - 1) * SZ_2K)
 
 static void *__hyp_bp_vect_base;
 int hyp_map_vectors(void)
@@ -222,4 +231,3 @@ int hyp_map_vectors(void)
 
 	return 0;
 }
-

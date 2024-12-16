@@ -14,23 +14,30 @@ ccflags-y += -fno-stack-protector	\
 	     -DDISABLE_BRANCH_PROFILING	\
 	     $(DISABLE_STACKLEAK_PLUGIN)
 
+asflags-y += -DCONFIG_PICOVM_STANDALONE
+ccflags-y += -DCONFIG_PICOVM_STANDALONE
+
 hostprogs := gen-hyprel
 HOST_EXTRACFLAGS += -I$(objtree)/include
 
-lib-objs := clear_page.o copy_page.o memcpy.o memset.o
-lib-objs := $(addprefix ../../../lib/, $(lib-objs))
+reused-hyp-objs := aarch32.o exception.o entry.o hyp-entry.o
+reused-nvhe-objs := hyp-init.o hyp-smp.o psci-relay.o stacktrace.o
 
-hyp-obj-y := host.o hyp-main.o mem_protect.o mm.o picovm_pgtable.o setup.o todo.o
-hyp-obj-y += $(lib-objs)
+picovm-obj-y := host.o kvm_interface.o
+picovm-obj-y += cache.o
+picovm-obj-y += early_alloc.o
+picovm-obj-y += hyp-main.o
+picovm-obj-y += mem_protect.o
+picovm-obj-y += mm.o
+picovm-obj-y += pgtable.o
+picovm-obj-y += setup.o
+# picovm-obj-y += switch.o
 
-# NVHE files we reuse
-nvhe-objs := hyp-init.o stacktrace.o hyp-smp.o sys_regs.o psci-relay.o
-hyp-obj-y += ${addprefix ../nvhe/, $(nvhe-objs)}
+picovm-lib-objs := memset.o
+picovm-lib-objs := $(addprefix lib/, $(picovm-lib-objs))
 
-hyp-obj-y += ../aarch32.o ../entry.o ../hyp-entry.o ../exception.o
-
-# ghost-lib-objs := strcmp.o strlen.o
-# hyp-obj-$(CONFIG_NVHE_GHOST_SPEC) += $(addprefix ../../../lib/, $(ghost-lib-objs))
+hyp-obj-y := ${addprefix ../, $(reused-hyp-objs)} ${addprefix ../nvhe/, $(reused-nvhe-objs)}
+hyp-obj-y += ${picovm-obj-y} $(picovm-lib-objs)
 
 ##
 ## Build rules for compiling nVHE hyp code

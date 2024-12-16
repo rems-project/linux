@@ -4,12 +4,117 @@
  * Author: Andrew Scull <ascull@google.com>
  */
 
+// TODO(standalone): replace this
 #include <linux/linkage.h>
+#undef ULL
 
-#include <asm/assembler.h>
+#include <picovm/sysregs.h>
+
+
+#ifdef CONFIG_PICOVM_STANDALONE
+
+// TODO (from kvm_mmu.h)
+/*
+ * Convert a hypervisor VA to a PA
+ * reg: hypervisor address to be converted in place
+ * tmp: temporary register
+ */
+.macro hyp_pa reg, tmp
+	ldr_l	\tmp, hyp_physvirt_offset
+	add	\reg, \reg, \tmp
+.endm
+
+// TODO (from kvm_mmu.h)
+/*
+ * Convert a hypervisor VA to a kernel image address
+ * reg: hypervisor address to be converted in place
+ * tmp: temporary register
+ *
+ * The actual code generation takes place in kvm_get_kimage_voffset, and
+ * the instructions below are only there to reserve the space and
+ * perform the register allocation (kvm_get_kimage_voffset uses the
+ * specific registers encoded in the instructions).
+ */
+.macro hyp_kimg_va reg, tmp
+	/* Convert hyp VA -> PA. */
+	hyp_pa	\reg, \tmp
+
+	/* Load kimage_voffset. */
+alternative_cb ARM64_ALWAYS_SYSTEM, kvm_get_kimage_voffset
+	movz	\tmp, #0
+	movk	\tmp, #0, lsl #16
+	movk	\tmp, #0, lsl #32
+	movk	\tmp, #0, lsl #48
+alternative_cb_end
+
+	/* Convert PA -> kimg VA. */
+	add	\reg, \reg, \tmp
+.endm
+
+
+// TODO (from arch/arm64/include/asm/virt.h)
+#define HVC_STUB_HCALL_NR	4
+
+// TODO
+// we always has KVM_MODE_PROTECTED to true, right? (if so remove the ARM64_KVM_PROTECTED_MODE alternative_if)
+
+//TODO (from kvm_asm.h)
+#define CPU_XREG_OFFSET(x)	(CPU_USER_PT_REGS + 8*x)
+/*
+ * We treat x18 as callee-saved as the host may use it as a platform
+ * register (e.g. for shadow call stack).
+ */
+.macro save_callee_saved_regs ctxt
+	str	x18,      [\ctxt, #CPU_XREG_OFFSET(18)]
+	stp	x19, x20, [\ctxt, #CPU_XREG_OFFSET(19)]
+	stp	x21, x22, [\ctxt, #CPU_XREG_OFFSET(21)]
+	stp	x23, x24, [\ctxt, #CPU_XREG_OFFSET(23)]
+	stp	x25, x26, [\ctxt, #CPU_XREG_OFFSET(25)]
+	stp	x27, x28, [\ctxt, #CPU_XREG_OFFSET(27)]
+	stp	x29, lr,  [\ctxt, #CPU_XREG_OFFSET(29)]
+.endm
+.macro restore_callee_saved_regs ctxt
+	// We require \ctxt is not x18-x28
+	ldr	x18,      [\ctxt, #CPU_XREG_OFFSET(18)]
+	ldp	x19, x20, [\ctxt, #CPU_XREG_OFFSET(19)]
+	ldp	x21, x22, [\ctxt, #CPU_XREG_OFFSET(21)]
+	ldp	x23, x24, [\ctxt, #CPU_XREG_OFFSET(23)]
+	ldp	x25, x26, [\ctxt, #CPU_XREG_OFFSET(25)]
+	ldp	x27, x28, [\ctxt, #CPU_XREG_OFFSET(27)]
+	ldp	x29, lr,  [\ctxt, #CPU_XREG_OFFSET(29)]
+.endm
+
+
+//TODO (from kvm_asm.h)
+.macro get_host_ctxt reg, tmp
+	adr_this_cpu \reg, kvm_host_data, \tmp
+	add	\reg, \reg, #HOST_DATA_CONTEXT
+.endm
+
+//TODO (from kvm_asm.h)
+.macro get_vcpu_ptr vcpu, ctxt
+	get_host_ctxt \ctxt, \vcpu
+	ldr	\vcpu, [\ctxt, #HOST_CONTEXT_VCPU]
+.endm
+
+//TODO (from kvm_asm.h)
+.macro get_loaded_vcpu vcpu, ctxt
+	adr_this_cpu \ctxt, kvm_hyp_ctxt, \vcpu
+	ldr	\vcpu, [\ctxt, #HOST_CONTEXT_VCPU]
+.endm
+
+#else
 #include <asm/kvm_arm.h>
 #include <asm/kvm_asm.h>
 #include <asm/kvm_mmu.h>
+#endif /* CONFIG_PICOVM_STANDALONE */
+
+// Copied and adapted from arch/arm64/include/asm/kvm_asm.h
+//.macro picovm_get_host_ctxt reg, tmp
+//	adr_this_cpu \reg, picovm_host_data, \tmp
+//	add	\reg, \reg, #HOST_DATA_CONTEXT   TODO: this offset needs to be adapted to the picovm type
+//.endm
+
 
 	.text
 

@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note */
 /*
- * Based on arch/arm64/include/asm/errno-base.h
+ * Based on include/uapi/asm-generic/errno-base.h
  */
 #ifndef __PICOVM_LINUX_ERRNO_BASE_H
 #define __PICOVM_LINUX_ERRNO_BASE_H

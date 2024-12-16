@@ -7,11 +7,19 @@
 #ifndef __PICOVM_MEM_PROTECT_H
 #define __PICOVM_MEM_PROTECT_H
 
-#include <picovm/host.h>
-#include <picovm/hyp.h>
-#include <picovm/picovm.h>
+#include <picovm/linux/types.h>
+#include <picovm/asm/sections.h>
 #include <picovm/pgtable.h>
 
+
+/*
+ * SW bits 0-1 are reserved to track the memory ownership state of each page:
+ *   00: The page is owned exclusively by the page-table owner.
+ *   01: The page is owned by the page-table owner, but is shared
+ *       with another entity.
+ *   10: The page is shared with, but not owned by the page-table owner.
+ *   11: Reserved for future use (lending).
+ */
 enum picovm_page_state {
 	PICOVM_PAGE_OWNED		= 0ULL,
 	PICOVM_PAGE_SHARED_OWNED	= PICOVM_PGTABLE_PROT_SW0,
@@ -24,6 +32,7 @@ enum picovm_page_state {
 };
 
 #define PICOVM_PAGE_STATE_PROT_MASK	(PICOVM_PGTABLE_PROT_SW0 | PICOVM_PGTABLE_PROT_SW1)
+
 static inline enum picovm_pgtable_prot picovm_mkstate(enum picovm_pgtable_prot prot,
 						      enum picovm_page_state state)
 {
@@ -35,32 +44,27 @@ static inline enum picovm_page_state picovm_getstate(enum picovm_pgtable_prot pr
 	return prot & PICOVM_PAGE_STATE_PROT_MASK;
 }
 
-struct host_mmu {
-	struct picovm_arch arch;
-	struct picovm_pgtable pgt;
-	hyp_spinlock_t lock;
-};
-extern struct host_mmu host_mmu;
 
 /* This corresponds to page-table locking order */
 enum picovm_component_id {
 	PICOVM_ID_HOST,
 	PICOVM_ID_HYP,
-	PICOVM_ID_GUEST,
+	// PICOVM_ID_HYP_ID_GUEST,
 };
 
+// DEFINED IN kvm_interface.c
 extern unsigned long hyp_nr_cpus;
 
 bool addr_is_memory(phys_addr_t phys);
-int picovm_host_prepare_stage2(void *pgt_pool_base);
+int picovm_host_prepare_stage2(void *pgt_pool_base); // TODO: missing implementation
 int host_stage2_idmap_locked(phys_addr_t addr, u64 size, enum picovm_pgtable_prot prot);
-int host_stage2_set_owner_locked(phys_addr_t addr, u64 size, u8 owner_id);
+int host_stage2_set_owner_locked(phys_addr_t addr, u64 size, u8 owner_id); // TODO: missing implementation
 
-int __picovm_prot_finalize(void);
-int __picovm_host_share_hyp(u64 pfn);
-int __picovm_host_unshare_hyp(u64 pfn);
+int __pkvm_prot_finalize(void);
+int __pkvm_host_share_hyp(u64 pfn);
+int __pkvm_host_unshare_hyp(u64 pfn);
 
-void handle_host_mem_abort(struct picovm_cpu_context *host_ctxt);
-
+#include <picovm/kvm_host.h>
+void handle_host_mem_abort(struct kvm_cpu_context *host_ctxt);
 
 #endif /* __PICOVM_MEM_PROTECT_H */

@@ -1,37 +1,69 @@
 /*
  * Based on arch/arm64/kvm/hyp/pgtable.c 
  */
+#include <picovm/asm/errno-base.h>
+
+#include <picovm/asm/bug.h>
+#include <picovm/asm/rwonce.h>
+#include <picovm/asm/barrier.h>
+#include <picovm/asm/tlbflush.h>
 
 #include <picovm/config.h>
-#include <picovm/prelude.h>
+#include <picovm/page.h>
+#include <picovm/bitfield.h>
+#include <picovm/sysregs.h>
+#include <picovm/memory.h>
 
 #include <picovm/early_alloc.h>
-#include <picovm/memory.h>
-#include <picovm/host.h>
 #include <picovm/pgtable.h>
 
-// NOTE: based on linux/rch/arm64/kvm/hyp/pgtable.c
-#define PICOVM_PTE_TYPE			BIT(1)
-#define PICOVM_PTE_TYPE_BLOCK		0
-#define PICOVM_PTE_TYPE_PAGE		1
-#define PICOVM_PTE_TYPE_TABLE		1
+
+// NOTE: from arch/arm64/include/asm/pgtable-hwdef.h
+/*
+ * Size mapped by an entry at level n ( 0 <= n <= 3)
+ * We map (PAGE_SHIFT - 3) at all translation levels and PAGE_SHIFT bits
+ * in the final page. The maximum number of translation levels supported by
+ * the architecture is 4. Hence, starting at level n, we have further
+ * ((4 - n) - 1) levels of translation excluding the offset within the page.
+ * So, the total number of bits mapped by an entry at level n is :
+ *
+ *  ((4 - n) - 1) * (PAGE_SHIFT - 3) + PAGE_SHIFT
+ *
+ * Rearranging it a bit we get :
+ *   (4 - n) * (PAGE_SHIFT - 3) + 3
+ */
+#define ARM64_HW_PGTABLE_LEVEL_SHIFT(n)	((PAGE_SHIFT - 3) * (4 - (n)) + 3)
+
+// NOTE: based on arch/arm64/include/asm/kvm_pgtable.h
+static inline u64 picovm_granule_shift(u32 level)
+{
+	/* Assumes KVM_PGTABLE_MAX_LEVELS is 4 */
+	return ARM64_HW_PGTABLE_LEVEL_SHIFT(level);
+}
+
 
 // NOTE: based on linux/arch/arm64/kvm/hyp/pgtable.c
-#define PICOVM_PTE_LEAF_ATTR_LO_S1_AP	GENMASK(7, 6)
+#define PICOVM_PTE_TYPE				BIT(1)
+#define PICOVM_PTE_TYPE_BLOCK			0
+#define PICOVM_PTE_TYPE_PAGE			1
+#define PICOVM_PTE_TYPE_TABLE			1
+
+#define PICOVM_PTE_LEAF_ATTR_LO_S1_AP		GENMASK(7, 6)
 #define PICOVM_PTE_LEAF_ATTR_LO_S1_AP_RO	3
 #define PICOVM_PTE_LEAF_ATTR_LO_S1_AP_RW	1
 
 #define PICOVM_PTE_LEAF_ATTR_LO_S2_MEMATTR	GENMASK(5, 2)
 #define PICOVM_PTE_LEAF_ATTR_LO_S2_S2AP_R	BIT(6)
 #define PICOVM_PTE_LEAF_ATTR_LO_S2_S2AP_W	BIT(7)
-#define PICOVM_PTE_LEAF_ATTR_LO_S2_SH	GENMASK(9, 8)
+#define PICOVM_PTE_LEAF_ATTR_LO_S2_SH		GENMASK(9, 8)
 #define PICOVM_PTE_LEAF_ATTR_LO_S2_SH_IS	3
-#define PICOVM_PTE_LEAF_ATTR_LO_S2_AF	BIT(10)
+#define PICOVM_PTE_LEAF_ATTR_LO_S2_AF		BIT(10)
 
-#define PICOVM_PTE_LEAF_ATTR_HI		GENMASK(63, 51)
-#define PICOVM_PTE_LEAF_ATTR_HI_SW	GENMASK(58, 55)
-#define PICOVM_PTE_LEAF_ATTR_HI_S1_XN	BIT(54)
-#define PICOVM_PTE_LEAF_ATTR_HI_S2_XN	BIT(54)
+#define PICOVM_PTE_LEAF_ATTR_HI			GENMASK(63, 51)
+#define PICOVM_PTE_LEAF_ATTR_HI_SW		GENMASK(58, 55)
+#define PICOVM_PTE_LEAF_ATTR_HI_S1_XN		BIT(54)
+#define PICOVM_PTE_LEAF_ATTR_HI_S2_XN		BIT(54)
+
 
 // NOTE: based on linux/arch/arm64/kvm/hyp/pgtable.c::struct kvm_stage2_map_data
 struct picovm_stage2_map_data {
@@ -101,6 +133,7 @@ enum picovm_pgtable_prot picovm_pgtable_hyp_pte_prot(picovm_pte_t pte)
 
 	return prot;
 }
+
 
 // NOTE: based on linux/arch/arm64/kvm/hyp/pgtable.c::static kvm_pgtable_idx(u64 addr, u32 level)
 static u32 picovm_pgtable_idx(u64 addr, u32 level)
@@ -192,7 +225,7 @@ static int hyp_unmap_walker(const struct picovm_pgtable_visit_ctx *ctx)
 	return 0;
 }
 
-picovm_pte_t* _picovm_pgtable_walk(struct picovm_pgtable *pgt, u64 ia)
+static picovm_pte_t* _picovm_pgtable_walk(struct picovm_pgtable *pgt, u64 ia)
 {
 	int level, idx;
 	picovm_pte_t pte;
@@ -250,7 +283,12 @@ int picovm_pgtable_walk(struct picovm_pgtable *pgt, u64 addr, u64 size, struct p
 
 #define GET_FIELD(val, NAME)	(((val) & NAME ## _MASK) >> NAME ## _SHIFT)
 
-void check_stage2_configuration(void)
+static inline void picovm_assert(bool test)
+{
+	BUG_ON(test);
+}
+
+static void check_stage2_configuration(void)
 {
 	u64 vtcr = read_sysreg(vtcr_el2);
 	u32 ia_bits = 64 - VTCR_EL2_T0SZ(vtcr);
@@ -281,7 +319,8 @@ void check_stage2_configuration(void)
  *
  * Total pages addressable: 134,480,385
  */
-int picovm_pgtable_stage2_init(struct picovm_pgtable *pgt, struct picovm_s2_mmu *mmu)
+// TODO: why is this not used?
+static int picovm_pgtable_stage2_init(struct picovm_pgtable *pgt, struct picovm_s2_mmu *mmu)
 {
 	size_t pgd_sz;
 	check_stage2_configuration();
@@ -291,7 +330,8 @@ int picovm_pgtable_stage2_init(struct picovm_pgtable *pgt, struct picovm_s2_mmu 
 
 	pgd_sz = picovm_pgd_pages(pgt->ia_bits, pgt->start_level) * PAGE_SIZE;
 	// TODO: use picovm_early_alloc?
-	pgt->pgd = (picovm_pteref_t)alloc_pages_exact(pgd_sz, GFP_KERNEL_ACCOUNT | __GFP_ZERO); // (picovm_pteref_t)host_s2_zalloc_pages_exact(pgd_sz);
+	pgt->pgd = (picovm_pteref_t)hyp_early_alloc_contig(pgd_sz);
+	// pgt->pgd = (picovm_pteref_t)alloc_pages_exact(pgd_sz, GFP_KERNEL_ACCOUNT | __GFP_ZERO); // (picovm_pteref_t)host_s2_zalloc_pages_exact(pgd_sz);
 	if (!pgt->pgd)
 		return -ENOMEM;
 	dsb(ishst);
@@ -350,12 +390,20 @@ int picovm_pgtable_hyp_unmap(struct picovm_pgtable *pgt, u64 addr, u64 size)
 	return ret;
 }
 
+// Copied from arch/arm64/include/asm/stage2_pgtable.h
+#define ARM64_HW_PGTABLE_LEVELS(va_bits) (((va_bits) - 4) / (PAGE_SHIFT - 3))
+#define stage2_pgtable_levels(ipa)	ARM64_HW_PGTABLE_LEVELS((ipa) - 4)
+
+// Copied from arch/arm64/include/asm/kvm_arm.h
+#define VTCR_EL2_LVLS_TO_SL0(levels)	\
+	((VTCR_EL2_TGRAN_SL0_BASE - (4 - (levels))) << VTCR_EL2_SL0_SHIFT)
+
 u64 picovm_get_vtcr(u64 mmfr0, u64 mmfr1, u32 phys_shift)
 {
 	u64 vtcr = VTCR_EL2_FLAGS;
 	u8 lvls;
 
-	vtcr |= picovm_get_parange(mmfr0) << VTCR_EL2_PS_SHIFT;
+	vtcr |= kvm_get_parange(mmfr0) << VTCR_EL2_PS_SHIFT;
 	vtcr |= VTCR_EL2_T0SZ(phys_shift);
 	/*
 	 * Use a minimum 2 level page table to prevent splitting
@@ -382,4 +430,3 @@ u64 picovm_get_vtcr(u64 mmfr0, u64 mmfr1, u32 phys_shift)
 
 	return vtcr;
 }
-

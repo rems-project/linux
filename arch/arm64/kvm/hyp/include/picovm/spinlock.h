@@ -2,13 +2,12 @@
 /*
  * Based on
  *	arch/arm64/kvm/hyp/include/nvhe/spinlock.h
- *	arch/arm64/include/asm/lse.h
  */
 
 #ifndef __PICOVM_SPINLOCK_H
 #define __PICOVM_SPINLOCK_H
 
-#include <picovm/prelude.h>
+#include <picovm/linux/types.h>
 
 typedef union hyp_spinlock {
 	u32	__val;
@@ -45,18 +44,11 @@ static inline void hyp_spin_lock(hyp_spinlock_t *lock)
 
 	asm volatile(
 	/* Atomically increment the next ticket. */
-	ARM64_LSE_ATOMIC_INSN(
-	/* LL/SC */
 "	prfm	pstl1strm, %3\n"
 "1:	ldaxr	%w0, %3\n"
 "	add	%w1, %w0, #(1 << 16)\n"
 "	stxr	%w2, %w1, %3\n"
-"	cbnz	%w2, 1b\n",
-	/* LSE atomics */
-"	mov	%w2, #(1 << 16)\n"
-"	ldadda	%w2, %w0, %3\n"
-	__nops(3))
-
+"	cbnz	%w2, 1b\n"
 	/* Did we get the lock? */
 "	eor	%w1, %w0, %w0, ror #16\n"
 "	cbz	%w1, 3f\n"
@@ -81,35 +73,12 @@ static inline void hyp_spin_unlock(hyp_spinlock_t *lock)
 	u64 tmp;
 
 	asm volatile(
-	ARM64_LSE_ATOMIC_INSN(
-	/* LL/SC */
 	"	ldrh	%w1, %0\n"
 	"	add	%w1, %w1, #1\n"
-	"	stlrh	%w1, %0",
-	/* LSE atomics */
-	"	mov	%w1, #1\n"
-	"	staddlh	%w1, %0\n"
-	__nops(1))
+	"	stlrh	%w1, %0"
 	: "=Q" (lock->owner), "=&r" (tmp)
 	:
 	: "memory");
 }
-
-#ifdef CONFIG_NVHE_EL2_DEBUG
-static inline void hyp_assert_lock_held(hyp_spinlock_t *lock)
-{
-	/*
-	 * The __pkvm_init() path accesses protected data-structures without
-	 * holding locks as the other CPUs are guaranteed to not enter EL2
-	 * concurrently at this point in time. The point by which EL2 is
-	 * initialized on all CPUs is reflected in the pkvm static key, so
-	 * wait until it is set before checking the lock state.
-	 */
-	 if (static_branch_likely(&kvm_protected_mode_initialized))
-	 	BUG_ON(!hyp_spin_is_locked(lock));
-}
-#else
-static inline void hyp_assert_lock_held(hyp_spinlock_t *lock) { }
-#endif
 
 #endif /* __PICOVM_SPINLOCK_H */

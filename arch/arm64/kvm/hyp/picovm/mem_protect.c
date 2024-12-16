@@ -2,31 +2,72 @@
 /* 
  * Based on linux/arch/arm64/kvm/hyp/nvhe/mem_protect.c
  */
+#include <picovm/asm/errno-base.h>
 
-#include <picovm/prelude.h>
-#include <picovm/mm.h>
+#include <picovm/linux/types.h>
+#include <picovm/per-cpu.h>
+#include <picovm/sysregs.h>
+#include <picovm/linux/memblock.h>
+
+#include <picovm/asm/bug.h>
+#include <picovm/asm/tlbflush.h>
+
+#include <picovm/spinlock.h>
+#include <picovm/pgtable.h>
+#include <picovm/memory.h>
 #include <picovm/mmu.h>
+#include <picovm/mm.h>
 #include <picovm/mem_protect.h>
-#include <picovm/picovm.h>
-#include <picovm/hyp.h>
+
+#include <picovm/kvm_hyp.h>
+#include <picovm/kvm_picovm.h>
+
+
+extern u64 picovm_get_parange(u64 mmfr0);
+extern u32 id_aa64mmfr0_parange_to_phys_shift(int parange);
+
+// DEFINED IN kvm_interface.c
+extern u64 id_aa64mmfr0_el1_sys_val;
+extern u64 id_aa64mmfr1_el1_sys_val;
+
+// DEFINED IN ../expection.c
+enum exception_type {
+	except_type_sync	= 0,
+	except_type_irq		= 0x80,
+	except_type_fiq		= 0x100,
+	except_type_serror	= 0x180,
+};
+unsigned long get_except64_cpsr(unsigned long old, bool has_mte,
+				unsigned long sctlr, unsigned long target_mode);
+extern unsigned long get_except64_offset(unsigned long psr, unsigned long target_mode,
+	enum exception_type type);
+
+
+struct host_mmu {
+	/* VTCR_EL2 value for the host */
+	u64 vtcr;
+	struct picovm_s2_mmu mmu;
+	struct picovm_pgtable pgt;
+	hyp_spinlock_t lock;
+};
 
 // the host Stage 2 page table
-struct host_mmu host_mmu;
+static struct host_mmu host_mmu;
 
-static DEFINE_PER_CPU(struct picovm_hyp_vm *, __current_vm);
-#define current_vm (*this_cpu_ptr(&__current_vm))
+// static DEFINE_PER_CPU(struct picovm_hyp_vm *, __current_vm);
+// #define current_vm (*this_cpu_ptr(&__current_vm))
 
-static void guest_lock_component(struct picovm_hyp_vm *vm)
-{
-	hyp_spin_lock(&vm->lock);
-	current_vm = vm;
-}
+// static void guest_lock_component(struct picovm_hyp_vm *vm)
+// {
+// 	hyp_spin_lock(&vm->lock);
+// 	current_vm = vm;
+// }
 
-static void guest_unlock_component(struct picovm_hyp_vm *vm)
-{
-	current_vm = NULL;
-	hyp_spin_unlock(&vm->lock);
-} 
+// static void guest_unlock_component(struct picovm_hyp_vm *vm)
+// {
+// 	current_vm = NULL;
+// 	hyp_spin_unlock(&vm->lock);
+// } 
 
 static void host_lock_component(void)
 {
@@ -56,20 +97,20 @@ static void prepare_host_vtcr(void)
 	parange = picovm_get_parange(id_aa64mmfr0_el1_sys_val);
 	phys_shift = id_aa64mmfr0_parange_to_phys_shift(parange);
 
-	host_mmu.arch.vtcr = picovm_get_vtcr(id_aa64mmfr0_el1_sys_val,
-					     id_aa64mmfr1_el1_sys_val, phys_shift);
+	host_mmu.vtcr = picovm_get_vtcr(id_aa64mmfr0_el1_sys_val,
+					id_aa64mmfr1_el1_sys_val, phys_shift);
 }
 
-int __picovm_prot_finalize(void)
+int __pkvm_prot_finalize(void)
 {
-	struct picovm_s2_mmu *mmu = &host_mmu.arch.mmu;
-	struct picovm_nvhe_init_params *params = this_cpu_ptr(&picovm_init_params);
+	struct picovm_s2_mmu *mmu = &host_mmu.mmu;
+	struct kvm_nvhe_init_params *params = this_cpu_ptr(&kvm_init_params);
 
 	if (params->hcr_el2 & HCR_VM)
 		return -EPERM;
 
 	params->vttbr = picovm_get_vttbr(mmu);
-	params->vtcr = host_mmu.arch.vtcr;
+	params->vtcr = host_mmu.vtcr;
 	params->hcr_el2 |= HCR_VM;
 
 	/*
@@ -81,7 +122,7 @@ int __picovm_prot_finalize(void)
 	picovm_flush_dcache_to_poc(params, sizeof(*params));
 
 	write_sysreg(params->hcr_el2, hcr_el2);
-	__load_stage2(&host_mmu.arch.mmu, &host_mmu.arch);
+	__load_stage2(&host_mmu.mmu, host_mmu.vtcr);
 
 	/*
 	 * Make sure to have an ISB before the TLB maintenance below but only
@@ -101,6 +142,9 @@ struct picovm_mem_range {
 	u64 start;
 	u64 end;
 };
+
+// From include/vdso/limits.h
+#define ULONG_MAX	(~0UL)
 
 static struct memblock_region *find_mem_range(phys_addr_t addr, struct picovm_mem_range *range)
 {
@@ -189,21 +233,21 @@ static int host_stage2_idmap(u64 addr)
 	return ret;
 }
 
-static void host_inject_abort(struct picovm_cpu_context *host_ctxt)
+static void host_inject_abort(struct kvm_cpu_context *host_ctxt)
 {
-	u64 spsr = read_sysreg_el2(SYS_SPSR);
-	u64 esr = read_sysreg_el2(SYS_ESR);
+	u64 spsr = read_sysreg(spsr_el2);
+	u64 esr = read_sysreg(esr_el2);
 	u64 ventry, ec;
 
 	/* Repaint the ESR to report a same-level fault if taken from EL1 */
-	if ((spsr & PSR_MODE_MASK) != PSR_MODE_EL0t) {
+	if ((spsr & SPSR_ELn_M_MASK) != SPSR_ELn_M_EL0t) {
 		ec = ESR_ELx_EC(esr);
 		if (ec == ESR_ELx_EC_DABT_LOW)
 			ec = ESR_ELx_EC_DABT_CUR;
 		else if (ec == ESR_ELx_EC_IABT_LOW)
 			ec = ESR_ELx_EC_IABT_CUR;
 		else
-			WARN_ON(1);
+			BUG_ON(1);
 		esr &= ~ESR_ELx_EC_MASK;
 		esr |= ec << ESR_ELx_EC_SHIFT;
 	}
@@ -219,30 +263,152 @@ static void host_inject_abort(struct picovm_cpu_context *host_ctxt)
 	 */
 	esr |= ESR_ELx_S1PTW;
 
-	write_sysreg_el1(esr, SYS_ESR);
-	write_sysreg_el1(spsr, SYS_SPSR);
-	write_sysreg_el1(read_sysreg_el2(SYS_ELR), SYS_ELR);
-	write_sysreg_el1(read_sysreg_el2(SYS_FAR), SYS_FAR);
+	write_sysreg(esr, esr_el1);
+	write_sysreg(spsr, spsr_el1);
+	write_sysreg(read_sysreg(elr_el2), elr_el1);
+	write_sysreg(read_sysreg(far_el2), far_el1);
 
-	ventry = read_sysreg_el1(SYS_VBAR);
-	ventry += get_except64_offset(spsr, PSR_MODE_EL1h, except_type_sync);
-	write_sysreg_el2(ventry, SYS_ELR);
+	ventry = read_sysreg(vbar_el1);
+	ventry += get_except64_offset(spsr, SPSR_ELn_M_EL1h, except_type_sync);
+	write_sysreg(ventry, elr_el2);
 
-	spsr = get_except64_cpsr(spsr, system_supports_mte(),
-				 read_sysreg_el1(SYS_SCTLR), PSR_MODE_EL1h);
-	write_sysreg_el2(spsr, SYS_SPSR);
+#ifdef CONFIG_ARM64_MTE
+#error "picovm must be build with MTE disabled"
+#endif
+	spsr = get_except64_cpsr(spsr, false/*TODO: system_supports_mte()*/,
+				 read_sysreg(sctlr_el1), SPSR_ELn_M_EL1h);
+	write_sysreg(spsr, spsr_el2);
 }
 
-void handle_host_mem_abort(struct picovm_cpu_context *host_ctxt)
+
+
+// this always include the fix for ARM64_WORKAROUND_1508412
+#define read_sysreg_par() ({						\
+	u64 par;							\
+	asm("dmb sy");							\
+	par = read_sysreg(par_el1);					\
+	asm("dmb sy");							\
+	par;								\
+})
+
+// Copied from arch/arm64/include/asm/kvm_arm.h
+/* Hyp Prefetch Fault Address Register (HPFAR/HDFAR) */
+#define HPFAR_MASK	(~UL(0xf))
+/*
+ * We have
+ *	PAR	[PA_Shift - 1	: 12] = PA	[PA_Shift - 1 : 12]
+ *	HPFAR	[PA_Shift - 9	: 4]  = FIPA	[PA_Shift - 1 : 12]
+ *
+ * Always assume 52 bit PA since at this point, we don't know how many PA bits
+ * the page table has been set up for. This should be safe since unused address
+ * bits in PAR are res0.
+ */
+#define PAR_TO_HPFAR(par)		\
+	(((par) & GENMASK_ULL(52 - 1, 12)) >> 8)
+
+
+// Copied from arch/arm64/include/asm/kvm_asm.h
+#define __KVM_EXTABLE(from, to)						\
+	"	.pushsection	__kvm_ex_table, \"a\"\n"		\
+	"	.align		3\n"					\
+	"	.long		(" #from " - .), (" #to " - .)\n"	\
+	"	.popsection\n"
+
+
+#define __kvm_at(at_op, addr)						\
+( { 									\
+	int __kvm_at_err = 0;						\
+	u64 spsr, elr;							\
+	asm volatile(							\
+	"	mrs	%1, spsr_el2\n"					\
+	"	mrs	%2, elr_el2\n"					\
+	"1:	at	"at_op", %3\n"					\
+	"	isb\n"							\
+	"	b	9f\n"						\
+	"2:	msr	spsr_el2, %1\n"					\
+	"	msr	elr_el2, %2\n"					\
+	"	mov	%w0, %4\n"					\
+	"9:\n"								\
+	__KVM_EXTABLE(1b, 2b)						\
+	: "+r" (__kvm_at_err), "=&r" (spsr), "=&r" (elr)		\
+	: "r" (addr), "i" (-EFAULT));					\
+	__kvm_at_err;							\
+} )
+
+# define unlikely(x)	__builtin_expect(!!(x), 0)
+
+// Copied from arch/arm64/kvm/hyp/include/hyp/fault.h
+static inline bool __translate_far_to_hpfar(u64 far, u64 *hpfar)
 {
-	struct picovm_vcpu_fault_info fault;
+	u64 par, tmp;
+
+	/*
+	 * Resolve the IPA the hard way using the guest VA.
+	 *
+	 * Stage-1 translation already validated the memory access
+	 * rights. As such, we can use the EL1 translation regime, and
+	 * don't have to distinguish between EL0 and EL1 access.
+	 *
+	 * We do need to save/restore PAR_EL1 though, as we haven't
+	 * saved the guest context yet, and we may return early...
+	 */
+	par = read_sysreg_par();
+	if (!__kvm_at("s1e1r", far))
+		tmp = read_sysreg_par();
+	else
+		tmp = PAR_EL1_F; /* back to the guest */
+	write_sysreg(par, par_el1);
+
+	if (unlikely(tmp & PAR_EL1_F))
+		return false; /* Translation failed, back to guest */
+
+	/* Convert PAR to HPFAR format */
+	*hpfar = PAR_TO_HPFAR(tmp);
+	return true;
+}
+
+static inline bool __get_hpfar(u64 esr, u64 *hpfar_out)
+{
+	u64 hpfar, far;
+
+	far = read_sysreg(far_el2);
+
+	/*
+	 * The HPFAR can be invalid if the stage 2 fault did not
+	 * happen during a stage 1 page table walk (the ESR_EL2.S1PTW
+	 * bit is clear) and one of the two following cases are true:
+	 *   1. The fault was due to a permission fault
+	 *   2. The processor carries errata 834220
+	 *
+	 * Therefore, for all non S1PTW faults where we either have a
+	 * permission fault or the errata workaround is enabled, we
+	 * resolve the IPA using the AT instruction.
+	 */
+	if (!(esr & ESR_ELx_S1PTW) &&
+	    (/*TODO: cpus_have_final_cap(ARM64_WORKAROUND_834220) || */
+	     (esr & ESR_ELx_FSC_TYPE) == ESR_ELx_FSC_PERM)) {
+		if (!__translate_far_to_hpfar(far, &hpfar))
+			return false;
+	} else {
+		hpfar = read_sysreg(hpfar_el2);
+	}
+
+	// fault->far_el2 = far;
+	// fault->hpfar_el2 = hpfar;
+	*hpfar_out = hpfar;
+	return true;
+}
+
+void handle_host_mem_abort(struct kvm_cpu_context *host_ctxt)
+{
+	u64 hpfar_el2;
 	u64 esr, addr;
 	int ret = 0;
 
-	esr = read_sysreg_el2(SYS_ESR);
-	// BUG_ON(!__get_fault_info(esr, &fault));
+	esr = read_sysreg(esr_el2);
+	BUG_ON(!__get_hpfar(esr, &hpfar_el2));
 
-	addr = (fault.hpfar_el2 & HPFAR_MASK) << 8;
+	addr = (hpfar_el2 & HPFAR_MASK) << 8;
 	ret = host_stage2_idmap(addr);
 
 	if (ret == -EPERM)
@@ -320,7 +486,7 @@ static int __hyp_check_page_state_range(u64 addr, u64 size,
 		* backing a page table (picovm's or the host's)
 		* backing the code/stack/... of picovm
 */
-int __picovm_host_share_hyp(u64 pfn)
+int __pkvm_host_share_hyp(u64 pfn)
 {
 	int ret;
 	u64 host_addr = hyp_pfn_to_phys(pfn);
@@ -337,7 +503,7 @@ int __picovm_host_share_hyp(u64 pfn)
 	if (ret)
 		goto unlock;
 
-do_share:
+//do_share:
 	// BEGIN WARN_ON()
 	ret = __host_set_page_state_range(host_addr, PAGE_SIZE, PICOVM_PAGE_SHARED_OWNED);
 	if (ret)
@@ -359,7 +525,7 @@ unlock:
 	return ret;
 }
 
-int __picovm_host_unshare_hyp(u64 pfn)
+int __pkvm_host_unshare_hyp(u64 pfn)
 {
 	int ret;
 	u64 host_addr = hyp_pfn_to_phys(pfn);
@@ -376,7 +542,7 @@ int __picovm_host_unshare_hyp(u64 pfn)
 	if (ret)
 		goto unlock;
 
-do_unshare:
+//do_unshare:
 	// BEGIN WARN_ON()
 	ret = __host_set_page_state_range(host_addr, PAGE_SIZE, PICOVM_PAGE_OWNED);
 	if (ret)

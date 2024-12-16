@@ -3,37 +3,24 @@
  * Based on
  *	arch/arm64/kvm/hyp/nvhe/hyp-main.c
  */
+#include <picovm/linux/types.h>
+#include <picovm/asm/bug.h>
+#include <picovm/per-cpu.h>
+#include <picovm/sysregs.h>
 
-// #include <kvm/arm_hypercalls.h>
+#include <picovm/kvm_host.h>
+#include <picovm/kvm_hyp.h>
 
-// #include <hyp/adjust_pc.h>
-
-// #include <asm/pgtable-types.h>
-// #include <asm/kvm_asm.h>
-// #include <asm/kvm_emulate.h>
-// #include <asm/kvm_host.h>
-// #include <asm/kvm_hyp.h>
-// #include <asm/kvm_mmu.h>
-
-#include <picovm/prelude.h>
 #include <picovm/mem_protect.h>
-#include <picovm/picovm.h>
-
-// #include <nvhe/mm.h>
-// #include <nvhe/pkvm.h>
-// #include <nvhe/trap_handler.h>
-
-// #include <linux/irqchip/arm-gic-v3.h>
-// #include <uapi/linux/psci.h>
-
-// #include "../../sys_regs.h"
-
+#include <picovm/trap_handler.h>
 
 bool picovm_initialized;
-DEFINE_PER_CPU(struct picovm_nvhe_init_params, picovm_init_params);
+
+// DEFINED IN kvm_interface.c
+DECLARE_PER_CPU(struct kvm_nvhe_init_params, kvm_init_params);
 
 
-static void handle___picovm_init(struct picovm_cpu_context *host_ctxt)
+static void handle___pkvm_init(struct kvm_cpu_context *host_ctxt)
 {
 	DECLARE_REG(phys_addr_t, phys, host_ctxt, 1);
 	DECLARE_REG(unsigned long, size, host_ctxt, 2);
@@ -46,28 +33,27 @@ static void handle___picovm_init(struct picovm_cpu_context *host_ctxt)
 	 * will tail-call in __picovm_init_finalise() which will have to deal
 	 * with the host context directly.
 	 */
-	cpu_reg(host_ctxt, 1) = __picovm_init(phys, size, nr_cpus, per_cpu_base,
+	cpu_reg(host_ctxt, 1) = __pkvm_init(phys, size, nr_cpus, per_cpu_base,
 					    hyp_va_bits);
 }
 
-static void handle___picovm_prot_finalize(struct picovm_cpu_context *host_ctxt)
+static void handle___pkvm_prot_finalize(struct kvm_cpu_context *host_ctxt)
 {
-	cpu_reg(host_ctxt, 1) = __picovm_prot_finalize();
+	cpu_reg(host_ctxt, 1) = __pkvm_prot_finalize();
 }
 
-
-static void handle___picovm_host_share_hyp(struct picovm_cpu_context *host_ctxt)
+static void handle___pkvm_host_share_hyp(struct kvm_cpu_context *host_ctxt)
 {
 	DECLARE_REG(u64, pfn, host_ctxt, 1);
 
-	cpu_reg(host_ctxt, 1) = __picovm_host_share_hyp(pfn);
+	cpu_reg(host_ctxt, 1) = __pkvm_host_share_hyp(pfn);
 }
 
-static void handle___picovm_host_unshare_hyp(struct picovm_cpu_context *host_ctxt)
+static void handle___pkvm_host_unshare_hyp(struct kvm_cpu_context *host_ctxt)
 {
 	DECLARE_REG(u64, pfn, host_ctxt, 1);
 
-	cpu_reg(host_ctxt, 1) = __picovm_host_unshare_hyp(pfn);
+	cpu_reg(host_ctxt, 1) = __pkvm_host_unshare_hyp(pfn);
 }
 
 
@@ -103,20 +89,27 @@ static void handle___picovm_host_unshare_hyp(struct picovm_cpu_context *host_ctx
 
 
 
-typedef void (*hcall_t)(struct picovm_cpu_context *);
+typedef void (*hcall_t)(struct kvm_cpu_context *);
 
-#define HANDLE_FUNC(x)	[__PICOVM_HOST_SMCCC_FUNC_##x] = (hcall_t)handle_##x
+#define HANDLE_FUNC(x)	[__KVM_HOST_SMCCC_FUNC_##x] = (hcall_t)handle_##x
 static const hcall_t host_hcall[] = {
 	/* ___kvm_hyp_init */
-	HANDLE_FUNC(__picovm_init),
+	HANDLE_FUNC(__pkvm_init),
 	// HANDLE_FUNC(__pkvm_create_private_mapping),
-	HANDLE_FUNC(__picovm_prot_finalize),
+	HANDLE_FUNC(__pkvm_prot_finalize),
 
-	HANDLE_FUNC(__picovm_host_share_hyp),
-	HANDLE_FUNC(__picovm_host_unshare_hyp),
+	HANDLE_FUNC(__pkvm_host_share_hyp),
+	HANDLE_FUNC(__pkvm_host_unshare_hyp),
 };
 
-static void handle_host_hcall(struct picovm_cpu_context *host_ctxt)
+
+// From include/linux/kernel.h
+// #define __same_type(a, b) __builtin_types_compatible_p(typeof(a), typeof(b))
+// #define __must_be_array(a)	BUILD_BUG_ON_ZERO(__same_type((a), &(a)[0]))
+// #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]) + __must_be_array(arr))
+#define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
+
+static void handle_host_hcall(struct kvm_cpu_context *host_ctxt)
 {
 	DECLARE_REG(unsigned long, id, host_ctxt, 0);
 	unsigned long hcall_min = 0;
@@ -132,9 +125,9 @@ static void handle_host_hcall(struct picovm_cpu_context *host_ctxt)
 	 * returns -EPERM after the first call for a given CPU.
 	 */
 	if (picovm_initialized)
-		hcall_min = __PICOVM_HOST_SMCCC_FUNC___picovm_prot_finalize;
+		hcall_min = __KVM_HOST_SMCCC_FUNC___pkvm_prot_finalize;
 
-	id -= PICOVM_HOST_SMCCC_ID(0);
+	id -= KVM_HOST_SMCCC_ID(0);
 
 	if (id < hcall_min || id >= ARRAY_SIZE(host_hcall))
 		goto inval;
@@ -152,7 +145,7 @@ inval:
 }
 
 
-void handle_trap(struct picovm_cpu_context *host_ctxt)
+void handle_trap(struct kvm_cpu_context *host_ctxt)
 {
 	u64 esr = read_esr_el2();
 	switch (ESR_ELx_EC(esr)) {
