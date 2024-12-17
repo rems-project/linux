@@ -21,9 +21,9 @@ hostprogs := gen-hyprel
 HOST_EXTRACFLAGS += -I$(objtree)/include
 
 reused-hyp-objs := aarch32.o exception.o entry.o hyp-entry.o
-reused-nvhe-objs := hyp-init.o hyp-smp.o psci-relay.o stacktrace.o
+reused-nvhe-objs := hyp-init.o hyp-smp.o psci-relay.o stacktrace.o host.o
 
-picovm-obj-y := host.o kvm_interface.o
+picovm-obj-y := kvm_interface.o
 picovm-obj-y += cache.o
 picovm-obj-y += early_alloc.o
 picovm-obj-y += hyp-main.o
@@ -124,4 +124,4 @@ KCOV_INSTRUMENT	:= n
 OBJECT_FILES_NON_STANDARD := y
 
 # Vergissmeinnicht...
-ccflags-$(CONFIG_NVHE_GHOST_SPEC) += -O1
+ccflags-y += -O1
