@@ -174,3 +174,6 @@ sphinx_*/
 
 # Rust analyzer configuration
 /rust-project.json
+
+# rems-project stuff
+cl/debug/kernel-pkvm.sym
