@@ -170,12 +170,13 @@ datatype info {
   }
 }
 
-datatype entry {
-  Entry {
+type_synonym entry = {
     u64 code,
     info info
-  }
 }
+
+
+
 
 datatype table {
   Table { map<u64, entry> entries }
@@ -258,11 +259,33 @@ predicate (entry) PageTableEntry(pointer p, u32 level)
 {
    take code = Owned<kvm_pte_t>(p);
    take info = PageTableEntrySubtable(p,level,code);
-   return Entry { code: code, info: info};
+   return { code: code, info: info };
 }
 
 
 predicate (info) PageTableEntrySubtable(pointer unused_p, u32 level, u64 pte)
+{
+  if (cn_pte_table(pte,level)) {
+      // assert (valid_pgtable_level(level));
+      // assert (good<kvm_pte_t *>(decode_table_entry_pointer (encoded)));
+      let table_pointer = decode_table_entry_pointer (pte);
+      take table = PageTable(table_pointer, level + 1u32);
+      return I_Table { table: pack_table(table) };
+  }
+  else {
+    let is_valid = cn_pte_valid(pte);
+    let is_page_type = is_page_or_table_type(pte);
+    let is_block = is_valid && !is_page_type;
+//    assert (is_block implies (cn_level_supports_block_mapping(level))); // TODO: maybe more
+    let info = 
+      if (!is_valid) { I_Invalid {} }
+      else { I_Block_or_page { output_address: cn_pte_to_phys(pte), is_page: is_page_type } }
+    ;
+    return info;
+  }
+}
+
+predicate (info) OLD_PageTableEntrySubtable(pointer unused_p, u32 level, u64 pte)
 {
   if (!cn_pte_valid(pte)) {
     return I_Invalid {};
@@ -1001,7 +1024,7 @@ static int hyp_map_walker(const struct kvm_pgtable_visit_ctx *ctx,
              valid_phys_virt_offset ();
              take D = Owned<struct hyp_map_data>(Ctx.arg);
              take pte = PageTableEntry(Ctx.ptep, Ctx.level);
-             !(cn_pte_table(pte, Ctx.level));
+             !(cn_pte_table(pte.code, Ctx.level));
              take Ops = MM_Ops(Ctx.mm_ops);
     ensures  take Ctx2 = Owned(ctx);
              Ctx2 == Ctx;
