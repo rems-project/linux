@@ -82,7 +82,7 @@ static inline u64 kvm_pte_to_phys(kvm_pte_t pte)
 	return pa;
 }
 
-/*@ function (kvm_pte_t) kvm_phys_to_pte(u64 pa) @*/
+
 
 /*@ function (phys) cn_phys_to_pte (pte pte) { bw_and_uf(pte, 0xfffffffff000u64) } @*/
 

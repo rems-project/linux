@@ -381,7 +381,7 @@ static bool kvm_phys_is_valid(u64 phys)
 
 
 /*@
-function (boolean) pure_kvm_block_mapping_supported(u64 addr, u64 end, u64 phys, u32 level)
+function (boolean) cn_block_mapping_supported(u64 addr, u64 end, u64 phys, u32 level)
 {
   cn_level_supports_block_mapping(level)
   && (! (cn_granule_size(level) > (end - addr)))
@@ -395,7 +395,7 @@ static bool kvm_block_mapping_supported(const struct kvm_pgtable_visit_ctx *ctx,
              valid_pgtable_level(Ctx.level);
     ensures  take Ctx2 = Owned(ctx);
              Ctx2 == Ctx;
-             return == (pure_kvm_block_mapping_supported(Ctx.addr, Ctx.end, phys, Ctx.level)
+             return == (cn_block_mapping_supported(Ctx.addr, Ctx.end, phys, Ctx.level)
                         ? 1u8 : 0u8);
 @*/
 {
@@ -522,7 +522,12 @@ static kvm_pte_t kvm_init_table_pte(kvm_pte_t *childp, struct kvm_pgtable_mm_ops
 
 static kvm_pte_t kvm_init_valid_leaf_pte(u64 pa, kvm_pte_t attr, u32 level)
 /*@ requires valid_pgtable_level(level);
-    ensures ! (cn_pte_table (return, level)); @*/
+    ensures //! (cn_pte_table (return, level)); 
+
+            cn_pte_valid(return);
+            cn_pte_to_phys(return) == cn_pte_to_phys(cn_phys_to_pte(pa));
+            is_page_or_table_type(return) == is_max_level(level);
+@*/
 {
 	kvm_pte_t pte = kvm_phys_to_pte(pa);
 	u64 type = (level == KVM_PGTABLE_MAX_LEVELS - 1) ? KVM_PTE_TYPE_PAGE :
@@ -967,7 +972,11 @@ static bool hyp_map_walker_try_leaf(const struct kvm_pgtable_visit_ctx *ctx,
              D2 == D;
              take pte2 = Owned<kvm_pte_t>(Ctx.ptep);
              take Ops2 = MM_Ops(Ctx.mm_ops);
-             ! (cn_pte_table (pte2, Ctx.level)); @*/
+             ! (cn_pte_table (pte2, Ctx.level)); 
+
+             let same_pte = pte == pte2;
+           
+@*/
 {
 	u64 phys = data->phys + (ctx->addr - ctx->start);
 	kvm_pte_t new;
