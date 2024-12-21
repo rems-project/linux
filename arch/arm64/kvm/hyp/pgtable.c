@@ -145,9 +145,33 @@ function (boolean) possible_mm_ops_agree (possible_mm_ops o, pointer m)
 enum {
   enum_PTRS_PER_PTE = PTRS_PER_PTE,
   enum_EAGAIN = EAGAIN,
-  enum_KVM_PGTABLE_MAX_LEVELS = KVM_PGTABLE_MAX_LEVELS,
+  enum_KVM_PGTABLE_MAX_LEVELS = KVM_PGTABLE_MAX_LEVELS
+
+//  enum_KVM_PTE_LEAF_ATTR_LO = KVM_PTE_LEAF_ATTR_LO,
+//  enum_KVM_PTE_LEAF_ATTR_HI = KVM_PTE_LEAF_ATTR_HI,
+//  enum_KVM_PTE_VALID = KVM_PTE_VALID
 };
 /*@
+
+function (u64) KVM_PTE_LEAF_ATTR_LO ()
+{
+  0b11111111110u64
+}
+
+function (u64) KVM_PTE_LEAF_ATTR_HI ()
+{
+  shift_left(0b1111111111111u64,51u64)
+}
+
+function (u64) KVM_PTE_VALID ()
+{
+  0b1u64
+}
+
+function (u64) KVM_PTE_LEAF_ATTR_HI_SW ()
+{
+  shift_left(0b1111u64,55u64)
+}
 
 
 // Looking at BS thesis section 7.3.1
@@ -520,9 +544,12 @@ static kvm_pte_t kvm_init_table_pte(kvm_pte_t *childp, struct kvm_pgtable_mm_ops
 
 
 
+/*@ function (kvm_pte_t) kvm_init_valid_leaf_pte (u64 pa, kvm_pte_t attr, u32 level) @*/
+
 static kvm_pte_t kvm_init_valid_leaf_pte(u64 pa, kvm_pte_t attr, u32 level)
-/*@ requires valid_pgtable_level(level);
-    ensures //! (cn_pte_table (return, level)); 
+/*@ cn_function kvm_init_valid_leaf_pte;
+    requires valid_pgtable_level(level);
+    ensures return == kvm_init_valid_leaf_pte(pa, attr, level);
 
             cn_pte_valid(return);
             cn_pte_to_phys(return) == cn_pte_to_phys(cn_phys_to_pte(pa));
@@ -974,7 +1001,17 @@ static bool hyp_map_walker_try_leaf(const struct kvm_pgtable_visit_ctx *ctx,
              take Ops2 = MM_Ops(Ctx.mm_ops);
              ! (cn_pte_table (pte2, Ctx.level)); 
 
-             let same_pte = pte == pte2;
+             let phys = D.phys+Ctx.addr - Ctx.start;
+             let block_mapping_supported = cn_block_mapping_supported(Ctx.addr, Ctx.end, phys, Ctx.level);
+             let new = kvm_init_valid_leaf_pte(phys, D.attr, Ctx.level);
+             let new_old_bad_difference = ((Ctx.old ^ new) & ~(KVM_PTE_LEAF_ATTR_HI_SW ())) != 0x0u64;
+
+             let no = !block_mapping_supported || (cn_pte_valid(Ctx.old) && new_old_bad_difference);
+             let yes_unchanged = (block_mapping_supported && Ctx.old == new);
+
+             no implies (return == 0u8 && pte == pte2);
+             yes_unchanged implies (return == 1u8 && pte == pte2);
+             (!(no || yes_unchanged)) implies (return == 1u8 && pte2 == new);
            
 @*/
 {

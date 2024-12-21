@@ -85,9 +85,13 @@ static inline u64 kvm_pte_to_phys(kvm_pte_t pte)
 
 
 /*@ function (phys) cn_phys_to_pte (pte pte) { bw_and_uf(pte, 0xfffffffff000u64) } @*/
+/*@ function (phys) kvm_phys_to_pte (pte pte) @*/
+
 
 static inline kvm_pte_t kvm_phys_to_pte(u64 pa)
-/*@ ensures return == cn_phys_to_pte(pa); @*/
+/*@ cn_function kvm_phys_to_pte;
+    ensures return == cn_phys_to_pte(pa);
+            return == kvm_phys_to_pte(pa); @*/
 {
 	kvm_pte_t pte = pa & KVM_PTE_ADDR_MASK;
 
