@@ -603,6 +603,7 @@ static int kvm_pgtable_visitor_cb(struct kvm_pgtable_walk_data *data,
              flag_in_flags ((i32) visit, (i32) (Data.flags));
              (visit == (u32)KVM_PGTABLE_WALK_LEAF) == (!(cn_pte_table(pte, Ctx.level)));
              ptr_eq(Ctx.arg,Data.walker.arg);
+             Ctx.old == pte;
     ensures  take Data2 = KVM_PgTable_Walk_Data (data);
              Data2 == Data;
              take Ctx2 = Owned(ctx);
@@ -993,6 +994,7 @@ static bool hyp_map_walker_try_leaf(const struct kvm_pgtable_visit_ctx *ctx,
              take pte = Owned<kvm_pte_t>(Ctx.ptep);
              ! (cn_pte_table (pte, Ctx.level));
              take Ops = MM_Ops(Ctx.mm_ops);
+             Ctx.old == pte;
     ensures  take Ctx2 = Owned(ctx);
              Ctx2 == Ctx;
              take D2 = Owned<struct hyp_map_data>(data);
@@ -1072,6 +1074,7 @@ static int hyp_map_walker(const struct kvm_pgtable_visit_ctx *ctx,
              take pte = PageTableEntry(Ctx.ptep, Ctx.level);
              !(cn_pte_table(pte.code, Ctx.level));
              take Ops = MM_Ops(Ctx.mm_ops);
+             pte.code == Ctx.old;
     ensures  take Ctx2 = Owned(ctx);
              Ctx2 == Ctx;
              take D2 = Owned<struct hyp_map_data>(Ctx.arg);
