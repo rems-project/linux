@@ -1053,10 +1053,10 @@ static bool hyp_map_walker_try_leaf(const struct kvm_pgtable_visit_ctx *ctx,
 /*@ requires take Ctx = Owned(ctx);
              valid_pgtable_level(Ctx.level);
              take D = Owned<struct hyp_map_data>(data);
-             take pte = Owned<kvm_pte_t>(Ctx.ptep);
-             ! (cn_pte_table (pte, Ctx.level));
+             take pte = PageTableEntry(Ctx.ptep, Ctx.level);
+             ! (cn_pte_table (pte.code, Ctx.level));
              take Ops = MM_Ops(Ctx.mm_ops);
-             Ctx.old == pte;
+             Ctx.old == pte.code;
              let phys = D.phys+Ctx.addr - Ctx.start;
              let block_mapping_supported = cn_block_mapping_supported(Ctx.addr, Ctx.end, phys, Ctx.level);
              let new = kvm_init_valid_leaf_pte(phys, D.attr, Ctx.level);
@@ -1066,9 +1066,9 @@ static bool hyp_map_walker_try_leaf(const struct kvm_pgtable_visit_ctx *ctx,
              Ctx2 == Ctx;
              take D2 = Owned<struct hyp_map_data>(data);
              D2 == D;
-             take pte2 = Owned<kvm_pte_t>(Ctx.ptep);
+             take pte2 = PageTableEntry(Ctx.ptep, Ctx.level);
              take Ops2 = MM_Ops(Ctx.mm_ops);
-             ! (cn_pte_table (pte2, Ctx.level)); 
+             // ! (cn_pte_table (pte2.code, Ctx.level)); 
 
 
              //TODO: simplify once above 'TODO' precondition is in place
@@ -1077,7 +1077,7 @@ static bool hyp_map_walker_try_leaf(const struct kvm_pgtable_visit_ctx *ctx,
 
              no implies (return == 0u8 && pte == pte2);
              yes_unchanged implies (return == 1u8 && pte == pte2);
-             (!(no || yes_unchanged)) implies (return == 1u8 && pte2 == new);
+             (!(no || yes_unchanged)) implies (return == 1u8 && pte2.code == new);
            
 @*/
 {
