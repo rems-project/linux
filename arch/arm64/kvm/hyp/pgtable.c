@@ -183,8 +183,8 @@ datatype packed_table {
 datatype info {
   I_Invalid {},
   I_Block_or_page {
-    u64 output_address, // actual size depending on level
-    boolean is_page // bit 1
+    //u64 output_address, // actual size depending on level
+    // boolean is_page // bit 1
     // u16 upper_attrs, // actually 14 bits
     // u16 lower_attrs, // actually 10 bits
   },
@@ -205,6 +205,9 @@ type_synonym entry = {
 datatype table {
   Table { map<u64, entry> entries }
 }
+
+type_synonym directory = map<u64,table>
+
 
 function (packed_table) pack_table (table t)
 function (table) unpack_table (packed_table t)
@@ -303,34 +306,13 @@ predicate (info) PageTableEntrySubtable(pointer unused_p, u32 level, u64 pte)
 //    assert (is_block implies (cn_level_supports_block_mapping(level))); // TODO: maybe more
     let info = 
       if (!is_valid) { I_Invalid {} }
-      else { I_Block_or_page { output_address: cn_pte_to_phys(pte), is_page: is_page_type } }
+      else { I_Block_or_page { } }
     ;
     return info;
   }
 }
 
-predicate (info) OLD_PageTableEntrySubtable(pointer unused_p, u32 level, u64 pte)
-{
-  if (!cn_pte_valid(pte)) {
-    return I_Invalid {};
-  }
-  else {
-    if (is_page_or_table_type(pte) && !is_max_level(level)) {
-      // assert (valid_pgtable_level(level));
-      // assert (good<kvm_pte_t *>(decode_table_entry_pointer (encoded)));
-      let table_pointer = decode_table_entry_pointer (pte);
-      take table = PageTable(table_pointer, level + 1u32);
-      return I_Table { table: pack_table(table) };
-    }
-    else {
-      let is_page = is_page_or_table_type(pte);
-      let is_block = !is_page;
-      let output_address = cn_pte_to_phys(pte);
-      assert (is_block implies (cn_level_supports_block_mapping(level))); // TODO: maybe more
-      return I_Block_or_page { output_address: output_address, is_page: is_page };
-    }
-  }
-}
+
 
 
 predicate table PageTable(pointer base, u32 level)
@@ -356,6 +338,15 @@ predicate {struct kvm_pgtable data, map<u64,table> tables} PageDirectory (pointe
   //return {extra_bits: extra_bits, data: Data};
   return {data: Data, tables: tables};
 }
+
+
+
+
+
+
+
+
+
 
 @*/
 
@@ -486,6 +477,77 @@ static u32 kvm_pgd_page_idx(struct kvm_pgtable *pgt, u64 addr)
 
 	return (addr & mask) >> shift;
 }
+
+
+
+
+
+
+
+
+/*@  
+
+// address translation
+
+// looking at arch/arm64/kvm/hyp/nvhe/ghost/ghost_pgtable.c and
+// arch/arm64/kvm/hyp/nvhe/ghost/ghost_pgtable_walk.c from 
+// linux@pkvm-verif-6.4, and pgtable.c C functions
+
+datatype translation_outcome {
+  Success { 
+    u64 phys 
+    // to be extended with permissions
+  },
+  Invalid {
+    u64 code
+  }
+}
+
+// transcribing GENMASK from  linux/include/linux/bits.h
+function (u64) GENMASK(u64 h, u64 l)
+{
+  (~0u64 - shift_left(1u64, l) + 1u64)
+  & (shift_right (~0u64, 64u64 - 1u64 - h) )
+}
+
+
+
+function [rec] (translation_outcome) pgtable_walk(u64 virt, u32 level, table table)
+{
+  let entries = match table { Table { entries: entries } => { entries } };
+  let entry = entries[(u64) purekvm_pgtable_idx(virt, level)];
+  match (entry.info) {
+    I_Invalid {} => { 
+      Invalid { code: entry.code } 
+    }
+    I_Block_or_page {} => {
+      let oa = entry.code & GENMASK(47u64, cn_granule_shift(level));
+      let page_offset = virt & GENMASK(cn_granule_shift(level) - 1u64,0u64); 
+      Success { phys: oa | page_offset }
+    }
+    I_Table { table: packed_table } => {
+      let next_table = unpack_table(packed_table);
+      pgtable_walk(virt, level+1u32, next_table)
+    }
+  }
+}
+
+function (translation_outcome) pgdirectory_walk(u32 ia_bits, u64 virt, u32 level, directory directory)
+{
+  let idx = (u64) pure__kvm_pgd_page_idx(ia_bits, level, virt);
+  pgtable_walk(virt, level, directory[idx])
+}
+
+
+@*/
+
+
+
+
+
+
+
+
 
 static u32 kvm_pgd_pages(u32 ia_bits, u32 start_level)
 {
@@ -995,6 +1057,11 @@ static bool hyp_map_walker_try_leaf(const struct kvm_pgtable_visit_ctx *ctx,
              ! (cn_pte_table (pte, Ctx.level));
              take Ops = MM_Ops(Ctx.mm_ops);
              Ctx.old == pte;
+             let phys = D.phys+Ctx.addr - Ctx.start;
+             let block_mapping_supported = cn_block_mapping_supported(Ctx.addr, Ctx.end, phys, Ctx.level);
+             let new = kvm_init_valid_leaf_pte(phys, D.attr, Ctx.level);
+             let bad_change = ((Ctx.old ^ new) & ~(KVM_PTE_LEAF_ATTR_HI_SW ())) != 0x0u64;
+             //TODO: !(cn_pte_valid(Ctx.old) && bad_change);
     ensures  take Ctx2 = Owned(ctx);
              Ctx2 == Ctx;
              take D2 = Owned<struct hyp_map_data>(data);
@@ -1003,12 +1070,9 @@ static bool hyp_map_walker_try_leaf(const struct kvm_pgtable_visit_ctx *ctx,
              take Ops2 = MM_Ops(Ctx.mm_ops);
              ! (cn_pte_table (pte2, Ctx.level)); 
 
-             let phys = D.phys+Ctx.addr - Ctx.start;
-             let block_mapping_supported = cn_block_mapping_supported(Ctx.addr, Ctx.end, phys, Ctx.level);
-             let new = kvm_init_valid_leaf_pte(phys, D.attr, Ctx.level);
-             let new_old_bad_difference = ((Ctx.old ^ new) & ~(KVM_PTE_LEAF_ATTR_HI_SW ())) != 0x0u64;
 
-             let no = !block_mapping_supported || (cn_pte_valid(Ctx.old) && new_old_bad_difference);
+             //TODO: simplify once above 'TODO' precondition is in place
+             let no = !block_mapping_supported || (cn_pte_valid(Ctx.old) && bad_change);
              let yes_unchanged = (block_mapping_supported && Ctx.old == new);
 
              no implies (return == 0u8 && pte == pte2);
