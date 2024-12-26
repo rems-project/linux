@@ -145,7 +145,8 @@ function (boolean) possible_mm_ops_agree (possible_mm_ops o, pointer m)
 enum {
   enum_PTRS_PER_PTE = PTRS_PER_PTE,
   enum_EAGAIN = EAGAIN,
-  enum_KVM_PGTABLE_MAX_LEVELS = KVM_PGTABLE_MAX_LEVELS
+  enum_KVM_PGTABLE_MAX_LEVELS = KVM_PGTABLE_MAX_LEVELS,
+  enum_ENOMEM = ENOMEM
 
 //  enum_KVM_PTE_LEAF_ATTR_LO = KVM_PTE_LEAF_ATTR_LO,
 //  enum_KVM_PTE_LEAF_ATTR_HI = KVM_PTE_LEAF_ATTR_HI,
@@ -201,10 +202,12 @@ type_synonym entry = {
 
 
 
+// datatype table {
+//   Table { map<u64, entry> entries }
+// }
 
-datatype table {
-  Table { map<u64, entry> entries }
-}
+
+type_synonym table = map<u64, entry>
 
 type_synonym directory = map<u64,table>
 
@@ -216,6 +219,35 @@ function (table) unpack_table (packed_table t)
 lemma table_packing (table t)
   requires true;
   ensures unpack_table(pack_table(t)) == t;
+
+@*/
+void table_packing_ (kvm_pte_t *p, u32 level)
+/*@ trusted;
+    requires take ptes = PageTable(p, level);
+    ensures  take ptes2 = PageTable(p, level);
+             ptes == ptes2;
+             unpack_table(pack_table(ptes)) == ptes;
+@*/
+{}
+
+/*@
+
+function (boolean) is_table (info i) {
+  match i {
+    I_Table { table: _ } => { true }
+    I_Block_or_page { } => { false }
+    I_Invalid {} => { false }
+  }
+}
+
+// assumption: is_table(i)
+function (table) get_table (info i) {
+  match i {
+    I_Table { table: packed_table } => { unpack_table (packed_table) }
+    I_Block_or_page {} => { default <table> }
+    I_Invalid {} => { default <table> }
+  }
+}
 
 
 
@@ -319,7 +351,8 @@ predicate table PageTable(pointer base, u32 level)
 {
   take entries = each (u64 i; 0u64 <= i && i < 512u64)
                       {PageTableEntry(array_shift<kvm_pte_t>(base, i), level)};
-  return Table { entries: entries };
+  //return Table { entries: entries };
+  return entries;
 }
 
 predicate {struct kvm_pgtable data, map<u64,table> tables} PageDirectory (pointer p)
@@ -514,7 +547,8 @@ function (u64) GENMASK(u64 h, u64 l)
 
 function [rec] (translation_outcome) pgtable_walk(u64 virt, u32 level, table table)
 {
-  let entries = match table { Table { entries: entries } => { entries } };
+  //let entries = match table { Table { entries: entries } => { entries } };
+  let entries = table;
   let entry = entries[(u64) purekvm_pgtable_idx(virt, level)];
   match (entry.info) {
     I_Invalid {} => { 
@@ -1061,24 +1095,16 @@ static bool hyp_map_walker_try_leaf(const struct kvm_pgtable_visit_ctx *ctx,
              let block_mapping_supported = cn_block_mapping_supported(Ctx.addr, Ctx.end, phys, Ctx.level);
              let new = kvm_init_valid_leaf_pte(phys, D.attr, Ctx.level);
              let bad_change = ((Ctx.old ^ new) & ~(KVM_PTE_LEAF_ATTR_HI_SW ())) != 0x0u64;
-             //TODO: !(cn_pte_valid(Ctx.old) && bad_change);
+             !(block_mapping_supported && cn_pte_valid(Ctx.old) && bad_change);
     ensures  take Ctx2 = Owned(ctx);
              Ctx2 == Ctx;
              take D2 = Owned<struct hyp_map_data>(data);
              D2 == D;
              take pte2 = PageTableEntry(Ctx.ptep, Ctx.level);
              take Ops2 = MM_Ops(Ctx.mm_ops);
-             // ! (cn_pte_table (pte2.code, Ctx.level)); 
 
-
-             //TODO: simplify once above 'TODO' precondition is in place
-             let no = !block_mapping_supported || (cn_pte_valid(Ctx.old) && bad_change);
-             let yes_unchanged = (block_mapping_supported && Ctx.old == new);
-
-             no implies (return == 0u8 && pte == pte2);
-             yes_unchanged implies (return == 1u8 && pte == pte2);
-             (!(no || yes_unchanged)) implies (return == 1u8 && pte2.code == new);
-           
+             if (block_mapping_supported) { return == 1u8 && pte2.code == new }
+             else { return == 0u8 && pte2 == pte };
 @*/
 {
 	u64 phys = data->phys + (ctx->addr - ctx->start);
@@ -1112,8 +1138,7 @@ predicate (map <u64, pte>) PTE_Array (pointer p)
 
 static inline void coerce_page_to_ptes(kvm_pte_t *ptep)
 /*@ trusted;
-    requires take ZP = Cond_Zero_Page (ptep);
-             ZP.exists;
+    requires take ZP = Zero_Page (ptep);
     ensures take ptes = PTE_Array (ptep);
             each (u64 i; 0u64 <= i && i < 512u64) {ptes[i] == 0u64}; @*/
 {
@@ -1124,9 +1149,13 @@ static inline void coerce_null_ptes_to_IPT(kvm_pte_t *ptep, u32 level)
     requires take ptes = PTE_Array (ptep);
              each (u64 i; 0u64 <= i && i < 512u64) {ptes[i] == 0u64};
              valid_pgtable_level(level);
-    ensures  take ptes2 = PageTable (ptep, level); @*/
+    ensures  take ptes2 = PageTable (ptep, level); 
+             each (u64 i; 0u64 <= i && i < 512u64) { !cn_pte_valid(ptes2[i].code) };
+@*/
 {
 }
+
+
 
 
 static int hyp_map_walker(const struct kvm_pgtable_visit_ctx *ctx,
@@ -1139,12 +1168,29 @@ static int hyp_map_walker(const struct kvm_pgtable_visit_ctx *ctx,
              !(cn_pte_table(pte.code, Ctx.level));
              take Ops = MM_Ops(Ctx.mm_ops);
              pte.code == Ctx.old;
+
+             let phys = D.phys+Ctx.addr - Ctx.start;
+             let block_mapping_supported = cn_block_mapping_supported(Ctx.addr, Ctx.end, phys, Ctx.level);
+             block_mapping_supported || !is_max_level(Ctx.level);
+             let possible_new_leaf = kvm_init_valid_leaf_pte(phys, D.attr, Ctx.level);
+             let bad_leaf_change = ((Ctx.old ^ possible_new_leaf) & ~(KVM_PTE_LEAF_ATTR_HI_SW ())) != 0x0u64;
+             !(block_mapping_supported && cn_pte_valid(Ctx.old) && bad_leaf_change);
+
     ensures  take Ctx2 = Owned(ctx);
              Ctx2 == Ctx;
              take D2 = Owned<struct hyp_map_data>(Ctx.arg);
              take new = PageTableEntry(Ctx.ptep, Ctx.level);
              D2 == D;
-             take Ops2 = MM_Ops(Ctx.mm_ops); @*/
+             take Ops2 = MM_Ops(Ctx.mm_ops); 
+
+             let progress = 
+               if (block_mapping_supported) { new.code == possible_new_leaf }
+               else { is_table(new.info) }
+             ;
+             (return == 0i32 && progress) || (return == -enum_ENOMEM && new == pte);
+
+             each (u64 i; 0u64 <= i && i < 512u64) { cn_pte_table(new.code,Ctx.level) implies !(cn_pte_valid((get_table(new.info)[i]).code)) }; // should go under `progress`, but CN doesn't allow nested `forall`
+@*/
 {
 	kvm_pte_t *childp, new;
 	struct hyp_map_data *data = ctx->arg;
@@ -1163,6 +1209,7 @@ static int hyp_map_walker(const struct kvm_pgtable_visit_ctx *ctx,
 	/* this is where we need to turn a char[] into a kvm_pte_t[] (i.e. a u64[]) */
 	coerce_page_to_ptes(childp);
 	coerce_null_ptes_to_IPT(childp, ctx->level + 1);
+        /*CN*/ table_packing_(childp,ctx->level+1);
 
 	new = kvm_init_table_pte(childp, mm_ops);
 	mm_ops->get_page(ctx->ptep);
