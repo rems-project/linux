@@ -392,24 +392,31 @@ struct kvm_pgtable_walk_data {
 	const u64			end;
 };
 
+
+// CN: moved this earlier
+struct hyp_map_data {
+	const u64			phys;
+	kvm_pte_t			attr;
+};
+
 /*@
 
 // --- parameterisation of page-table walker -----------------------------------
 
-predicate {u32 flags, pointer arg} KVM_PgTable_Walker (pointer p)
+predicate {u32 flags, pointer arg, struct hyp_map_data data} KVM_PgTable_Walker (pointer p)
 {
   take D = Owned<struct kvm_pgtable_walker>(p);
   take X = Hyp_Walker_Cases (D.cb, D.arg, D.flags);
-  return {flags: D.flags, arg: D.arg};
+  return {flags: D.flags, arg: D.arg, data: X};
 }
 
-predicate {u64 addr, u64 end, {pointer walker, pointer arg} walker, u32 flags}
+predicate {u64 addr, u64 end, {pointer walker, pointer arg} walker, u32 flags, struct hyp_map_data data}
     KVM_PgTable_Walk_Data (pointer p)
 {
   take D = Owned<struct kvm_pgtable_walk_data>(p);
   take Walker = KVM_PgTable_Walker(D.walker);
   let walker = {walker: D.walker, arg: Walker.arg};
-  return {addr: D.addr, end: D.end, walker: walker, flags: Walker.flags};
+  return {addr: D.addr, end: D.end, walker: walker, flags: Walker.flags, data: Walker.data};
 }
 @*/
 
@@ -700,6 +707,14 @@ static int kvm_pgtable_visitor_cb(struct kvm_pgtable_walk_data *data,
              (visit == (u32)KVM_PGTABLE_WALK_LEAF) == (!(cn_pte_table(pte, Ctx.level)));
              ptr_eq(Ctx.arg,Data.walker.arg);
              Ctx.old == pte;
+
+             is_max_level(Ctx.level) implies (! (cn_granule_size(Ctx.level) > (Ctx.end - Ctx.addr)));
+             let phys = Data.data.phys+Ctx.addr - Ctx.start;
+             // overapproximating range+alignment conditions from cn_block_mapping_supported
+             cn_phys_is_valid(phys);
+             aligned_u64(phys, cn_granule_shift(Ctx.level));
+             aligned_u64(Ctx.addr, cn_granule_shift(Ctx.level));
+
     ensures  take Data2 = KVM_PgTable_Walk_Data (data);
              Data2 == Data;
              take Ctx2 = Owned(ctx);
@@ -1023,10 +1038,11 @@ int kvm_pgtable_get_leaf(struct kvm_pgtable *pgt, u64 addr,
 	return ret;
 }
 
-struct hyp_map_data {
-	const u64			phys;
-	kvm_pte_t			attr;
-};
+// CN: move this earlier
+// struct hyp_map_data {
+// 	const u64			phys;
+// 	kvm_pte_t			attr;
+// };
 
 static int hyp_set_prot_attr(enum kvm_pgtable_prot prot, kvm_pte_t *ptep)
 /* not much to prove for (C) safety of this function */
@@ -1219,15 +1235,15 @@ static int hyp_map_walker(const struct kvm_pgtable_visit_ctx *ctx,
 }
 
 /*@
-predicate (void) Hyp_Map_Walker_Case(pointer f, pointer x, u32 flags)
+predicate (struct hyp_map_data) Hyp_Map_Walker_Case(pointer f, pointer x, u32 flags)
 {
   assert (ptr_eq(f,&hyp_map_walker));
   assert (flags == ((u32) KVM_PGTABLE_WALK_LEAF));
   take D = Owned<struct hyp_map_data>(x);
-  return;
+  return D;
 }
 
-predicate (void) Hyp_Walker_Cases(pointer f, pointer x, u32 flags)
+predicate (struct hyp_map_data) Hyp_Walker_Cases(pointer f, pointer x, u32 flags)
 {
   take X = Hyp_Map_Walker_Case (f, x, flags);
   return X;
