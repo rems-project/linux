@@ -708,12 +708,17 @@ static int kvm_pgtable_visitor_cb(struct kvm_pgtable_walk_data *data,
              ptr_eq(Ctx.arg,Data.walker.arg);
              Ctx.old == pte;
 
+             !cn_pte_valid(pte); // TODO: relax this slightly
+
              is_max_level(Ctx.level) implies (! (cn_granule_size(Ctx.level) > (Ctx.end - Ctx.addr)));
              let phys = Data.data.phys+Ctx.addr - Ctx.start;
+             let block_mapping_supported = cn_block_mapping_supported(Ctx.addr, Ctx.end, phys, Ctx.level);
              // overapproximating range+alignment conditions from cn_block_mapping_supported
              cn_phys_is_valid(phys);
              aligned_u64(phys, cn_granule_shift(Ctx.level));
              aligned_u64(Ctx.addr, cn_granule_shift(Ctx.level));
+             let possible_new_leaf = kvm_init_valid_leaf_pte(phys, Data.data.attr, Ctx.level);
+
 
     ensures  take Data2 = KVM_PgTable_Walk_Data (data);
              Data2 == Data;
@@ -723,7 +728,17 @@ static int kvm_pgtable_visitor_cb(struct kvm_pgtable_walk_data *data,
              take IPT2 = PageTableEntrySubtable (Ctx.ptep, Ctx.level, pte2);
              take Ops2 = MM_Ops(Ctx.mm_ops);
              Ops2 == Ops;
-             visit == ((u32)KVM_PGTABLE_WALK_TABLE_PRE) ? pte2 == pte : true; @*/
+             visit == ((u32)KVM_PGTABLE_WALK_TABLE_PRE) ? pte2 == pte : true; 
+
+             let progress = 
+               if (block_mapping_supported) { pte2 == possible_new_leaf }
+               else { is_table(IPT2) }
+             ;
+             (return == 0i32 && progress) || (return == -enum_ENOMEM && pte2 == pte);
+             
+             each (u64 i; 0u64 <= i && i < 512u64) { cn_pte_table(pte2,Ctx.level) implies !(cn_pte_valid((get_table(IPT2)[i]).code)) }; // should go under `progress`, but CN doesn't allow nested `forall`
+
+@*/
 {
 	struct kvm_pgtable_walker *walker = data->walker;
 	WARN_ON_ONCE(kvm_pgtable_walk_shared(ctx) && !kvm_pgtable_walk_lock_held());
