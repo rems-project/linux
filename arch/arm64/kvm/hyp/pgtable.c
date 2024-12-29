@@ -700,15 +700,14 @@ static int kvm_pgtable_visitor_cb(struct kvm_pgtable_walk_data *data,
              take Ctx = Owned(ctx);
              valid_pgtable_level(Ctx.level);
              valid_phys_virt_offset ();
-             take pte = Owned(Ctx.ptep);
-             take IPT = PageTableEntrySubtable (Ctx.ptep, Ctx.level, pte);
+             take pte = PageTableEntry(Ctx.ptep, Ctx.level);
              take Ops = MM_Ops(Ctx.mm_ops);
              flag_in_flags ((i32) visit, (i32) (Data.flags));
-             (visit == (u32)KVM_PGTABLE_WALK_LEAF) == (!(cn_pte_table(pte, Ctx.level)));
+             (visit == (u32)KVM_PGTABLE_WALK_LEAF) == (!(cn_pte_table(pte.code, Ctx.level)));
              ptr_eq(Ctx.arg,Data.walker.arg);
-             Ctx.old == pte;
+             Ctx.old == pte.code;
 
-             !cn_pte_valid(pte); // TODO: relax this slightly
+             !cn_pte_valid(pte.code); // TODO: relax this slightly
 
              is_max_level(Ctx.level) implies (! (cn_granule_size(Ctx.level) > (Ctx.end - Ctx.addr)));
              let phys = Data.data.phys+Ctx.addr - Ctx.start;
@@ -724,19 +723,18 @@ static int kvm_pgtable_visitor_cb(struct kvm_pgtable_walk_data *data,
              Data2 == Data;
              take Ctx2 = Owned(ctx);
              Ctx2 == Ctx;
-             take pte2 = Owned(Ctx.ptep);
-             take IPT2 = PageTableEntrySubtable (Ctx.ptep, Ctx.level, pte2);
+             take pte2 = PageTableEntry(Ctx.ptep, Ctx.level);
              take Ops2 = MM_Ops(Ctx.mm_ops);
              Ops2 == Ops;
              visit == ((u32)KVM_PGTABLE_WALK_TABLE_PRE) ? pte2 == pte : true; 
 
              let progress = 
-               if (block_mapping_supported) { pte2 == possible_new_leaf }
-               else { is_table(IPT2) }
+               if (block_mapping_supported) { pte2.code == possible_new_leaf }
+               else { is_table(pte2.info) }
              ;
              (return == 0i32 && progress) || (return == -enum_ENOMEM && pte2 == pte);
              
-             each (u64 i; 0u64 <= i && i < 512u64) { cn_pte_table(pte2,Ctx.level) implies !(cn_pte_valid((get_table(IPT2)[i]).code)) }; // should go under `progress`, but CN doesn't allow nested `forall`
+             each (u64 i; 0u64 <= i && i < 512u64) { cn_pte_table(pte2.code,Ctx.level) implies !(cn_pte_valid((get_table(pte2.info)[i]).code)) }; // should go under `progress`, but CN doesn't allow nested `forall`
 
 @*/
 {
