@@ -146,7 +146,8 @@ enum {
   enum_PTRS_PER_PTE = PTRS_PER_PTE,
   enum_EAGAIN = EAGAIN,
   enum_KVM_PGTABLE_MAX_LEVELS = KVM_PGTABLE_MAX_LEVELS,
-  enum_ENOMEM = ENOMEM
+  enum_ENOMEM = ENOMEM,
+  enum_PAGE_SIZE = PAGE_SIZE
 
 //  enum_KVM_PTE_LEAF_ATTR_LO = KVM_PTE_LEAF_ATTR_LO,
 //  enum_KVM_PTE_LEAF_ATTR_HI = KVM_PTE_LEAF_ATTR_HI,
@@ -726,7 +727,6 @@ static int kvm_pgtable_visitor_cb(struct kvm_pgtable_walk_data *data,
              let phys = Data.data.phys+Ctx.addr - Ctx.start;
              let block_mapping_supported = cn_block_mapping_supported(Ctx.addr, Ctx.end, phys, Ctx.level);
              // overapproximating range+alignment conditions from cn_block_mapping_supported
-             cn_phys_is_valid(phys);
              aligned_u64(phys, cn_granule_shift(Ctx.level));
              aligned_u64(Ctx.addr, cn_granule_shift(Ctx.level));
              let possible_new_leaf = kvm_init_valid_leaf_pte(phys, Data.data.attr, Ctx.level);
@@ -1031,6 +1031,22 @@ int kvm_pgtable_walk(struct kvm_pgtable *pgt, u64 addr, u64 size,
              take W = KVM_PgTable_Walker (walker);
              take Ops = MM_Ops(PT.data.mm_ops);
              valid_phys_virt_offset ();
+
+             let PAGE_SIZE = (u64) enum_PAGE_SIZE;
+             let cn_addr2 = addr - mod(addr, PAGE_SIZE);
+             let end_upalign_difference = mod(PAGE_SIZE - mod(addr + size, PAGE_SIZE), PAGE_SIZE);
+             let cn_end = addr + size + end_upalign_difference;
+             cn_addr2 < cn_end;
+             let effective_size = cn_end - cn_addr2;
+             effective_size <= cn_granule_size(0u32); // at least
+             PAGE_SIZE <= size;
+             let phys = W.data.phys;
+             let max_phys = phys + effective_size;
+             phys < max_phys;
+             cn_phys_is_valid(max_phys);
+             
+
+             
     ensures  take PT2 = PageDirectory (pgt);
              PT2.data == PT.data;
              take Ops2 = MM_Ops(PT.data.mm_ops);
