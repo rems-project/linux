@@ -920,6 +920,19 @@ static int __kvm_pgtable_walk(struct kvm_pgtable_walk_data *data,
              valid_pgtable_level(level);
              valid_phys_virt_offset ();
              let orig_level = level;
+
+             // let pages_done = shift_right(Data.addr - Data.start, 12u64);
+             // let pages_todo = shift_right(Data.size, 12u64);
+
+             // each (u64 i; pages_done <= i && i < pages_todo) {
+             //   let page_addr = Data.start + shift_left(i, 12u64);
+             //   let translation_outcome = pgtable_walk(page_addr, level, PTEs);
+             //   match translation_outcome {
+             //     Invalid { code : _ } => { true }
+             //     Success { phys : _ } => { false }
+             //   }
+             // };
+
     ensures  take Data2 = KVM_PgTable_Walk_Data (data);
              Data2.start == Data.start;
              Data2.end == Data.end;
@@ -974,7 +987,21 @@ static int __kvm_pgtable_walk(struct kvm_pgtable_walk_data *data,
 		||
 		((Data.addr < Data.end) && Data3.addr ==
 			(align_u64 (Data.addr, cn_granule_shift(level - 1u32)) +
-				shift_left((u64)idx, cn_granule_shift(level)))); @*/
+				shift_left((u64)idx, cn_granule_shift(level)))); 
+
+               // let pages_done_inv = shift_right(Data3.addr - Data.start, 12u64);
+
+               // each (u64 i; pages_done_inv <= i && i < pages_todo) {
+               //   let page_addr = Data.start + shift_left(i, 12u64);
+               //   let translation_outcome = pgtable_walk(page_addr, level, PTEs);
+               //   match translation_outcome {
+               //     Invalid { code : _ } => { true }
+               //     Success { phys : _ } => { false }
+               //   }
+               // };
+
+
+@*/
 	{
 		kvm_pteref_t pteref = &pgtable[idx];
 
