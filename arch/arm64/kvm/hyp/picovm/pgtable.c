@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Based on arch/arm64/kvm/hyp/pgtable.c 
  */
@@ -48,6 +49,8 @@ static inline u64 picovm_granule_shift(u32 level)
 #define PICOVM_PTE_TYPE_PAGE			1
 #define PICOVM_PTE_TYPE_TABLE			1
 
+#define PICOVM_PTE_LEAF_ATTR_LO			GENMASK(11, 2)
+
 #define PICOVM_PTE_LEAF_ATTR_LO_S1_AP		GENMASK(7, 6)
 #define PICOVM_PTE_LEAF_ATTR_LO_S1_AP_RO	3
 #define PICOVM_PTE_LEAF_ATTR_LO_S1_AP_RW	1
@@ -63,6 +66,9 @@ static inline u64 picovm_granule_shift(u32 level)
 #define PICOVM_PTE_LEAF_ATTR_HI_SW		GENMASK(58, 55)
 #define PICOVM_PTE_LEAF_ATTR_HI_S1_XN		BIT(54)
 #define PICOVM_PTE_LEAF_ATTR_HI_S2_XN		BIT(54)
+
+#define PICOVM_INVALID_PTE_OWNER_MASK	GENMASK(9, 2)
+#define PICOVM_MAX_OWNER_ID		FIELD_MAX(PICOVM_INVALID_PTE_OWNER_MASK)
 
 
 // NOTE: based on linux/arch/arm64/kvm/hyp/pgtable.c::struct kvm_stage2_map_data
@@ -80,7 +86,7 @@ struct picovm_hyp_map_data {
 
 // NOTE: based on linux/arch/arm64/kvm/hyp/pgtable.c::struct kvm_pgtable_walk_data
 struct picovm_pgtable_walk_data {
-	struct picovm_pgtable_walker *walker;
+	struct picovm_pgtable_walker	*walker;
 	const u64			start;
 	u64				addr;
 	const u64			end;
@@ -134,7 +140,6 @@ enum picovm_pgtable_prot picovm_pgtable_hyp_pte_prot(picovm_pte_t pte)
 	return prot;
 }
 
-
 // NOTE: based on linux/arch/arm64/kvm/hyp/pgtable.c::static kvm_pgtable_idx(u64 addr, u32 level)
 static u32 picovm_pgtable_idx(u64 addr, u32 level)
 {
@@ -185,6 +190,7 @@ static int stage2_map_walker(const struct picovm_pgtable_visit_ctx *ctx)
 	picovm_pte_t* ptep = ctx->ptep;
 	struct picovm_stage2_map_data *data = ctx->arg;
 	phys_addr_t pa = data->phys + ctx->ofs;
+
 	picovm_pte_t new = pa | data->prot;
 
 	WRITE_ONCE(*ptep, 0);
@@ -319,8 +325,7 @@ static void check_stage2_configuration(void)
  *
  * Total pages addressable: 134,480,385
  */
-// TODO: why is this not used?
-static int picovm_pgtable_stage2_init(struct picovm_pgtable *pgt, struct picovm_s2_mmu *mmu)
+int picovm_pgtable_stage2_init(struct picovm_pgtable *pgt, struct picovm_s2_mmu *mmu)
 {
 	size_t pgd_sz;
 	check_stage2_configuration();
@@ -339,7 +344,7 @@ static int picovm_pgtable_stage2_init(struct picovm_pgtable *pgt, struct picovm_
 }
 
 int picovm_pgtable_stage2_map(struct picovm_pgtable *pgt, u64 addr, u64 size,
-			   u64 phys, enum picovm_pgtable_prot prot)
+			      u64 phys, enum picovm_pgtable_prot prot)
 {
 	int ret;
 	struct picovm_stage2_map_data map_data = {
@@ -354,6 +359,25 @@ int picovm_pgtable_stage2_map(struct picovm_pgtable *pgt, u64 addr, u64 size,
 
 	ret = picovm_pgtable_walk(pgt, addr, size, &walker);
 	dsb(ishst);
+	return ret;
+}
+
+int picovm_pgtable_stage2_set_owner(struct picovm_pgtable *pgt, u64 addr, u64 size,
+				    u8 owner_id)
+{
+	int ret;
+	struct picovm_stage2_map_data map_data = {
+		.phys		= PICOVM_PHYS_INVALID,
+	};
+	struct picovm_pgtable_walker walker = {
+		.cb		= stage2_map_walker,
+		.arg		= &map_data,
+	};
+
+	if (owner_id > PICOVM_MAX_OWNER_ID)
+		return -EINVAL;
+
+	ret = picovm_pgtable_walk(pgt, addr, size, &walker);
 	return ret;
 }
 
@@ -403,7 +427,7 @@ u64 picovm_get_vtcr(u64 mmfr0, u64 mmfr1, u32 phys_shift)
 	u64 vtcr = VTCR_EL2_FLAGS;
 	u8 lvls;
 
-	vtcr |= kvm_get_parange(mmfr0) << VTCR_EL2_PS_SHIFT;
+	vtcr |= picovm_get_parange(mmfr0) << VTCR_EL2_PS_SHIFT;
 	vtcr |= VTCR_EL2_T0SZ(phys_shift);
 	/*
 	 * Use a minimum 2 level page table to prevent splitting
@@ -430,3 +454,4 @@ u64 picovm_get_vtcr(u64 mmfr0, u64 mmfr1, u32 phys_shift)
 
 	return vtcr;
 }
+

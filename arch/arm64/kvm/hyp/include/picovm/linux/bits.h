@@ -19,6 +19,26 @@
 #define BITS_PER_LONG_LONG 	64
 
 /*
+ * FIELD_MAX() - produce the maximum value representable by a field
+ * @_mask: shifted mask defining the field's length and position
+ *
+ * Create the maximum value that can be held in the field
+ * specified by @_mask.
+ */
+#define FIELD_MAX(_mask) ((_mask) >> (__builtin_ctz(_mask)))
+
+/*
+ * FIELD_PREP() - Prepare a bitfield element
+ * @_mask: Shifted mask defining the field's length and position
+ * @_val:  Value to put in the field
+ *
+ * Masks and shifts the value up according to the mask. The result should
+ * be combined with other fields of the bitfield using logical OR.
+ */
+#define FIELD_PREP(_mask, _val) \
+    (((_val) << __bf_shf(_mask)) & (_mask))
+
+/*
  * Create a contiguous bitmask starting at bit position @l and ending at
  * position @h. For example
  * GENMASK_ULL(39, 21) gives us the 64bit vector 0x000000ffffe00000.

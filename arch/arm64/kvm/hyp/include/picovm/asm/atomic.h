@@ -13,5 +13,6 @@
 #include <picovm/asm/rwonce.h>
 
 #define atomic64_read(v)	__READ_ONCE((v)->counter)
+#define atomic64_write(v, i)	__WRITE_ONCE((v)->counter, i)
 
 #endif /* __PICOVM_ASM_ATOMIC_H */

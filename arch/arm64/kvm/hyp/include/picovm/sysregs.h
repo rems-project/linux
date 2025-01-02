@@ -131,8 +131,6 @@
 #define ID_AA64MMFR0_EL1_PARANGE_MAX	ID_AA64MMFR0_EL1_PARANGE_48
 #endif
 
-
-
 #ifndef __ASSEMBLY__
 #include <picovm/linux/types.h>
 

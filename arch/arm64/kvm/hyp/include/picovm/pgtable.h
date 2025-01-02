@@ -17,7 +17,7 @@
 
 #define PICOVM_PGTABLE_MAX_LEVELS	4U
 
-static inline u64 kvm_get_parange(u64 mmfr0)
+static inline u64 picovm_get_parange(u64 mmfr0)
 {
 	u64 parange = cpuid_feature_extract_unsigned_field(mmfr0,
 				ID_AA64MMFR0_EL1_PARANGE_SHIFT);
@@ -37,7 +37,7 @@ typedef picovm_pte_t *picovm_pteref_t;
 #define PICOVM_PTE_ADDR_MASK		GENMASK(47, PAGE_SHIFT)
 // #define PICOVM_PTE_ADDR_51_48		GENMASK(15, 12)
 
-// #define PICOVM_PHYS_INVALID		(-1ULL)
+#define PICOVM_PHYS_INVALID		(-1ULL)
 
 
 static inline bool picovm_pte_valid(picovm_pte_t pte)
@@ -129,14 +129,15 @@ struct picovm_pgtable {
  * INTERFACE of picovm/pgtable.c
  */
 int picovm_pgtable_hyp_init(struct picovm_pgtable *pgt, u32 va_bits);
-//TODO(not used?) int picovm_pgtable_stage2_init(struct picovm_pgtable *pgt, struct picovm_s2_mmu *mmu);
+int picovm_pgtable_stage2_init(struct picovm_pgtable *pgt, struct picovm_s2_mmu *mmu);
 
 int picovm_pgtable_walk(struct picovm_pgtable *pgt, u64 addr, u64 size,
 			struct picovm_pgtable_walker *walker);
 
 int picovm_pgtable_stage2_map(struct picovm_pgtable *pgt, u64 addr, u64 size,
 			      u64 phys, enum picovm_pgtable_prot prot);
-
+int picovm_pgtable_stage2_set_owner(struct picovm_pgtable *pgt, u64 addr, u64 size,
+				    u8 owner_id);
 int picovm_pgtable_hyp_map(struct picovm_pgtable *pgt, u64 addr, u64 size,
 			   u64 phys, enum picovm_pgtable_prot prot);
 

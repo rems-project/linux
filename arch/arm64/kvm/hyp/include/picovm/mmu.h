@@ -35,7 +35,7 @@ struct picovm_vmid {
 
 struct picovm_s2_mmu {
 	struct picovm_vmid vmid;
-	phys_addr_t	pgd_phys;
+	phys_addr_t	pgd_phys;	
 };
 
 

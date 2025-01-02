@@ -22,9 +22,21 @@
 #include <picovm/kvm_hyp.h>
 #include <picovm/kvm_picovm.h>
 
+static inline u32 id_aa64mmfr0_parange_to_phys_shift(int parange)
+{
+	switch (parange) {
+	case ID_AA64MMFR0_EL1_PARANGE_48: return 48;
+	/*
+	 * A future PE could use a value unknown to the kernel.
+	 * However, by the "D10.1.4 Principles of the ID scheme
+	 * for fields in ID registers", ARM DDI 0487C.a, any new
+	 * value is guaranteed to be higher than what we know already.
+	 * As a safe limit, we return the limit supported by the kernel.
+	 */
+	default: return CONFIG_ARM64_PA_BITS;
+	}
+}
 
-extern u64 picovm_get_parange(u64 mmfr0);
-extern u32 id_aa64mmfr0_parange_to_phys_shift(int parange);
 
 // DEFINED IN kvm_interface.c
 extern u64 id_aa64mmfr0_el1_sys_val;
@@ -99,6 +111,25 @@ static void prepare_host_vtcr(void)
 
 	host_mmu.vtcr = picovm_get_vtcr(id_aa64mmfr0_el1_sys_val,
 					id_aa64mmfr1_el1_sys_val, phys_shift);
+}
+
+int picovm_host_prepare_stage2(void *pgt_pool_base)
+{
+	struct picovm_s2_mmu *mmu = &host_mmu.mmu;
+	int ret;
+
+	prepare_host_vtcr();
+	hyp_spin_lock_init(&host_mmu.lock);
+
+	ret = picovm_pgtable_stage2_init(&host_mmu.pgt, mmu);
+	if (ret)
+		return ret;
+
+	mmu->pgd_phys = __hyp_pa(host_mmu.pgt.pgd);
+	// mmu->pgt = &host_mmu.pgt;
+	atomic64_write(&mmu->vmid.id, 0);
+
+	return 0;
 }
 
 int __pkvm_prot_finalize(void)
@@ -214,6 +245,11 @@ int host_stage2_idmap_locked(phys_addr_t addr, u64 size,
 	// TODO(doc) we don't do the host_stage2_try from actual pKVM
 	return picovm_pgtable_stage2_map(&host_mmu.pgt, addr, size, addr,
 					 prot /*, &host_s2_pool, 0 */);
+}
+
+int host_stage2_set_owner_locked(phys_addr_t addr, u64 size, u8 owner_id)
+{
+	return picovm_pgtable_stage2_set_owner(&host_mmu.pgt, addr, size, owner_id);
 }
 
 static int host_stage2_idmap(u64 addr)

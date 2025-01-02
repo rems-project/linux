@@ -131,20 +131,6 @@ void *__pi_memcpy(void *dst, const void *src, size_t size)
  * TODO: remove all after this once the picovm code builds
  *****************************************************************************/
 
-
-
-// TODO: missing implementations
-int picovm_host_prepare_stage2(void *pgt_pool_base)
-{
-	// TODO
-	return 0;
-}
-int host_stage2_set_owner_locked(phys_addr_t addr, u64 size, u8 owner_id)
-{
-	// TODO
-	return 0;
-}
-
 DEFINE_PER_CPU(struct kvm_cpu_context, kvm_hyp_ctxt);
 void __noreturn hyp_panic(void){}
 void __noreturn hyp_panic_bad_stack(void){}
