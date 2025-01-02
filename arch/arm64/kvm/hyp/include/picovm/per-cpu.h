@@ -210,6 +210,23 @@ DECLARE_PER_CPU_READ_MOSTLY(int, cpu_number);
 
 // #define	this_cpu_ptr		raw_cpu_ptr
 
-#define this_cpu_ptr(X)	0 // TODO
+// #define this_cpu_ptr(X)	0 // TODO
+#define this_cpu_ptr(X)							\
+	({								\
+	do {								\
+		const void *__vpp_verify =				\
+		(typeof((X) + 0))((void *)0);				\
+		(void)__vpp_verify;					\
+	} while (0);							\
+	({								\
+		unsigned long __ptr;					\
+		__ptr = (unsigned long)((				\
+		typeof(*(X)) *)(X));					\
+		(typeof((						\
+		typeof(*(X))						\
+			*)(X)))(__ptr +					\
+				((read_sysreg(tpidr_el2))));		\
+	});								\
+	})
 
 #endif /* __PICOVM_PER_CPU_H */
