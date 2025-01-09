@@ -111,6 +111,10 @@ static inline kvm_pfn_t kvm_pte_to_pfn(kvm_pte_t pte)
 
 
 // copied from ARM64_HW_PGTABLE_LEVEL_SHIFT
+// 0: 39
+// 1: 30
+// 2: 21
+// 3: 12
 /*@ function (u64) cn_granule_shift(u32 level) { (u64) ((9u32 * (4u32 - level)) + 3u32) } @*/
 
 static inline u64 kvm_granule_shift(u32 level)

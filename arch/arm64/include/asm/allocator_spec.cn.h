@@ -26,7 +26,7 @@ predicate (void) Zero_Page(pointer p)
 
 predicate {boolean exists} Cond_Zero_Page (pointer p) 
 {
-  if (p == NULL) {
+  if (ptr_eq (p,NULL)) {
     return {exists: false};
   }
   else {
