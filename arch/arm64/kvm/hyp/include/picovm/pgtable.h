@@ -58,7 +58,7 @@ static inline u64 picovm_pte_to_phys(picovm_pte_t pte)
 	return pa;
 }
 
-static inline picovm_pte_t kvm_phys_to_pte(u64 pa)
+static inline picovm_pte_t picovm_phys_to_pte(u64 pa)
 {
 	picovm_pte_t pte = pa & PICOVM_PTE_ADDR_MASK;
 

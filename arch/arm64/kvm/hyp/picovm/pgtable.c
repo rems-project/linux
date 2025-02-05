@@ -170,6 +170,15 @@ static u32 picovm_pgd_pages(u32 ia_bits, u32 start_level)
 	return picovm_pgd_page_idx(&pgt, -1ULL) + 1;
 }
 
+static picovm_pte_t picovm_init_table_pte(picovm_pte_t *childp)
+{
+	picovm_pte_t pte = picovm_phys_to_pte(hyp_virt_to_phys(childp));
+
+	pte |= FIELD_PREP(PICOVM_PTE_TYPE, PICOVM_PTE_TYPE_TABLE);
+	pte |= PICOVM_PTE_VALID;
+	return pte;
+}
+
 int __picovm_pgtable_hyp_init_leaf(picovm_pte_t *pgt) {
 	picovm_pte_t *curr;
    	u32 idx;
@@ -183,6 +192,7 @@ int __picovm_pgtable_hyp_init_leaf(picovm_pte_t *pgt) {
 
 int __picovm_pgtable_hyp_init_tables(picovm_pte_t *pgt, u64 level) {
 	picovm_pte_t *curr, *childp;
+	picovm_pte_t pte;
    	u32 idx;
 	int ret;
 	
@@ -195,8 +205,10 @@ int __picovm_pgtable_hyp_init_tables(picovm_pte_t *pgt, u64 level) {
 		childp = (picovm_pteref_t)hyp_early_alloc_page();
 		if (!childp)
 			return -ENOMEM;
-		
-		WRITE_ONCE(*curr, hyp_virt_to_phys(childp) | PICOVM_PTE_TYPE_TABLE);
+
+		pte = picovm_init_table_pte(childp);
+		WRITE_ONCE(*curr, pte);
+
 		ret = __picovm_pgtable_hyp_init_tables(childp, level + 1);
 		if (ret)
 			return ret;
