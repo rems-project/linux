@@ -739,7 +739,7 @@ static int hyp_unmap_walker(const struct kvm_pgtable_visit_ctx *ctx,
 #endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 		__tlbi_level(vae2is, __TLBI_VADDR(ctx->addr, 0), ctx->level);
 #if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
-	casemate_model_step_tlbi3(TLBI_vae2is, __TLBI_VADDR(ctx->addr, 0), ctx->level);
+	casemate_model_step_tlbi_va(TLBI_vae2is, ctx->addr >> 12, (u64)ctx->level, 0ULL);
 #endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 	} else {
 		if (ctx->end - ctx->addr < granule)
@@ -752,7 +752,7 @@ static int hyp_unmap_walker(const struct kvm_pgtable_visit_ctx *ctx,
 #endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 		__tlbi_level(vale2is, __TLBI_VADDR(ctx->addr, 0), ctx->level);
 #if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
-	casemate_model_step_tlbi3(TLBI_vale2is, __TLBI_VADDR(ctx->addr, 0), ctx->level);
+	casemate_model_step_tlbi_va(TLBI_vale2is,ctx->addr >> 12, (u64)ctx->level, 0ULL);
 #endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 		*unmapped += granule;
 	}
@@ -767,6 +767,10 @@ static int hyp_unmap_walker(const struct kvm_pgtable_visit_ctx *ctx,
 #endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 	mm_ops->put_page(ctx->ptep);
 
+#if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
+	if (childp)
+		casemate_model_step_hint(GHOST_HINT_SET_OWNER_ROOT, hyp_virt_to_phys(childp), (u64)NULL);
+#endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 	if (childp)
 		mm_ops->put_page(childp);
 
@@ -1663,7 +1667,10 @@ static int stage2_free_walker(const struct kvm_pgtable_visit_ctx *ctx,
 		return 0;
 
 	mm_ops->put_page(ctx->ptep);
-
+#if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
+	if (kvm_pte_table(ctx->old, ctx->level))
+		casemate_model_step_hint(GHOST_HINT_SET_OWNER_ROOT, hyp_virt_to_phys(kvm_pte_follow(ctx->old, mm_ops)), (u64)NULL);
+#endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 	if (kvm_pte_table(ctx->old, ctx->level))
 		mm_ops->put_page(kvm_pte_follow(ctx->old, mm_ops));
 

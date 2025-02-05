@@ -174,7 +174,7 @@ void __kvm_tlb_flush_vmid_ipa(struct kvm_s2_mmu *mmu,
 	ipa >>= 12;
 	__tlbi_level(ipas2e1is, ipa, level);
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-	casemate_model_step_tlbi3(TLBI_ipas2e1is, ipa, level);
+	casemate_model_step_tlbi_ipa(TLBI_ipas2e1is, ipa, (u64)level);
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	/*
 	 * We have to ensure completion of the invalidation at Stage-2,
@@ -189,7 +189,7 @@ void __kvm_tlb_flush_vmid_ipa(struct kvm_s2_mmu *mmu,
 	__tlbi(vmalle1is);
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
 #ifndef CONFIG_NVHE_GHOST_SPEC_INJECT_ERROR___kvm_tlb_flush_vmid_ipa_MISSING_TLBI
-	casemate_model_step_tlbi1(TLBI_vmalle1is);
+	casemate_model_step_tlbi(TLBI_vmalle1is);
 #endif /* CONFIG_NVHE_GHOST_SPEC_INJECT_ERROR___kvm_tlb_flush_vmid_ipa_MISSING_TLBI */
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	dsb(ish);
@@ -235,7 +235,7 @@ void __kvm_tlb_flush_vmid(struct kvm_s2_mmu *mmu)
 
 	__tlbi(vmalls12e1is);
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-	casemate_model_step_tlbi1(TLBI_vmalls12e1is);
+	casemate_model_step_tlbi(TLBI_vmalls12e1is);
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	dsb(ish);
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
@@ -258,7 +258,7 @@ void __kvm_flush_cpu_context(struct kvm_s2_mmu *mmu)
 
 	__tlbi(vmalle1);
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-	casemate_model_step_tlbi1(TLBI_vmalle1);
+	casemate_model_step_tlbi(TLBI_vmalle1);
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	asm volatile("ic iallu");
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
@@ -285,7 +285,7 @@ void __kvm_flush_vm_context(void)
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	__tlbi(alle1is);
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-	casemate_model_step_tlbi1(TLBI_alle1is);
+	casemate_model_step_tlbi(TLBI_alle1is);
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 
 	/*

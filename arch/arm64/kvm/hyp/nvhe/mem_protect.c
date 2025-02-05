@@ -464,7 +464,7 @@ int __pkvm_prot_finalize(void)
 	/* Invalidate stale HCR bits that may be cached in TLBs */
 	__tlbi(vmalls12e1);
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-	casemate_model_step_tlbi1(TLBI_vmalls12e1);
+	casemate_model_step_tlbi(TLBI_vmalls12e1);
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	dsb(nsh);
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
