@@ -2,6 +2,7 @@
 /*
  * Based on arch/arm64/kvm/hyp/pgtable.c 
  */
+#include "picovm/kvm_picovm.h"
 #include <picovm/asm/errno-base.h>
 
 #include <picovm/asm/bug.h>
@@ -169,19 +170,62 @@ static u32 picovm_pgd_pages(u32 ia_bits, u32 start_level)
 	return picovm_pgd_page_idx(&pgt, -1ULL) + 1;
 }
 
+int __picovm_pgtable_hyp_init_leaf(picovm_pte_t *pgt) {
+	picovm_pte_t *curr;
+   	u32 idx;
+
+	for (idx = 0; idx < PTRS_PER_PTE; idx++) {
+		curr = &pgt[idx];
+		WRITE_ONCE(*curr, PICOVM_PHYS_INVALID);
+	}
+	return 0;
+}
+
+int __picovm_pgtable_hyp_init_tables(picovm_pte_t *pgt, u64 level) {
+	picovm_pte_t *curr, *childp;
+   	u32 idx;
+	int ret;
+	
+	if (level == PICOVM_PGTABLE_MAX_LEVELS - 1) {
+		return __picovm_pgtable_hyp_init_leaf(pgt);
+	}
+
+	for (idx = 0; idx < PTRS_PER_PTE; idx++) {
+		curr = &pgt[idx];
+		childp = (picovm_pteref_t)hyp_early_alloc_page();
+		if (!childp)
+			return -ENOMEM;
+		
+		WRITE_ONCE(*curr, hyp_virt_to_phys(childp) | PICOVM_PTE_TYPE_TABLE);
+		ret = __picovm_pgtable_hyp_init_tables(childp, level + 1);
+		if (ret)
+			return ret;
+	}
+	return 0;
+}
+
 int picovm_pgtable_hyp_init(struct picovm_pgtable *pgt, u32 va_bits)
 {
-	u64 levels = 4;
-
-	pgt->pgd = (picovm_pteref_t) hyp_early_alloc_page();
-	if (!pgt->pgd)
-		return ENOMEM;
-
+	int ret = 0;
+	u64 nr_pages;
+	
 	pgt->ia_bits		= va_bits;
-	pgt->start_level	= PICOVM_PGTABLE_MAX_LEVELS - levels;
+	pgt->start_level	= 0;
 	pgt->mmu		= NULL;
+	
+	nr_pages = picovm_pgd_pages(pgt->ia_bits, pgt->start_level);
+	pgt->pgd = (picovm_pteref_t)hyp_early_alloc_contig(nr_pages);
+	if (!pgt->pgd)
+		return -ENOMEM;
 
-	return 0;
+	for (int idx = 0; idx < nr_pages; idx++) {
+		ret = __picovm_pgtable_hyp_init_tables(&pgt->pgd[idx * PTRS_PER_PTE], pgt->start_level);
+		if (ret) {
+			return ret;
+		}
+	}
+	
+	return ret;
 }
 
 
@@ -239,7 +283,7 @@ static picovm_pte_t* _picovm_pgtable_walk(struct picovm_pgtable *pgt, u64 ia)
 	u64 *childp;
 
 	// Level 0
-	idx = picovm_pgtable_idx(ia, 0);
+	idx = picovm_pgd_page_idx(pgt, ia);
 	pte = pgt->pgd[idx];
 	if (picovm_is_pte_invalid_or_block(pte)) {
 		return NULL;
