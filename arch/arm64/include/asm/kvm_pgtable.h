@@ -53,7 +53,7 @@ type_synonym pte = kvm_pte_t
 type_synonym phys = u64
 @*/
 enum {
-  enum_KVM_PGTABLE_MIN_BLOCK_LEVEL = KVM_PGTABLE_MIN_BLOCK_LEVEL,
+	enum_KVM_PGTABLE_MIN_BLOCK_LEVEL = KVM_PGTABLE_MIN_BLOCK_LEVEL,
 };
 // --- end CN auxiliaries ------------------------------------------------------
 
@@ -61,18 +61,28 @@ enum {
 
 
 
-/*@ function (boolean) cn_pte_valid (pte pte) { bw_and_uf(pte, 1u64) == 1u64 } @*/
+/*@ 
+function (boolean) cn_pte_valid (pte pte) { 
+	bw_and_uf(pte, 1u64) == 1u64 
+} 
+@*/
 
 static inline bool kvm_pte_valid(kvm_pte_t pte)
-/*@ ensures return == (cn_pte_valid(pte) ? 1u8 : 0u8); @*/
+/*@ ensures 
+		return == (cn_pte_valid(pte) ? 1u8 : 0u8); @*/
 {
 	return pte & KVM_PTE_VALID;
 }
 
-/*@ function (phys) cn_pte_to_phys (pte pte) { bw_and_uf(pte, 0xfffffffff000u64) } @*/
+/*@ 
+function (phys) cn_pte_to_phys (pte pte) { 
+	bw_and_uf(pte, 0xfffffffff000u64) 
+} 
+@*/
 
 static inline u64 kvm_pte_to_phys(kvm_pte_t pte)
-/*@ ensures return == cn_pte_to_phys(pte); @*/
+/*@ ensures 
+		return == cn_pte_to_phys(pte); @*/
 {
 	u64 pa = pte & KVM_PTE_ADDR_MASK;
 
@@ -84,14 +94,21 @@ static inline u64 kvm_pte_to_phys(kvm_pte_t pte)
 
 
 
-/*@ function (phys) cn_phys_to_pte (pte pte) { bw_and_uf(pte, 0xfffffffff000u64) } @*/
-/*@ function (phys) kvm_phys_to_pte (pte pte) @*/
+/*@ 
+function (phys) cn_phys_to_pte (pte pte) { 
+	bw_and_uf(pte, 0xfffffffff000u64) 
+} 
+
+function (phys) kvm_phys_to_pte (pte pte) 
+@*/
 
 
 static inline kvm_pte_t kvm_phys_to_pte(u64 pa)
 /*@ cn_function kvm_phys_to_pte;
-    ensures return == cn_phys_to_pte(pa);
-            return == kvm_phys_to_pte(pa); @*/
+    ensures 
+		return == cn_phys_to_pte(pa);
+        return == kvm_phys_to_pte(pa); 
+@*/
 {
 	kvm_pte_t pte = pa & KVM_PTE_ADDR_MASK;
 
@@ -115,29 +132,48 @@ static inline kvm_pfn_t kvm_pte_to_pfn(kvm_pte_t pte)
 // 1: 30
 // 2: 21
 // 3: 12
-/*@ function (u64) cn_granule_shift(u32 level) { (u64) ((9u32 * (4u32 - level)) + 3u32) } @*/
+/*@ 
+function (u64) cn_granule_shift(u32 level) { 
+	(u64) ((9u32 * (4u32 - level)) + 3u32) 
+} 
+@*/
 
 static inline u64 kvm_granule_shift(u32 level)
-/*@ ensures return == cn_granule_shift(level); @*/
+/*@ ensures 
+		return == cn_granule_shift(level); 
+@*/
 {
 	/* Assumes KVM_PGTABLE_MAX_LEVELS is 4 */
 	return ARM64_HW_PGTABLE_LEVEL_SHIFT(level);
 }
 
-/*@ function (u64) cn_granule_size (u32 level) { shift_left(1u64, cn_granule_shift(level)) } @*/
+/*@ 
+function (u64) cn_granule_size (u32 level) { 
+	shift_left(1u64, cn_granule_shift(level)) 
+} 
+@*/
 
 static inline u64 kvm_granule_size(u32 level)
-/*@ requires valid_pgtable_level(level);
-    ensures  return == cn_granule_size(level); @*/
+/*@ requires 
+		valid_pgtable_level(level);
+    ensures  
+		return == cn_granule_size(level); 
+@*/
 {
 	return BIT(kvm_granule_shift(level));
 }
 
 
-/*@ function (boolean) cn_level_supports_block_mapping (u32 level) { level >= (u32) enum_KVM_PGTABLE_MIN_BLOCK_LEVEL } @*/
+/*@ 
+function (boolean) cn_level_supports_block_mapping (u32 level) { 
+	level >= (u32) enum_KVM_PGTABLE_MIN_BLOCK_LEVEL 
+} 
+@*/
 
 static inline bool kvm_level_supports_block_mapping(u32 level)
-/*@ ensures return == (cn_level_supports_block_mapping(level) ? 1u8 : 0u8); @*/
+/*@ ensures 
+		return == (cn_level_supports_block_mapping(level) ? 1u8 : 0u8); 
+@*/
 {
 	return level >= KVM_PGTABLE_MIN_BLOCK_LEVEL;
 }
@@ -273,9 +309,12 @@ typedef int (*kvm_pgtable_visitor_fn_t)(const struct kvm_pgtable_visit_ctx *ctx,
 					enum kvm_pgtable_walk_flags visit);
 
 static inline bool kvm_pgtable_walk_shared(const struct kvm_pgtable_visit_ctx *ctx)
-/*@ requires take Ctx = Owned(ctx); 
-    ensures  take Ctx2 = Owned(ctx); 
-             Ctx2 == Ctx; @*/
+/*@ requires 
+		take Ctx = Owned(ctx); 
+    ensures  
+		take Ctx2 = Owned(ctx); 
+        Ctx2 == Ctx; 
+@*/
 {
 	return ctx->flags & KVM_PGTABLE_WALK_SHARED;
 }
@@ -304,15 +343,20 @@ typedef kvm_pte_t *kvm_pteref_t;
 
 static inline kvm_pte_t *kvm_dereference_pteref(struct kvm_pgtable_walker *walker,
 						kvm_pteref_t pteref)
-/*@ ensures ptr_eq(return,pteref); @*/
+/*@ ensures 
+		ptr_eq(return,pteref); 
+@*/
 {
 	return pteref;
 }
 
 static inline int kvm_pgtable_walk_begin(struct kvm_pgtable_walker *walker)
-/*@ requires take W = Owned(walker); 
-    ensures  take W2 = Owned(walker); 
-             W2 == W; @*/
+/*@ requires 
+		take W = Owned(walker); 
+    ensures  
+		take W2 = Owned(walker); 
+        W2 == W; 
+@*/
 {
 	/*
 	 * Due to the lack of RCU (or a similar protection scheme), only

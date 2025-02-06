@@ -68,27 +68,25 @@ extern void hyp_get_page(void *addr);
 
 // --- mm_ops specification ----------------------------------------------------
 
-predicate (void) MM_Ops(pointer p)
-{
-  take data = Owned<struct kvm_pgtable_mm_ops>(p);
-  assert (ptr_eq(data.zalloc_page,&hyp_zalloc_hyp_page));
-  assert (ptr_eq(data.phys_to_virt,&hyp_phys_to_virt));
-  assert (ptr_eq(data.virt_to_phys,&hyp_virt_to_phys));
-  assert (ptr_eq(data.get_page,&hyp_get_page));
-  return;
+predicate (void) MM_Ops(pointer p) {
+	take data = Owned<struct kvm_pgtable_mm_ops>(p);
+	assert (ptr_eq(data.zalloc_page,&hyp_zalloc_hyp_page));
+	assert (ptr_eq(data.phys_to_virt,&hyp_phys_to_virt));
+	assert (ptr_eq(data.virt_to_phys,&hyp_virt_to_phys));
+	assert (ptr_eq(data.get_page,&hyp_get_page));
+	return;
 }
 
 datatype possible_mm_ops {
-  No_MM_Ops {},
-  Has_MM_Ops {pointer mm_ops}
+	No_MM_Ops {},
+	Has_MM_Ops {pointer mm_ops}
 }
 
-function (boolean) possible_mm_ops_agree (possible_mm_ops o, pointer m)
-{
-  match o {
-    No_MM_Ops {} => {true}
-    Has_MM_Ops {mm_ops: m2} => {ptr_eq (m,m2)}
-  }
+function (boolean) possible_mm_ops_agree (possible_mm_ops o, pointer m) {
+	match o {
+		No_MM_Ops {} => {true}
+		Has_MM_Ops {mm_ops: m2} => {ptr_eq (m,m2)}
+	}
 }
 @*/
 
@@ -143,70 +141,62 @@ function (boolean) possible_mm_ops_agree (possible_mm_ops o, pointer m)
 /*@
 @*/
 enum {
-  enum_PTRS_PER_PTE = PTRS_PER_PTE,
-  enum_EAGAIN = EAGAIN,
-  enum_KVM_PGTABLE_MAX_LEVELS = KVM_PGTABLE_MAX_LEVELS,
-  enum_ENOMEM = ENOMEM,
-  enum_PAGE_SIZE = PAGE_SIZE
-
+	enum_PTRS_PER_PTE = PTRS_PER_PTE,
+	enum_EAGAIN = EAGAIN,
+	enum_KVM_PGTABLE_MAX_LEVELS = KVM_PGTABLE_MAX_LEVELS,
+	enum_ENOMEM = ENOMEM,
+	enum_PAGE_SIZE = PAGE_SIZE
 //  enum_KVM_PTE_LEAF_ATTR_LO = KVM_PTE_LEAF_ATTR_LO,
 //  enum_KVM_PTE_LEAF_ATTR_HI = KVM_PTE_LEAF_ATTR_HI,
 //  enum_KVM_PTE_VALID = KVM_PTE_VALID
 };
 /*@
 
-function (u64) KVM_PTE_LEAF_ATTR_LO ()
-{
-  0b11111111110u64
+function (u64) KVM_PTE_LEAF_ATTR_LO () {
+	0b11111111110u64
 }
 
-function (u64) KVM_PTE_LEAF_ATTR_HI ()
-{
-  shift_left(0b1111111111111u64,51u64)
+function (u64) KVM_PTE_LEAF_ATTR_HI () {
+	shift_left(0b1111111111111u64,51u64)
 }
 
-function (u64) KVM_PTE_VALID ()
-{
-  0b1u64
+function (u64) KVM_PTE_VALID () {
+	0b1u64
 }
 
-function (u64) KVM_PTE_LEAF_ATTR_HI_SW ()
-{
-  shift_left(0b1111u64,55u64)
+function (u64) KVM_PTE_LEAF_ATTR_HI_SW () {
+	shift_left(0b1111u64,55u64)
 }
 
 
 // Looking at BS thesis section 7.3.1
 
 datatype packed_table {
-  PackedTable { integer table }
+	PackedTable { integer table }
 }
 
 datatype info {
-  I_Invalid {},
-  I_Block_or_page {
-    //u64 output_address, // actual size depending on level
-    // boolean is_page // bit 1
-    // u16 upper_attrs, // actually 14 bits
-    // u16 lower_attrs, // actually 10 bits
-  },
-  I_Table {
-    packed_table table
-    // u16 attrs, // actually 14 bits
-  }
+	I_Invalid {},
+	I_Block_or_page {
+		//u64 output_address, // actual size depending on level
+		// boolean is_page // bit 1
+		// u16 upper_attrs, // actually 14 bits
+		// u16 lower_attrs, // actually 10 bits
+	},
+	I_Table {
+		packed_table table
+		// u16 attrs, // actually 14 bits
+	}
 }
 
 type_synonym entry = {
-    u64 code,
-    info info
+	u64 code,
+	info info
 }
-
-
 
 // datatype table {
 //   Table { map<u64, entry> entries }
 // }
-
 
 type_synonym table = map<u64, entry>
 
@@ -218,180 +208,145 @@ function (table) unpack_table (packed_table t)
 
 
 lemma table_packing (table t)
-  requires true;
-  ensures unpack_table(pack_table(t)) == t;
+	requires 
+		true;
+	ensures 
+		unpack_table(pack_table(t)) == t;
 
 @*/
 void table_packing_ (kvm_pte_t *p, u32 level)
 /*@ trusted;
-    requires take ptes = PageTable(p, level);
-    ensures  take ptes2 = PageTable(p, level);
-             ptes == ptes2;
-             unpack_table(pack_table(ptes)) == ptes;
+	requires 
+		take ptes = PageTable(p, level);
+	ensures  
+		take ptes2 = PageTable(p, level);
+		ptes == ptes2;
+		unpack_table(pack_table(ptes)) == ptes;
 @*/
 {}
-
 /*@
 
 function (boolean) is_table (info i) {
-  match i {
-    I_Table { table: _ } => { true }
-    I_Block_or_page { } => { false }
-    I_Invalid {} => { false }
-  }
+	match i {
+		I_Table { table: _ } => { true }
+		I_Block_or_page { } => { false }
+		I_Invalid {} => { false }
+	}
 }
 
 // assumption: is_table(i)
 function (table) get_table (info i) {
-  match i {
-    I_Table { table: packed_table } => { unpack_table (packed_table) }
-    I_Block_or_page {} => { default <table> }
-    I_Invalid {} => { default <table> }
-  }
+	match i {
+		I_Table { table: packed_table } => { unpack_table (packed_table) }
+		I_Block_or_page {} => { default <table> }
+		I_Invalid {} => { default <table> }
+	}
 }
-
-
 
 
 
 // constraints on level, see arch/arm64/include/asm/pgtable-hwdef.h
 
-function (u32) max_level ()
-{
-  (u32) enum_KVM_PGTABLE_MAX_LEVELS - 1u32
+function (u32) max_level () {
+	(u32) enum_KVM_PGTABLE_MAX_LEVELS - 1u32
 }
 
 // copying part of kvm_pte_table
-function (boolean) is_max_level (u32 level)
-{
-  level == max_level ()
+function (boolean) is_max_level (u32 level) {
+	level == max_level ()
 }
 
-
-function (boolean) is_page_or_table_type (kvm_pte_t pte)
-{
-  (pte & 0x2u64) == 0x2u64
+function (boolean) is_page_or_table_type (kvm_pte_t pte) {
+	(pte & 0x2u64) == 0x2u64
 }
 
-
-function (boolean) valid_pgtable_level (u32 level)
-{
-  0u32 <= level && level <= 3u32
+function (boolean) valid_pgtable_level (u32 level) {
+	0u32 <= level && level <= 3u32
 }
 
-
-
-function (boolean) cn_pte_table (kvm_pte_t pte, u32 level)
-{
-  cn_pte_valid(pte)
-  && is_page_or_table_type(pte)
-  && !is_max_level(level)
+function (boolean) cn_pte_table (kvm_pte_t pte, u32 level) {
+	cn_pte_valid(pte)
+	&& is_page_or_table_type(pte)
+	&& !is_max_level(level)
 }
-
 
 // - note about level: in this ARM pgtable, the page & table encodings are
 //   shared, and entries at the final level are automatically not tables
 
-
-function (pointer) decode_table_entry_pointer (u64 encoded)
-{
-  hyp_phys_to_virt (cn_pte_to_phys (encoded))
+function (pointer) decode_table_entry_pointer (u64 encoded) {
+	hyp_phys_to_virt (cn_pte_to_phys (encoded))
 }
 
-function (u64) align_down_u64 (u64 x, u64 n)
-{
-  shift_left (shift_right (x, n), n)
+function (u64) align_down_u64 (u64 x, u64 n) {
+	shift_left (shift_right (x, n), n)
 }
 
-function (u64) align_up_u64 (u64 x, u64 n)
-{
-  align_down_u64(x, n) + shift_left(1u64, n)
+function (u64) align_up_u64 (u64 x, u64 n) {
+	align_down_u64(x, n) + shift_left(1u64, n)
 }
 
-function (boolean) aligned_u64 (u64 x, u64 n)
-{
-  align_down_u64 (x, n) == x
+function (boolean) aligned_u64 (u64 x, u64 n) {
+	align_down_u64 (x, n) == x
 }
 
-function (u32) pgd_extra_bits(u32 ia_bits, u32 start_level)
-{
-  let levels = 4u32 - start_level;
-  let bits_covered = levels * 9u32 + 12u32;
-  let bits_missing = (ia_bits <= bits_covered) ? 0u32 : (ia_bits - bits_covered);
-  bits_missing
+function (u32) pgd_extra_bits(u32 ia_bits, u32 start_level) {
+	let levels = 4u32 - start_level;
+	let bits_covered = levels * 9u32 + 12u32;
+	let bits_missing = (ia_bits <= bits_covered) ? 0u32 : (ia_bits - bits_covered);
+	bits_missing
 }
-
 
 // see struct kvm_pgtable defn in arch/arm64/include/asm/kvm_pgtable.h
 
-
-predicate (entry) PageTableEntry(pointer p, u32 level)
-{
-   take code = Owned<kvm_pte_t>(p);
-   take info = PageTableEntrySubtable(p,level,code);
-   return { code: code, info: info };
+predicate (entry) PageTableEntry(pointer p, u32 level) {
+	take code = Owned<kvm_pte_t>(p);
+	take info = PageTableEntrySubtable(p,level,code);
+	return { code: code, info: info };
 }
 
-
-predicate (info) PageTableEntrySubtable(pointer unused_p, u32 level, u64 pte)
-{
-  if (cn_pte_table(pte,level)) {
-      // assert (valid_pgtable_level(level));
-      // assert (good<kvm_pte_t *>(decode_table_entry_pointer (encoded)));
-      let table_pointer = decode_table_entry_pointer (pte);
-      take table = PageTable(table_pointer, level + 1u32);
-      return I_Table { table: pack_table(table) };
-  }
-  else {
-    let is_valid = cn_pte_valid(pte);
-    let is_page_type = is_page_or_table_type(pte);
-    let is_block = is_valid && !is_page_type;
-//    assert (is_block implies (cn_level_supports_block_mapping(level))); // TODO: maybe more
-    let info = 
-      if (!is_valid) { I_Invalid {} }
-      else { I_Block_or_page { } }
-    ;
-    return info;
-  }
+predicate (info) PageTableEntrySubtable(pointer unused_p, u32 level, u64 pte) {
+	if (cn_pte_table(pte,level)) {
+		// assert (valid_pgtable_level(level));
+		// assert (good<kvm_pte_t *>(decode_table_entry_pointer (encoded)));
+		let table_pointer = decode_table_entry_pointer (pte);
+		take table = PageTable(table_pointer, level + 1u32);
+		return I_Table { table: pack_table(table) };
+	}
+	else {
+		let is_valid = cn_pte_valid(pte);
+		let is_page_type = is_page_or_table_type(pte);
+		let is_block = is_valid && !is_page_type;
+		// assert (is_block implies (cn_level_supports_block_mapping(level))); // TODO: maybe more
+		let info = 
+			if (!is_valid) { I_Invalid {} }
+			else { I_Block_or_page { } }
+		;
+		return info;
+	}
 }
 
-
-
-
-predicate table PageTable(pointer base, u32 level)
-{
-  take entries = each (u64 i; 0u64 <= i && i < 512u64)
-                      {PageTableEntry(array_shift<kvm_pte_t>(base, i), level)};
-  //return Table { entries: entries };
-  return entries;
+predicate table PageTable(pointer base, u32 level) {
+	take entries = each (u64 i; 0u64 <= i && i < 512u64) {
+		PageTableEntry(array_shift<kvm_pte_t>(base, i), level)
+	};
+	//return Table { entries: entries };
+	return entries;
 }
 
-predicate {struct kvm_pgtable data, map<u64,table> tables} PageDirectory (pointer p)
-{
-  take Data = Owned<struct kvm_pgtable>(p);
-  let extra_bits = pgd_extra_bits(Data.ia_bits, Data.start_level);
+predicate {struct kvm_pgtable data, map<u64,table> tables} PageDirectory (pointer p) {
+	take Data = Owned<struct kvm_pgtable>(p);
+	let extra_bits = pgd_extra_bits(Data.ia_bits, Data.start_level);	
+	assert (39u32 <= Data.ia_bits && Data.ia_bits <= 48u32);
+	assert (0u32 <= extra_bits && extra_bits <= 4u32);
+	// assert (aligned_u64 ((u64) Data.pgd, 12u64 + ((u64) extra_bits)));
+	assert (valid_pgtable_level(Data.start_level));	
+	take tables = each (u64 i; 0u64 <= i && i < (u64) shift_left(1u32,extra_bits)) {
+		PageTable(array_shift<kvm_pte_t[enum_PTRS_PER_PTE]>(Data.pgd, i), Data.start_level)
+	};
 
-  assert (39u32 <= Data.ia_bits && Data.ia_bits <= 48u32);
-  assert (0u32 <= extra_bits && extra_bits <= 4u32);
-  // assert (aligned_u64 ((u64) Data.pgd, 12u64 + ((u64) extra_bits)));
-  assert (valid_pgtable_level(Data.start_level));
-
-  take tables = each (u64 i; 0u64 <= i && i < (u64) shift_left(1u32,extra_bits))
-                     {PageTable(array_shift<kvm_pte_t[enum_PTRS_PER_PTE]>(Data.pgd, i), Data.start_level)};
-
-  //return {extra_bits: extra_bits, data: Data};
-  return {data: Data, tables: tables};
+	//return {extra_bits: extra_bits, data: Data};
+	return {data: Data, tables: tables};
 }
-
-
-
-
-
-
-
-
-
-
 @*/
 
 
@@ -414,40 +369,55 @@ struct hyp_map_data {
 
 // --- parameterisation of page-table walker -----------------------------------
 
-predicate {u32 flags, pointer arg, struct hyp_map_data data} KVM_PgTable_Walker (pointer p)
-{
-  take D = Owned<struct kvm_pgtable_walker>(p);
-  take X = Hyp_Walker_Cases (D.cb, D.arg, D.flags);
-  return {flags: D.flags, arg: D.arg, data: X};
+predicate {u32 flags, pointer arg, struct hyp_map_data data} KVM_PgTable_Walker (pointer p) {
+	take D = Owned<struct kvm_pgtable_walker>(p);
+	take X = Hyp_Walker_Cases (D.cb, D.arg, D.flags);
+	return {flags: D.flags, arg: D.arg, data: X};
 }
 
-predicate {u64 start, u64 addr, u64 end, u64 size, {pointer walker, pointer arg} walker, u32 flags, struct hyp_map_data data}
-    KVM_PgTable_Walk_Data (pointer p)
-{
-  take D = Owned<struct kvm_pgtable_walk_data>(p);
-  take Walker = KVM_PgTable_Walker(D.walker);
-  let walker = {walker: D.walker, arg: Walker.arg};
+type_synonym KVM_PgTable_Walk_Data_output = {
+	u64 start, 
+	u64 addr, 
+	u64 end, 
+	u64 size, 
+	{pointer walker, pointer arg} walker, 
+	u32 flags, 
+	struct hyp_map_data data
+}
 
-  let start = D.start;
-  let addr = D.addr;
-  let end = D.end;
-  let size = end - start;
+predicate KVM_PgTable_Walk_Data_output KVM_PgTable_Walk_Data (pointer p) {
+	take D = Owned<struct kvm_pgtable_walk_data>(p);
+	take Walker = KVM_PgTable_Walker(D.walker);
+	let walker = {walker: D.walker, arg: Walker.arg};
 
-  assert(start <= addr);
-  assert(start <= end);
-  assert(size <= cn_granule_size(0u32)); // at least
+	let start = D.start;
+	let addr = D.addr;
+	let end = D.end;
+	let size = end - start;
 
-  assert(aligned_u64(start, 12u64));
-  assert(aligned_u64(addr, 12u64));
-  assert(aligned_u64(end, 12u64));
+	assert(start <= addr);
+	assert(start <= end);
+	assert(size <= cn_granule_size(0u32)); // at least
 
-  let phys = Walker.data.phys;
-  let max_phys = phys + size - 1u64;
-  assert(phys < max_phys);
-  assert(cn_phys_is_valid(max_phys));
-  assert(aligned_u64(phys, 12u64));
-                          
-  return {start: start, addr: addr, end: end, size: size, walker: walker, flags: Walker.flags, data: Walker.data};
+	assert(aligned_u64(start, 12u64));
+	assert(aligned_u64(addr, 12u64));
+	assert(aligned_u64(end, 12u64));
+
+	let phys = Walker.data.phys;
+	let max_phys = phys + size - 1u64;
+	assert(phys < max_phys);
+	assert(cn_phys_is_valid(max_phys));
+	assert(aligned_u64(phys, 12u64));
+						  
+  	return {
+		start: start, 
+		addr: addr, 
+		end: end, 
+		size: size, 
+		walker: walker, 
+		flags: Walker.flags, 
+		data: Walker.data
+	};
 }
 @*/
 
@@ -459,7 +429,8 @@ predicate {u64 start, u64 addr, u64 end, u64 size, {pointer walker, pointer arg}
 /*@ function (boolean) cn_phys_is_valid(u64 phys) { phys < 0x1000000000000u64 } @*/
 
 static bool kvm_phys_is_valid(u64 phys)
-/*@ ensures return == (cn_phys_is_valid(phys) ? 1u8 : 0u8);
+/*@ ensures 
+		return == (cn_phys_is_valid(phys) ? 1u8 : 0u8);
 @*/
 {
 	return phys < BIT(id_aa64mmfr0_parange_to_phys_shift(ID_AA64MMFR0_EL1_PARANGE_MAX));
@@ -469,20 +440,21 @@ static bool kvm_phys_is_valid(u64 phys)
 /*@
 function (boolean) cn_block_mapping_supported(u64 addr, u64 end, u64 phys, u32 level)
 {
-  cn_level_supports_block_mapping(level)
-  && (! (cn_granule_size(level) > (end - addr)))
-  && (! (cn_phys_is_valid(phys) && (! aligned_u64(phys, cn_granule_shift(level)))))
-  && aligned_u64(addr, cn_granule_shift(level))
+	cn_level_supports_block_mapping(level)
+	&& (! (cn_granule_size(level) > (end - addr)))
+	&& (! (cn_phys_is_valid(phys) && (! aligned_u64(phys, cn_granule_shift(level)))))
+	&& aligned_u64(addr, cn_granule_shift(level))
 }
 @*/
 
 static bool kvm_block_mapping_supported(const struct kvm_pgtable_visit_ctx *ctx, u64 phys)
-/*@ requires take Ctx = Owned(ctx);
-             valid_pgtable_level(Ctx.level);
-    ensures  take Ctx2 = Owned(ctx);
-             Ctx2 == Ctx;
-             return == (cn_block_mapping_supported(Ctx.addr, Ctx.end, phys, Ctx.level)
-                        ? 1u8 : 0u8);
+/*@ requires 
+		take Ctx = Owned(ctx);
+		valid_pgtable_level(Ctx.level);
+	ensures 
+		take Ctx2 = Owned(ctx);
+		Ctx2 == Ctx;
+		return == (cn_block_mapping_supported(Ctx.addr, Ctx.end, phys, Ctx.level) ? 1u8 : 0u8);
 @*/
 {
 	u64 granule = kvm_granule_size(ctx->level);
@@ -501,19 +473,20 @@ static bool kvm_block_mapping_supported(const struct kvm_pgtable_visit_ctx *ctx,
 
 
 /*@
-function (u32) purekvm_pgtable_idx(u64 addr, u32 level)
-{
-  (u32) (bw_and_uf((u64) ((u32) shift_right (addr, cn_granule_shift(level))), 511u64))
+function (u32) purekvm_pgtable_idx(u64 addr, u32 level) {
+	(u32) (bw_and_uf((u64) ((u32) shift_right (addr, cn_granule_shift(level))), 511u64))
 }
 @*/
 
 static u32 kvm_pgtable_idx(struct kvm_pgtable_walk_data *data, u32 level)
-/*@ requires take Data = Owned (data);
-             valid_pgtable_level(level);
-    ensures  take Data2 = Owned (data);
-             0u32 <= return && return < shift_left(1u32, 12u32 - 3u32);
-             Data2 == Data;
-             return == purekvm_pgtable_idx(Data.addr, level);
+/*@ requires 
+		take Data = Owned (data);
+		valid_pgtable_level(level);
+	ensures 
+		take Data2 = Owned (data);
+		0u32 <= return && return < shift_left(1u32, 12u32 - 3u32);
+		Data2 == Data;
+		return == purekvm_pgtable_idx(Data.addr, level);
 @*/
 {
 	u64 shift = kvm_granule_shift(level);
@@ -525,23 +498,26 @@ static u32 kvm_pgtable_idx(struct kvm_pgtable_walk_data *data, u32 level)
 /*@
 function (u32) pure__kvm_pgd_page_idx(u32 ia_bits, u32 start_level, u64 addr)
 {
-  (u32) shift_right (
-    bw_and_uf(addr, (shift_left(1u64, (u64)(ia_bits))) - 1u64),
-    cn_granule_shift(start_level - 1u32)
-  )
+	(u32) shift_right (
+		bw_and_uf(addr, (shift_left(1u64, (u64)(ia_bits))) - 1u64),
+		cn_granule_shift(start_level - 1u32)
+	)
 }
 @*/
 
 static u32 kvm_pgd_page_idx(struct kvm_pgtable *pgt, u64 addr)
-/*@ requires take PTStruct = Owned<struct kvm_pgtable>(pgt);
-             ((0u32 < PTStruct.ia_bits) && (PTStruct.ia_bits < 64u32));
-             valid_pgtable_level(PTStruct.start_level);
-             let extra_bits = pgd_extra_bits(PTStruct.ia_bits, PTStruct.start_level);
-             0u32 <= extra_bits; extra_bits <= 4u32;
-    ensures  shift_right(return, extra_bits) == 0u32;
-             take PTStruct2 = Owned<struct kvm_pgtable>(pgt);
-             PTStruct2 == PTStruct;
-             return == pure__kvm_pgd_page_idx(PTStruct.ia_bits, PTStruct.start_level, addr); @*/
+/*@ requires 
+		take PTStruct = Owned<struct kvm_pgtable>(pgt);
+		((0u32 < PTStruct.ia_bits) && (PTStruct.ia_bits < 64u32));
+		valid_pgtable_level(PTStruct.start_level);
+		let extra_bits = pgd_extra_bits(PTStruct.ia_bits, PTStruct.start_level);
+		0u32 <= extra_bits; extra_bits <= 4u32;
+	ensures 
+		shift_right(return, extra_bits) == 0u32;
+		take PTStruct2 = Owned<struct kvm_pgtable>(pgt);
+		PTStruct2 == PTStruct;
+		return == pure__kvm_pgd_page_idx(PTStruct.ia_bits, PTStruct.start_level, addr); 
+@*/
 {
 	u64 shift = kvm_granule_shift(pgt->start_level - 1); /* May underflow */
 	u64 mask = BIT(pgt->ia_bits) - 1;
@@ -565,67 +541,52 @@ static u32 kvm_pgd_page_idx(struct kvm_pgtable *pgt, u64 addr)
 // linux@pkvm-verif-6.4, and pgtable.c C functions
 
 datatype translation_outcome {
-  Success { 
-    u64 phys 
-    // to be extended with permissions
-  },
-  Invalid {
-    u64 code
-  }
+	Success { 
+		u64 phys 
+		// to be extended with permissions
+	},
+	Invalid {
+		u64 code
+	}
 }
 
 // transcribing GENMASK from  linux/include/linux/bits.h
-function (u64) GENMASK(u64 h, u64 l)
-{
-  (~0u64 - shift_left(1u64, l) + 1u64)
-  & (shift_right (~0u64, 64u64 - 1u64 - h) )
+function (u64) GENMASK(u64 h, u64 l) {
+	(~0u64 - shift_left(1u64, l) + 1u64)
+	& (shift_right (~0u64, 64u64 - 1u64 - h) )
 }
 
-
-
-function [rec] (translation_outcome) pgtable_walk(u64 virt, u32 level, table table)
-{
-  //let entries = match table { Table { entries: entries } => { entries } };
-  let entries = table;
-  let entry = entries[(u64) purekvm_pgtable_idx(virt, level)];
-  pgtable_walk_entry(virt, level, entry)
+function [rec] (translation_outcome) pgtable_walk(u64 virt, u32 level, table table) {
+	//let entries = match table { Table { entries: entries } => { entries } };
+	let entries = table;
+	let entry = entries[(u64) purekvm_pgtable_idx(virt, level)];
+	pgtable_walk_entry(virt, level, entry)
 }
 
-function [rec] (translation_outcome) pgtable_walk_entry (u64 virt, u32 level, entry entry)
-{
-  match (entry.info) {
-    I_Invalid {} => { 
-      Invalid { code: entry.code } 
-    }
-    I_Block_or_page {} => {
-      let oa = entry.code & GENMASK(47u64, cn_granule_shift(level));
-      let page_offset = virt & GENMASK(cn_granule_shift(level) - 1u64,0u64); 
-      Success { phys: oa | page_offset }
-    }
-    I_Table { table: packed_table } => {
-      let next_table = unpack_table(packed_table);
-      pgtable_walk(virt, level+1u32, next_table)
-    }
-  }
+function [rec] (translation_outcome) pgtable_walk_entry (u64 virt, u32 level, entry entry) {
+	match (entry.info) {
+		I_Invalid {} => { 
+			Invalid { code: entry.code } 
+		}
+		I_Block_or_page {} => {
+			let oa = entry.code & GENMASK(47u64, cn_granule_shift(level));
+			let page_offset = virt & GENMASK(cn_granule_shift(level) - 1u64,0u64); 
+			Success { phys: oa | page_offset }
+		}
+		I_Table { table: packed_table } => {
+			let next_table = unpack_table(packed_table);
+			pgtable_walk(virt, level+1u32, next_table)
+		}
+	}
 }
 
-
-
-function (translation_outcome) pgdirectory_walk(u32 ia_bits, u64 virt, u32 level, directory directory)
-{
-  let idx = (u64) pure__kvm_pgd_page_idx(ia_bits, level, virt);
-  pgtable_walk(virt, level, directory[idx])
+function (translation_outcome) pgdirectory_walk(u32 ia_bits, u64 virt, u32 level, directory directory) {
+	let idx = (u64) pure__kvm_pgd_page_idx(ia_bits, level, virt);
+	pgtable_walk(virt, level, directory[idx])
 }
 
 
 @*/
-
-
-
-
-
-
-
 
 
 static u32 kvm_pgd_pages(u32 ia_bits, u32 start_level)
@@ -639,8 +600,11 @@ static u32 kvm_pgd_pages(u32 ia_bits, u32 start_level)
 }
 
 static bool kvm_pte_table(kvm_pte_t pte, u32 level)
-/*@ requires valid_pgtable_level(level);
-    ensures  return == (cn_pte_table(pte, level) ? 1u8 : 0u8); @*/
+/*@ requires 
+		valid_pgtable_level(level);
+	ensures 
+		return == (cn_pte_table(pte, level) ? 1u8 : 0u8); 
+@*/
 {
 	if (level == KVM_PGTABLE_MAX_LEVELS - 1)
 		return false;
@@ -653,10 +617,13 @@ static bool kvm_pte_table(kvm_pte_t pte, u32 level)
 }
 
 static kvm_pte_t *kvm_pte_follow(kvm_pte_t pte, struct kvm_pgtable_mm_ops *mm_ops)
-/*@ requires good<kvm_pte_t *>(decode_table_entry_pointer (pte));
-    requires take Ops = MM_Ops(mm_ops);
-    ensures  take Ops2 = MM_Ops(mm_ops);
-             ptr_eq (return,decode_table_entry_pointer (pte)); @*/
+/*@ requires 
+		good<kvm_pte_t *>(decode_table_entry_pointer (pte));
+		take Ops = MM_Ops(mm_ops);
+	ensures 
+		take Ops2 = MM_Ops(mm_ops);
+		ptr_eq (return,decode_table_entry_pointer (pte)); 
+@*/
 {
 	return mm_ops->phys_to_virt(kvm_pte_to_phys(pte));
 }
@@ -667,12 +634,15 @@ static void kvm_clear_pte(kvm_pte_t *ptep)
 }
 
 static kvm_pte_t kvm_init_table_pte(kvm_pte_t *childp, struct kvm_pgtable_mm_ops *mm_ops)
-/*@ requires take Ops = MM_Ops(mm_ops);
-             valid_phys_virt_offset ();
-             valid_hyp_virt_page(childp);
-    ensures  take Ops2 = MM_Ops(mm_ops);
-             cn_pte_valid(return) && is_page_or_table_type(return);
-             addr_eq(decode_table_entry_pointer(return),childp); @*/
+/*@ requires 
+		take Ops = MM_Ops(mm_ops);
+		valid_phys_virt_offset ();
+		valid_hyp_virt_page(childp);
+	ensures 
+		take Ops2 = MM_Ops(mm_ops);
+		cn_pte_valid(return) && is_page_or_table_type(return);
+		addr_eq(decode_table_entry_pointer(return),childp); 
+@*/
 {
 	kvm_pte_t pte = kvm_phys_to_pte(mm_ops->virt_to_phys(childp));
 
@@ -689,12 +659,14 @@ static kvm_pte_t kvm_init_table_pte(kvm_pte_t *childp, struct kvm_pgtable_mm_ops
 
 static kvm_pte_t kvm_init_valid_leaf_pte(u64 pa, kvm_pte_t attr, u32 level)
 /*@ cn_function kvm_init_valid_leaf_pte;
-    requires valid_pgtable_level(level);
-    ensures return == kvm_init_valid_leaf_pte(pa, attr, level);
+	requires 
+		valid_pgtable_level(level);
+	ensures 
+		return == kvm_init_valid_leaf_pte(pa, attr, level);
 
-            cn_pte_valid(return);
-            cn_pte_to_phys(return) == cn_pte_to_phys(cn_phys_to_pte(pa));
-            is_page_or_table_type(return) == is_max_level(level);
+		cn_pte_valid(return);
+		cn_pte_to_phys(return) == cn_pte_to_phys(cn_phys_to_pte(pa));
+		is_page_or_table_type(return) == is_max_level(level);
 @*/
 {
 	kvm_pte_t pte = kvm_phys_to_pte(pa);
@@ -714,61 +686,64 @@ static kvm_pte_t kvm_init_invalid_leaf_owner(u8 owner_id)
 }
 
 /*@
-function (boolean) flag_in_flags (i32 flag, i32 flags)
-{
-  (flag == KVM_PGTABLE_WALK_LEAF
-        || flag == KVM_PGTABLE_WALK_TABLE_PRE
-        || flag == KVM_PGTABLE_WALK_TABLE_POST)
-  && (flag == KVM_PGTABLE_WALK_LEAF
-      ? bw_and_uf (flags, KVM_PGTABLE_WALK_LEAF) != 0i32
-      : true)
-  && (flag == KVM_PGTABLE_WALK_TABLE_PRE
-      ? bw_and_uf (flags, KVM_PGTABLE_WALK_TABLE_PRE) != 0i32
-      : true)
-  && (flag == KVM_PGTABLE_WALK_TABLE_POST
-      ? bw_and_uf (flags, KVM_PGTABLE_WALK_TABLE_POST) != 0i32
-      : true)
+function (boolean) flag_in_flags (i32 flag, i32 flags) {
+	(flag == KVM_PGTABLE_WALK_LEAF
+		|| flag == KVM_PGTABLE_WALK_TABLE_PRE
+		|| flag == KVM_PGTABLE_WALK_TABLE_POST)
+	&& (flag == KVM_PGTABLE_WALK_LEAF
+		? bw_and_uf (flags, KVM_PGTABLE_WALK_LEAF) != 0i32
+		: true)
+	&& (flag == KVM_PGTABLE_WALK_TABLE_PRE
+		? bw_and_uf (flags, KVM_PGTABLE_WALK_TABLE_PRE) != 0i32
+		: true)
+	&& (flag == KVM_PGTABLE_WALK_TABLE_POST
+		? bw_and_uf (flags, KVM_PGTABLE_WALK_TABLE_POST) != 0i32
+		: true)
 }
 @*/
 
 static int kvm_pgtable_visitor_cb(struct kvm_pgtable_walk_data *data,
 				  const struct kvm_pgtable_visit_ctx *ctx,
 				  enum kvm_pgtable_walk_flags visit)
-/*@ requires take Data = KVM_PgTable_Walk_Data(data);
-             take Ctx = Owned(ctx);
-             valid_pgtable_level(Ctx.level);
-             valid_phys_virt_offset ();
-             take pte = PageTableEntry(Ctx.ptep, Ctx.level);
-             take Ops = MM_Ops(Ctx.mm_ops);
-             Ctx.addr < Ctx.end;
-             flag_in_flags ((i32) visit, (i32) (Data.flags));
-             (visit == (u32)KVM_PGTABLE_WALK_LEAF) == (!(cn_pte_table(pte.code, Ctx.level)));
-             ptr_eq(Ctx.arg,Data.walker.arg);
-             Ctx.old == pte.code;
+/*@ requires 
+		take Data = KVM_PgTable_Walk_Data(data);
+		take Ctx = Owned(ctx);
+		valid_pgtable_level(Ctx.level);
+		valid_phys_virt_offset ();
+		take pte = PageTableEntry(Ctx.ptep, Ctx.level);
+		take Ops = MM_Ops(Ctx.mm_ops);
+		Ctx.addr < Ctx.end;
+		flag_in_flags ((i32) visit, (i32) (Data.flags));
+		(visit == (u32)KVM_PGTABLE_WALK_LEAF) == (!(cn_pte_table(pte.code, Ctx.level)));
+		ptr_eq(Ctx.arg,Data.walker.arg);
+		Ctx.old == pte.code;
 
-             let phys = Data.data.phys+Ctx.addr - Ctx.start;
-             let block_mapping_supported = cn_block_mapping_supported(Ctx.addr, Ctx.end, phys, Ctx.level);
-             // overapproximating range+alignment conditions from cn_block_mapping_supported
-             aligned_u64(phys, cn_granule_shift(max_level ()));
-             aligned_u64(Ctx.addr, cn_granule_shift(max_level ()));
-             aligned_u64(Ctx.end, cn_granule_shift(max_level ()));
-             let possible_new_leaf = kvm_init_valid_leaf_pte(phys, Data.data.attr, Ctx.level);
-             !cn_pte_valid(pte.code); // TODO: relax this slightly
-    ensures  take Data2 = KVM_PgTable_Walk_Data (data);
-             Data2 == Data;
-             take Ctx2 = Owned(ctx);
-             Ctx2 == Ctx;
-             take pte2 = PageTableEntry(Ctx.ptep, Ctx.level);
-             take Ops2 = MM_Ops(Ctx.mm_ops);
-             Ops2 == Ops;
-             visit == ((u32)KVM_PGTABLE_WALK_TABLE_PRE) ? pte2 == pte : true; 
+		let phys = Data.data.phys+Ctx.addr - Ctx.start;
+		let block_mapping_supported = cn_block_mapping_supported(Ctx.addr, Ctx.end, phys, Ctx.level);
+		// overapproximating range+alignment conditions from cn_block_mapping_supported
+		aligned_u64(phys, cn_granule_shift(max_level ()));
+		aligned_u64(Ctx.addr, cn_granule_shift(max_level ()));
+		aligned_u64(Ctx.end, cn_granule_shift(max_level ()));
+		let possible_new_leaf = kvm_init_valid_leaf_pte(phys, Data.data.attr, Ctx.level);
+		!cn_pte_valid(pte.code); // TODO: relax this slightly
+	ensures 
+		take Data2 = KVM_PgTable_Walk_Data (data);
+		Data2 == Data;
+		take Ctx2 = Owned(ctx);
+		Ctx2 == Ctx;
+		take pte2 = PageTableEntry(Ctx.ptep, Ctx.level);
+		take Ops2 = MM_Ops(Ctx.mm_ops);
+		Ops2 == Ops;
+		visit == ((u32)KVM_PGTABLE_WALK_TABLE_PRE) ? pte2 == pte : true; 
 
-             let progress = 
-               if (block_mapping_supported) { pte2.code == possible_new_leaf }
-               else { is_table(pte2.info) }
-             ;
-             (return == 0i32 && progress) || (return == -enum_ENOMEM && pte2 == pte);
-             each (u64 i; 0u64 <= i && i < 512u64) { cn_pte_table(pte2.code,Ctx.level) implies !(cn_pte_valid((get_table(pte2.info)[i]).code)) }; // should go under `progress`, but CN doesn't allow nested `forall`
+		let progress = 
+		  if (block_mapping_supported) { pte2.code == possible_new_leaf }
+		  else { is_table(pte2.info) }
+		;
+		(return == 0i32 && progress) || (return == -enum_ENOMEM && pte2 == pte);
+		each (u64 i; 0u64 <= i && i < 512u64) { 
+			cn_pte_table(pte2.code,Ctx.level) implies !(cn_pte_valid((get_table(pte2.info)[i]).code)) 
+		}; // should go under `progress`, but CN doesn't allow nested `forall`
 @*/
 {
 	struct kvm_pgtable_walker *walker = data->walker;
@@ -777,19 +752,21 @@ static int kvm_pgtable_visitor_cb(struct kvm_pgtable_walk_data *data,
 }
 
 /*@
-function (boolean) walk_again_case(i32 r, u32 flags)
-{
-  r == (0i32 - enum_EAGAIN) &&
-  bw_and_uf(flags, (u32) KVM_PGTABLE_WALK_HANDLE_FAULT) == 0u32
+function (boolean) walk_again_case(i32 r, u32 flags) {
+	r == (0i32 - enum_EAGAIN) &&
+	bw_and_uf(flags, (u32) KVM_PGTABLE_WALK_HANDLE_FAULT) == 0u32
 }
 @*/
 
 static bool kvm_pgtable_walk_continue(const struct kvm_pgtable_walker *walker,
-				      int r)
-/*@ requires take Walker = KVM_PgTable_Walker (walker);
-    ensures  take Walker2 = KVM_PgTable_Walker (walker);
-             Walker2 == Walker;
-             return == ((r == 0i32) || walk_again_case(r, Walker.flags) ? 1u8 : 0u8); @*/
+					  int r)
+/*@ requires 
+		take Walker = KVM_PgTable_Walker (walker);
+	ensures 
+		take Walker2 = KVM_PgTable_Walker (walker);
+		Walker2 == Walker;
+		return == ((r == 0i32) || walk_again_case(r, Walker.flags) ? 1u8 : 0u8); 
+@*/
 {
 	/*
 	 * Visitor callbacks return EAGAIN when the conditions that led to a
@@ -808,58 +785,54 @@ static bool kvm_pgtable_walk_continue(const struct kvm_pgtable_walker *walker,
 }
 
 static int __kvm_pgtable_walk(struct kvm_pgtable_walk_data *data,
-			      struct kvm_pgtable_mm_ops *mm_ops, kvm_pteref_t pgtable, u32 level);
+				  struct kvm_pgtable_mm_ops *mm_ops, kvm_pteref_t pgtable, u32 level);
 
 static inline int __kvm_pgtable_visit(struct kvm_pgtable_walk_data *data,
-				      struct kvm_pgtable_mm_ops *mm_ops,
-				      kvm_pteref_t pteref, u32 level)
-/*@ requires take Data = KVM_PgTable_Walk_Data (data);
-             valid_pgtable_level(level);
-             valid_phys_virt_offset ();
-             take pte = PageTableEntry(pteref, level);
-             take Ops = MM_Ops(mm_ops);
-             Data.addr < Data.end;
-             let phys = Data.data.phys+Data.addr - Data.start;
-             !cn_pte_valid(pte.code); // TODO: relax this slightly
+					  struct kvm_pgtable_mm_ops *mm_ops,
+					  kvm_pteref_t pteref, u32 level)
+/*@ requires 
+		take Data = KVM_PgTable_Walk_Data (data);
+		valid_pgtable_level(level);
+		valid_phys_virt_offset ();
+		take pte = PageTableEntry(pteref, level);
+		take Ops = MM_Ops(mm_ops);
+		Data.addr < Data.end;
+		let phys = Data.data.phys+Data.addr - Data.start;
+		//!cn_pte_valid(pte.code); // TODO: relax this slightly
 
-             let pte_range_start = align_down_u64(Data.addr, cn_granule_shift(level));
-             let pte_range_end = pte_range_start + shift_left(1u64, cn_granule_shift(level));
-             each (u64 v; pte_range_start <= v && v < pte_range_end &&
-                          Data.addr <= v && v < Data.end) {
-               let translation_outcome = pgtable_walk_entry(v, level, pte);
-               match translation_outcome {
-                 Invalid { code : _ } => { true }
-                 Success { phys : _ } => { false }
-               }
-             };
-    ensures  take Data2 = KVM_PgTable_Walk_Data (data);
-             Data2.start == Data.start;
-             Data2.end == Data.end;
-             Data2.walker == Data.walker;
-             Data2.flags == Data.flags;
-             Data2.data == Data.data;
-             take pte2 = PageTableEntry(pteref, level);
-             take Ops2 = MM_Ops(mm_ops);
-             Ops2 == Ops;
-             ((Data2.addr < Data2.end) && (return == 0i32)) implies
-               (Data2.addr == align_up_u64(Data.addr,cn_granule_shift(level)));
-             // ((Data2.addr < Data2.end) && (return == 0i32)) implies
-             //   (Data2.addr == (align_down_u64 (Data.addr, cn_granule_shift(level)) + shift_left(1u64, cn_granule_shift(level))));
-             ! walk_again_case(return, Data.flags); 
+		let pte_range_start = align_down_u64(Data.addr, cn_granule_shift(level));
+		let pte_range_end = pte_range_start + shift_left(1u64, cn_granule_shift(level));
+		each (u64 v; pte_range_start <= v && v < pte_range_end && Data.addr <= v && v < Data.end) {
+			match (pgtable_walk_entry(v, level, pte)) {
+				Invalid { code : _ } => { true }
+				Success { phys : _ } => { false }
+			}
+		};
+	ensures 
+		take Data2 = KVM_PgTable_Walk_Data (data);
+		Data2.start == Data.start;
+		Data2.end == Data.end;
+		Data2.walker == Data.walker;
+		Data2.flags == Data.flags;
+		Data2.data == Data.data;
+		take pte2 = PageTableEntry(pteref, level);
+		take Ops2 = MM_Ops(mm_ops);
+		Ops2 == Ops;
+		((Data2.addr < Data2.end) && (return == 0i32)) implies
+			(Data2.addr == align_up_u64(Data.addr,cn_granule_shift(level)));
+		// ((Data2.addr < Data2.end) && (return == 0i32)) implies
+		//   (Data2.addr == (align_down_u64 (Data.addr, cn_granule_shift(level)) + shift_left(1u64, cn_granule_shift(level))));
+		! walk_again_case(return, Data.flags); 
 
-             each (u64 v; pte_range_start <= v && v < pte_range_end &&
-                          Data.addr <= v && v < Data.end) {
-               let translation_outcome = pgtable_walk_entry(v, level, pte2);
-               let offset = v - Data.start;
-               match translation_outcome {
-                 Success { phys : p } => { p == Data.data.phys + offset }
-                 Invalid { code : _ } => { false }
-               }
-             };
-             each (u64 v; pte_range_start <= v && v < pte_range_end &&
-                          ! (Data.addr <= v && v < Data.end)) {
-               pgtable_walk_entry(v, level, pte2) == pgtable_walk_entry(v, level, pte)
-             };
+		each (u64 v; pte_range_start <= v && v < pte_range_end && Data.addr <= v && v < Data.end) {
+			match (pgtable_walk_entry(v, level, pte2)) {
+				Success { phys : p } => { p == Data.data.phys + (v - Data.start) }
+				Invalid { code : _ } => { false }
+			}
+		};
+		each (u64 v; pte_range_start <= v && v < pte_range_end && ! (Data.addr <= v && v < Data.end)) {
+			pgtable_walk_entry(v, level, pte2) == pgtable_walk_entry(v, level, pte)
+		};
 @*/
 {
 	enum kvm_pgtable_walk_flags flags = data->walker->flags;
@@ -925,58 +898,54 @@ out:
 }
 
 static int __kvm_pgtable_walk(struct kvm_pgtable_walk_data *data,
-			      struct kvm_pgtable_mm_ops *mm_ops, kvm_pteref_t pgtable, u32 level)
-/*@ requires take Data = KVM_PgTable_Walk_Data (data);
-             take PTEs = PageTable (pgtable, level);
-             let orig_data = data;
-             let orig_pgtable = pgtable;
-             let orig_mm_ops = mm_ops;
-             take Ops = MM_Ops(mm_ops);
-             valid_pgtable_level(level);
-             valid_phys_virt_offset ();
-             let orig_level = level;
+				  struct kvm_pgtable_mm_ops *mm_ops, kvm_pteref_t pgtable, u32 level)
+/*@ requires 
+		take Data = KVM_PgTable_Walk_Data (data);
+		take PTEs = PageTable (pgtable, level);
+		let orig_data = data;
+		let orig_pgtable = pgtable;
+		let orig_mm_ops = mm_ops;
+		take Ops = MM_Ops(mm_ops);
+		valid_pgtable_level(level);
+		valid_phys_virt_offset ();
+		let orig_level = level;
 
-             let pte_range_start = align_down_u64(Data.addr, cn_granule_shift(level));
-             let pte_range_end = pte_range_start + shift_left(1u64, cn_granule_shift(level));
+		let pte_range_start = align_down_u64(Data.addr, cn_granule_shift(level));
+		let pte_range_end = pte_range_start + shift_left(1u64, cn_granule_shift(level));
 
-             each (u64 v; pte_range_start <= v && v < pte_range_end &&
-                          Data.addr <= v && v < Data.end) {
-               let translation_outcome = pgtable_walk(v, level, PTEs);
-               match translation_outcome {
-                 Invalid { code : _ } => { true }
-                 Success { phys : _ } => { false }
-               }
-             };
+		each (u64 v; pte_range_start <= v && v < pte_range_end && Data.addr <= v && v < Data.end) {
+			match (pgtable_walk(v, level, PTEs)) {
+				Invalid { code : _ } => { true }
+				Success { phys : _ } => { false }
+			}
+		};
 
-    ensures  take Data2 = KVM_PgTable_Walk_Data (data);
-             Data2.start == Data.start;
-             Data2.addr >= Data.addr;
-             Data2.end == Data.end;
-             Data2.walker == Data.walker;
-             Data2.flags == Data.flags;
-             Data2.data == Data.data;
-             take PTEs2 = PageTable (pgtable, level);
-             take Ops2 = MM_Ops(mm_ops);
-             Ops2 == Ops;
-             ((Data2.addr < Data2.end) && (return == 0i32)) implies
-               (Data2.addr == (align_down_u64 (Data.addr, cn_granule_shift(level - 1u32)) 
-                               + shift_left(1u64, cn_granule_shift(level - 1u32))));
-             ! walk_again_case(return, Data.flags); 
+	ensures  
+		take Data2 = KVM_PgTable_Walk_Data (data);
+		Data2.start == Data.start;
+		Data2.addr >= Data.addr;
+		Data2.end == Data.end;
+		Data2.walker == Data.walker;
+		Data2.flags == Data.flags;
+		Data2.data == Data.data;
+		take PTEs2 = PageTable (pgtable, level);
+		take Ops2 = MM_Ops(mm_ops);
+		Ops2 == Ops;
+		((Data2.addr < Data2.end) && (return == 0i32)) implies
+			   (Data2.addr == (align_down_u64 (Data.addr, cn_granule_shift(level - 1u32)) 
+							   + shift_left(1u64, cn_granule_shift(level - 1u32))));
+		! walk_again_case(return, Data.flags); 
 
-             each (u64 v; pte_range_start <= v && v < pte_range_end &&
-                          Data.addr <= v && v < Data.end) {
-               let translation_outcome = pgtable_walk(v, level, PTEs2);
-               let offset = v - Data.start;
-               match translation_outcome {
-                 Success { phys : p } => { p == Data.data.phys + offset }
-                 Invalid { code : _ } => { false }
-               }
-             };
+		each (u64 v; pte_range_start <= v && v < pte_range_end && Data.addr <= v && v < Data.end) {
+			match (pgtable_walk(v, level, PTEs2)) {
+				Success { phys : p } => { p == Data.data.phys + (v - Data.start) }
+				Invalid { code : _ } => { false }
+			}
+		};
 
-             each (u64 v; pte_range_start <= v && v < pte_range_end &&
-                          ! (Data.addr <= v && v < Data2.addr)) {
-               pgtable_walk(v, level, PTEs2) == pgtable_walk(v, level, PTEs)
-             };
+		each (u64 v; pte_range_start <= v && v < pte_range_end && ! (Data.addr <= v && v < Data2.addr)) {
+			pgtable_walk(v, level, PTEs2) == pgtable_walk(v, level, PTEs)
+		};
 @*/
 {
 	u32 idx;
@@ -988,45 +957,39 @@ static int __kvm_pgtable_walk(struct kvm_pgtable_walk_data *data,
 		return -EINVAL;
 
 	for (idx = kvm_pgtable_idx(data, level); idx < PTRS_PER_PTE; ++idx)
-	/*@ inv take Data3 = KVM_PgTable_Walk_Data (data);
-	        take PTEs3 = PageTable (pgtable, level);
-	        0u32 <= idx && idx <= ((u32)enum_PTRS_PER_PTE);
-	        ptr_eq(data,orig_data);
-	        ptr_eq(pgtable,orig_pgtable);
-	        level == orig_level;
-	        Data3.start == Data.start;
-	        Data3.addr >= Data.addr;
-	        Data3.end == Data.end;
-	        Data3.walker == Data.walker;
-	        Data3.flags == Data.flags;
-	        Data3.data == Data.data;
-	        ptr_eq(mm_ops,orig_mm_ops);
-	        take Ops3 = MM_Ops(mm_ops);
-	        ret == 0i32;
-	        ((Data3.addr == Data.addr) && (idx == purekvm_pgtable_idx(Data.addr, level)))
-		||
-		(Data3.addr >= Data.end)
-		||
-		((Data.addr < Data.end) && Data3.addr ==
-			(align_down_u64 (Data.addr, cn_granule_shift(level - 1u32)) +
-				shift_left((u64)idx, cn_granule_shift(level)))); 
+	/*@ inv 
+			take Data3 = KVM_PgTable_Walk_Data (data);
+			take PTEs3 = PageTable (pgtable, level);
+			0u32 <= idx && idx <= ((u32)enum_PTRS_PER_PTE);
+			ptr_eq(data,orig_data);
+			ptr_eq(pgtable,orig_pgtable);
+			level == orig_level;
+			Data3.start == Data.start;
+			Data3.addr >= Data.addr;
+			Data3.end == Data.end;
+			Data3.walker == Data.walker;
+			Data3.flags == Data.flags;
+			Data3.data == Data.data;
+			ptr_eq(mm_ops,orig_mm_ops);
+			take Ops3 = MM_Ops(mm_ops);
+			ret == 0i32;
+			((Data3.addr == Data.addr) && (idx == purekvm_pgtable_idx(Data.addr, level)))
+				|| (Data3.addr >= Data.end)
+				|| ((Data.addr < Data.end) && Data3.addr ==
+					(align_down_u64 (Data.addr, cn_granule_shift(level - 1u32)) + shift_left((u64)idx, cn_granule_shift(level)))); 
 
-               // let pages_done_inv = shift_right(Data3.addr - Data.start, 12u64);
+			// let pages_done_inv = shift_right(Data3.addr - Data.start, 12u64);
 
-               each (u64 v; pte_range_start <= v && v < pte_range_end &&
-                            Data.addr <= v && v < Data3.addr) {
-                 let translation_outcome = pgtable_walk(v, level, PTEs3);
-                 let offset = v - Data.start;
-                 match translation_outcome {
-                   Success { phys : p } => { p == Data.data.phys + offset }
-                   Invalid { code : _ } => { false }
-                 }
-               };
+			each (u64 v; pte_range_start <= v && v < pte_range_end && Data.addr <= v && v < Data3.addr) {
+				match (pgtable_walk(v, level, PTEs3)) {
+					Success { phys : p } => { p == Data.data.phys + (v - Data.start) }
+					Invalid { code : _ } => { false }
+				}
+			};
 
-               each (u64 v; pte_range_start <= v && v < pte_range_end &&
-                            ! (Data.addr <= v && v < Data3.addr)) {
-                 pgtable_walk(v, level, PTEs3) == pgtable_walk(v, level, PTEs)
-               };
+			each (u64 v; pte_range_start <= v && v < pte_range_end && ! (Data.addr <= v && v < Data3.addr)) {
+				pgtable_walk(v, level, PTEs3) == pgtable_walk(v, level, PTEs)
+			};
 @*/
 	{
 		kvm_pteref_t pteref = &pgtable[idx];
@@ -1047,22 +1010,24 @@ static int __kvm_pgtable_walk(struct kvm_pgtable_walk_data *data,
 }
 
 static int _kvm_pgtable_walk(struct kvm_pgtable *pgt, struct kvm_pgtable_walk_data *data)
-/*@ requires take Data = KVM_PgTable_Walk_Data (data);
-             take PT = PageDirectory (pgt);
-             let orig_data = data;
-             let orig_pgt = pgt;
-             take Ops = MM_Ops(PT.data.mm_ops);
-             valid_phys_virt_offset ();
-    ensures  take Data2 = KVM_PgTable_Walk_Data (data);
-             take PT2 = PageDirectory (pgt);
-             PT2.data == PT.data;
-             take Ops2 = MM_Ops(PT.data.mm_ops);
-             Data2.start == Data.start; 
-             Data2.addr >= Data.addr;
-             Data2.end == Data.end; 
-             Data2.walker == Data.walker; 
-             Data2.flags == Data.flags; 
-             Data2.data == Data.data; 
+/*@ requires 
+		take Data = KVM_PgTable_Walk_Data (data);
+		take PT = PageDirectory (pgt);
+		let orig_data = data;
+		let orig_pgt = pgt;
+		take Ops = MM_Ops(PT.data.mm_ops);
+		valid_phys_virt_offset ();
+	ensures 
+		take Data2 = KVM_PgTable_Walk_Data (data);
+		take PT2 = PageDirectory (pgt);
+		PT2.data == PT.data;
+		take Ops2 = MM_Ops(PT.data.mm_ops);
+		Data2.start == Data.start; 
+		Data2.addr >= Data.addr;
+		Data2.end == Data.end; 
+		Data2.walker == Data.walker; 
+		Data2.flags == Data.flags; 
+		Data2.data == Data.data; 
 @*/
 {
 	u32 idx;
@@ -1076,22 +1041,24 @@ static int _kvm_pgtable_walk(struct kvm_pgtable *pgt, struct kvm_pgtable_walk_da
 		return -EINVAL;
 
 	for (idx = kvm_pgd_page_idx(pgt, data->addr); data->addr < data->end; ++idx)
-	/*@ inv take Data3 = KVM_PgTable_Walk_Data (data);
-	        take PT3 = PageDirectory(pgt);
-	        take Ops3 = MM_Ops(PT.data.mm_ops);
-	        ptr_eq (data,orig_data);
-	        ptr_eq(pgt,orig_pgt);
-	        PT3.data == PT.data;
-	        Ops3 == Ops;
-	        Data3.start == Data.start;
-                Data3.addr >= Data.addr;
-	        Data3.end == Data.end;
-	        Data3.walker == Data.walker;
-	        Data3.flags == Data.flags;
-	        Data3.data == Data.data;
-	        Data.end <= shift_left(1u64, (u64) PT.data.ia_bits);
-	        (Data3.addr < Data.end) implies (idx == pure__kvm_pgd_page_idx(PT.data.ia_bits,
-			PT.data.start_level, Data3.addr)); @*/
+	/*@ inv 
+			take Data3 = KVM_PgTable_Walk_Data (data);
+			take PT3 = PageDirectory(pgt);
+			take Ops3 = MM_Ops(PT.data.mm_ops);
+			ptr_eq (data,orig_data);
+			ptr_eq(pgt,orig_pgt);
+			PT3.data == PT.data;
+			Ops3 == Ops;
+			Data3.start == Data.start;
+				Data3.addr >= Data.addr;
+			Data3.end == Data.end;
+			Data3.walker == Data.walker;
+			Data3.flags == Data.flags;
+			Data3.data == Data.data;
+			Data.end <= shift_left(1u64, (u64) PT.data.ia_bits);
+			(Data3.addr < Data.end) implies (idx == pure__kvm_pgd_page_idx(PT.data.ia_bits,
+			PT.data.start_level, Data3.addr)); 
+@*/
 	{
 		kvm_pteref_t pteref = &pgt->pgd[idx * PTRS_PER_PTE];
 
@@ -1106,33 +1073,34 @@ static int _kvm_pgtable_walk(struct kvm_pgtable *pgt, struct kvm_pgtable_walk_da
 }
 
 int kvm_pgtable_walk(struct kvm_pgtable *pgt, u64 addr, u64 size,
-		     struct kvm_pgtable_walker *walker)
-/*@ requires take PT = PageDirectory (pgt);
-             take W = KVM_PgTable_Walker (walker);
-             take Ops = MM_Ops(PT.data.mm_ops);
-             valid_phys_virt_offset ();
+			 struct kvm_pgtable_walker *walker)
+/*@ requires 
+		take PT = PageDirectory (pgt);
+		take W = KVM_PgTable_Walker (walker);
+		take Ops = MM_Ops(PT.data.mm_ops);
+		valid_phys_virt_offset ();
 
-             let PAGE_SIZE = (u64) enum_PAGE_SIZE;
-             let cn_addr2 = addr - mod(addr, PAGE_SIZE);
-             let end_upalign_difference = mod(PAGE_SIZE - mod(addr + size, PAGE_SIZE), PAGE_SIZE);
-             let cn_end = addr + size + end_upalign_difference;
-             cn_addr2 < cn_end;
-             let effective_size = cn_end - cn_addr2;
-             effective_size <= cn_granule_size(0u32); // at least
-             PAGE_SIZE <= size;
-             let phys = W.data.phys;
-             let max_phys = phys + effective_size;
-             phys < max_phys;
-             cn_phys_is_valid(max_phys);
-             (aligned_u64(phys, 12u64));
-             
-
-             
-    ensures  take PT2 = PageDirectory (pgt);
-             PT2.data == PT.data;
-             take Ops2 = MM_Ops(PT.data.mm_ops);
-             take W2 = KVM_PgTable_Walker (walker);
-             ptr_eq(W2.arg,W.arg); @*/
+		let PAGE_SIZE = (u64) enum_PAGE_SIZE;
+		let cn_addr2 = addr - mod(addr, PAGE_SIZE);
+		let end_upalign_difference = mod(PAGE_SIZE - mod(addr + size, PAGE_SIZE), PAGE_SIZE);
+		let cn_end = addr + size + end_upalign_difference;
+		cn_addr2 < cn_end;
+		let effective_size = cn_end - cn_addr2;
+		effective_size <= cn_granule_size(0u32); // at least
+		PAGE_SIZE <= size;
+		let phys = W.data.phys;
+		let max_phys = phys + effective_size;
+		phys < max_phys;
+		cn_phys_is_valid(max_phys);
+		(aligned_u64(phys, 12u64));
+			 
+	ensures 
+		take PT2 = PageDirectory (pgt);
+		PT2.data == PT.data;
+		take Ops2 = MM_Ops(PT.data.mm_ops);
+		take W2 = KVM_PgTable_Walker (walker);
+		ptr_eq(W2.arg,W.arg); 
+@*/
 {
 	/* CN modification: align addr first, avoid self-referential init */
 	u64 addr2 = ALIGN_DOWN(addr, PAGE_SIZE);
@@ -1160,7 +1128,7 @@ struct leaf_walk_data {
 };
 
 static int leaf_walker(const struct kvm_pgtable_visit_ctx *ctx,
-		       enum kvm_pgtable_walk_flags visit)
+			   enum kvm_pgtable_walk_flags visit)
 {
 	struct leaf_walk_data *data = ctx->arg;
 
@@ -1182,7 +1150,7 @@ int kvm_pgtable_get_leaf(struct kvm_pgtable *pgt, u64 addr,
 	int ret;
 
 	ret = kvm_pgtable_walk(pgt, ALIGN_DOWN(addr, PAGE_SIZE),
-			       PAGE_SIZE, &walker);
+				   PAGE_SIZE, &walker);
 	if (!ret) {
 		if (ptep)
 			*ptep  = data.pte;
@@ -1201,15 +1169,18 @@ int kvm_pgtable_get_leaf(struct kvm_pgtable *pgt, u64 addr,
 
 static int hyp_set_prot_attr(enum kvm_pgtable_prot prot, kvm_pte_t *ptep)
 /* not much to prove for (C) safety of this function */
-/*@ requires take P = Owned(ptep);
-    ensures  take P2 = Owned(ptep); @*/
+/*@ requires 
+		take P = Owned(ptep);
+	ensures 
+		take P2 = Owned(ptep); 
+@*/
 {
 	bool device = prot & KVM_PGTABLE_PROT_DEVICE;
 	u32 mtype = device ? MT_DEVICE_nGnRE : MT_NORMAL;
 	kvm_pte_t attr = FIELD_PREP(KVM_PTE_LEAF_ATTR_LO_S1_ATTRIDX, mtype);
 	u32 sh = KVM_PTE_LEAF_ATTR_LO_S1_SH_IS;
 	u32 ap = (prot & KVM_PGTABLE_PROT_W) ? KVM_PTE_LEAF_ATTR_LO_S1_AP_RW :
-					       KVM_PTE_LEAF_ATTR_LO_S1_AP_RO;
+						   KVM_PTE_LEAF_ATTR_LO_S1_AP_RO;
 
 	if (!(prot & KVM_PGTABLE_PROT_R))
 		return -EINVAL;
@@ -1254,28 +1225,30 @@ enum kvm_pgtable_prot kvm_pgtable_hyp_pte_prot(kvm_pte_t pte)
 }
 
 static bool hyp_map_walker_try_leaf(const struct kvm_pgtable_visit_ctx *ctx,
-				    struct hyp_map_data *data)
-/*@ requires take Ctx = Owned(ctx);
-             valid_pgtable_level(Ctx.level);
-             take D = Owned<struct hyp_map_data>(data);
-             take pte = PageTableEntry(Ctx.ptep, Ctx.level);
-             ! (cn_pte_table (pte.code, Ctx.level));
-             take Ops = MM_Ops(Ctx.mm_ops);
-             Ctx.old == pte.code;
-             let phys = D.phys+Ctx.addr - Ctx.start;
-             let block_mapping_supported = cn_block_mapping_supported(Ctx.addr, Ctx.end, phys, Ctx.level);
-             let new = kvm_init_valid_leaf_pte(phys, D.attr, Ctx.level);
-             let bad_change = ((Ctx.old ^ new) & ~(KVM_PTE_LEAF_ATTR_HI_SW ())) != 0x0u64;
-             !(block_mapping_supported && cn_pte_valid(Ctx.old) && bad_change);
-    ensures  take Ctx2 = Owned(ctx);
-             Ctx2 == Ctx;
-             take D2 = Owned<struct hyp_map_data>(data);
-             D2 == D;
-             take pte2 = PageTableEntry(Ctx.ptep, Ctx.level);
-             take Ops2 = MM_Ops(Ctx.mm_ops);
+					struct hyp_map_data *data)
+/*@ requires 
+		take Ctx = Owned(ctx);
+		valid_pgtable_level(Ctx.level);
+		take D = Owned<struct hyp_map_data>(data);
+		take pte = PageTableEntry(Ctx.ptep, Ctx.level);
+		! (cn_pte_table (pte.code, Ctx.level));
+		take Ops = MM_Ops(Ctx.mm_ops);
+		Ctx.old == pte.code;
+		let phys = D.phys+Ctx.addr - Ctx.start;
+		let block_mapping_supported = cn_block_mapping_supported(Ctx.addr, Ctx.end, phys, Ctx.level);
+		let new = kvm_init_valid_leaf_pte(phys, D.attr, Ctx.level);
+		let bad_change = ((Ctx.old ^ new) & ~(KVM_PTE_LEAF_ATTR_HI_SW ())) != 0x0u64;
+		!(block_mapping_supported && cn_pte_valid(Ctx.old) && bad_change);
+	ensures 
+		take Ctx2 = Owned(ctx);
+		Ctx2 == Ctx;
+		take D2 = Owned<struct hyp_map_data>(data);
+		D2 == D;
+		take pte2 = PageTableEntry(Ctx.ptep, Ctx.level);
+		take Ops2 = MM_Ops(Ctx.mm_ops);
 
-             if (block_mapping_supported) { return == 1u8 && pte2.code == new }
-             else { return == 0u8 && pte2 == pte };
+		if (block_mapping_supported) { return == 1u8 && pte2.code == new }
+		else { return == 0u8 && pte2 == pte };
 @*/
 {
 	u64 phys = data->phys + (ctx->addr - ctx->start);
@@ -1298,30 +1271,41 @@ static bool hyp_map_walker_try_leaf(const struct kvm_pgtable_visit_ctx *ctx,
 
 
 /*@
-predicate (map <u64, pte>) PTE_Array (pointer p)
-{
-  assert (mod((u64)p, 4096u64) == 0u64);
-  take ptes = each (u64 i; 0u64 <= i && i < 512u64)
-                   {Owned<kvm_pte_t>(array_shift<kvm_pte_t>(p, i))};
-  return ptes;
+predicate (map <u64, pte>) PTE_Array (pointer p) {
+	assert (mod((u64)p, 4096u64) == 0u64);
+	take ptes = each (u64 i; 0u64 <= i && i < 512u64) {
+		Owned<kvm_pte_t>(array_shift<kvm_pte_t>(p, i))
+	};
+	return ptes;
 }
 @*/
 
 static inline void coerce_page_to_ptes(kvm_pte_t *ptep)
 /*@ trusted;
-    requires take ZP = Zero_Page (ptep);
-    ensures take ptes = PTE_Array (ptep);
-            each (u64 i; 0u64 <= i && i < 512u64) {ptes[i] == 0u64}; @*/
+	requires 
+		take ZP = Zero_Page (ptep);
+	ensures 
+		take ptes = PTE_Array (ptep);
+		each (u64 i; 0u64 <= i && i < 512u64) {
+			ptes[i] == 0u64
+		}; 
+@*/
 {
 }
 
 static inline void coerce_null_ptes_to_IPT(kvm_pte_t *ptep, u32 level)
 /*@ trusted;
-    requires take ptes = PTE_Array (ptep);
-             each (u64 i; 0u64 <= i && i < 512u64) {ptes[i] == 0u64};
-             valid_pgtable_level(level);
-    ensures  take ptes2 = PageTable (ptep, level); 
-             each (u64 i; 0u64 <= i && i < 512u64) { !cn_pte_valid(ptes2[i].code) };
+	requires 
+		take ptes = PTE_Array (ptep);
+		each (u64 i; 0u64 <= i && i < 512u64) {
+			ptes[i] == 0u64
+		};
+		valid_pgtable_level(level);
+	ensures 
+		take ptes2 = PageTable (ptep, level); 
+		each (u64 i; 0u64 <= i && i < 512u64) { 
+			!cn_pte_valid(ptes2[i].code) 
+		};
 @*/
 {
 }
@@ -1331,36 +1315,40 @@ static inline void coerce_null_ptes_to_IPT(kvm_pte_t *ptep, u32 level)
 
 static int hyp_map_walker(const struct kvm_pgtable_visit_ctx *ctx,
 			  enum kvm_pgtable_walk_flags visit)
-/*@ requires take Ctx = Owned(ctx);
-             valid_pgtable_level(Ctx.level);
-             valid_phys_virt_offset ();
-             take D = Owned<struct hyp_map_data>(Ctx.arg);
-             take pte = PageTableEntry(Ctx.ptep, Ctx.level);
-             !(cn_pte_table(pte.code, Ctx.level));
-             take Ops = MM_Ops(Ctx.mm_ops);
-             pte.code == Ctx.old;
+/*@ requires 
+		take Ctx = Owned(ctx);
+		valid_pgtable_level(Ctx.level);
+		valid_phys_virt_offset ();
+		take D = Owned<struct hyp_map_data>(Ctx.arg);
+		take pte = PageTableEntry(Ctx.ptep, Ctx.level);
+		!(cn_pte_table(pte.code, Ctx.level));
+		take Ops = MM_Ops(Ctx.mm_ops);
+		pte.code == Ctx.old;
 
-             let phys = D.phys+Ctx.addr - Ctx.start;
-             let block_mapping_supported = cn_block_mapping_supported(Ctx.addr, Ctx.end, phys, Ctx.level);
-             block_mapping_supported || !is_max_level(Ctx.level);
-             let possible_new_leaf = kvm_init_valid_leaf_pte(phys, D.attr, Ctx.level);
-             let bad_leaf_change = ((Ctx.old ^ possible_new_leaf) & ~(KVM_PTE_LEAF_ATTR_HI_SW ())) != 0x0u64;
-             !(block_mapping_supported && cn_pte_valid(Ctx.old) && bad_leaf_change);
+		let phys = D.phys+Ctx.addr - Ctx.start;
+		let block_mapping_supported = cn_block_mapping_supported(Ctx.addr, Ctx.end, phys, Ctx.level);
+		block_mapping_supported || !is_max_level(Ctx.level);
+		let possible_new_leaf = kvm_init_valid_leaf_pte(phys, D.attr, Ctx.level);
+		let bad_leaf_change = ((Ctx.old ^ possible_new_leaf) & ~(KVM_PTE_LEAF_ATTR_HI_SW ())) != 0x0u64;
+		!(block_mapping_supported && cn_pte_valid(Ctx.old) && bad_leaf_change);
 
-    ensures  take Ctx2 = Owned(ctx);
-             Ctx2 == Ctx;
-             take D2 = Owned<struct hyp_map_data>(Ctx.arg);
-             take new = PageTableEntry(Ctx.ptep, Ctx.level);
-             D2 == D;
-             take Ops2 = MM_Ops(Ctx.mm_ops); 
+	ensures  
+		take Ctx2 = Owned(ctx);
+		Ctx2 == Ctx;
+		take D2 = Owned<struct hyp_map_data>(Ctx.arg);
+		take new = PageTableEntry(Ctx.ptep, Ctx.level);
+		D2 == D;
+		take Ops2 = MM_Ops(Ctx.mm_ops); 
 
-             let progress = 
-               if (block_mapping_supported) { new.code == possible_new_leaf }
-               else { is_table(new.info) }
-             ;
-             (return == 0i32 && progress) || (return == -enum_ENOMEM && new == pte);
+		let progress = 
+		  if (block_mapping_supported) { new.code == possible_new_leaf }
+		  else { is_table(new.info) }
+		;
+		(return == 0i32 && progress) || (return == -enum_ENOMEM && new == pte);
 
-             each (u64 i; 0u64 <= i && i < 512u64) { cn_pte_table(new.code,Ctx.level) implies !(cn_pte_valid((get_table(new.info)[i]).code)) }; // should go under `progress`, but CN doesn't allow nested `forall`
+		each (u64 i; 0u64 <= i && i < 512u64) { 
+			cn_pte_table(new.code,Ctx.level) implies !(cn_pte_valid((get_table(new.info)[i]).code)) 
+		}; // should go under `progress`, but CN doesn't allow nested `forall`
 @*/
 {
 	kvm_pte_t *childp, new;
@@ -1380,7 +1368,7 @@ static int hyp_map_walker(const struct kvm_pgtable_visit_ctx *ctx,
 	/* this is where we need to turn a char[] into a kvm_pte_t[] (i.e. a u64[]) */
 	coerce_page_to_ptes(childp);
 	coerce_null_ptes_to_IPT(childp, ctx->level + 1);
-        /*CN*/ table_packing_(childp,ctx->level+1);
+		/*CN*/ table_packing_(childp,ctx->level+1);
 
 	new = kvm_init_table_pte(childp, mm_ops);
 	mm_ops->get_page(ctx->ptep);
@@ -1390,44 +1378,44 @@ static int hyp_map_walker(const struct kvm_pgtable_visit_ctx *ctx,
 }
 
 /*@
-predicate (struct hyp_map_data) Hyp_Map_Walker_Case(pointer f, pointer x, u32 flags)
-{
-  assert (ptr_eq(f,&hyp_map_walker));
-  assert (flags == ((u32) KVM_PGTABLE_WALK_LEAF));
-  take D = Owned<struct hyp_map_data>(x);
-  return D;
+predicate (struct hyp_map_data) Hyp_Map_Walker_Case(pointer f, pointer x, u32 flags) {
+	assert (ptr_eq(f,&hyp_map_walker));
+	assert (flags == ((u32) KVM_PGTABLE_WALK_LEAF));
+	take D = Owned<struct hyp_map_data>(x);
+	return D;
 }
 
-predicate (struct hyp_map_data) Hyp_Walker_Cases(pointer f, pointer x, u32 flags)
-{
-  take X = Hyp_Map_Walker_Case (f, x, flags);
-  return X;
+predicate (struct hyp_map_data) Hyp_Walker_Cases(pointer f, pointer x, u32 flags) {
+	take X = Hyp_Map_Walker_Case (f, x, flags);
+	return X;
 }
-
 @*/
 
 int kvm_pgtable_hyp_map(struct kvm_pgtable *pgt, u64 addr, u64 size, u64 phys,
 			enum kvm_pgtable_prot prot)
-/*@ requires take PT = PageDirectory(pgt);
-             take Ops = MM_Ops(PT.data.mm_ops);
-             valid_phys_virt_offset ();
+/*@ requires 
+		take PT = PageDirectory(pgt);
+		take Ops = MM_Ops(PT.data.mm_ops);
+		valid_phys_virt_offset ();
 
-             let PAGE_SIZE = (u64) enum_PAGE_SIZE;
-             let cn_addr2 = addr - mod(addr, PAGE_SIZE);
-             let end_upalign_difference = mod(PAGE_SIZE - mod(addr + size, PAGE_SIZE), PAGE_SIZE);
-             let cn_end = addr + size + end_upalign_difference;
-             cn_addr2 < cn_end;
-             let effective_size = cn_end - cn_addr2;
-             effective_size <= cn_granule_size(0u32); // at least
-             PAGE_SIZE <= size;
-             let max_phys = phys + effective_size;
-             phys < max_phys;
-             cn_phys_is_valid(max_phys);
+		let PAGE_SIZE = (u64) enum_PAGE_SIZE;
+		let cn_addr2 = addr - mod(addr, PAGE_SIZE);
+		let end_upalign_difference = mod(PAGE_SIZE - mod(addr + size, PAGE_SIZE), PAGE_SIZE);
+		let cn_end = addr + size + end_upalign_difference;
+		cn_addr2 < cn_end;
+		let effective_size = cn_end - cn_addr2;
+		effective_size <= cn_granule_size(0u32); // at least
+		PAGE_SIZE <= size;
+		let max_phys = phys + effective_size;
+		phys < max_phys;
+		cn_phys_is_valid(max_phys);
 
-    ensures  take PT2 = PageDirectory(pgt);
-             //PT2.extra_bits == PT.extra_bits;
-             PT2.data == PT.data;
-             take Ops2 = MM_Ops(PT.data.mm_ops); @*/
+	ensures  
+		take PT2 = PageDirectory(pgt);
+		//PT2.extra_bits == PT.extra_bits;
+		PT2.data == PT.data;
+		take Ops2 = MM_Ops(PT.data.mm_ops); 
+@*/
 {
 	int ret;
 	struct hyp_map_data map_data = {
@@ -1450,7 +1438,7 @@ int kvm_pgtable_hyp_map(struct kvm_pgtable *pgt, u64 addr, u64 size, u64 phys,
 }
 
 static int hyp_unmap_walker(const struct kvm_pgtable_visit_ctx *ctx,
-			    enum kvm_pgtable_walk_flags visit)
+				enum kvm_pgtable_walk_flags visit)
 {
 	kvm_pte_t *childp = NULL;
 	u64 granule = kvm_granule_size(ctx->level);
@@ -1614,7 +1602,7 @@ static int stage2_set_prot_attr(struct kvm_pgtable *pgt, enum kvm_pgtable_prot p
 {
 	bool device = prot & KVM_PGTABLE_PROT_DEVICE;
 	kvm_pte_t attr = device ? KVM_S2_MEMATTR(pgt, DEVICE_nGnRE) :
-			    KVM_S2_MEMATTR(pgt, NORMAL);
+				KVM_S2_MEMATTR(pgt, NORMAL);
 	u32 sh = KVM_PTE_LEAF_ATTR_LO_S2_SH_IS;
 
 	if (!(prot & KVM_PGTABLE_PROT_X))
@@ -1771,7 +1759,7 @@ static bool stage2_pte_executable(kvm_pte_t pte)
 }
 
 static u64 stage2_map_walker_phys_addr(const struct kvm_pgtable_visit_ctx *ctx,
-				       const struct stage2_map_data *data)
+					   const struct stage2_map_data *data)
 {
 	u64 phys = data->phys;
 
@@ -1802,7 +1790,7 @@ static bool stage2_leaf_mapping_allowed(const struct kvm_pgtable_visit_ctx *ctx,
 }
 
 static int stage2_map_walker_try_leaf(const struct kvm_pgtable_visit_ctx *ctx,
-				      struct stage2_map_data *data)
+					  struct stage2_map_data *data)
 {
 	kvm_pte_t new;
 	u64 phys = stage2_map_walker_phys_addr(ctx, data);
@@ -1829,7 +1817,7 @@ static int stage2_map_walker_try_leaf(const struct kvm_pgtable_visit_ctx *ctx,
 
 	/* If we're only changing software bits, then store them and go! */
 	if (!kvm_pgtable_walk_shared(ctx) &&
-	    !((ctx->old ^ new) & ~KVM_PTE_LEAF_ATTR_HI_SW)) {
+		!((ctx->old ^ new) & ~KVM_PTE_LEAF_ATTR_HI_SW)) {
 		WRITE_ONCE(*ctx->ptep, new);
 		return 0;
 	}
@@ -1851,7 +1839,7 @@ static int stage2_map_walker_try_leaf(const struct kvm_pgtable_visit_ctx *ctx,
 }
 
 static int stage2_map_walk_table_pre(const struct kvm_pgtable_visit_ctx *ctx,
-				     struct stage2_map_data *data)
+					 struct stage2_map_data *data)
 {
 	struct kvm_pgtable_mm_ops *mm_ops = ctx->mm_ops;
 	kvm_pte_t *childp = kvm_pte_follow(ctx->old, mm_ops);
@@ -1915,7 +1903,7 @@ static int stage2_map_walk_leaf(const struct kvm_pgtable_visit_ctx *ctx,
  * instead.
  */
 static int stage2_map_walker(const struct kvm_pgtable_visit_ctx *ctx,
-			     enum kvm_pgtable_walk_flags visit)
+				 enum kvm_pgtable_walk_flags visit)
 {
 	struct stage2_map_data *data = ctx->arg;
 
@@ -1986,7 +1974,7 @@ int kvm_pgtable_stage2_set_owner(struct kvm_pgtable *pgt, u64 addr, u64 size,
 }
 
 static int stage2_unmap_walker(const struct kvm_pgtable_visit_ctx *ctx,
-			       enum kvm_pgtable_walk_flags visit)
+				   enum kvm_pgtable_walk_flags visit)
 {
 	struct kvm_pgtable *pgt = ctx->arg;
 	struct kvm_s2_mmu *mmu = pgt->mmu;
@@ -2020,7 +2008,7 @@ static int stage2_unmap_walker(const struct kvm_pgtable_visit_ctx *ctx,
 
 	if (need_flush && mm_ops->dcache_clean_inval_poc)
 		mm_ops->dcache_clean_inval_poc(kvm_pte_follow(ctx->old, mm_ops),
-					       kvm_granule_size(ctx->level));
+						   kvm_granule_size(ctx->level));
 
 	if (childp)
 		mm_ops->put_page(childp);
@@ -2047,7 +2035,7 @@ struct stage2_attr_data {
 };
 
 static int stage2_attr_walker(const struct kvm_pgtable_visit_ctx *ctx,
-			      enum kvm_pgtable_walk_flags visit)
+				  enum kvm_pgtable_walk_flags visit)
 {
 	kvm_pte_t pte = ctx->old;
 	struct stage2_attr_data *data = ctx->arg;
@@ -2072,7 +2060,7 @@ static int stage2_attr_walker(const struct kvm_pgtable_visit_ctx *ctx,
 		 * stage-2 PTE if we are going to add executable permission.
 		 */
 		if (mm_ops->icache_inval_pou &&
-		    stage2_pte_executable(pte) && !stage2_pte_executable(ctx->old))
+			stage2_pte_executable(pte) && !stage2_pte_executable(ctx->old))
 			mm_ops->icache_inval_pou(kvm_pte_follow(pte, mm_ops),
 						  kvm_granule_size(ctx->level));
 
@@ -2084,9 +2072,9 @@ static int stage2_attr_walker(const struct kvm_pgtable_visit_ctx *ctx,
 }
 
 static int stage2_update_leaf_attrs(struct kvm_pgtable *pgt, u64 addr,
-				    u64 size, kvm_pte_t attr_set,
-				    kvm_pte_t attr_clr, kvm_pte_t *orig_pte,
-				    u32 *level, enum kvm_pgtable_walk_flags flags)
+					u64 size, kvm_pte_t attr_set,
+					kvm_pte_t attr_clr, kvm_pte_t *orig_pte,
+					u32 *level, enum kvm_pgtable_walk_flags flags)
 {
 	int ret;
 	kvm_pte_t attr_mask = KVM_PTE_LEAF_ATTR_LO | KVM_PTE_LEAF_ATTR_HI;
@@ -2125,9 +2113,9 @@ kvm_pte_t kvm_pgtable_stage2_mkyoung(struct kvm_pgtable *pgt, u64 addr)
 	int ret;
 
 	ret = stage2_update_leaf_attrs(pgt, addr, 1, KVM_PTE_LEAF_ATTR_LO_S2_AF, 0,
-				       &pte, NULL,
-				       KVM_PGTABLE_WALK_HANDLE_FAULT |
-				       KVM_PGTABLE_WALK_SHARED);
+					   &pte, NULL,
+					   KVM_PGTABLE_WALK_HANDLE_FAULT |
+					   KVM_PGTABLE_WALK_SHARED);
 	if (!ret)
 		dsb(ishst);
 
@@ -2175,15 +2163,15 @@ int kvm_pgtable_stage2_relax_perms(struct kvm_pgtable *pgt, u64 addr,
 		clr |= KVM_PTE_LEAF_ATTR_HI_S2_XN;
 
 	ret = stage2_update_leaf_attrs(pgt, addr, 1, set, clr, NULL, &level,
-				       KVM_PGTABLE_WALK_HANDLE_FAULT |
-				       KVM_PGTABLE_WALK_SHARED);
+					   KVM_PGTABLE_WALK_HANDLE_FAULT |
+					   KVM_PGTABLE_WALK_SHARED);
 	if (!ret)
 		kvm_call_hyp(__kvm_tlb_flush_vmid_ipa, pgt->mmu, addr, level);
 	return ret;
 }
 
 static int stage2_flush_walker(const struct kvm_pgtable_visit_ctx *ctx,
-			       enum kvm_pgtable_walk_flags visit)
+				   enum kvm_pgtable_walk_flags visit)
 {
 	struct kvm_pgtable *pgt = ctx->arg;
 	struct kvm_pgtable_mm_ops *mm_ops = pgt->mm_ops;
@@ -2193,7 +2181,7 @@ static int stage2_flush_walker(const struct kvm_pgtable_visit_ctx *ctx,
 
 	if (mm_ops->dcache_clean_inval_poc)
 		mm_ops->dcache_clean_inval_poc(kvm_pte_follow(ctx->old, mm_ops),
-					       kvm_granule_size(ctx->level));
+						   kvm_granule_size(ctx->level));
 	return 0;
 }
 
@@ -2213,9 +2201,9 @@ int kvm_pgtable_stage2_flush(struct kvm_pgtable *pgt, u64 addr, u64 size)
 
 
 int __kvm_pgtable_stage2_init(struct kvm_pgtable *pgt, struct kvm_s2_mmu *mmu,
-			      struct kvm_pgtable_mm_ops *mm_ops,
-			      enum kvm_pgtable_stage2_flags flags,
-			      kvm_pgtable_force_pte_cb_t force_pte_cb)
+				  struct kvm_pgtable_mm_ops *mm_ops,
+				  enum kvm_pgtable_stage2_flags flags,
+				  kvm_pgtable_force_pte_cb_t force_pte_cb)
 {
 	size_t pgd_sz;
 	u64 vtcr = mmu->arch->vtcr;
@@ -2250,7 +2238,7 @@ size_t kvm_pgtable_stage2_pgd_size(u64 vtcr)
 }
 
 static int stage2_free_walker(const struct kvm_pgtable_visit_ctx *ctx,
-			      enum kvm_pgtable_walk_flags visit)
+				  enum kvm_pgtable_walk_flags visit)
 {
 	struct kvm_pgtable_mm_ops *mm_ops = ctx->mm_ops;
 
