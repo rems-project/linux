@@ -57,6 +57,7 @@ int picovm_alloc_private_va_range(size_t size, unsigned long *haddr)
 
 	/* Are we overflowing on the vmemmap ? */
 	__io_map_base = base;
+	picovm_pgtable_hyp_early_alloc_path(&picovm_pgtable, __io_map_base);
 	*haddr = addr;
 
 	hyp_spin_unlock(&picovm_pgd_lock);
@@ -97,6 +98,10 @@ int picovm_create_mappings_locked(void *from, void *to, enum picovm_pgtable_prot
 
 	for (virt_addr = start; virt_addr < end; virt_addr += PAGE_SIZE) {
 		int err;
+
+		err = picovm_pgtable_hyp_early_alloc_path(&picovm_pgtable, virt_addr);
+		if (err)
+			return err;
 
 		phys = hyp_virt_to_phys((void *)virt_addr);
 		err = picovm_pgtable_hyp_map(&picovm_pgtable, virt_addr, PAGE_SIZE,
@@ -202,6 +207,9 @@ int hyp_create_idmap(u32 hyp_va_bits)
 
 	end = hyp_virt_to_phys((void *)__hyp_idmap_text_end);
 	end = ALIGN(end, PAGE_SIZE);
+
+	__io_map_base = start & BIT(hyp_va_bits - 2);
+	__io_map_base ^= BIT(hyp_va_bits - 2);
 
 	return __picovm_create_mappings(start, end - start, start, PAGE_HYP_EXEC);
 }

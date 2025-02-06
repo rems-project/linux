@@ -170,6 +170,17 @@ static u32 picovm_pgd_pages(u32 ia_bits, u32 start_level)
 	return picovm_pgd_page_idx(&pgt, -1ULL) + 1;
 }
 
+static bool picovm_pte_table(picovm_pte_t pte, u32 level)
+{
+	if (level == PICOVM_PGTABLE_MAX_LEVELS - 1)
+		return false;
+
+	if (!picovm_pte_valid(pte))
+		return false;
+
+	return FIELD_GET(PICOVM_PTE_TYPE, pte) == PICOVM_PTE_TYPE_TABLE;
+}
+
 static picovm_pte_t picovm_init_table_pte(picovm_pte_t *childp)
 {
 	picovm_pte_t pte = picovm_phys_to_pte(hyp_virt_to_phys(childp));
@@ -179,47 +190,46 @@ static picovm_pte_t picovm_init_table_pte(picovm_pte_t *childp)
 	return pte;
 }
 
-int __picovm_pgtable_hyp_init_leaf(picovm_pte_t *pgt) {
-	picovm_pte_t *curr;
-   	u32 idx;
+// DEFINED IN arch/arm64/kvm/hyp/hyp-entry.S
+extern unsigned char __bp_harden_hyp_vecs[];
 
-	for (idx = 0; idx < PTRS_PER_PTE; idx++) {
-		curr = &pgt[idx];
-		WRITE_ONCE(*curr, PICOVM_PHYS_INVALID);
-	}
-	return 0;
-}
-
-int __picovm_pgtable_hyp_init_tables(picovm_pte_t *pgt, u64 level) {
-	picovm_pte_t *curr, *childp;
+int picovm_pgtable_hyp_early_alloc_path(struct picovm_pgtable *pgt, u64 addr)
+{
+	picovm_pteref_t pteref, childp;
 	picovm_pte_t pte;
-   	u32 idx;
-	int ret;
-	
-	if (level == PICOVM_PGTABLE_MAX_LEVELS - 1) {
-		return __picovm_pgtable_hyp_init_leaf(pgt);
+	u64 level;
+	phys_addr_t phys;
+
+	u32 idx = picovm_pgd_page_idx(pgt, addr);
+	pteref = &pgt->pgd[idx * PTRS_PER_PTE];
+
+	for (level = pgt->start_level; level < PICOVM_PGTABLE_MAX_LEVELS - 1; level++) {
+		idx = picovm_pgtable_idx(addr, level);
+		pte = pteref[idx];
+		if (picovm_pte_table(pte, level)) {
+			phys = picovm_pte_to_phys(pte);
+			pteref = (picovm_pteref_t)hyp_phys_to_virt(phys);
+		} else {
+			childp = (picovm_pteref_t)hyp_early_alloc_page();
+			if (!childp)
+				return -ENOMEM;
+
+			// initialize the pte as a table
+			pte = picovm_init_table_pte(childp);
+			pteref[idx] = pte;
+			pteref = childp;
+		}
+		
 	}
 
-	for (idx = 0; idx < PTRS_PER_PTE; idx++) {
-		curr = &pgt[idx];
-		childp = (picovm_pteref_t)hyp_early_alloc_page();
-		if (!childp)
-			return -ENOMEM;
-
-		pte = picovm_init_table_pte(childp);
-		WRITE_ONCE(*curr, pte);
-
-		ret = __picovm_pgtable_hyp_init_tables(childp, level + 1);
-		if (ret)
-			return ret;
-	}
+	pteref[picovm_pgtable_idx(addr, PICOVM_PGTABLE_MAX_LEVELS-1)] = PICOVM_PHYS_INVALID;
 	return 0;
 }
 
 int picovm_pgtable_hyp_init(struct picovm_pgtable *pgt, u32 va_bits)
 {
-	int ret = 0;
-	u64 nr_pages;
+	u64 nr_pages, addr;
+	int i, ret = 0;
 	
 	pgt->ia_bits		= va_bits;
 	pgt->start_level	= 0;
@@ -230,10 +240,16 @@ int picovm_pgtable_hyp_init(struct picovm_pgtable *pgt, u32 va_bits)
 	if (!pgt->pgd)
 		return -ENOMEM;
 
-	for (int idx = 0; idx < nr_pages; idx++) {
-		ret = __picovm_pgtable_hyp_init_tables(&pgt->pgd[idx * PTRS_PER_PTE], pgt->start_level);
-		if (ret) {
-			return ret;
+	// allocate intermediate page tables for hyp_memory in advance
+	for (i = 0; i < hyp_memblock_nr; i++) {
+		struct memblock_region *reg = &hyp_memory[i];
+		u64 start = ALIGN_DOWN(reg->base, PAGE_SIZE);
+		u64 end = PAGE_ALIGN(start + reg->size);
+		
+		for (addr = start; addr < end; addr += PAGE_SIZE) {
+			ret = picovm_pgtable_hyp_early_alloc_path(pgt, addr);
+			if (ret)
+				return ret;
 		}
 	}
 	
@@ -287,40 +303,34 @@ static int hyp_unmap_walker(const struct picovm_pgtable_visit_ctx *ctx)
 	return 0;
 }
 
-static picovm_pte_t* _picovm_pgtable_walk(struct picovm_pgtable *pgt, u64 ia)
+static picovm_pte_t* _picovm_pgtable_walk(struct picovm_pgtable *pgt, u64 addr)
 {
-	int level, idx;
+	int idx, level;
+	picovm_pteref_t pteref;
 	picovm_pte_t pte;
-	phys_addr_t child_phys;
-	u64 *childp;
+	phys_addr_t phys;
 
-	// Level 0
-	idx = picovm_pgd_page_idx(pgt, ia);
-	pte = pgt->pgd[idx];
-	if (picovm_is_pte_invalid_or_block(pte)) {
-		return NULL;
-	}
-	child_phys = picovm_pte_to_phys(pte);
-	childp = hyp_phys_to_virt(child_phys);
+	
+	idx = picovm_pgd_page_idx(pgt, addr);
+	pteref = &pgt->pgd[idx * PTRS_PER_PTE];
 
-	// Walk down to PICOVM_PGTABLE_MAX_LEVELS-1
-	for (level = 1; level < PICOVM_PGTABLE_MAX_LEVELS-1; level++) {
-		int idx = picovm_pgtable_idx(ia, level);
-		pte = childp[idx];
+	for (level = 0; level < PICOVM_PGTABLE_MAX_LEVELS-1; level++) {
+		int idx = picovm_pgtable_idx(addr, level);
+		pte = pteref[idx];
 		if (picovm_is_pte_invalid_or_block(pte)) {
 			return NULL;
 		}
-		child_phys = picovm_pte_to_phys(pte);
-		childp = hyp_phys_to_virt(child_phys);
+		phys = picovm_pte_to_phys(pte);
+		pteref = (picovm_pteref_t)hyp_phys_to_virt(phys);
 	}
 
-	return &childp[picovm_pgtable_idx(ia, PICOVM_PGTABLE_MAX_LEVELS-1)];
+	return &pteref[picovm_pgtable_idx(addr, PICOVM_PGTABLE_MAX_LEVELS-1)];
 }
 
 // NOTE: based on linux/arch/arm64/kvm/hyp/pgtable.c::int kvm_pgtable_walk(struct kvm_pgtable *pgt, u64 addr, u64 size, struct kvm_pgtable_walker *walker)
 int picovm_pgtable_walk(struct picovm_pgtable *pgt, u64 addr, u64 size, struct picovm_pgtable_walker *walker)
 {
-	int r;
+	int ret;
 	u64 start = ALIGN_DOWN(addr, PAGE_SIZE);
 	u64 end = PAGE_ALIGN(addr + size);
 
@@ -335,12 +345,12 @@ int picovm_pgtable_walk(struct picovm_pgtable *pgt, u64 addr, u64 size, struct p
 			.ofs	= cur - start,
 		};
 
-		r = walker->cb(&ctx);
-		if (r) {
+		ret = walker->cb(&ctx);
+		if (ret) {
 			return -1;
 		}
 	}
-	return r;
+	return ret;
 }
 
 #define GET_FIELD(val, NAME)	(((val) & NAME ## _MASK) >> NAME ## _SHIFT)

@@ -171,11 +171,11 @@ static int recreate_hyp_mappings(phys_addr_t phys, unsigned long size,
 	ret = picovm_pgtable_hyp_init(&picovm_pgtable, hyp_va_bits);
 	if (ret)
 		return ret;
-	
+
 	ret = hyp_create_idmap(hyp_va_bits);
 	if (ret)
 		return ret;
-	
+
 	ret = hyp_map_vectors();
 	if (ret)
 		return ret;
