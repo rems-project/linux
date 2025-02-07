@@ -127,11 +127,33 @@ void *__pi_memcpy(void *dst, const void *src, size_t size)
 // int __pkvm_prot_finalize(void)
 
 
-/******************************************************************************
- * TODO: remove all after this once the picovm code builds
- *****************************************************************************/
+void __psci_invoke(u32 func_, u64 arg1, u64 arg2, u64 arg3)
+{
+	register u32 func asm("w0") = func_;
+	register u64 x1 asm("x1") = arg1;
+	register u64 x2 asm("x2") = arg2;
+	register u64 x3 asm("x3") = arg3;
+
+	asm volatile("smc #0" : "+r"(func) : "r"((void*)x1), "r"((void*)x2), "r"((void*)x3));
+	/* could return something, but ignoring it */
+}
+#define PSCI_SYSTEM_OFF		0x84000008U
+
+void __noreturn psci_system_off(void)
+{
+	__psci_invoke(PSCI_SYSTEM_OFF, 0, 0, 0);
+	__builtin_unreachable();
+}
 
 DEFINE_PER_CPU(struct kvm_cpu_context, kvm_hyp_ctxt);
-void __noreturn hyp_panic(void){}
-void __noreturn hyp_panic_bad_stack(void){}
-void kvm_unexpected_el2_exception(void){}
+void __noreturn hyp_panic(void)
+{
+	psci_system_off();
+}
+void __noreturn hyp_panic_bad_stack(void)
+{
+	psci_system_off();
+}
+void kvm_unexpected_el2_exception(void){
+	psci_system_off();
+}
