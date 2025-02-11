@@ -46,7 +46,7 @@ static inline u64 picovm_granule_shift(u32 level)
 
 // NOTE: based on linux/arch/arm64/kvm/hyp/pgtable.c
 #define PICOVM_PTE_TYPE				BIT(1)
-#define PICOVM_PTE_TYPE_BLOCK			0
+#define PICOVM_PTE_TYPE_BLOCK			0	
 #define PICOVM_PTE_TYPE_PAGE			1
 #define PICOVM_PTE_TYPE_TABLE			1
 
@@ -95,7 +95,7 @@ struct picovm_pgtable_walk_data {
 
 static bool inline picovm_pte_block(picovm_pte_t pte)
 {
-	return !(pte & PICOVM_PTE_TYPE);
+	return FIELD_GET(PICOVM_PTE_TYPE, pte) == PICOVM_PTE_TYPE_BLOCK;
 }
 
 static bool inline picovm_is_pte_invalid_or_block(picovm_pte_t pte)
@@ -190,10 +190,7 @@ static picovm_pte_t picovm_init_table_pte(picovm_pte_t *childp)
 	return pte;
 }
 
-// DEFINED IN arch/arm64/kvm/hyp/hyp-entry.S
-extern unsigned char __bp_harden_hyp_vecs[];
-
-int picovm_pgtable_hyp_early_alloc_path(struct picovm_pgtable *pgt, u64 addr)
+int picovm_pgtable_hyp_early_map(struct picovm_pgtable *pgt, u64 addr)
 {
 	picovm_pteref_t pteref, childp;
 	picovm_pte_t pte;
@@ -240,14 +237,13 @@ int picovm_pgtable_hyp_init(struct picovm_pgtable *pgt, u32 va_bits)
 	if (!pgt->pgd)
 		return -ENOMEM;
 
-	// allocate intermediate page tables for hyp_memory in advance
 	for (i = 0; i < hyp_memblock_nr; i++) {
 		struct memblock_region *reg = &hyp_memory[i];
-		u64 start = ALIGN_DOWN(reg->base, PAGE_SIZE);
+		u64 start = (u64)hyp_phys_to_virt(ALIGN_DOWN(reg->base, PAGE_SIZE));
 		u64 end = PAGE_ALIGN(start + reg->size);
 		
 		for (addr = start; addr < end; addr += PAGE_SIZE) {
-			ret = picovm_pgtable_hyp_early_alloc_path(pgt, addr);
+			ret = picovm_pgtable_hyp_early_map(pgt, addr);
 			if (ret)
 				return ret;
 		}
@@ -261,9 +257,9 @@ static int stage2_map_walker(const struct picovm_pgtable_visit_ctx *ctx)
 {
 	picovm_pte_t* ptep = ctx->ptep;
 	struct picovm_stage2_map_data *data = ctx->arg;
-	phys_addr_t pa = data->phys + ctx->ofs;
+	phys_addr_t phys = data->phys + ctx->ofs;
 
-	picovm_pte_t new = pa | data->prot;
+	picovm_pte_t new = phys | data->prot;
 
 	WRITE_ONCE(*ptep, 0);
 	if (picovm_pte_valid(ctx->old)) {
@@ -284,9 +280,9 @@ static int stage2_map_walker(const struct picovm_pgtable_visit_ctx *ctx)
 static int hyp_map_walker(const struct picovm_pgtable_visit_ctx *ctx)
 {
 	picovm_pte_t* ptep = ctx->ptep;
-	struct picovm_hyp_map_data *data = ctx->arg; 
-	phys_addr_t pa = data->phys + ctx->ofs;
-	picovm_pte_t new = pa | data->prot;
+	struct picovm_hyp_map_data *data = ctx->arg;
+	phys_addr_t phys = data->phys + ctx->ofs;
+	picovm_pte_t new = phys | data->prot;
 
 	smp_store_release(ptep, new);
 	return 0;
@@ -314,7 +310,7 @@ static picovm_pte_t* _picovm_pgtable_walk(struct picovm_pgtable *pgt, u64 addr)
 	idx = picovm_pgd_page_idx(pgt, addr);
 	pteref = &pgt->pgd[idx * PTRS_PER_PTE];
 
-	for (level = 0; level < PICOVM_PGTABLE_MAX_LEVELS-1; level++) {
+	for (level = pgt->start_level; level < PICOVM_PGTABLE_MAX_LEVELS-1; level++) {
 		int idx = picovm_pgtable_idx(addr, level);
 		pte = pteref[idx];
 		if (picovm_is_pte_invalid_or_block(pte)) {
@@ -330,11 +326,12 @@ static picovm_pte_t* _picovm_pgtable_walk(struct picovm_pgtable *pgt, u64 addr)
 // NOTE: based on linux/arch/arm64/kvm/hyp/pgtable.c::int kvm_pgtable_walk(struct kvm_pgtable *pgt, u64 addr, u64 size, struct kvm_pgtable_walker *walker)
 int picovm_pgtable_walk(struct picovm_pgtable *pgt, u64 addr, u64 size, struct picovm_pgtable_walker *walker)
 {
-	int ret;
+	int ret = 0;
 	u64 start = ALIGN_DOWN(addr, PAGE_SIZE);
 	u64 end = PAGE_ALIGN(addr + size);
+	u64 cur;
 
-	for (u64 cur = start; cur < end; cur += PAGE_SIZE) {
+	for (cur = start; cur < end; cur += PAGE_SIZE) {
 		picovm_pte_t *ptep = _picovm_pgtable_walk(pgt, cur);
 
 		struct picovm_pgtable_visit_ctx ctx = {

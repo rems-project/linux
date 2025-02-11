@@ -1,3 +1,25 @@
+# Adapted from https://android-kvm.googlesource.com/build/+/refs/heads/master/aarch64/aarch64.gdb
+# (accessed 29-01-2025)
+# with has the following license
+# Copyright 2020 The Android KVM Authors
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+##
+## This is a GDB script with commands to easier debug KVM on arm64.
+## Do not use this script directly. The calling script first replaces
+## variables in the form "##VAR##" with real values.
+##
+
 set architecture aarch64
 define virt_to_phys
 	set $__addr = $arg0
@@ -59,8 +81,10 @@ document break_nvhe
 end
 
 define break_host_exceptions
-  hbreak *(__kvm_nvhe___kvm_hyp_host_vector + 0x200)
-  # hbreak *(__kvm_nvhe___kvm_hyp_host_vector + 0x400)
+#  hbreak *((unsigned char*)__kvm_nvhe___kvm_hyp_host_vector + 0x000)
+#  hbreak *((unsigned char*)__kvm_nvhe___kvm_hyp_host_vector + 0x200)
+#  hbreak *((unsigned char*)__kvm_nvhe___kvm_hyp_host_vector + 0x400)
+#  hbreak *((unsigned char*)__kvm_nvhe___kvm_hyp_host_vector + 0x400)
 end
 
 define currentEL
@@ -94,9 +118,10 @@ commands
 	echo Protected KVM debug mode initialized\n
 
   break_nvhe hyp_panic
-  break_host_exceptions
+#  break_host_exceptions
 end
 
 target remote :1234
 
 continue
+

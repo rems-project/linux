@@ -33,18 +33,18 @@ static DEFINE_PER_CPU(struct hyp_fixmap_slot, fixmap_slots);
 static int __picovm_create_mappings(unsigned long start, unsigned long size, 
                                     unsigned long phys, enum picovm_pgtable_prot prot)
 {
-  int err;
+	int err;
 
-  hyp_spin_lock(&picovm_pgd_lock);
-  err = picovm_pgtable_hyp_map(&picovm_pgtable, start, size, phys, prot);
-  hyp_spin_unlock(&picovm_pgd_lock);
+	hyp_spin_lock(&picovm_pgd_lock);
+	err = picovm_pgtable_hyp_map(&picovm_pgtable, start, size, phys, prot);
+	hyp_spin_unlock(&picovm_pgd_lock);
 
-  return err;
+	return err;
 }
 
 int picovm_alloc_private_va_range(size_t size, unsigned long *haddr)
 {
-	unsigned long base, addr;
+	unsigned long base, addr, cur;
 	int ret = 0;
 
 	hyp_spin_lock(&picovm_pgd_lock);
@@ -57,9 +57,15 @@ int picovm_alloc_private_va_range(size_t size, unsigned long *haddr)
 
 	/* Are we overflowing on the vmemmap ? */
 	__io_map_base = base;
-	picovm_pgtable_hyp_early_alloc_path(&picovm_pgtable, __io_map_base);
 	*haddr = addr;
 
+	for (cur = addr; cur < __io_map_base; cur += PAGE_SIZE) {
+		ret = picovm_pgtable_hyp_early_map(&picovm_pgtable, cur);
+		if (ret)
+			goto out;
+	}
+
+out:
 	hyp_spin_unlock(&picovm_pgd_lock);
 
 	return ret;
@@ -99,7 +105,7 @@ int picovm_create_mappings_locked(void *from, void *to, enum picovm_pgtable_prot
 	for (virt_addr = start; virt_addr < end; virt_addr += PAGE_SIZE) {
 		int err;
 
-		err = picovm_pgtable_hyp_early_alloc_path(&picovm_pgtable, virt_addr);
+		err = picovm_pgtable_hyp_early_map(&picovm_pgtable, virt_addr);
 		if (err)
 			return err;
 
@@ -200,7 +206,8 @@ int hyp_create_pcpu_fixmap(void)
 
 int hyp_create_idmap(u32 hyp_va_bits)
 {
-	unsigned long start, end;
+	int ret;
+	unsigned long start, cur, end;
 
 	start = hyp_virt_to_phys((void *)__hyp_idmap_text_start);
 	start = ALIGN_DOWN(start, PAGE_SIZE);
@@ -210,6 +217,12 @@ int hyp_create_idmap(u32 hyp_va_bits)
 
 	__io_map_base = start & BIT(hyp_va_bits - 2);
 	__io_map_base ^= BIT(hyp_va_bits - 2);
+
+	for (cur = start; cur < end; cur += PAGE_SIZE) {
+		ret = picovm_pgtable_hyp_early_map(&picovm_pgtable, cur);
+		if (ret)
+			return ret;
+	}
 
 	return __picovm_create_mappings(start, end - start, start, PAGE_HYP_EXEC);
 }

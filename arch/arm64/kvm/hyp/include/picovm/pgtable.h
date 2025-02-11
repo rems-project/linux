@@ -131,7 +131,7 @@ struct picovm_pgtable {
 int picovm_pgtable_hyp_init(struct picovm_pgtable *pgt, u32 va_bits);
 int picovm_pgtable_stage2_init(struct picovm_pgtable *pgt, struct picovm_s2_mmu *mmu);
 
-int picovm_pgtable_hyp_early_alloc_path(struct picovm_pgtable *pgt, u64 addr);
+int picovm_pgtable_hyp_early_map(struct picovm_pgtable *pgt, u64 addr);
 
 int picovm_pgtable_walk(struct picovm_pgtable *pgt, u64 addr, u64 size,
 			struct picovm_pgtable_walker *walker);
