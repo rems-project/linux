@@ -455,16 +455,14 @@ static void check_stage2_configuration(void)
  */
 int picovm_pgtable_stage2_init(struct picovm_pgtable *pgt, struct picovm_s2_mmu *mmu)
 {
-	size_t pgd_sz;
+	size_t nr_pages;
 	check_stage2_configuration();
 	pgt->ia_bits = PICOVM_CONFIG_IA_BITS;
 	pgt->start_level = PICOVM_CONFIG_STARTING_LEVEL;
 	pgt->mmu = mmu;
 
-	pgd_sz = picovm_pgd_pages(pgt->ia_bits, pgt->start_level) * PAGE_SIZE;
-	// TODO: use picovm_early_alloc?
-	pgt->pgd = (picovm_pteref_t)hyp_early_alloc_contig(pgd_sz);
-	// pgt->pgd = (picovm_pteref_t)alloc_pages_exact(pgd_sz, GFP_KERNEL_ACCOUNT | __GFP_ZERO); // (picovm_pteref_t)host_s2_zalloc_pages_exact(pgd_sz);
+	nr_pages = picovm_pgd_pages(pgt->ia_bits, pgt->start_level);
+	pgt->pgd = (picovm_pteref_t)hyp_early_alloc_contig(nr_pages);
 	if (!pgt->pgd)
 		return -ENOMEM;
 	dsb(ishst);
