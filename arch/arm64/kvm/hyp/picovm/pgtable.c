@@ -55,6 +55,13 @@ static inline u64 picovm_granule_shift(u32 level)
 #define PICOVM_PTE_LEAF_ATTR_LO_S1_AP		GENMASK(7, 6)
 #define PICOVM_PTE_LEAF_ATTR_LO_S1_AP_RO	3
 #define PICOVM_PTE_LEAF_ATTR_LO_S1_AP_RW	1
+#define PICOVM_PTE_LEAF_ATTR_LO_S1_SH		GENMASK(9, 8)
+#define PICOVM_PTE_LEAF_ATTR_LO_S1_SH_IS	3
+#define PICOVM_PTE_LEAF_ATTR_LO_S1_AF		BIT(10)
+
+#define PICOVM_PTE_LEAF_ATTR_LO_S1_ATTRIDX	GENMASK(4, 2)
+#define MT_DEVICE_nGnRE 			4
+#define MT_NORMAL				0
 
 #define PICOVM_PTE_LEAF_ATTR_LO_S2_MEMATTR	GENMASK(5, 2)
 #define PICOVM_PTE_LEAF_ATTR_LO_S2_S2AP_R	BIT(6)
@@ -252,16 +259,75 @@ int picovm_pgtable_hyp_init(struct picovm_pgtable *pgt, u32 va_bits)
 	return ret;
 }
 
+static u64 picovm_make_hyp_attr(enum picovm_pgtable_prot prot)
+{
+	bool device = prot & PICOVM_PGTABLE_PROT_DEVICE;
+	u32 mtype = device ? MT_DEVICE_nGnRE : MT_NORMAL;
+	u64 attr = FIELD_PREP(PICOVM_PTE_LEAF_ATTR_LO_S1_ATTRIDX, mtype);
+
+	u32 sh = PICOVM_PTE_LEAF_ATTR_LO_S1_SH_IS;
+	u32 ap = (prot & PICOVM_PGTABLE_PROT_W) ?
+		 PICOVM_PTE_LEAF_ATTR_LO_S1_AP_RW :
+		 PICOVM_PTE_LEAF_ATTR_LO_S1_AP_RO;
+
+	BUG_ON(!(prot & PICOVM_PGTABLE_PROT_R));
+	if (prot & PICOVM_PGTABLE_PROT_X)
+		// TODO: does this need to be a propagated EINVAL?
+		BUG_ON(prot & PICOVM_PGTABLE_PROT_W);
+	else
+		attr |= PICOVM_PTE_LEAF_ATTR_HI_S1_XN;
+
+	attr |= FIELD_PREP(PICOVM_PTE_LEAF_ATTR_LO_S1_AP, ap);
+	attr |= FIELD_PREP(PICOVM_PTE_LEAF_ATTR_LO_S1_SH, sh);
+	attr |= PICOVM_PTE_LEAF_ATTR_LO_S1_AF;
+	attr |= prot & PICOVM_PTE_LEAF_ATTR_HI_SW;
+
+	return attr;
+}
+
+static u64 picovm_make_stage2_attr(enum picovm_pgtable_prot prot)
+{
+	bool device = prot & PICOVM_PGTABLE_PROT_DEVICE;
+	u32 mtype = device ? MT_DEVICE_nGnRE : MT_NORMAL;
+	u64 attr = mtype << 2;
+	u32 sh = PICOVM_PTE_LEAF_ATTR_LO_S2_SH_IS;
+
+	if (!(prot & PICOVM_PGTABLE_PROT_X))
+		attr |= PICOVM_PTE_LEAF_ATTR_HI_S1_XN;
+	else
+		// TODO: does this need to be a propagated EINVAL?
+		BUG_ON(device);
+
+	if (prot & PICOVM_PGTABLE_PROT_R)
+		attr |= PICOVM_PTE_LEAF_ATTR_LO_S2_S2AP_R;
+
+	if (prot & PICOVM_PGTABLE_PROT_W)
+		attr |= PICOVM_PTE_LEAF_ATTR_LO_S2_S2AP_W;
+
+	attr |= FIELD_PREP(PICOVM_PTE_LEAF_ATTR_LO_S2_SH, sh);
+	attr |= PICOVM_PTE_LEAF_ATTR_LO_S2_AF;
+	attr |= prot & PICOVM_PTE_LEAF_ATTR_HI_SW;
+
+	return attr;
+}
+
+static u64 picovm_make_page_pte(bool is_hyp, u64 phys, enum picovm_pgtable_prot prot)
+{
+	u64 pte = 0;
+
+	pte |= PICOVM_PTE_VALID;
+	pte |= FIELD_PREP(PICOVM_PTE_TYPE, PICOVM_PTE_TYPE_PAGE);
+	pte |= is_hyp ? picovm_make_hyp_attr(prot) : picovm_make_stage2_attr(prot);
+	pte |= phys & GENMASK(47, 12);
+	return pte;
+}
+
 
 static int stage2_map_walker(const struct picovm_pgtable_visit_ctx *ctx)
 {
 	picovm_pte_t* ptep = ctx->ptep;
 	struct picovm_stage2_map_data *data = ctx->arg;
 	phys_addr_t phys = data->phys + ctx->ofs;
-
-	picovm_pte_t new = phys | data->prot;
-
-	WRITE_ONCE(*ptep, 0);
 	if (picovm_pte_valid(ctx->old)) {
 		phys_addr_t ipa = ctx->addr;
 		dsb(ishst);
@@ -273,7 +339,7 @@ static int stage2_map_walker(const struct picovm_pgtable_visit_ctx *ctx)
 		isb();
 	}
 
-	smp_store_release(ctx->ptep, new);
+	smp_store_release(ctx->ptep, picovm_make_page_pte(false, phys, data->prot));
 	return 0;
 }
 
@@ -282,9 +348,8 @@ static int hyp_map_walker(const struct picovm_pgtable_visit_ctx *ctx)
 	picovm_pte_t* ptep = ctx->ptep;
 	struct picovm_hyp_map_data *data = ctx->arg;
 	phys_addr_t phys = data->phys + ctx->ofs;
-	picovm_pte_t new = phys | data->prot;
 
-	smp_store_release(ptep, new);
+	smp_store_release(ptep, picovm_make_page_pte(true, phys, data->prot));
 	return 0;
 }
 
