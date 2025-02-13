@@ -19,6 +19,20 @@ bool picovm_initialized;
 // DEFINED IN kvm_interface.c
 DECLARE_PER_CPU(struct kvm_nvhe_init_params, kvm_init_params);
 
+static void handle___kvm_get_mdcr_el2(struct kvm_cpu_context *host_ctxt)
+{
+	cpu_reg(host_ctxt, 1) = read_sysreg(mdcr_el2);
+}
+
+static void handle___pkvm_cpu_set_vector(struct kvm_cpu_context *host_ctxt)
+{
+	// TODO: we don't care about this for now
+	// DECLARE_REG(enum arm64_hyp_spectre_vector, slot, host_ctxt, 1);
+
+	// cpu_reg(host_ctxt, 1) = pkvm_cpu_set_vector(slot);
+	cpu_reg(host_ctxt, 1) = 0;
+}
+
 
 static void handle___pkvm_init(struct kvm_cpu_context *host_ctxt)
 {
@@ -94,8 +108,10 @@ typedef void (*hcall_t)(struct kvm_cpu_context *);
 #define HANDLE_FUNC(x)	[__KVM_HOST_SMCCC_FUNC_##x] = (hcall_t)handle_##x
 static const hcall_t host_hcall[] = {
 	/* ___kvm_hyp_init */
+	HANDLE_FUNC(__kvm_get_mdcr_el2),
 	HANDLE_FUNC(__pkvm_init),
 	// HANDLE_FUNC(__pkvm_create_private_mapping),
+	HANDLE_FUNC(__pkvm_cpu_set_vector),
 	HANDLE_FUNC(__pkvm_prot_finalize),
 
 	HANDLE_FUNC(__pkvm_host_share_hyp),
