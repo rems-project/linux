@@ -422,23 +422,22 @@ static inline void picovm_assert(bool test)
 	BUG_ON(test);
 }
 
-static void check_stage2_configuration(void)
+void check_stage2_configuration(u64 vtcr)
 {
-	u64 vtcr = read_sysreg(vtcr_el2);
-	u32 ia_bits = 64 - VTCR_EL2_T0SZ(vtcr);
+	u32 ia_bits = 64 - FIELD_GET(GENMASK(5,0), vtcr);
 	u32 starting_level = 2U - GET_FIELD(vtcr, VTCR_EL2_SL0);
 
 	// checking the granual size
-	picovm_assert(GET_FIELD(vtcr, VTCR_EL2_TG0) == PICOVM_CONFIG_GRANULE_SIZE);
+	picovm_assert(GET_FIELD(vtcr, VTCR_EL2_TG0) != PICOVM_CONFIG_GRANULE_SIZE);
 	
 	// checking the maximum input address size
 	// NOTE: because we configure IA_BITS to 48bits, the TTBR points to a
 	// single level 0 table (not a concatenation of level 1 tables), so
 	// we don't need additional checks
-	picovm_assert(ia_bits == PICOVM_CONFIG_IA_BITS);
+	picovm_assert(ia_bits != PICOVM_CONFIG_IA_BITS);
 
 	// checking the starting level
-	picovm_assert(starting_level == PICOVM_CONFIG_STARTING_LEVEL);
+	picovm_assert(starting_level != PICOVM_CONFIG_STARTING_LEVEL);
 }
 
 /*
@@ -456,7 +455,6 @@ static void check_stage2_configuration(void)
 int picovm_pgtable_stage2_init(struct picovm_pgtable *pgt, struct picovm_s2_mmu *mmu)
 {
 	size_t nr_pages;
-	check_stage2_configuration();
 	pgt->ia_bits = PICOVM_CONFIG_IA_BITS;
 	pgt->start_level = PICOVM_CONFIG_STARTING_LEVEL;
 	pgt->mmu = mmu;

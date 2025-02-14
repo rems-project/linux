@@ -128,6 +128,8 @@ struct picovm_pgtable {
 /*
  * INTERFACE of picovm/pgtable.c
  */
+void check_stage2_configuration(u64 vtcr);
+
 int picovm_pgtable_hyp_init(struct picovm_pgtable *pgt, u32 va_bits);
 int picovm_pgtable_stage2_init(struct picovm_pgtable *pgt, struct picovm_s2_mmu *mmu);
 

@@ -92,8 +92,8 @@
 #define VTCR_EL2_ORGN0_WBWA	TCR_ORGN0_WBWA
 #define VTCR_EL2_IRGN0_WBWA	TCR_IRGN0_WBWA
 
-// TODO: ???
-#define VTCR_EL2_T0SZ(x)	(UL(64) - (x))
+#define TCR_T0SZ_OFFSET		0
+#define VTCR_EL2_T0SZ(x)	((UL(64) - (x)) << TCR_T0SZ_OFFSET)
 
 
 #ifdef CONFIG_ARM64_4K_PAGES

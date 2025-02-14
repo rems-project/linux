@@ -121,6 +121,7 @@ int picovm_host_prepare_stage2(void *pgt_pool_base)
 	prepare_host_vtcr();
 	hyp_spin_lock_init(&host_mmu.lock);
 
+	check_stage2_configuration(host_mmu.vtcr);
 	ret = picovm_pgtable_stage2_init(&host_mmu.pgt, mmu);
 	if (ret)
 		return ret;
