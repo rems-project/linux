@@ -3,6 +3,7 @@
  * Based on arch/arm64/kvm/hyp/pgtable.c 
  */
 #include "picovm/kvm_picovm.h"
+#include "picovm/mmu.h"
 #include <picovm/asm/errno-base.h>
 
 #include <picovm/asm/bug.h>
@@ -77,7 +78,6 @@ static inline u64 picovm_granule_shift(u32 level)
 
 #define PICOVM_INVALID_PTE_OWNER_MASK	GENMASK(9, 2)
 #define PICOVM_MAX_OWNER_ID		FIELD_MAX(PICOVM_INVALID_PTE_OWNER_MASK)
-
 
 // NOTE: based on linux/arch/arm64/kvm/hyp/pgtable.c::struct kvm_stage2_map_data
 struct picovm_stage2_map_data {
@@ -188,77 +188,6 @@ static bool picovm_pte_table(picovm_pte_t pte, u32 level)
 	return FIELD_GET(PICOVM_PTE_TYPE, pte) == PICOVM_PTE_TYPE_TABLE;
 }
 
-static picovm_pte_t picovm_init_table_pte(picovm_pte_t *childp)
-{
-	picovm_pte_t pte = picovm_phys_to_pte(hyp_virt_to_phys(childp));
-
-	pte |= FIELD_PREP(PICOVM_PTE_TYPE, PICOVM_PTE_TYPE_TABLE);
-	pte |= PICOVM_PTE_VALID;
-	return pte;
-}
-
-int picovm_pgtable_hyp_early_map(struct picovm_pgtable *pgt, u64 addr)
-{
-	picovm_pteref_t pteref, childp;
-	picovm_pte_t pte;
-	u64 level;
-	phys_addr_t phys;
-
-	u32 idx = picovm_pgd_page_idx(pgt, addr);
-	pteref = &pgt->pgd[idx * PTRS_PER_PTE];
-
-	for (level = pgt->start_level; level < PICOVM_PGTABLE_MAX_LEVELS - 1; level++) {
-		idx = picovm_pgtable_idx(addr, level);
-		pte = pteref[idx];
-		if (picovm_pte_table(pte, level)) {
-			phys = picovm_pte_to_phys(pte);
-			pteref = (picovm_pteref_t)hyp_phys_to_virt(phys);
-		} else {
-			childp = (picovm_pteref_t)hyp_early_alloc_page();
-			if (!childp)
-				return -ENOMEM;
-
-			// initialize the pte as a table
-			pte = picovm_init_table_pte(childp);
-			pteref[idx] = pte;
-			pteref = childp;
-		}
-		
-	}
-
-	pteref[picovm_pgtable_idx(addr, PICOVM_PGTABLE_MAX_LEVELS-1)] = PICOVM_PHYS_INVALID;
-	return 0;
-}
-
-int picovm_pgtable_hyp_init(struct picovm_pgtable *pgt, u32 va_bits)
-{
-	u64 nr_pages, addr;
-	int i, ret = 0;
-	
-	pgt->ia_bits		= va_bits;
-	pgt->start_level	= 0;
-	pgt->mmu		= NULL;
-	
-	nr_pages = picovm_pgd_pages(pgt->ia_bits, pgt->start_level);
-	pgt->pgd = (picovm_pteref_t)hyp_early_alloc_contig(nr_pages);
-	if (!pgt->pgd)
-		return -ENOMEM;
-
-	for (i = 0; i < hyp_memblock_nr; i++) {
-		struct memblock_region *reg = &hyp_memory[i];
-		u64 start = (u64)hyp_phys_to_virt(ALIGN_DOWN(reg->base, PAGE_SIZE));
-		u64 end = PAGE_ALIGN(start + reg->size);
-		
-		for (addr = start; addr < end; addr += PAGE_SIZE) {
-			ret = picovm_pgtable_hyp_early_map(pgt, addr);
-			if (ret)
-				return ret;
-		}
-	}
-	
-	return ret;
-}
-
 static u64 picovm_make_hyp_attr(enum picovm_pgtable_prot prot)
 {
 	bool device = prot & PICOVM_PGTABLE_PROT_DEVICE;
@@ -322,10 +251,86 @@ static u64 picovm_make_page_pte(bool is_hyp, u64 phys, enum picovm_pgtable_prot 
 	return pte;
 }
 
+static picovm_pte_t picovm_init_table_pte(picovm_pte_t *childp)
+{
+	picovm_pte_t pte = picovm_phys_to_pte(hyp_virt_to_phys(childp));
+
+	pte |= FIELD_PREP(PICOVM_PTE_TYPE, PICOVM_PTE_TYPE_TABLE);
+	pte |= PICOVM_PTE_VALID;
+	return pte;
+}
+
+int picovm_pgtable_hyp_early_map(struct picovm_pgtable *pgt, u64 addr, picovm_pte_t new)
+{
+	picovm_pteref_t pteref, childp;
+	picovm_pte_t pte;
+	u64 level;
+	phys_addr_t phys;
+
+	u32 idx = picovm_pgd_page_idx(pgt, addr);
+	pteref = &pgt->pgd[idx * PTRS_PER_PTE];
+
+	for (level = pgt->start_level; level < PICOVM_PGTABLE_MAX_LEVELS - 1; level++) {
+		idx = picovm_pgtable_idx(addr, level);
+		pte = pteref[idx];
+		if (picovm_pte_table(pte, level)) {
+			phys = picovm_pte_to_phys(pte);
+			pteref = (picovm_pteref_t)hyp_phys_to_virt(phys);
+		} else {
+			childp = (picovm_pteref_t)hyp_early_alloc_page();
+			if (!childp)
+				return -ENOMEM;
+
+			// initialize the pte as a table
+			pte = picovm_init_table_pte(childp);
+			pteref[idx] = pte;
+			pteref = childp;
+		}
+		
+	}
+
+	pteref[picovm_pgtable_idx(addr, PICOVM_PGTABLE_MAX_LEVELS-1)] = new;
+	return 0;
+}
+
+int picovm_pgtable_hyp_early_map_invalid(struct picovm_pgtable *pgt, u64 addr)
+{
+	return picovm_pgtable_hyp_early_map(pgt, addr, PICOVM_PHYS_INVALID);
+}
+
+int picovm_pgtable_hyp_init(struct picovm_pgtable *pgt, u32 va_bits)
+{
+	u64 nr_pages;
+	int i, ret = 0;
+	
+	pgt->ia_bits		= va_bits;
+	pgt->start_level	= 0;
+	pgt->mmu		= NULL;
+	
+	nr_pages = picovm_pgd_pages(pgt->ia_bits, pgt->start_level);
+	pgt->pgd = (picovm_pteref_t)hyp_early_alloc_contig(nr_pages);
+	if (!pgt->pgd)
+		return -ENOMEM;
+
+	for (i = 0; i < hyp_memblock_nr; i++) {
+		struct memblock_region *reg = &hyp_memory[i];
+		u64 start = reg->base;
+		u64 end = start + reg->size;
+	
+		for (phys_addr_t phys = start; phys < end; phys += PAGE_SIZE) {
+			u64 addr = (u64)hyp_phys_to_virt(phys);
+			picovm_pte_t pte = picovm_make_page_pte(true, phys, PICOVM_PGTABLE_PROT_R);
+			ret = picovm_pgtable_hyp_early_map(pgt, addr, pte);
+			if (ret)
+				return ret;
+		}
+	}
+	
+	return ret;
+}
 
 static int stage2_map_walker(const struct picovm_pgtable_visit_ctx *ctx)
 {
-	picovm_pte_t* ptep = ctx->ptep;
 	struct picovm_stage2_map_data *data = ctx->arg;
 	phys_addr_t phys = data->phys + ctx->ofs;
 	if (picovm_pte_valid(ctx->old)) {
@@ -429,7 +434,7 @@ void check_stage2_configuration(u64 vtcr)
 
 	// checking the granual size
 	picovm_assert(GET_FIELD(vtcr, VTCR_EL2_TG0) != PICOVM_CONFIG_GRANULE_SIZE);
-	
+
 	// checking the maximum input address size
 	// NOTE: because we configure IA_BITS to 48bits, the TTBR points to a
 	// single level 0 table (not a concatenation of level 1 tables), so
@@ -455,6 +460,8 @@ void check_stage2_configuration(u64 vtcr)
 int picovm_pgtable_stage2_init(struct picovm_pgtable *pgt, struct picovm_s2_mmu *mmu)
 {
 	size_t nr_pages;
+	int i, ret = 0;
+	// check_stage2_configuration(mmu);
 	pgt->ia_bits = PICOVM_CONFIG_IA_BITS;
 	pgt->start_level = PICOVM_CONFIG_STARTING_LEVEL;
 	pgt->mmu = mmu;
@@ -463,8 +470,22 @@ int picovm_pgtable_stage2_init(struct picovm_pgtable *pgt, struct picovm_s2_mmu 
 	pgt->pgd = (picovm_pteref_t)hyp_early_alloc_contig(nr_pages);
 	if (!pgt->pgd)
 		return -ENOMEM;
+
+	for (i = 0; i < hyp_memblock_nr; i++) {
+		struct memblock_region *reg = &hyp_memory[i];
+		u64 start = reg->base;
+		u64 end = start + reg->size;
+	
+		for (phys_addr_t phys = start; phys < end; phys += PAGE_SIZE) {
+			picovm_pte_t pte = picovm_make_page_pte(false, phys, 0);
+			ret = picovm_pgtable_hyp_early_map(pgt, phys, pte);
+			if (ret)
+				return ret;
+		}
+	}
+
 	dsb(ishst);
-	return 0;
+	return ret;
 }
 
 int picovm_pgtable_stage2_map(struct picovm_pgtable *pgt, u64 addr, u64 size,

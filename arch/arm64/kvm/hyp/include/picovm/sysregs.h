@@ -93,8 +93,8 @@
 #define VTCR_EL2_IRGN0_WBWA	TCR_IRGN0_WBWA
 
 #define TCR_T0SZ_OFFSET		0
+#define TCR_T1SZ_OFFSET		16
 #define VTCR_EL2_T0SZ(x)	((UL(64) - (x)) << TCR_T0SZ_OFFSET)
-
 
 #ifdef CONFIG_ARM64_4K_PAGES
 #define TCR_TG0_SHIFT		14

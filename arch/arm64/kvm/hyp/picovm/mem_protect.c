@@ -13,6 +13,7 @@
 #include <picovm/asm/tlbflush.h>
 
 #include <picovm/spinlock.h>
+#include <picovm/early_alloc.h>
 #include <picovm/pgtable.h>
 #include <picovm/memory.h>
 #include <picovm/mmu.h>
@@ -56,9 +57,7 @@ extern unsigned long get_except64_offset(unsigned long psr, unsigned long target
 
 
 struct host_mmu {
-	/* VTCR_EL2 value for the host */
-	u64 vtcr;
-	struct picovm_s2_mmu mmu;
+	struct picovm_arch arch;
 	struct picovm_pgtable pgt;
 	hyp_spinlock_t lock;
 };
@@ -109,19 +108,22 @@ static void prepare_host_vtcr(void)
 	parange = picovm_get_parange(id_aa64mmfr0_el1_sys_val);
 	phys_shift = id_aa64mmfr0_parange_to_phys_shift(parange);
 
-	host_mmu.vtcr = picovm_get_vtcr(id_aa64mmfr0_el1_sys_val,
+	host_mmu.arch.vtcr = picovm_get_vtcr(id_aa64mmfr0_el1_sys_val,
 					id_aa64mmfr1_el1_sys_val, phys_shift);
 }
 
-int picovm_host_prepare_stage2(void *pgt_pool_base)
+int picovm_host_prepare_stage2(void *host_s2_pgt_base)
 {
-	struct picovm_s2_mmu *mmu = &host_mmu.mmu;
+	struct picovm_s2_mmu *mmu = &host_mmu.arch.mmu;
+	unsigned long pgt_size = host_s2_pgtable_pages() << PAGE_SHIFT;
 	int ret;
 
 	prepare_host_vtcr();
 	hyp_spin_lock_init(&host_mmu.lock);
+	mmu->arch = &host_mmu.arch;
 
-	check_stage2_configuration(host_mmu.vtcr);
+	check_stage2_configuration(host_mmu.arch.vtcr);
+	hyp_early_alloc_init(host_s2_pgt_base, pgt_size);
 	ret = picovm_pgtable_stage2_init(&host_mmu.pgt, mmu);
 	if (ret)
 		return ret;
@@ -135,14 +137,14 @@ int picovm_host_prepare_stage2(void *pgt_pool_base)
 
 int __pkvm_prot_finalize(void)
 {
-	struct picovm_s2_mmu *mmu = &host_mmu.mmu;
+	struct picovm_s2_mmu *mmu = &host_mmu.arch.mmu;
 	struct kvm_nvhe_init_params *params = this_cpu_ptr(&kvm_init_params);
 
 	if (params->hcr_el2 & HCR_VM)
 		return -EPERM;
 
 	params->vttbr = picovm_get_vttbr(mmu);
-	params->vtcr = host_mmu.vtcr;
+	params->vtcr = host_mmu.arch.vtcr;
 	params->hcr_el2 |= HCR_VM;
 
 	/*
@@ -154,7 +156,7 @@ int __pkvm_prot_finalize(void)
 	picovm_flush_dcache_to_poc(params, sizeof(*params));
 
 	write_sysreg(params->hcr_el2, hcr_el2);
-	__load_stage2(&host_mmu.mmu, host_mmu.vtcr);
+	__load_stage2(&host_mmu.arch.mmu, host_mmu.arch.vtcr);
 
 	/*
 	 * Make sure to have an ISB before the TLB maintenance below but only
@@ -213,31 +215,6 @@ bool addr_is_memory(phys_addr_t phys)
 	struct picovm_mem_range range;
 
 	return !!find_mem_range(phys, &range);
-}
-
-static bool addr_is_allowed_memory(phys_addr_t phys)
-{
-	struct memblock_region *reg;
-	struct picovm_mem_range range;
-
-	reg = find_mem_range(phys, &range);
-
-	return reg && !(reg->flags & MEMBLOCK_NOMAP);
-}
-
-static bool is_in_mem_range(u64 addr, struct picovm_mem_range *range)
-{
-	return range->start <= addr && addr < range->end;
-}
-
-static bool range_is_memory(u64 start, u64 end)
-{
-	struct picovm_mem_range r;
-
-	if (!find_mem_range(start, &r))
-		return false;
-
-	return is_in_mem_range(end - 1, &r);
 }
 
 int host_stage2_idmap_locked(phys_addr_t addr, u64 size,

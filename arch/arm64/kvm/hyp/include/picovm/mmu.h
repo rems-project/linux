@@ -34,8 +34,14 @@ struct picovm_vmid {
 };
 
 struct picovm_s2_mmu {
-	struct picovm_vmid vmid;
-	phys_addr_t	pgd_phys;	
+	struct picovm_vmid	vmid;
+	phys_addr_t		pgd_phys;
+	struct picovm_arch	*arch;
+};
+
+struct picovm_arch {
+	struct picovm_s2_mmu mmu;
+	u64	vtcr;
 };
 
 
