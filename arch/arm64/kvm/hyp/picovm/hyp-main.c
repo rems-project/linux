@@ -33,6 +33,13 @@ static void handle___pkvm_cpu_set_vector(struct kvm_cpu_context *host_ctxt)
 	cpu_reg(host_ctxt, 1) = 0;
 }
 
+static void handle___vgic_v3_get_gic_config(struct kvm_cpu_context *host_ctxt)
+{
+	// this is in hyp/vgic-v3-sr.c
+	extern u64 __vgic_v3_get_gic_config(void);
+	cpu_reg(host_ctxt, 1) = __vgic_v3_get_gic_config();
+}
+
 
 static void handle___pkvm_init(struct kvm_cpu_context *host_ctxt)
 {
@@ -112,6 +119,7 @@ static const hcall_t host_hcall[] = {
 	HANDLE_FUNC(__pkvm_init),
 	// HANDLE_FUNC(__pkvm_create_private_mapping),
 	HANDLE_FUNC(__pkvm_cpu_set_vector),
+	HANDLE_FUNC(__vgic_v3_get_gic_config),
 	HANDLE_FUNC(__pkvm_prot_finalize),
 
 	HANDLE_FUNC(__pkvm_host_share_hyp),

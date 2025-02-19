@@ -20,7 +20,7 @@ ccflags-y += -DCONFIG_PICOVM_STANDALONE
 hostprogs := gen-hyprel
 HOST_EXTRACFLAGS += -I$(objtree)/include
 
-reused-hyp-objs := aarch32.o exception.o entry.o hyp-entry.o
+reused-hyp-objs := aarch32.o exception.o entry.o hyp-entry.o vgic-v3-sr.o
 reused-nvhe-objs := hyp-init.o hyp-smp.o psci-relay.o stacktrace.o host.o
 
 picovm-obj-y := kvm_interface.o
