@@ -238,7 +238,7 @@ static picovm_pte_t picovm_init_table_pte(picovm_pte_t *childp)
 	return pte;
 }
 
-int picovm_pgtable_hyp_early_mapping(struct picovm_pgtable *pgt, u64 addr)
+int __picovm_pgtable_early_mapping(struct picovm_pgtable *pgt, u64 addr, bool is_hyp)
 {
 	picovm_pteref_t pteref, childp;
 	picovm_pte_t pte;
@@ -255,7 +255,12 @@ int picovm_pgtable_hyp_early_mapping(struct picovm_pgtable *pgt, u64 addr)
 			phys = picovm_pte_to_phys(pte);
 			pteref = (picovm_pteref_t)hyp_phys_to_virt(phys);
 		} else {
-			childp = (picovm_pteref_t)hyp_early_alloc_page();
+			// TODO: use mm_ops (?)
+			if (is_hyp) {
+				childp = (picovm_pteref_t)hyp_early_alloc_page();
+			} else {
+				childp = (picovm_pteref_t)host_stage2_early_alloc_page();
+			}
 			if (!childp)
 				return -ENOMEM;
 
@@ -269,6 +274,17 @@ int picovm_pgtable_hyp_early_mapping(struct picovm_pgtable *pgt, u64 addr)
 
 	pteref[picovm_pgtable_idx(addr, PICOVM_PGTABLE_MAX_LEVELS-1)] = 0;
 	return 0;
+
+}
+
+int picovm_pgtable_hyp_early_mapping(struct picovm_pgtable *pgt, u64 addr)
+{
+	return __picovm_pgtable_early_mapping(pgt, addr, true);
+}
+
+int picovm_pgtable_stage2_early_mapping(struct picovm_pgtable *pgt, u64 addr)
+{
+	return __picovm_pgtable_early_mapping(pgt, addr, false);
 }
 
 int picovm_pgtable_hyp_init(struct picovm_pgtable *pgt, u32 va_bits)
@@ -401,7 +417,6 @@ struct leaf_walk_data {
 static int leaf_walker(const struct picovm_pgtable_visit_ctx *ctx)
 {
 	struct leaf_walk_data *data = ctx->arg;
-
 	data->pte   = ctx->old;
 
 	return 0;
@@ -466,13 +481,13 @@ int picovm_pgtable_stage2_init(struct picovm_pgtable *pgt, struct picovm_s2_mmu 
 {
 	size_t nr_pages;
 	int i, ret = 0;
-	// check_stage2_configuration(mmu);
+
 	pgt->ia_bits = PICOVM_CONFIG_IA_BITS;
 	pgt->start_level = PICOVM_CONFIG_STARTING_LEVEL;
 	pgt->mmu = mmu;
 
 	nr_pages = picovm_pgd_pages(pgt->ia_bits, pgt->start_level);
-	pgt->pgd = (picovm_pteref_t)hyp_early_alloc_contig(nr_pages);
+	pgt->pgd = (picovm_pteref_t)host_stage2_early_alloc_contig(nr_pages);
 	if (!pgt->pgd)
 		return -ENOMEM;
 
@@ -482,7 +497,7 @@ int picovm_pgtable_stage2_init(struct picovm_pgtable *pgt, struct picovm_s2_mmu 
 		u64 end = start + reg->size;
 	
 		for (phys_addr_t phys = start; phys < end; phys += PAGE_SIZE) {
-			ret = picovm_pgtable_hyp_early_mapping(pgt, phys);
+			ret = picovm_pgtable_stage2_early_mapping(pgt, phys);
 			if (ret)
 				return ret;
 		}

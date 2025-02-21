@@ -123,7 +123,7 @@ int picovm_host_prepare_stage2(void *host_s2_pgt_base)
 	mmu->arch = &host_mmu.arch;
 
 	check_stage2_configuration(host_mmu.arch.vtcr);
-	hyp_early_alloc_init(host_s2_pgt_base, pgt_size);
+	host_stage2_early_alloc_init(host_s2_pgt_base, pgt_size);
 	ret = picovm_pgtable_stage2_init(&host_mmu.pgt, mmu);
 	if (ret)
 		return ret;
@@ -275,7 +275,6 @@ static int host_stage2_idmap(u64 addr)
 
 unlock:
 	host_unlock_component();
-
 	return ret;
 }
 

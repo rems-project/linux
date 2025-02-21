@@ -67,7 +67,6 @@ int picovm_alloc_private_va_range(size_t size, unsigned long *haddr)
 
 out:
 	hyp_spin_unlock(&picovm_pgd_lock);
-
 	return ret;
 }
 
