@@ -211,6 +211,38 @@ bool addr_is_memory(phys_addr_t phys)
 	return !!find_mem_range(phys, &range);
 }
 
+static inline bool range_included(struct picovm_mem_range *child,
+				  struct picovm_mem_range *parent)
+{
+	return parent->start <= child->start && child->end <= parent->end;
+}
+
+static int host_stage2_adjust_range(u64 addr, struct picovm_mem_range *range)
+{
+	struct picovm_mem_range cur;
+	picovm_pte_t pte;
+	u64 granule;
+	int ret;
+
+	ret = picovm_pgtable_get_leaf(&host_mmu.pgt, addr, &pte);
+	if (ret)
+		return ret;
+
+	if (picovm_pte_valid(pte))
+		return -EAGAIN;
+
+	if (pte)
+		return -EPERM;
+
+	granule = picovm_granule_size(PICOVM_PGTABLE_MAX_LEVELS - 1);
+	cur.start = ALIGN_DOWN(addr, granule);
+	cur.end = cur.start + granule;
+
+	*range = cur;
+
+	return 0;
+}
+
 int host_stage2_idmap_locked(phys_addr_t addr, u64 size,
 			     enum picovm_pgtable_prot prot)
 {
@@ -235,7 +267,13 @@ static int host_stage2_idmap(u64 addr)
 	prot = is_memory ? PICOVM_HOST_MEM_PROT : PICOVM_HOST_MMIO_PROT;
 
 	host_lock_component();
+	ret = host_stage2_adjust_range(addr, &range);
+	if (ret)
+		goto unlock;
+
 	ret = picovm_pgtable_stage2_map(&host_mmu.pgt, range.start, range.end - range.start, addr, prot);
+
+unlock:
 	host_unlock_component();
 
 	return ret;

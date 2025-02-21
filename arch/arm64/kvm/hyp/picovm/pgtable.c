@@ -22,29 +22,6 @@
 #include <picovm/pgtable.h>
 
 
-// NOTE: from arch/arm64/include/asm/pgtable-hwdef.h
-/*
- * Size mapped by an entry at level n ( 0 <= n <= 3)
- * We map (PAGE_SHIFT - 3) at all translation levels and PAGE_SHIFT bits
- * in the final page. The maximum number of translation levels supported by
- * the architecture is 4. Hence, starting at level n, we have further
- * ((4 - n) - 1) levels of translation excluding the offset within the page.
- * So, the total number of bits mapped by an entry at level n is :
- *
- *  ((4 - n) - 1) * (PAGE_SHIFT - 3) + PAGE_SHIFT
- *
- * Rearranging it a bit we get :
- *   (4 - n) * (PAGE_SHIFT - 3) + 3
- */
-#define ARM64_HW_PGTABLE_LEVEL_SHIFT(n)	((PAGE_SHIFT - 3) * (4 - (n)) + 3)
-
-// NOTE: based on arch/arm64/include/asm/kvm_pgtable.h
-static inline u64 picovm_granule_shift(u32 level)
-{
-	/* Assumes KVM_PGTABLE_MAX_LEVELS is 4 */
-	return ARM64_HW_PGTABLE_LEVEL_SHIFT(level);
-}
-
 
 // NOTE: based on linux/arch/arm64/kvm/hyp/pgtable.c
 #define PICOVM_PTE_TYPE				BIT(1)
@@ -395,23 +372,56 @@ int picovm_pgtable_walk(struct picovm_pgtable *pgt, u64 addr, u64 size, struct p
 	u64 start = ALIGN_DOWN(addr, PAGE_SIZE);
 	u64 end = PAGE_ALIGN(addr + size);
 	u64 cur;
+	struct picovm_pgtable_visit_ctx ctx;
 
 	for (cur = start; cur < end; cur += PAGE_SIZE) {
 		picovm_pte_t *ptep = _picovm_pgtable_walk(pgt, cur);
+		if (ptep == NULL) {
+			return -1;
+		}
 
-		struct picovm_pgtable_visit_ctx ctx = {
-			.ptep	= ptep,
-			.old	= READ_ONCE(*ptep),
-			.arg	= walker->arg,
-			.addr	= cur,
-			.ofs	= cur - start,
-		};
+		ctx.ptep = ptep;
+		ctx.old = READ_ONCE(*ptep);
+		ctx.arg = walker->arg;
+		ctx.addr = cur;
+		ctx.ofs = cur - start;
 
 		ret = walker->cb(&ctx);
 		if (ret) {
 			return -1;
 		}
 	}
+	return ret;
+}
+
+struct leaf_walk_data {
+	picovm_pte_t	pte;
+};
+
+static int leaf_walker(const struct picovm_pgtable_visit_ctx *ctx)
+{
+	struct leaf_walk_data *data = ctx->arg;
+
+	data->pte   = ctx->old;
+
+	return 0;
+}
+
+int picovm_pgtable_get_leaf(struct picovm_pgtable *pgt, u64 addr, picovm_pte_t *ptep)
+{
+	struct leaf_walk_data data;
+	struct picovm_pgtable_walker walker = {
+		.cb	= leaf_walker,
+		.arg	= &data,
+	};
+	int ret;
+
+	ret = picovm_pgtable_walk(pgt, ALIGN_DOWN(addr, PAGE_SIZE), PAGE_SIZE, &walker);
+	if (!ret) {
+		if (ptep)
+			*ptep  = data.pte;
+	}
+
 	return ret;
 }
 
