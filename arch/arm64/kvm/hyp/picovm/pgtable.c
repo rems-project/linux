@@ -3,6 +3,7 @@
  * Based on arch/arm64/kvm/hyp/pgtable.c 
  */
 #include "picovm/kvm_picovm.h"
+#include "picovm/mem_protect.h"
 #include "picovm/mmu.h"
 #include <picovm/asm/errno-base.h>
 
@@ -260,7 +261,7 @@ static picovm_pte_t picovm_init_table_pte(picovm_pte_t *childp)
 	return pte;
 }
 
-int picovm_pgtable_hyp_early_map(struct picovm_pgtable *pgt, u64 addr, picovm_pte_t new)
+int picovm_pgtable_hyp_early_mapping(struct picovm_pgtable *pgt, u64 addr)
 {
 	picovm_pteref_t pteref, childp;
 	picovm_pte_t pte;
@@ -289,13 +290,8 @@ int picovm_pgtable_hyp_early_map(struct picovm_pgtable *pgt, u64 addr, picovm_pt
 		
 	}
 
-	pteref[picovm_pgtable_idx(addr, PICOVM_PGTABLE_MAX_LEVELS-1)] = new;
+	pteref[picovm_pgtable_idx(addr, PICOVM_PGTABLE_MAX_LEVELS-1)] = 0;
 	return 0;
-}
-
-int picovm_pgtable_hyp_early_map_invalid(struct picovm_pgtable *pgt, u64 addr)
-{
-	return picovm_pgtable_hyp_early_map(pgt, addr, PICOVM_PHYS_INVALID);
 }
 
 int picovm_pgtable_hyp_init(struct picovm_pgtable *pgt, u32 va_bits)
@@ -319,8 +315,7 @@ int picovm_pgtable_hyp_init(struct picovm_pgtable *pgt, u32 va_bits)
 	
 		for (phys_addr_t phys = start; phys < end; phys += PAGE_SIZE) {
 			u64 addr = (u64)hyp_phys_to_virt(phys);
-			picovm_pte_t pte = picovm_make_page_pte(true, phys, PICOVM_PGTABLE_PROT_R);
-			ret = picovm_pgtable_hyp_early_map(pgt, addr, pte);
+			ret = picovm_pgtable_hyp_early_mapping(pgt, addr);
 			if (ret)
 				return ret;
 		}
@@ -477,8 +472,7 @@ int picovm_pgtable_stage2_init(struct picovm_pgtable *pgt, struct picovm_s2_mmu 
 		u64 end = start + reg->size;
 	
 		for (phys_addr_t phys = start; phys < end; phys += PAGE_SIZE) {
-			picovm_pte_t pte = picovm_make_page_pte(false, phys, 0);
-			ret = picovm_pgtable_hyp_early_map(pgt, phys, pte);
+			ret = picovm_pgtable_hyp_early_mapping(pgt, phys);
 			if (ret)
 				return ret;
 		}

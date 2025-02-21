@@ -60,7 +60,7 @@ int picovm_alloc_private_va_range(size_t size, unsigned long *haddr)
 	*haddr = addr;
 
 	for (cur = addr; cur < __io_map_base; cur += PAGE_SIZE) {
-		ret = picovm_pgtable_hyp_early_map_invalid(&picovm_pgtable, cur);
+		ret = picovm_pgtable_hyp_early_mapping(&picovm_pgtable, cur);
 		if (ret)
 			goto out;
 	}
@@ -105,7 +105,7 @@ int picovm_create_mappings_locked(void *from, void *to, enum picovm_pgtable_prot
 	for (virt_addr = start; virt_addr < end; virt_addr += PAGE_SIZE) {
 		int err;
 
-		err = picovm_pgtable_hyp_early_map_invalid(&picovm_pgtable, virt_addr);
+		err = picovm_pgtable_hyp_early_mapping(&picovm_pgtable, virt_addr);
 		if (err)
 			return err;
 
@@ -219,7 +219,7 @@ int hyp_create_idmap(u32 hyp_va_bits)
 	__io_map_base ^= BIT(hyp_va_bits - 2);
 
 	for (cur = start; cur < end; cur += PAGE_SIZE) {
-		ret = picovm_pgtable_hyp_early_map_invalid(&picovm_pgtable, cur);
+		ret = picovm_pgtable_hyp_early_mapping(&picovm_pgtable, cur);
 		if (ret)
 			return ret;
 	}
