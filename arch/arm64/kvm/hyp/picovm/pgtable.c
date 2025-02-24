@@ -59,8 +59,9 @@
 
 // NOTE: based on linux/arch/arm64/kvm/hyp/pgtable.c::struct kvm_stage2_map_data
 struct picovm_stage2_map_data {
-	const u64 phys;
-	enum picovm_pgtable_prot prot;
+	const u64	phys;
+	picovm_pte_t	attr;
+	u8		owner_id;
 };
 
 
@@ -77,6 +78,12 @@ struct picovm_pgtable_walk_data {
 	u64				addr;
 	const u64			end;
 };
+
+static bool picovm_phys_is_valid(u64 phys)
+{
+	// BIT(id_aa64mmfr0_parange_to_phys_shift(ID_AA64MMFR0_EL1_PARANGE_MAX))
+	return phys < BIT(48);
+}
 
 static bool inline picovm_pte_block(picovm_pte_t pte)
 {
@@ -238,6 +245,23 @@ static picovm_pte_t picovm_init_table_pte(picovm_pte_t *childp)
 	return pte;
 }
 
+static picovm_pte_t picovm_init_valid_leaf_pte(u64 pa, picovm_pte_t attr)
+{
+	picovm_pte_t pte = picovm_phys_to_pte(pa);
+	u64 type = PICOVM_PTE_TYPE_PAGE;
+
+	pte |= attr & (PICOVM_PTE_LEAF_ATTR_LO | PICOVM_PTE_LEAF_ATTR_HI);
+	pte |= FIELD_PREP(PICOVM_PTE_TYPE, type);
+	pte |= PICOVM_PTE_VALID;
+
+	return pte;
+}
+
+static picovm_pte_t picovm_init_invalid_leaf_owner(u8 owner_id)
+{
+	return FIELD_PREP(PICOVM_INVALID_PTE_OWNER_MASK, owner_id);
+}
+
 int __picovm_pgtable_early_mapping(struct picovm_pgtable *pgt, u64 addr, bool is_hyp)
 {
 	picovm_pteref_t pteref, childp;
@@ -255,12 +279,9 @@ int __picovm_pgtable_early_mapping(struct picovm_pgtable *pgt, u64 addr, bool is
 			phys = picovm_pte_to_phys(pte);
 			pteref = (picovm_pteref_t)hyp_phys_to_virt(phys);
 		} else {
-			// TODO: use mm_ops (?)
-			if (is_hyp) {
-				childp = (picovm_pteref_t)hyp_early_alloc_page();
-			} else {
-				childp = (picovm_pteref_t)host_stage2_early_alloc_page();
-			}
+			childp = is_hyp ? 
+				(picovm_pteref_t)hyp_early_alloc_page() :
+				(picovm_pteref_t)host_stage2_early_alloc_page();
 			if (!childp)
 				return -ENOMEM;
 
@@ -269,12 +290,10 @@ int __picovm_pgtable_early_mapping(struct picovm_pgtable *pgt, u64 addr, bool is
 			pteref[idx] = pte;
 			pteref = childp;
 		}
-		
 	}
 
 	pteref[picovm_pgtable_idx(addr, PICOVM_PGTABLE_MAX_LEVELS-1)] = 0;
 	return 0;
-
 }
 
 int picovm_pgtable_hyp_early_mapping(struct picovm_pgtable *pgt, u64 addr)
@@ -319,8 +338,17 @@ int picovm_pgtable_hyp_init(struct picovm_pgtable *pgt, u32 va_bits)
 
 static int stage2_map_walker(const struct picovm_pgtable_visit_ctx *ctx)
 {
+	picovm_pte_t* ptep = ctx->ptep;
 	struct picovm_stage2_map_data *data = ctx->arg;
 	phys_addr_t phys = data->phys + ctx->ofs;
+	picovm_pte_t new;
+
+	if (picovm_phys_is_valid(phys)) {
+		new = picovm_init_valid_leaf_pte(phys, data->attr);
+	} else {
+		new = picovm_init_invalid_leaf_owner(data->owner_id);
+	}
+
 	if (picovm_pte_valid(ctx->old)) {
 		phys_addr_t ipa = ctx->addr;
 		dsb(ishst);
@@ -332,7 +360,7 @@ static int stage2_map_walker(const struct picovm_pgtable_visit_ctx *ctx)
 		isb();
 	}
 
-	smp_store_release(ctx->ptep, picovm_make_page_pte(false, phys, data->prot));
+	smp_store_release(ptep, new);
 	return 0;
 }
 
@@ -363,7 +391,6 @@ static picovm_pte_t* _picovm_pgtable_walk(struct picovm_pgtable *pgt, u64 addr)
 	picovm_pteref_t pteref;
 	picovm_pte_t pte;
 	phys_addr_t phys;
-
 	
 	idx = picovm_pgd_page_idx(pgt, addr);
 	pteref = &pgt->pgd[idx * PTRS_PER_PTE];
@@ -513,7 +540,7 @@ int picovm_pgtable_stage2_map(struct picovm_pgtable *pgt, u64 addr, u64 size,
 	int ret;
 	struct picovm_stage2_map_data map_data = {
 		.phys = ALIGN_DOWN(phys, PAGE_SIZE),
-		.prot = prot,
+		.attr = picovm_make_page_pte(false, map_data.phys, prot),
 	};
 
 	struct picovm_pgtable_walker walker = {
@@ -532,6 +559,7 @@ int picovm_pgtable_stage2_set_owner(struct picovm_pgtable *pgt, u64 addr, u64 si
 	int ret;
 	struct picovm_stage2_map_data map_data = {
 		.phys		= PICOVM_PHYS_INVALID,
+		.owner_id	= owner_id,
 	};
 	struct picovm_pgtable_walker walker = {
 		.cb		= stage2_map_walker,
