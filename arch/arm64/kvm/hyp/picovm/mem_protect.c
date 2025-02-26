@@ -158,6 +158,12 @@ int __pkvm_prot_finalize(void)
 	write_sysreg(params->hcr_el2, hcr_el2);
 	__load_stage2(&host_mmu.arch.mmu, host_mmu.arch.vtcr);
 
+	/*
+	 * Make sure to have an ISB before the TLB maintenance below but only
+	 * when __load_stage2() doesn't include one already.
+	 */
+	isb();
+
 	/* Invalidate stale HCR bits that may be cached in TLBs */
 	__tlbi(vmalls12e1);
 	dsb(nsh);

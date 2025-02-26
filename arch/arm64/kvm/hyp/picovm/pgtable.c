@@ -59,9 +59,9 @@
 
 // NOTE: based on linux/arch/arm64/kvm/hyp/pgtable.c::struct kvm_stage2_map_data
 struct picovm_stage2_map_data {
-	const u64	phys;
-	picovm_pte_t	attr;
-	u8		owner_id;
+	const u64 phys;
+	enum picovm_pgtable_prot prot;
+	u8 owner_id;
 };
 
 
@@ -344,7 +344,8 @@ static int stage2_map_walker(const struct picovm_pgtable_visit_ctx *ctx)
 	picovm_pte_t new;
 
 	if (picovm_phys_is_valid(phys)) {
-		new = picovm_init_valid_leaf_pte(phys, data->attr);
+		u64 attr = picovm_make_page_pte(false, phys, data->prot);
+		new = picovm_init_valid_leaf_pte(phys, attr);
 	} else {
 		new = picovm_init_invalid_leaf_owner(data->owner_id);
 	}
@@ -540,7 +541,7 @@ int picovm_pgtable_stage2_map(struct picovm_pgtable *pgt, u64 addr, u64 size,
 	int ret;
 	struct picovm_stage2_map_data map_data = {
 		.phys = ALIGN_DOWN(phys, PAGE_SIZE),
-		.attr = picovm_make_page_pte(false, map_data.phys, prot),
+		.prot = prot,
 	};
 
 	struct picovm_pgtable_walker walker = {
