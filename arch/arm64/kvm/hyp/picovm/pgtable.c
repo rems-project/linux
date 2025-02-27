@@ -459,6 +459,10 @@ int picovm_pgtable_get_leaf(struct picovm_pgtable *pgt, u64 addr, picovm_pte_t *
 	};
 	int ret;
 
+	ret = picovm_pgtable_stage2_early_mapping(pgt, ALIGN_DOWN(addr, PAGE_SIZE));
+	if (ret) {
+		return ret;
+	}
 	ret = picovm_pgtable_walk(pgt, ALIGN_DOWN(addr, PAGE_SIZE), PAGE_SIZE, &walker);
 	if (!ret) {
 		if (ptep)
