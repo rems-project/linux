@@ -95,6 +95,15 @@ static __always_inline unsigned long __kern_hyp_va(unsigned long v)
 #define EL2_STACK_NR_PAGES (PICOVM_CONFIG_NVHE_EL2_STACKSIZE)
 #define EL2_STACKSIZE (PAGE_SIZE * EL2_STACK_NR_PAGES)
 
+unsigned long arm64_kvm_hyp_debug_uart_addr;
+static int create_hyp_debug_uart_mapping(void)
+{
+	phys_addr_t base = CONFIG_KVM_ARM_HYP_DEBUG_UART_ADDR;
+
+	return __picovm_create_private_mapping(base, PAGE_SIZE, PAGE_HYP_DEVICE,
+						&arm64_kvm_hyp_debug_uart_addr);
+}
+
 static void *hyp_pgt_base;
 static void *host_s2_pgt_base;
 
@@ -194,7 +203,8 @@ static int recreate_hyp_mappings(phys_addr_t phys, unsigned long size,
 		/* Update stack_hyp_va to end of the stack's private VA range */
 		params->stack_hyp_va = hyp_addr + PAGE_SIZE + EL2_STACKSIZE;
 	}
-
+	
+	create_hyp_debug_uart_mapping();
 	return 0;
 }
 

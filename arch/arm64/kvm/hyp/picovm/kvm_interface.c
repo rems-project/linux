@@ -71,9 +71,6 @@ DEFINE_PER_CPU(struct kvm_host_data, kvm_host_data);
 /*****************************************************************************/
 // IN THE REMAINDER OF THIS FILE ARE SYMBOLS THAT ARE NOT USED BY PICOVM
 
-// USED BY EXTERNAL arch/arm64/kvm/mmu.c
-unsigned long arm64_kvm_hyp_debug_uart_addr;
-
 // USED BY EXTERNAL arch/arm64/kvm/arm.c
 unsigned long __icache_flags;
 

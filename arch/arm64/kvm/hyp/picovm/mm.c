@@ -70,7 +70,7 @@ out:
 	return ret;
 }
 
-static int __picovm_create_private_mapping(phys_addr_t phys, size_t size,
+int __picovm_create_private_mapping(phys_addr_t phys, size_t size,
 				  enum picovm_pgtable_prot prot,
 				  unsigned long *haddr)
 {
