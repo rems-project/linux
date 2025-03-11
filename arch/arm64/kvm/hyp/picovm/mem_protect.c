@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
-/* 
+/*
  * Based on linux/arch/arm64/kvm/hyp/nvhe/mem_protect.c
  */
 #include <picovm/asm/errno-base.h>
@@ -78,7 +78,7 @@ static struct host_mmu host_mmu;
 // {
 // 	current_vm = NULL;
 // 	hyp_spin_unlock(&vm->lock);
-// } 
+// }
 
 static void host_lock_component(void)
 {
@@ -508,12 +508,12 @@ static enum picovm_page_state host_get_page_state(picovm_pte_t pte, u64 addr)
 static int __host_check_page_state_range(u64 addr, u64 size,
 					 enum picovm_page_state state)
 {
-  struct check_walk_data d = {
-    .desired = state,
-    .get_page_state = host_get_page_state
-  };
-  
-  // hyp_assert_lock_held(&host_mmu.lock);
+	struct check_walk_data d = {
+		.desired = state,
+		.get_page_state = host_get_page_state
+	};
+
+	// hyp_assert_lock_held(&host_mmu.lock);
 	return check_page_state_range(&host_mmu.pgt, addr, size, &d);
 }
 
@@ -525,11 +525,23 @@ static int __host_set_page_state_range(u64 addr, u64 size,
 	return host_stage2_idmap_locked(addr, size, prot);
 }
 
+static enum picovm_page_state hyp_get_page_state(picovm_pte_t pte, u64 addr)
+{
+	if (!picovm_pte_valid(pte))
+		return PICOVM_NOPAGE;
+
+	return picovm_getstate(picovm_pgtable_hyp_pte_prot(pte));
+}
+
 static int __hyp_check_page_state_range(u64 addr, u64 size,
 					enum picovm_page_state state)
 {
-	// TODO
-	return 0;
+	struct check_walk_data d = {
+		.desired	= state,
+		.get_page_state	= hyp_get_page_state,
+	};
+
+	return check_page_state_range(&picovm_pgtable, addr, size, &d);
 }
 
 
