@@ -737,6 +737,8 @@ out:
 	return true;
 }
 
+// TODO(porting)
+#if 0
 static bool compute_new_abstract_state_handle___pkvm_host_reclaim_page(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call)
 {
 	int ret = 0;
@@ -798,6 +800,7 @@ out:
 	/* check this spec */
 	return true;
 }
+#endif
 
 /**
  * compute the new abstract ghost_state from a struct ghost_call_data *call = pkvm_host_map_guest(host_pfn, guest_gfn)
@@ -1426,6 +1429,8 @@ out:
 }
 
 
+// TODO(porting)
+#if 0
 static bool compute_new_abstract_state_handle___pkvm_teardown_vm(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call)
 {
 	int ret = 0;
@@ -1601,6 +1606,7 @@ out:
 	/* check this spec */
 	return true;
 }
+#endif
 
 static bool compute_new_abstract_state_handle_host_hcall(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call)
 {
@@ -1625,9 +1631,9 @@ static bool compute_new_abstract_state_handle_host_hcall(struct ghost_state *g1,
 	case __KVM_HOST_SMCCC_FUNC___pkvm_host_unshare_hyp:
 		new_state_computed =  compute_new_abstract_state_handle___pkvm_host_unshare_hyp(g1, g0, call);
 		break;
-	case __KVM_HOST_SMCCC_FUNC___pkvm_host_reclaim_page:
-		new_state_computed =  compute_new_abstract_state_handle___pkvm_host_reclaim_page(g1, g0, call);
-		break;
+	// case __KVM_HOST_SMCCC_FUNC___pkvm_host_reclaim_page:
+	// 	new_state_computed =  compute_new_abstract_state_handle___pkvm_host_reclaim_page(g1, g0, call);
+	// 	break;
 	case __KVM_HOST_SMCCC_FUNC___pkvm_host_map_guest:
 		new_state_computed =  compute_new_abstract_state_handle___pkvm_host_map_guest(g1, g0, call);
 		break;
@@ -1646,9 +1652,9 @@ static bool compute_new_abstract_state_handle_host_hcall(struct ghost_state *g1,
 	case __KVM_HOST_SMCCC_FUNC___pkvm_init_vcpu:
 		new_state_computed =  compute_new_abstract_state_handle___pkvm_init_vcpu(g1, g0, call);
 		break;
-	case __KVM_HOST_SMCCC_FUNC___pkvm_teardown_vm:
-		new_state_computed =  compute_new_abstract_state_handle___pkvm_teardown_vm(g1, g0, call);
-		break;
+	// case __KVM_HOST_SMCCC_FUNC___pkvm_teardown_vm:
+	// 	new_state_computed =  compute_new_abstract_state_handle___pkvm_teardown_vm(g1, g0, call);
+	// 	break;
 		// TODO: and their bodies, and all the other cases
 	default:
 		smccc_ret = SMCCC_RET_NOT_SUPPORTED;
