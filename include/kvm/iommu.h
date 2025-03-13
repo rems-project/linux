@@ -26,11 +26,19 @@
  */
 struct kvm_hyp_iommu {
 	struct kvm_power_domain		power_domain;
+#ifdef CONFIG_NVHE_GHOST_SPEC
+#ifndef __GENKSYMS__
+	u64				lock;   /* lock size verified in kvm_iommu_get_lock.  */
+#else
+	u64				unused;
+#endif
+#else
 #ifndef __GENKSYMS__
 	u32				lock;   /* lock size verified in kvm_iommu_get_lock.  */
 #else
 	u32				unused;
 #endif
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	bool				power_is_off;
 	ANDROID_KABI_RESERVE(1);
 	ANDROID_KABI_RESERVE(2);
