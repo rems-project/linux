@@ -1725,11 +1725,12 @@ static void handle_host_hcall(struct kvm_cpu_context *host_ctxt)
 	id -= KVM_HOST_SMCCC_ID(0);
 
 #ifdef CONFIG_NVHE_GHOST_SPEC
-
-	char *hcall_name = (char*)ghost_host_hcall_names[id];
 	GHOST_LOG_CONTEXT_ENTER();
 	GHOST_LOG(id, u64);
-	GHOST_LOG(hcall_name, str);
+	if (id < 0 || id >= ARRAY_SIZE(ghost_host_hcall_names))
+		GHOST_LOG("UNKNOWN HCALL", str);
+	else
+		GHOST_LOG(ghost_host_hcall_names[id], str);
 
 	_Bool ghost_dump_verbose = ghost_control_print_enabled("handle_host_hcall_verbose");
 	u64 i=0; /* base indent */
@@ -1747,44 +1748,7 @@ static void handle_host_hcall(struct kvm_cpu_context *host_ctxt)
 		ghost_dump_hyp_memory(0);
 		ghost_dump_shadow_table();
 	}
-	enum ghost_trace_event tr_event = 0;
-	bool do_tracing = true;
-	switch (id) {
-	case __KVM_HOST_SMCCC_FUNC___pkvm_host_share_hyp:
-		tr_event = GHOST_TRACE_host_share_hyp;
-		break;
-	case __KVM_HOST_SMCCC_FUNC___pkvm_host_unshare_hyp:
-		tr_event = GHOST_TRACE_host_unshare_hyp;
-		break;
-	case __KVM_HOST_SMCCC_FUNC___pkvm_host_reclaim_page:
-		tr_event = GHOST_TRACE_host_reclaim_page;
-		break;
-	case __KVM_HOST_SMCCC_FUNC___pkvm_host_map_guest:
-		tr_event = GHOST_TRACE_host_map_guest;
-		break;
-	case __KVM_HOST_SMCCC_FUNC___pkvm_vcpu_load:
-		tr_event = GHOST_TRACE_vcpu_load;
-		break;
-	case __KVM_HOST_SMCCC_FUNC___pkvm_vcpu_put:
-		tr_event = GHOST_TRACE_vcpu_put;
-		break;
-	case __KVM_HOST_SMCCC_FUNC___kvm_vcpu_run:
-		tr_event = GHOST_TRACE_vcpu_run;
-		break;
-	case __KVM_HOST_SMCCC_FUNC___pkvm_init_vm:
-		tr_event = GHOST_TRACE_init_vm;
-		break;
-	case __KVM_HOST_SMCCC_FUNC___pkvm_init_vcpu:
-		tr_event = GHOST_TRACE_init_vcpu;
-		break;
-	case __KVM_HOST_SMCCC_FUNC___pkvm_teardown_vm:
-		tr_event = GHOST_TRACE_teardown_vm;
-		break;
-	default:
-		do_tracing = false;
-	}
-	if (do_tracing)
-		trace_ghost_enter(tr_event);
+	bool is_valid = false;
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 
 	if (handle_host_dynamic_hcall(&host_ctxt->regs, id) == HCALL_HANDLED)
@@ -1792,6 +1756,12 @@ static void handle_host_hcall(struct kvm_cpu_context *host_ctxt)
 
 	if (unlikely(id < hcall_min || id >= ARRAY_SIZE(host_hcall)))
 		goto inval;
+
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	enum ghost_trace_event tr_event = ghost_hcall_event(id, &is_valid);
+	if (is_valid && ghost_trace_event_is_enabled(tr_event))
+		trace_ghost_enter(tr_event);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 
 	hfn = host_hcall[id];
 	if (unlikely(!hfn))
@@ -1803,7 +1773,7 @@ end:
 	trace_host_hcall(id, 0);
 
 #ifdef CONFIG_NVHE_GHOST_SPEC
-	if (do_tracing)
+	if (is_valid && ghost_trace_event_is_enabled(tr_event))
 		trace_ghost_exit(tr_event);
 	if (ghost_dump_verbose) {
 		hyp_puts("\nafter host hcall body");
@@ -1819,6 +1789,8 @@ inval:
 	trace_host_hcall(id, 1);
 	cpu_reg(host_ctxt, 0) = SMCCC_RET_NOT_SUPPORTED;
 #ifdef CONFIG_NVHE_GHOST_SPEC
+	if (is_valid && ghost_trace_event_is_enabled(tr_event))
+		trace_ghost_exit(tr_event);
 	GHOST_LOG_CONTEXT_EXIT();
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 }

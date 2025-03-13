@@ -164,10 +164,18 @@ config NVHE_GHOST_SPEC_CHECK___pkvm_host_share_hyp
 	bool "Check __pkvm_host_share_hyp"
 config NVHE_GHOST_SPEC_CHECK___pkvm_host_unshare_hyp
 	bool "Check __pkvm_host_unshare_hyp"
-config NVHE_GHOST_SPEC_CHECK___pkvm_host_reclaim_page
-	bool "Check __pkvm_host_reclaim_page"
 config NVHE_GHOST_SPEC_CHECK___pkvm_host_map_guest
 	bool "Check __pkvm_host_map_guest"
+config NVHE_GHOST_SPEC_CHECK___pkvm_host_unmap_guest
+	bool "Check __pkvm_host_unmap_guest"
+# config NVHE_GHOST_SPEC_CHECK___pkvm_relax_perms
+# 	bool "Check __pkvm_relax_perms"
+# config NVHE_GHOST_SPEC_CHECK___pkvm_wrprotect
+# 	bool "Check __pkvm_wrprotect"
+# config NVHE_GHOST_SPEC_CHECK___pkvm_dirty_log
+# 	bool "Check __pkvm_dirty_log"
+# config NVHE_GHOST_SPEC_CHECK___pkvm_tlb_flush_vmid
+# 	bool "Check __pkvm_tlb_flush_vmid"
 # config NVHE_GHOST_SPEC_CHECK___kvm_adjust_pc
 # 	bool "Check __kvm_adjust_pc"
 config NVHE_GHOST_SPEC_CHECK___kvm_vcpu_run
@@ -182,14 +190,52 @@ config NVHE_GHOST_SPEC_CHECK___pkvm_init_vm
 	bool "Check __pkvm_init_vm"
 config NVHE_GHOST_SPEC_CHECK___pkvm_init_vcpu
 	bool "Check __pkvm_init_vcpu"
-config NVHE_GHOST_SPEC_CHECK___pkvm_teardown_vm
-	bool "Check __pkvm_teardown_vm"
+config NVHE_GHOST_SPEC_CHECK___pkvm_start_teardown_vm
+	bool "Check __pkvm_start_teardown_vm"
+config NVHE_GHOST_SPEC_CHECK___pkvm_finalize_teardown_vm
+	bool "Check __pkvm_finalize_teardown_vm"
+config NVHE_GHOST_SPEC_CHECK___pkvm_reclaim_dying_guest_page
+	bool "Check __pkvm_reclaim_dying_guest_page"
 config NVHE_GHOST_SPEC_CHECK___pkvm_vcpu_load
 	bool "Check __pkvm_vcpu_load"
 config NVHE_GHOST_SPEC_CHECK___pkvm_vcpu_put
 	bool "Check __pkvm_vcpu_put"
 # config NVHE_GHOST_SPEC_CHECK___pkvm_vcpu_sync_state
 # 	bool "Check __pkvm_vcpu_sync_state"
+# config NVHE_GHOST_SPEC_CHECK___pkvm_load_tracing
+# 	bool "Check __pkvm_load_tracing"
+# config NVHE_GHOST_SPEC_CHECK___pkvm_teardown_tracing
+# 	bool "Check __pkvm_teardown_tracing"
+# config NVHE_GHOST_SPEC_CHECK___pkvm_enable_tracing
+# 	bool "Check __pkvm_enable_tracing"
+# config NVHE_GHOST_SPEC_CHECK___pkvm_swap_reader_tracing
+# 	bool "Check __pkvm_swap_reader_tracing"
+# config NVHE_GHOST_SPEC_CHECK___pkvm_enable_event
+# 	bool "Check __pkvm_enable_event"
+config NVHE_GHOST_SPEC_CHECK___pkvm_hyp_alloc_mgt_refill
+	bool "Check __pkvm_hyp_alloc_mgt_refill"
+config NVHE_GHOST_SPEC_CHECK___pkvm_hyp_alloc_mgt_reclaimable
+	bool "Check __pkvm_hyp_alloc_mgt_reclaimable"
+config NVHE_GHOST_SPEC_CHECK___pkvm_hyp_alloc_mgt_reclaim
+	bool "Check __pkvm_hyp_alloc_mgt_reclaim"
+# config NVHE_GHOST_SPEC_CHECK___pkvm_host_iommu_alloc_domain
+# 	bool "Check __pkvm_host_iommu_alloc_domain"
+# config NVHE_GHOST_SPEC_CHECK___pkvm_host_iommu_free_domain
+# 	bool "Check __pkvm_host_iommu_free_domain"
+# config NVHE_GHOST_SPEC_CHECK___pkvm_host_iommu_attach_dev
+# 	bool "Check __pkvm_host_iommu_attach_dev"
+# config NVHE_GHOST_SPEC_CHECK___pkvm_host_iommu_detach_dev
+# 	bool "Check __pkvm_host_iommu_detach_dev"
+# config NVHE_GHOST_SPEC_CHECK___pkvm_host_iommu_map_pages
+# 	bool "Check __pkvm_host_iommu_map_pages"
+# config NVHE_GHOST_SPEC_CHECK___pkvm_host_iommu_unmap_pages
+# 	bool "Check __pkvm_host_iommu_unmap_pages"
+# config NVHE_GHOST_SPEC_CHECK___pkvm_host_iommu_iova_to_phys
+# 	bool "Check __pkvm_host_iommu_iova_to_phys"
+# config NVHE_GHOST_SPEC_CHECK___pkvm_host_hvc_pd
+# 	bool "Check __pkvm_host_hvc_pd"
+# config NVHE_GHOST_SPEC_CHECK___pkvm_stage2_snapshot
+# 	bool "Check __pkvm_stage2_snapshot"
 
 config NVHE_GHOST_SPEC_CHECK___pkvm_guest_share_host
 	bool "Check __pkvm_guest_share_host"
@@ -200,7 +246,6 @@ config NVHE_GHOST_SPEC_CHECK_handle_guest_mem_abort
 config NVHE_GHOST_SPEC_NOISY_handle_guest_mem_abort
 	depends on NVHE_GHOST_SPEC_NOISY
 	bool "Noisy handle_guest_mem_abort"
-
 endmenu
 
 menu "Inject errors"
