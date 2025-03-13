@@ -143,7 +143,11 @@ static int create_hyp_host_fp_mappings(void)
 	for (i = 0; i < hyp_nr_cpus; i++) {
 		start = (void *)kern_hyp_va(kvm_arm_hyp_host_fp_state[i]);
 		end = start + PAGE_ALIGN(pkvm_host_fp_state_size());
+#ifdef CONFIG_NVHE_GHOST_SPEC
+		ret = pkvm_create_mappings(start, end, PAGE_HYP, HYP_HOST_FP_STATE, DUMMY_CPU);
+#else
 		ret = pkvm_create_mappings(start, end, PAGE_HYP);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 		if (ret)
 			return ret;
 	}
@@ -187,7 +191,11 @@ static int recreate_hyp_mappings(phys_addr_t phys, unsigned long size,
 	if (ret)
 		return ret;
 
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	ret = pkvm_create_mappings(__hyp_data_start, __hyp_data_end, PAGE_HYP, HYP_DATA, DUMMY_CPU);
+#else
 	ret = pkvm_create_mappings(__hyp_data_start, __hyp_data_end, PAGE_HYP);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	if (ret)
 		return ret;
 
@@ -247,7 +255,11 @@ static int recreate_hyp_mappings(phys_addr_t phys, unsigned long size,
 	start = hyp_phys_to_virt(pvmfw_base);
 	end = start + pvmfw_size;
 	prot = pkvm_mkstate(PAGE_HYP_RO, PKVM_PAGE_OWNED);
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	ret = pkvm_create_mappings(start, end, prot, HYP_PVMFW, DUMMY_CPU);
+#else
 	ret = pkvm_create_mappings(start, end, prot);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	if (ret)
 		return ret;
 

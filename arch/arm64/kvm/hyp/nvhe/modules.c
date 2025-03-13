@@ -60,7 +60,11 @@ static void *__pkvm_linear_map_early(phys_addr_t phys, size_t size, enum kvm_pgt
 		return NULL;
 
 	addr = __hyp_va(phys);
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	ret = pkvm_create_mappings(addr, addr + size, prot, HYP_MODULE_LINEAR_MAP_EARLY, DUMMY_CPU);
+#else
 	ret = pkvm_create_mappings(addr, addr + size, prot);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	if (ret)
 		addr = NULL;
 	else
@@ -105,8 +109,21 @@ static int host_stage2_disable_lazy_pte(u64 pfn, u64 nr_pages)
 	return __pkvm_host_lazy_pte(pfn, nr_pages, false);
 }
 
+#ifdef CONFIG_NVHE_GHOST_SPEC
+static int __ghost_pkvm_create_private_mapping(phys_addr_t phys, size_t size,
+					       enum kvm_pgtable_prot prot,
+					       unsigned long *haddr)
+{
+	return __pkvm_create_private_mapping(phys, size, prot, haddr, HYP_MODULE_CREATE_PRIVATE_MAPPING);
+}
+#endif /* CONFIG_NVHE_GHOST_SPEC */
+
 const struct pkvm_module_ops module_ops = {
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	.create_private_mapping= __ghost_pkvm_create_private_mapping,
+#else
 	.create_private_mapping = __pkvm_create_private_mapping,
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	.alloc_module_va = __pkvm_alloc_module_va,
 	.map_module_page = __pkvm_map_module_page,
 	.register_serial_driver = __pkvm_register_serial_driver,

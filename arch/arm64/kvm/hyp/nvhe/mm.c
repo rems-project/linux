@@ -151,7 +151,11 @@ int __pkvm_create_private_mapping(phys_addr_t phys, size_t size,
 
 int __hyp_allocator_map(unsigned long va, phys_addr_t phys)
 {
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	return __pkvm_create_mappings(va, PAGE_SIZE, phys, PAGE_HYP, HYP_ALLOCATOR_MAP);
+#else /* CONFIG_NVHE_GHOST_SPEC */
 	return __pkvm_create_mappings(va, PAGE_SIZE, phys, PAGE_HYP);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 }
 
 #ifdef CONFIG_NVHE_EL2_DEBUG
@@ -206,7 +210,11 @@ int __pkvm_map_module_page(u64 pfn, void *va, enum kvm_pgtable_prot prot, bool i
 			return ret;
 	}
 
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	ret = __pkvm_create_mappings(addr, PAGE_SIZE, hyp_pfn_to_phys(pfn), prot, HYP_MODULE);
+#else /* CONFIG_NVHE_GHOST_SPEC */
 	ret = __pkvm_create_mappings(addr, PAGE_SIZE, hyp_pfn_to_phys(pfn), prot);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	if (ret && !is_protected)
 		WARN_ON(__pkvm_hyp_donate_host(pfn, 1));
 
