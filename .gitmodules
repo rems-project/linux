@@ -1,3 +1,7 @@
 [submodule "arch/arm64/kvm/hyp/nvhe/ghost/casemate"]
 	path = arch/arm64/kvm/hyp/nvhe/ghost/casemate
 	url = https://github.com/rems-project/casemate
+
+[submodule "cl"]
+	path = cl
+	url = https://github.com/rems-project/linux-tools
