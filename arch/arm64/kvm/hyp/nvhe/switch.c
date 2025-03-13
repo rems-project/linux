@@ -29,6 +29,13 @@
 #include <nvhe/mem_protect.h>
 #include <nvhe/pkvm.h>
 
+#ifdef CONFIG_NVHE_GHOST_SPEC
+#include <nvhe/ghost/ghost_spec.h>
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+#include <nvhe/ghost/ghost_simplified_model.h>
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
+#endif /* CONFIG_NVHE_GHOST_SPEC */
+
 /* Non-VHE specific context */
 DEFINE_PER_CPU(struct kvm_host_data, kvm_host_data);
 DEFINE_PER_CPU(struct kvm_cpu_context, kvm_hyp_ctxt);
@@ -419,14 +426,28 @@ int __kvm_vcpu_run(struct kvm_vcpu *vcpu)
 
 	do {
 		trace_hyp_exit();
+#ifdef CONFIG_NVHE_GHOST_SPEC
+		this_cpu_ptr(&ghost_cpu_run_state)->guest_running = true;
+		this_cpu_ptr(&ghost_cpu_run_state)->vm_handle = vcpu->kvm->arch.pkvm.handle;
+		this_cpu_ptr(&ghost_cpu_run_state)->vcpu_index = vcpu->vcpu_idx;
+		ghost_post(&vcpu->arch.ctxt);
+#endif  /* CONFIG_NVHE_GHOST_SPEC */
 
 		/* Jump in the fire! */
 		exit_code = __guest_enter(vcpu);
+
+#ifdef CONFIG_NVHE_GHOST_SPEC
+		this_cpu_ptr(&ghost_cpu_run_state)->guest_exit_code = exit_code;
+		ghost_record_pre(&vcpu->arch.ctxt, exit_code);
+#endif  /* CONFIG_NVHE_GHOST_SPEC */
 
 		/* And we're baaack! */
 		trace_hyp_enter();
 	} while (fixup_guest_exit(vcpu, &exit_code));
 
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	this_cpu_ptr(&ghost_cpu_run_state)->guest_running = false;
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	__sysreg_save_state_nvhe(guest_ctxt);
 	__sysreg32_save_state(vcpu);
 	__timer_disable_traps(vcpu);

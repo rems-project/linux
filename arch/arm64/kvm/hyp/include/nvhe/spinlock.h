@@ -17,13 +17,27 @@
 #include <asm/lse.h>
 #include <asm/rwonce.h>
 
+#ifdef CONFIG_NVHE_GHOST_SPEC
+#include <asm/kvm_hyp.h>
+#endif /* CONFIG_NVHE_GHOST_SPEC */
+
 typedef union hyp_spinlock {
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	u64	__val;
+#else /* CONFIG_NVHE_GHOST_SPEC */
 	u32	__val;
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	struct {
 #ifdef __AARCH64EB__
+#ifdef CONFIG_NVHE_GHOST_SPEC
+		u32 owner_tid;
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 		u16 next, owner;
 #else
 		u16 owner, next;
+#ifdef CONFIG_NVHE_GHOST_SPEC
+		u32 owner_tid;
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 #endif
 	};
 } hyp_spinlock_t;
@@ -43,7 +57,11 @@ do {									\
 
 static inline void hyp_spin_lock(hyp_spinlock_t *lock)
 {
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	u64 tmp;
+#else /* CONFIG_NVHE_GHOST_SPEC */
 	u32 tmp;
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_spinlock_t lockval, newval;
 
 	asm volatile(
@@ -74,8 +92,16 @@ static inline void hyp_spin_lock(hyp_spinlock_t *lock)
 "	cbnz	%w1, 2b\n"
 	/* We got the lock. Critical section starts here. */
 "3:"
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	/* Set owner_tid */
+"	str 	%w[tid], %[owner_tid]\n"
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	: "=&r" (lockval), "=&r" (newval), "=&r" (tmp), "+Q" (*lock)
 	: "Q" (lock->owner)
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	, [tid] "r" (ghost_hyp_smp_processor_id())
+	, [owner_tid] "Q" (lock->owner_tid)
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	: "memory");
 }
 
@@ -84,6 +110,10 @@ static inline void hyp_spin_unlock(hyp_spinlock_t *lock)
 	u64 tmp;
 
 	asm volatile(
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	/* Zero owner_tid */
+"	str 	wzr, %[owner_tid]\n"
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	ARM64_LSE_ATOMIC_INSN(
 	/* LL/SC */
 	"	ldrh	%w1, %0\n"
@@ -94,6 +124,9 @@ static inline void hyp_spin_unlock(hyp_spinlock_t *lock)
 	"	staddlh	%w1, %0\n"
 	__nops(1))
 	: "=Q" (lock->owner), "=&r" (tmp)
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	, [owner_tid] "=Q" (lock->owner_tid)
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	:
 	: "memory");
 }
@@ -102,7 +135,14 @@ static inline bool hyp_spin_is_locked(hyp_spinlock_t *lock)
 {
 	hyp_spinlock_t lockval = READ_ONCE(*lock);
 
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	u64 cpu = ghost_hyp_smp_processor_id();
+
+	// lockval.owner_id == 0 might mean "locked by CPU 0" or not taken at all.
+	return (lockval.owner != lockval.next && cpu == lockval.owner_tid);
+#else /* CONFIG_NVHE_GHOST_SPEC */
 	return lockval.owner != lockval.next;
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 }
 
 #ifdef CONFIG_NVHE_EL2_DEBUG

@@ -1,0 +1,216 @@
+menuconfig NVHE_GHOST_SPEC
+	bool "nVHE Ghost specification checking"
+	select NVHE_EL2_DEBUG
+	select PROTECTED_NVHE_STACKTRACE
+	depends on KVM
+	help
+	  Enables compilation of ghost code inside nVHE sources.
+
+config NVHE_GHOST_SPEC_SAFETY_CHECKS
+	bool "Redundant safety checks"
+	depends on NVHE_GHOST_SPEC
+	default y
+	help
+	help
+	  Enables a variety of safety checks that would otherwise slow down the checking too much
+
+config NVHE_GHOST_SPEC_COLOURS
+	bool "Colours in the output of nVHE ghost spec"
+	depends on NVHE_GHOST_SPEC
+	default n
+	help
+	  When enabled, all ghost machinery prints ANSI colour codes.  Enables compilation of ghost code in nVHE sources.
+
+config NVHE_GHOST_MEM_LOG2
+	int "Ghost dynamic memory pool size (log_2)"
+	depends on NVHE_GHOST_SPEC
+	default 22
+	range 5 30
+	help
+	  Ghost will statically allocate its dynamic memory pool, mostly to
+	  contradict in terms.
+
+	  This number denotes log_2 of the memory pool size, in bytes. For instance,
+	  22 denotes 4 MB.
+
+config NVHE_GHOST_MEM_DUMP_STATS
+	bool "Dump allocator tables"
+	depends on NVHE_GHOST_SPEC
+	default n
+	help
+	  Print the internal allocator state when using it. Helps track issues
+	  with the allocator itself.
+
+menuconfig NVHE_GHOST_SIMPLIFIED_MODEL
+	bool "Runtime simplified model checking"
+	depends on NVHE_GHOST_SPEC
+	default n
+	select NVHE_EL2_DEBUG
+	select PROTECTED_NVHE_STACKTRACE
+
+config NVHE_GHOST_SIMPLIFIED_MODEL_LOG_ONLY
+	bool "Only log simplified model steps"
+	depends on NVHE_GHOST_SIMPLIFIED_MODEL
+	default n
+	help
+	  Do not compute the simplified model state but log the transitions for later analysis.
+
+menuconfig NVHE_GHOST_SIMPLIFIED_MODEL_NOISY
+	bool "Noisy ghost simplified model output"
+	depends on NVHE_GHOST_SIMPLIFIED_MODEL
+	default n
+	help
+	  Enable some noisy logs from the ghost simplified model.
+
+config NVHE_GHOST_SIMPLIFIED_MODEL_DIFF_ON_TRANS
+	bool "Print a diff to the simplified model state on each transition"
+	depends on NVHE_GHOST_SIMPLIFIED_MODEL_NOISY
+	depends on NVHE_GHOST_DIFF
+	default n
+	help
+	  Prints the diff that a transition made to the simplified model.
+
+config NVHE_GHOST_SIMPLIFIED_MODEL_DUMP_ON_TRANS
+	bool "Print the entire simplified model state on each transition"
+	depends on NVHE_GHOST_SIMPLIFIED_MODEL_NOISY
+	default n
+	help
+	  Dumps the entire simplified model state to the UART on each simplified model transition (very noisy).
+
+config NVHE_GHOST_SIMPLIFIED_MODEL_NOISY_CONDENSED
+	bool "Condense simplified model state dumps&diffs to only invalid uncleans"
+	depends on NVHE_GHOST_SIMPLIFIED_MODEL_NOISY
+	default n
+	help
+	  Don't show entire state or full diffs, only show those that affected a location that was or became invalid unclean.
+
+menuconfig NVHE_GHOST_SPEC_NOISY
+	bool "Noisy ghost spec checking machinery"
+	depends on NVHE_GHOST_SPEC
+	default n
+	help
+	  Enable some quite noisy prints from the ghost spec recording
+	  and checking machinery.
+
+config NVHE_GHOST_SPEC_DUMP_STATE
+	bool "Dump complete pre/post ghost state on transition"
+	depends on NVHE_GHOST_SPEC_NOISY
+	default n
+
+config NVHE_GHOST_SPEC_DUMP_STATE_RAW_HOST
+	bool "Dump raw pre/post host pgtable"
+	depends on NVHE_GHOST_SPEC_DUMP_STATE
+	default n
+
+config NVHE_GHOST_SPEC_VERBOSE
+	bool "Very noisy ghost spec checking machinery"
+	depends on NVHE_GHOST_SPEC_NOISY
+	default n
+	help
+	  Enable the full (very noisy) logs from the ghost spec recording
+	  and checking machinery.
+
+menuconfig NVHE_GHOST_DIFF
+	bool "Show diffs between ghost states on traps"
+	depends on NVHE_GHOST_SPEC_NOISY
+	default n
+	help
+	  Prints diffs on each trap of the actual v expected ghost states.
+
+config NVHE_GHOST_DIFF_MAX_DIFFS_PER_NODE
+	int "Number of diffs to display per group"
+	depends on NVHE_GHOST_DIFF
+	default 16
+
+config NVHE_GHOST_DIFF_post_computed
+	bool "Show diffs of recorded->computed spec ghost state"
+	depends on NVHE_GHOST_DIFF
+	default n
+
+config NVHE_GHOST_DIFF_pre_post_recorded
+	bool "Show diffs of pre->post recorded ghost state"
+	depends on NVHE_GHOST_DIFF
+
+config NVHE_GHOST_DIFF_post_host_pgtable
+	bool "Show concrete diffs to host pgtable on each handler"
+	depends on NVHE_GHOST_DIFF
+	default n
+
+config NVHE_GHOST_TRACE
+	bool "Enable ghost tracing"
+	depends on NVHE_GHOST_SPEC_NOISY
+	default n
+	help
+	  When enabled, trace each ghost enter/exit call site.
+
+config NVHE_GHOST_TRACE_TRACE_EVENT
+	bool "Output ghost tracing for TraceEvent"
+	depends on NVHE_GHOST_TRACE
+	default n
+	help
+	  Output ghost tracing in a format allowing the reconstruction of a TraceEvent file
+
+menu "Hypercalls"
+	depends on NVHE_GHOST_SPEC
+
+
+config NVHE_GHOST_SPEC_CHECK_handle_host_mem_abort
+	bool "Check handle_host_mem_abort"
+config NVHE_GHOST_SPEC_NOISY_handle_host_mem_abort
+	depends on NVHE_GHOST_SPEC_NOISY
+	bool "Noisy handle_host_mem_abort"
+
+config NVHE_GHOST_SPEC_CHECK___pkvm_host_share_hyp
+	bool "Check __pkvm_host_share_hyp"
+config NVHE_GHOST_SPEC_CHECK___pkvm_host_unshare_hyp
+	bool "Check __pkvm_host_unshare_hyp"
+config NVHE_GHOST_SPEC_CHECK___pkvm_host_reclaim_page
+	bool "Check __pkvm_host_reclaim_page"
+config NVHE_GHOST_SPEC_CHECK___pkvm_host_map_guest
+	bool "Check __pkvm_host_map_guest"
+# config NVHE_GHOST_SPEC_CHECK___kvm_adjust_pc
+# 	bool "Check __kvm_adjust_pc"
+config NVHE_GHOST_SPEC_CHECK___kvm_vcpu_run
+	bool "Check __kvm_vcpu_run"
+# config NVHE_GHOST_SPEC_CHECK___kvm_timer_set_cntvoff
+# 	bool "Check __kvm_timer_set_cntvoff"
+# config NVHE_GHOST_SPEC_CHECK___vgic_v3_save_vmcr_aprs
+# 	bool "Check __vgic_v3_save_vmcr_aprs"
+# config NVHE_GHOST_SPEC_CHECK___vgic_v3_restore_vmcr_aprs
+# 	bool "Check __vgic_v3_restore_vmcr_aprs"
+config NVHE_GHOST_SPEC_CHECK___pkvm_init_vm
+	bool "Check __pkvm_init_vm"
+config NVHE_GHOST_SPEC_CHECK___pkvm_init_vcpu
+	bool "Check __pkvm_init_vcpu"
+config NVHE_GHOST_SPEC_CHECK___pkvm_teardown_vm
+	bool "Check __pkvm_teardown_vm"
+config NVHE_GHOST_SPEC_CHECK___pkvm_vcpu_load
+	bool "Check __pkvm_vcpu_load"
+config NVHE_GHOST_SPEC_CHECK___pkvm_vcpu_put
+	bool "Check __pkvm_vcpu_put"
+# config NVHE_GHOST_SPEC_CHECK___pkvm_vcpu_sync_state
+# 	bool "Check __pkvm_vcpu_sync_state"
+
+config NVHE_GHOST_SPEC_CHECK___pkvm_guest_share_host
+	bool "Check __pkvm_guest_share_host"
+config NVHE_GHOST_SPEC_CHECK___pkvm_guest_unshare_host
+	bool "Check __pkvm_guest_unshare_host"
+config NVHE_GHOST_SPEC_CHECK_handle_guest_mem_abort
+	bool "Check handle_guest_mem_abort"
+config NVHE_GHOST_SPEC_NOISY_handle_guest_mem_abort
+	depends on NVHE_GHOST_SPEC_NOISY
+	bool "Noisy handle_guest_mem_abort"
+
+endmenu
+
+menu "Inject errors"
+	depends on NVHE_GHOST_SPEC
+
+source "arch/arm64/kvm/Kconfig-ghost-inject-errors"
+endmenu
+
+menu "Inject fixes"
+	depends on NVHE_GHOST_SPEC
+
+source "arch/arm64/kvm/Kconfig-ghost-inject-fixes"
+endmenu

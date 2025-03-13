@@ -1,0 +1,4 @@
+config NVHE_GHOST_SPEC_INJECT_FIX_stage2_try_break_pte_MISSING_DSB
+	bool "Inject an fix (restore DSB) into stage2_try_break_pte"
+  default y
+	depends on NVHE_GHOST_SIMPLIFIED_MODEL

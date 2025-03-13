@@ -17,11 +17,34 @@
 /*
  * The LSB of the HYP VA tag
  */
+#ifdef CONFIG_NVHE_GHOST_SPEC
+ /* this not static so the ghost code can access it */
+ /* NOTE: this should link to ghost_compute_abstraction.c::tag_lsb (see comment theere) */
+extern u8 kvm_nvhe_sym(tag_lsb);
+#define tag_lsb CHOOSE_NVHE_SYM(tag_lsb)
+#else /* CONFIG_NVHE_GHOST_SPEC */
 static u8 tag_lsb;
+#endif /* CONFIG_NVHE_GHOST_SPEC */
+
 /*
  * The HYP VA tag value with the region bit
+ *
+ * GHOST
+ * this not static so the ghost code can access it
+ * NOTE: this should link to ghost_compute_abstraction.c::tag_val (see comment theere)
+ * /GHOST
  */
+#ifdef CONFIG_NVHE_GHOST_SPEC
+
+extern u64 kvm_nvhe_sym(tag_val);
+#define tag_val CHOOSE_NVHE_SYM(tag_val)
+
+#else /* CONFIG_NVHE_GHOST_SPEC */
+
 static u64 tag_val;
+
+#endif /* CONFIG_NVHE_GHOST_SPEC */
+
 static u64 va_mask;
 
 /*

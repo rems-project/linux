@@ -11,6 +11,18 @@
 #include <asm/kvm_pgtable.h>
 #include <asm/stage2_pgtable.h>
 
+#if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SPEC)
+#include <asm/kvm_mmu.h>
+#include <nvhe/ghost/ghost_serial.h>
+#include <nvhe/ghost/ghost_pgtable.h>
+#include <nvhe/ghost/ghost_control.h>
+#include <nvhe/ghost/ghost_asserts.h>
+// #pragma GCC diagnostic ignored "-Wdeclaration-after-statement"
+#if defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
+#include <nvhe/ghost/ghost_simplified_model.h>
+#endif
+#endif /* CONFIG_NVHE_GHOST_SPEC */
+
 
 #define KVM_PTE_LEAF_ATTR_S2_PERMS	(KVM_PTE_LEAF_ATTR_LO_S2_S2AP_R | \
 					 KVM_PTE_LEAF_ATTR_LO_S2_S2AP_W | \
@@ -26,6 +38,51 @@ struct kvm_pgtable_walk_data {
 	u64				addr;
 	const u64			end;
 };
+
+#if defined(CONFIG_NVHE_GHOST_SPEC) && defined(__KVM_NVHE_HYPERVISOR__)
+// for GHOST code: this type definition was just before kvm_get_vtcr, but we need it earlier to state pre/postconditions in __kvm_pgtable_walk, as we're doing that specific for the stage2, not for arbitrary callbacks
+struct stage2_map_data {
+	const u64			phys;
+	kvm_pte_t			attr;
+	u8				owner_id;
+
+	kvm_pte_t			*anchor;
+	kvm_pte_t			*childp;
+
+	struct kvm_s2_mmu		*mmu;
+	void				*memcache;
+
+	/* Force mappings to page granularity */
+	bool				force_pte;
+};
+#endif /* CONFIG_NVHE_GHOST_SPEC */
+
+#if defined(CONFIG_NVHE_GHOST_SPEC) && defined(__KVM_NVHE_HYPERVISOR__)
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+/* include external for simplified model hints */
+extern struct kvm_pgtable pkvm_pgtable;
+#endif
+
+bool is_stage2_map_walker(struct kvm_pgtable_walk_data *data);
+
+void ghost_dump_kvm_pgtable(struct kvm_pgtable *pgt, u64 i)
+{
+	hyp_puti(i);
+	hyp_putsxn("ia_bits",pgt->ia_bits,32);
+	hyp_putsxn("start_level",pgt->start_level,32);
+	hyp_putsxn("pgd",(u64)(pgt->pgd),64);
+}
+void ghost_dump_kvm_pgtable_walk_data(struct kvm_pgtable_walk_data *data, u64 i)
+{
+	hyp_puti(i);
+	hyp_puts("pgd:");
+	/* ghost_dump_kvm_pgtable(data->pgt, 0); */
+	hyp_putsxn("start",data->start,64);
+	hyp_putsxn("addr",data->addr,64);
+	hyp_putsxn("end",data->end,64);
+	hyp_putc('\n');
+}
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 
 static bool kvm_pgtable_walk_skip_bbm_tlbi(const struct kvm_pgtable_visit_ctx *ctx)
 {
@@ -87,6 +144,11 @@ static u32 kvm_pgd_pages(u32 ia_bits, u32 start_level)
 static void kvm_clear_pte(kvm_pte_t *ptep)
 {
 	WRITE_ONCE(*ptep, 0);
+#if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
+#ifndef CONFIG_NVHE_GHOST_SPEC_INJECT_ERROR_kvm_clear_pte_MISSING_WRITE
+	casemate_model_step_write(WMO_plain, hyp_virt_to_phys(ptep), 0);
+#endif /* CONFIG_NVHE_GHOST_SPEC_INJECT_ERROR_kvm_clear_pte_MISSING_WRITE */
+#endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 }
 
 static kvm_pte_t kvm_init_table_pte(kvm_pte_t *childp, struct kvm_pgtable_mm_ops *mm_ops)
@@ -141,18 +203,35 @@ static bool kvm_pgtable_walk_continue(const struct kvm_pgtable_walker *walker,
 	return !r;
 }
 
+#if defined(CONFIG_NVHE_GHOST_SPEC) && defined(__KVM_NVHE_HYPERVISOR__)
+static int __kvm_pgtable_walk(struct kvm_pgtable_walk_data *data,
+			      struct kvm_pgtable_mm_ops *mm_ops, kvm_pteref_t pgtable, u32 level,
+			      u64 ghost_va_partial, bool s2);
+#else
 static int __kvm_pgtable_walk(struct kvm_pgtable_walk_data *data,
 			      struct kvm_pgtable_mm_ops *mm_ops,
 			      struct kvm_pgtable_pte_ops *pte_ops,
 			      kvm_pteref_t pgtable, u32 level);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 
+#if defined(CONFIG_NVHE_GHOST_SPEC) && defined(__KVM_NVHE_HYPERVISOR__)
+static inline int __kvm_pgtable_visit(struct kvm_pgtable_walk_data *data,
+				      struct kvm_pgtable_mm_ops *mm_ops,
+				      kvm_pteref_t pteref, u32 level,
+				      u64 ghost_va_partial, bool s2)
+#else
 static inline int __kvm_pgtable_visit(struct kvm_pgtable_walk_data *data,
 				      struct kvm_pgtable_mm_ops *mm_ops,
 				      struct kvm_pgtable_pte_ops *pte_ops,
 				      kvm_pteref_t pteref, u32 level)
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 {
 	enum kvm_pgtable_walk_flags flags = data->walker->flags;
 	kvm_pte_t *ptep = kvm_dereference_pteref(data->walker, pteref);
+#if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
+	/* might be different to the other READ_ONCE below, but this is a best-effort sanity check anyway */
+	casemate_model_step_read(hyp_virt_to_phys(ptep), READ_ONCE(*ptep));
+#endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 	struct kvm_pgtable_visit_ctx ctx = {
 		.ptep	= ptep,
 		.old	= READ_ONCE(*ptep),
@@ -187,6 +266,9 @@ static inline int __kvm_pgtable_visit(struct kvm_pgtable_walk_data *data,
 	 */
 	if (reload) {
 		ctx.old = READ_ONCE(*ptep);
+#if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
+	casemate_model_step_read(hyp_virt_to_phys(ctx.ptep), ctx.old);
+#endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 		table = kvm_pte_table(ctx.old, level);
 	}
 
@@ -200,7 +282,11 @@ static inline int __kvm_pgtable_visit(struct kvm_pgtable_walk_data *data,
 	}
 
 	childp = (kvm_pteref_t)kvm_pte_follow(ctx.old, mm_ops);
+#if defined(CONFIG_NVHE_GHOST_SPEC) && defined(__KVM_NVHE_HYPERVISOR__)
+	ret = __kvm_pgtable_walk(data, mm_ops, childp, level + 1, ghost_va_partial, s2);
+#else
 	ret = __kvm_pgtable_walk(data, mm_ops, pte_ops, childp, level + 1);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	if (!kvm_pgtable_walk_continue(data->walker, ret))
 		goto out;
 
@@ -214,16 +300,71 @@ out:
 	return ret;
 }
 
+#if defined(CONFIG_NVHE_GHOST_SPEC) && defined(__KVM_NVHE_HYPERVISOR__)
+static int __kvm_pgtable_walk(struct kvm_pgtable_walk_data *data,
+			      struct kvm_pgtable_mm_ops *mm_ops, kvm_pteref_t pgtable, u32 level,
+			      u64 ghost_va_partial, bool s2)
+#else
 static int __kvm_pgtable_walk(struct kvm_pgtable_walk_data *data,
 			      struct kvm_pgtable_mm_ops *mm_ops,
 			      struct kvm_pgtable_pte_ops *pte_ops,
 			      kvm_pteref_t pgtable, u32 level)
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 {
 	u32 idx;
 	int ret = 0;
 
+#if defined(CONFIG_NVHE_GHOST_SPEC) && defined(__KVM_NVHE_HYPERVISOR__)
+	bool ghost_check = ghost_control_check_enabled(__func__) && is_stage2_map_walker(data); // turning off for now
+	u64 i = 4 + level * 2;  /* base indent */
+	u64 ghost_va_partial_new;
+	mapping mapping_pre, mapping_post; // interpretation of pgt on entry and exit
+	mapping mapping_pre_annot, mapping_post_annot; // interpretation of pgtable on entry and exit, cut down to annot parts
+	mapping mapping_requested, mapping_pre_plus_requested;
+
+	if (ghost_check) {
+		hyp_putspi("__kvm_pgtable_walk ", i);
+		if (level==0) ghost_dump_kvm_pgtable_walk_data(data, i);
+		hyp_puti(i+2);
+		hyp_putsxn("pgtable",(u64)pgtable,64);
+		hyp_putsxn("level",level,32);
+		hyp_putsxn("va_partial",ghost_va_partial,64);
+		hyp_putc('\n');
+
+		ghost_lock_maplets();
+		ghost_mair_t mair;
+		ghost_stage_t stage;
+		if (s2) {
+			mair = no_mair();
+			stage = GHOST_STAGE2;
+		} else {
+			mair = read_mair(read_sysreg_el2(SYS_MAIR));
+			stage = GHOST_STAGE1;
+		}
+		u64 phys = ((struct stage2_map_data *)(data->walker->arg))->phys;
+		u64 nr_pages = (data->end - data->addr)/PAGE_SIZE;
+		mapping_pre = ghost_record_pgtable_partial(pgtable, stage, mair, level, ghost_va_partial, DUMMY_AAL, "__kvm_pgtable_walk pre", i+2);
+		if (((struct stage2_map_data *)(data->walker->arg))->anchor == NULL) { // if anchor not set
+			// TODO: I guess we need to cut down the (addr,end) to the footprint of the subpagetable we're working on. We don't see that in the boot as the fault-on-demand only seems to request a single-page mapping?  If it never does, the anchor machinery is irrelevant for that.
+			mapping_requested = mapping_singleton(
+				s2 ? GHOST_STAGE2 : GHOST_STAGE1, data->addr, nr_pages,
+				maplet_target_mapped_ext(phys, nr_pages, DUMMY_ATTR, DUMMY_ATTR, DUMMY_ATTR));
+		} else {
+			mapping_requested = mapping_empty_();
+		}
+		ghost_unlock_maplets();
+	}
+#endif /* CONFIG_NVHE_GHOST_SPEC */
+
 	if (WARN_ON_ONCE(level >= KVM_PGTABLE_MAX_LEVELS))
+#if defined(CONFIG_NVHE_GHOST_SPEC) && defined(__KVM_NVHE_HYPERVISOR__)
+	{
+		ret = -EINVAL;
+		goto out;
+	}
+#else
 		return -EINVAL;
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 
 	for (idx = kvm_pgtable_idx(data, level); idx < PTRS_PER_PTE; ++idx) {
 		kvm_pteref_t pteref = &pgtable[idx];
@@ -231,11 +372,58 @@ static int __kvm_pgtable_walk(struct kvm_pgtable_walk_data *data,
 		if (data->addr >= data->end)
 			break;
 
+#if defined(CONFIG_NVHE_GHOST_SPEC) && defined(__KVM_NVHE_HYPERVISOR__)
+                switch (level) {
+                case 0: ghost_va_partial_new = ghost_va_partial | ((u64)idx << 39); break;
+                case 1: ghost_va_partial_new = ghost_va_partial | ((u64)idx << 30); break;
+                case 2: ghost_va_partial_new = ghost_va_partial | ((u64)idx << 21); break;
+                case 3: ghost_va_partial_new = ghost_va_partial | ((u64)idx << 12); break;
+                default: check_assert_fail("unhandled level"); // cases are exhaustive
+                }
+		ret = __kvm_pgtable_visit(data, mm_ops, pteref, level, ghost_va_partial_new, s2);
+#else
 		ret = __kvm_pgtable_visit(data, mm_ops, pte_ops, pteref, level);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 		if (ret)
 			break;
 	}
 
+#if defined(CONFIG_NVHE_GHOST_SPEC) && defined(__KVM_NVHE_HYPERVISOR__)
+out:
+	if (ghost_check) {
+		// sketch of the postcondition - punting on sundry rounding and error/edge cases
+		// some of this is shared with the kvm_pgtable_stage2_map postcondition, but for a subtable
+		ghost_lock_maplets();
+		ghost_mair_t mair;
+		ghost_stage_t stage;
+		if (s2) {
+			mair = no_mair();
+			stage = GHOST_STAGE2;
+		} else {
+			mair = read_mair(read_sysreg_el2(SYS_MAIR));
+			stage = GHOST_STAGE1;
+		}
+		mapping_post = ghost_record_pgtable_partial(pgtable, stage, mair, level, ghost_va_partial, DUMMY_AAL, "__kvm_pgtable_walk post", i+2);
+		// postcondition: mapping_requested included in mapping_post
+		mapping_submapping(mapping_requested, mapping_post, "__kvm_pgtable_walk_post", "mapping_requested", "mapping_post", i+2);
+		// postcondition: mapping_post included in mapping_pre + mapping_requested
+		mapping_pre_plus_requested = mapping_plus(mapping_pre, mapping_requested);
+		mapping_submapping(mapping_post, mapping_pre_plus_requested, "__kvm_pgtable_walk_post", "mapping_post", "mapping_pre_plus_requested", i+2);
+		// postcondition: mapping_post and mapping_pre have the same annotation part
+		mapping_pre_annot = mapping_annot(mapping_pre);
+		mapping_post_annot = mapping_annot(mapping_post);
+		mapping_equal(mapping_pre_annot, mapping_post_annot, "__kvm_pgtable_walk_post annot equal", "mapping_pre_annot", "mapping_post_annot", i+2);
+		free_mapping(mapping_pre);
+		free_mapping(mapping_post);
+		free_mapping(mapping_pre_annot);
+		free_mapping(mapping_post_annot);
+		free_mapping(mapping_requested);
+		free_mapping(mapping_pre_plus_requested);
+		ghost_unlock_maplets();
+		// in addition to these, we need various properties of the intervening memory+tlbi+dsb state, as sketched for kvm_pgtable_stage2_map
+		// if the anchor was set on entry, the mapping_requested was empty, but we should have free'd all the pages below, and cleared the anchor when we got back to it
+	}
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	return ret;
 }
 
@@ -244,6 +432,18 @@ static int _kvm_pgtable_walk(struct kvm_pgtable *pgt, struct kvm_pgtable_walk_da
 	u32 idx;
 	int ret = 0;
 	u64 limit = BIT(pgt->ia_bits);
+
+#if defined(CONFIG_NVHE_GHOST_SPEC) && defined(__KVM_NVHE_HYPERVISOR__)
+	u64 ghost_va_partial;
+	bool ghost_check = ghost_control_check_enabled(__func__) &&  is_stage2_map_walker(data);/* turning off for now to reduce noise */
+	u64 i=2; /* base indent */
+	if (ghost_check) {
+		hyp_putspi("_kvm_pgtable_walk\n", i);
+	        ghost_dump_kvm_pgtable_walk_data(data, i+2);
+		hyp_putsxn("pgt",(u64)pgt,64);
+		hyp_putc('\n');
+	}
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 
 	if (data->addr > limit || data->end > limit)
 		return -ERANGE;
@@ -254,8 +454,14 @@ static int _kvm_pgtable_walk(struct kvm_pgtable *pgt, struct kvm_pgtable_walk_da
 	for (idx = kvm_pgd_page_idx(pgt, data->addr); data->addr < data->end; ++idx) {
 		kvm_pteref_t pteref = &pgt->pgd[idx * PTRS_PER_PTE];
 
+#if defined(CONFIG_NVHE_GHOST_SPEC) && defined(__KVM_NVHE_HYPERVISOR__)
+		ghost_va_partial = 0;  // TODO?
+		bool is_s2 = pgt->mmu != NULL;
+		ret = __kvm_pgtable_walk(data, pgt->mm_ops, pteref, pgt->start_level, ghost_va_partial, is_s2);
+#else
 		ret = __kvm_pgtable_walk(data, pgt->mm_ops, pgt->pte_ops,
 					 pteref, pgt->start_level);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 		if (ret)
 			break;
 	}
@@ -263,6 +469,7 @@ static int _kvm_pgtable_walk(struct kvm_pgtable *pgt, struct kvm_pgtable_walk_da
 	return ret;
 }
 
+/* GHOST: maybe we'd just inline this in the verification of kvm_pgtable_stage2_map, rather than more-or-less duplicate their specifications? */
 int kvm_pgtable_walk(struct kvm_pgtable *pgt, u64 addr, u64 size,
 		     struct kvm_pgtable_walker *walker)
 {
@@ -411,6 +618,9 @@ static bool hyp_map_walker_try_leaf(const struct kvm_pgtable_visit_ctx *ctx,
 		return false;
 
 	smp_store_release(ctx->ptep, new);
+#if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
+	casemate_model_step_write(WMO_release, hyp_virt_to_phys(ctx->ptep), new);
+#endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 	return true;
 }
 
@@ -430,10 +640,17 @@ static int hyp_map_walker(const struct kvm_pgtable_visit_ctx *ctx,
 	childp = (kvm_pte_t *)mm_ops->zalloc_page(NULL);
 	if (!childp)
 		return -ENOMEM;
+#if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
+	casemate_model_step_init(hyp_virt_to_phys(childp), PAGE_SIZE);
+	casemate_model_step_hint(GHOST_HINT_SET_OWNER_ROOT, hyp_virt_to_phys(childp), hyp_virt_to_phys(pkvm_pgtable.pgd));
+#endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 
 	new = kvm_init_table_pte(childp, mm_ops);
 	mm_ops->get_page(ctx->ptep);
 	smp_store_release(ctx->ptep, new);
+#if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
+	casemate_model_step_write(WMO_release, hyp_virt_to_phys(ctx->ptep), new);
+#endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 
 	return 0;
 }
@@ -457,7 +674,13 @@ int kvm_pgtable_hyp_map(struct kvm_pgtable *pgt, u64 addr, u64 size, u64 phys,
 
 	ret = kvm_pgtable_walk(pgt, addr, size, &walker);
 	dsb(ishst);
+#if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
+	casemate_model_step_dsb(DxB_ishst);
+#endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 	isb();
+#if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
+	casemate_model_step_isb();
+#endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 	return ret;
 }
 
@@ -480,21 +703,43 @@ static int hyp_unmap_walker(const struct kvm_pgtable_visit_ctx *ctx,
 
 		kvm_clear_pte(ctx->ptep);
 		dsb(ishst);
+#if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
+	casemate_model_step_dsb(DxB_ishst);
+#endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 		__tlbi_level(vae2is, __TLBI_VADDR(ctx->addr, 0), 0);
+#if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
+	casemate_model_step_tlbi_va(TLBI_vae2is, ctx->addr >> 12, (u64)ctx->level, 0ULL);
+#endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 	} else {
 		if (ctx->end - ctx->addr < granule)
 			return -EINVAL;
 
 		kvm_clear_pte(ctx->ptep);
 		dsb(ishst);
+#if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
+	casemate_model_step_dsb(DxB_ishst);
+#endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 		__tlbi_level(vale2is, __TLBI_VADDR(ctx->addr, 0), ctx->level);
+#if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
+	casemate_model_step_tlbi_va(TLBI_vale2is,ctx->addr >> 12, (u64)ctx->level, 0ULL);
+#endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 		*unmapped += granule;
 	}
 
 	dsb(ish);
+#if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
+	casemate_model_step_dsb(DxB_ish);
+#endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 	isb();
+#if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
+	casemate_model_step_isb();
+#endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 	mm_ops->put_page(ctx->ptep);
 
+#if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
+	if (childp)
+		casemate_model_step_hint(GHOST_HINT_SET_OWNER_ROOT, hyp_virt_to_phys(childp), (u64)NULL);
+#endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 	if (childp)
 		mm_ops->put_page(childp);
 
@@ -526,6 +771,10 @@ int kvm_pgtable_hyp_init(struct kvm_pgtable *pgt, u32 va_bits,
 	if (!pgt->pgd)
 		return -ENOMEM;
 
+
+#if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
+	casemate_model_step_init(hyp_virt_to_phys(pgt->pgd), PAGE_SIZE);
+#endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 	pgt->ia_bits		= va_bits;
 	pgt->start_level	= KVM_PGTABLE_MAX_LEVELS - levels;
 	pgt->mm_ops		= mm_ops;
@@ -563,6 +812,8 @@ void kvm_pgtable_hyp_destroy(struct kvm_pgtable *pgt)
 	pgt->pgd = NULL;
 }
 
+#if !defined(CONFIG_NVHE_GHOST_SPEC) || !defined(__KVM_NVHE_HYPERVISOR__)
+//  GHOST: struct stage2_map_data  was here; moved above
 struct stage2_map_data {
 	const u64			phys;
 	kvm_pte_t			attr;
@@ -577,6 +828,7 @@ struct stage2_map_data {
 	/* Force mappings to page granularity */
 	bool				force_pte;
 };
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 
 u64 kvm_get_vtcr(u64 mmfr0, u64 mmfr1, u32 phys_shift)
 {
@@ -749,9 +1001,15 @@ static bool stage2_try_set_pte(const struct kvm_pgtable_visit_ctx *ctx, kvm_pte_
 {
 	if (!kvm_pgtable_walk_shared(ctx)) {
 		WRITE_ONCE(*ctx->ptep, new);
+#if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
+	casemate_model_step_write(WMO_plain, hyp_virt_to_phys(ctx->ptep), new);
+#endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 		return true;
 	}
 
+#if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
+	ghost_assert(false);
+#endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 	return cmpxchg(ctx->ptep, ctx->old, new) == ctx->old;
 }
 
@@ -792,6 +1050,7 @@ static bool stage2_try_break_pte(const struct kvm_pgtable_visit_ctx *ctx,
 		 * Perform the appropriate TLB invalidation based on the
 		 * evicted pte value (if any).
 		 */
+		#if !defined(__KVM_NVHE_HYPERVISOR__) || !defined(CONFIG_NVHE_GHOST_SPEC_INJECT_ERROR_stage2_try_break_pte_MISSING_TLBI)
 		if (kvm_pte_table(ctx->old, ctx->level)) {
 			u64 size = kvm_granule_size(ctx->level);
 			u64 addr = ALIGN_DOWN(ctx->addr, size);
@@ -800,6 +1059,7 @@ static bool stage2_try_break_pte(const struct kvm_pgtable_visit_ctx *ctx,
 		} else if (kvm_pte_valid(ctx->old)) {
 			kvm_call_hyp(__kvm_tlb_flush_vmid_ipa, mmu,
 				     ctx->addr, ctx->level);
+		#endif /* CONFIG_NVHE_GHOST_SPEC_INJECT_ERROR_stage2_try_break_pte_MISSING_TLBI */
 		}
 	}
 
@@ -814,12 +1074,17 @@ static void stage2_make_pte(const struct kvm_pgtable_visit_ctx *ctx, kvm_pte_t n
 	struct kvm_pgtable_mm_ops *mm_ops = ctx->mm_ops;
 	struct kvm_pgtable_pte_ops *pte_ops = ctx->pte_ops;
 
+	#ifndef CONFIG_NVHE_GHOST_SPEC_INJECT_ERROR_stage2_map_walker_try_leaf_MISSING_BREAK
 	WARN_ON(!stage2_pte_is_locked(*ctx->ptep));
+	#endif /* CONFIG_NVHE_GHOST_SPEC_INJECT_ERROR_stage2_map_walker_try_leaf_MISSING_BREAK */
 
 	if (pte_ops->pte_is_counted_cb(new, ctx->level))
 		mm_ops->get_page(ctx->ptep);
 
 	smp_store_release(ctx->ptep, new);
+#if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
+	casemate_model_step_write(WMO_release, hyp_virt_to_phys(ctx->ptep), new);
+#endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 }
 
 static bool stage2_unmap_defer_tlb_flush(struct kvm_pgtable *pgt)
@@ -839,6 +1104,7 @@ static void stage2_unmap_clear_pte(const struct kvm_pgtable_visit_ctx *ctx,
 				   struct kvm_s2_mmu *mmu)
 {
 	struct kvm_pgtable *pgt = ctx->arg;
+	#if !defined(__KVM_NVHE_HYPERVISOR__) || !defined(CONFIG_NVHE_GHOST_SPEC_INJECT_ERROR_stage2_put_pte_MISSING_INVALIDATE)
 	if (kvm_pte_valid(ctx->old)) {
 		kvm_clear_pte(ctx->ptep);
 
@@ -849,6 +1115,7 @@ static void stage2_unmap_clear_pte(const struct kvm_pgtable_visit_ctx *ctx,
 			kvm_call_hyp(__kvm_tlb_flush_vmid_ipa, mmu, ctx->addr,
 				     ctx->level);
 		}
+	#endif /* CONFIG_NVHE_GHOST_SPEC_INJECT_ERROR_stage2_put_pte_MISSING_INVALIDATE */
 	}
 }
 
@@ -958,8 +1225,10 @@ static int stage2_map_walker_try_leaf(const struct kvm_pgtable_visit_ctx *ctx,
 		return 0;
 	}
 
+	#if !defined(__KVM_NVHE_HYPERVISOR__) || !defined(CONFIG_NVHE_GHOST_SPEC_INJECT_ERROR_stage2_map_walker_try_leaf_MISSING_BREAK)
 	if (!stage2_try_break_pte(ctx, data->mmu))
 		return -EAGAIN;
+	#endif /* CONFIG_NVHE_GHOST_SPEC_INJECT_ERROR_stage2_map_walker_try_leaf_MISSING_BREAK */
 
 	/* Perform CMOs before installation of the guest stage-2 PTE */
 	if (!kvm_pgtable_walk_skip_cmo(ctx) && mm_ops->dcache_clean_inval_poc &&
@@ -1055,6 +1324,10 @@ static int stage2_map_walk_leaf(const struct kvm_pgtable_visit_ctx *ctx,
 	childp = mm_ops->zalloc_page(data->memcache);
 	if (!childp)
 		return -ENOMEM;
+#if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
+	casemate_model_step_init(hyp_virt_to_phys(childp), PAGE_SIZE);
+	casemate_model_step_hint(GHOST_HINT_SET_OWNER_ROOT, hyp_virt_to_phys(childp), hyp_virt_to_phys(data->mmu->pgt->pgd));
+#endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 
 	WARN_ON((pgt->flags & KVM_PGTABLE_S2_IDMAP) &&
 		pte_ops->pte_is_counted_cb(ctx->old, ctx->level));
@@ -1171,12 +1444,56 @@ static int stage2_map_walker(const struct kvm_pgtable_visit_ctx *ctx,
 	}
 }
 
+#if defined(CONFIG_NVHE_GHOST_SPEC) && defined(__KVM_NVHE_HYPERVISOR__)
+bool is_stage2_map_walker(struct kvm_pgtable_walk_data *data)
+{
+	return data->walker->cb == stage2_map_walker;
+}
+#endif /* CONFIG_NVHE_GHOST_SPEC */
+
+
 int kvm_pgtable_stage2_map(struct kvm_pgtable *pgt, u64 addr, u64 size,
 			   u64 phys, enum kvm_pgtable_prot prot,
 			   void *mc, enum kvm_pgtable_walk_flags flags)
 {
 	int ret;
 	struct kvm_pgtable_pte_ops *pte_ops = pgt->pte_ops;
+
+#if defined(CONFIG_NVHE_GHOST_SPEC) && defined(__KVM_NVHE_HYPERVISOR__)
+
+	bool ghost_check = ghost_control_check_enabled(__func__);
+	int i=0;  /* base indent */
+	mapping mapping_pre, mapping_post; // interpretation of pgt on entry and exit
+	mapping mapping_pre_annot, mapping_post_annot; // interpretation of pgt on entry and exit, cut down to annot parts
+	mapping mapping_requested, mapping_pre_plus_requested;
+	if (ghost_check) {
+		hyp_putspi("*********************************************************\n", i);
+		hyp_putspi("kvm_pgtable_stage2_map:\n", i);
+
+		// mapping_requested = addr..addr+size |-> (phys..phys+size, prot)
+		ghost_lock_maplets();
+		u64 nr_pages = size / PAGE_SIZE;
+		mapping_requested = mapping_singleton(GHOST_STAGE2, addr, nr_pages, maplet_target_mapped_ext(phys, nr_pages, DUMMY_ATTR, DUMMY_ATTR, DUMMY_ATTR));
+// the attribute we see in the constructed table is
+// 1000000000007fc
+// 0000000100000000000000000000000000000000000000000000011111111100
+// bits 56 and 10-2 all set
+// 	56 is in 58:55 reserved for s/w use
+//  10 is AF               the access flag
+//  9:8 is SH[1:0]         11 for Normal memory means Inner Shareable (if effecticve VTCR_EL2.DS=0)
+//  7:6 is S2AP[1:0]       11 means Access from N-s EL1 or N-s EL0 is Read/write
+//  5:2 is MemAttr[3:0]    11 is Normal, Outer Write-Back Cacheable, Inner Write-Back Cacheable
+
+		ghost_unlock_maplets();
+
+		hyp_putspi("mapping_requested\n", i+2);
+		hyp_put_mapping(mapping_requested, i+2);
+
+		// record mapping on entry
+		mapping_pre = ghost_record_pgtable(pgt, NULL, "kvm_pgtable_stage2_map pre", i+2);
+	}
+#endif /* CONFIG_NVHE_GHOST_SPEC */
+
 	struct stage2_map_data map_data = {
 		.phys		= ALIGN_DOWN(phys, PAGE_SIZE),
 		.mmu		= pgt->mmu,
@@ -1197,14 +1514,56 @@ int kvm_pgtable_stage2_map(struct kvm_pgtable *pgt, u64 addr, u64 size,
 		map_data.force_pte = pte_ops->force_pte_cb(addr, addr + size, prot);
 
 	if (WARN_ON((pgt->flags & KVM_PGTABLE_S2_IDMAP) && (addr != phys)))
+#if defined(CONFIG_NVHE_GHOST_SPEC) && defined(__KVM_NVHE_HYPERVISOR__)
+	{
+		ret = -EINVAL;
+		goto out;
+	}
+#else
 		return -EINVAL;
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 
 	ret = stage2_set_prot_attr(pgt, prot, &map_data.attr);
 	if (ret)
+#if defined(CONFIG_NVHE_GHOST_SPEC) && defined(__KVM_NVHE_HYPERVISOR__)
+		goto out;
+#else
 		return ret;
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 
 	ret = kvm_pgtable_walk(pgt, addr, size, &walker);
 	dsb(ishst);
+
+#if defined(CONFIG_NVHE_GHOST_SPEC) && defined(__KVM_NVHE_HYPERVISOR__)
+out:
+	if (ghost_check) {
+		// sketch of the postcondition - punting on sundry rounding and error/edge cases
+		ghost_lock_maplets();
+		mapping_post = ghost_record_pgtable(pgt, NULL, "kvm_pgtable_stage2_map post", i+2);
+		// postcondition: mapping_requested included in mapping_post
+		mapping_submapping(mapping_requested, mapping_post, "kvm_pgtable_stage2_map post", "mapping_requested", "mapping_post", i+2);
+		// postcondition: mapping_post included in mapping_pre + mapping_requested
+		mapping_pre_plus_requested = mapping_plus(mapping_pre, mapping_requested);
+		mapping_submapping(mapping_post, mapping_pre_plus_requested, "kvm_pgtable_stage2_map post", "mapping_post", "mapping_pre_plus_requested", i+2);
+		// postcondition: mapping_post and mapping_pre have the same annotation part
+		mapping_pre_annot = mapping_annot(mapping_pre);
+		mapping_post_annot = mapping_annot(mapping_post);
+		mapping_equal(mapping_pre_annot, mapping_post_annot, "kvm_pgtable_stage2_map post annot equal", "mapping_pre_annot", "mapping_post_annot", i+2);
+		free_mapping(mapping_pre);
+		free_mapping(mapping_post);
+		free_mapping(mapping_pre_annot);
+		free_mapping(mapping_post_annot);
+		free_mapping(mapping_requested);
+		free_mapping(mapping_pre_plus_requested);
+		ghost_unlock_maplets();
+		// in addition to these, we need to know:
+		//  - that the second condition above held throughout any changes (with an invariant on the pgt)
+		//  - that the break-before-make protocol and sufficient barriers have been conformed with (with that invariant being over some tlbi/dsb-state-annotated semantics)
+		//  - the ownership transfer of pages between the pgt and by the allocator is handled correctly (standard separation-logic stuff)
+		// perhaps we also need to know that new mappings are not block mappings, and that only block mappings will be lost?  Without that, mem_protect.c:host_stage2_idmap can't guarantee to actually establish the new mapping, as another thread could come in after the host_unlock_component().  If the code actually relies in that case on again trapping and remapping, liveness is questionable.
+	}
+#endif /* CONFIG_NVHE_GHOST_SPEC */
+
 	return ret;
 }
 
@@ -1797,6 +2156,9 @@ int __kvm_pgtable_stage2_init(struct kvm_pgtable *pgt, struct kvm_s2_mmu *mmu,
 	if (!pgt->pgd)
 		return -ENOMEM;
 
+#if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
+	casemate_model_step_init(hyp_virt_to_phys(pgt->pgd), pgd_sz);
+#endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 	pgt->ia_bits		= ia_bits;
 	pgt->start_level	= start_level;
 	pgt->mm_ops		= mm_ops;
@@ -1828,7 +2190,10 @@ static int stage2_free_walker(const struct kvm_pgtable_visit_ctx *ctx,
 		return 0;
 
 	mm_ops->put_page(ctx->ptep);
-
+#if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
+	if (kvm_pte_table(ctx->old, ctx->level))
+		casemate_model_step_hint(GHOST_HINT_SET_OWNER_ROOT, hyp_virt_to_phys(kvm_pte_follow(ctx->old, mm_ops)), (u64)NULL);
+#endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 	if (kvm_pte_table(ctx->old, ctx->level))
 		mm_ops->put_page(kvm_pte_follow(ctx->old, mm_ops));
 
@@ -1872,7 +2237,12 @@ void kvm_pgtable_stage2_free_unlinked(struct kvm_pgtable_mm_ops *mm_ops,
 		.end	= kvm_granule_size(level),
 	};
 
+#if defined(CONFIG_NVHE_GHOST_SPEC) && defined(__KVM_NVHE_HYPERVISOR__)
+	u64 ghost_va_partial = 0;  // TODO?
+	WARN_ON(__kvm_pgtable_walk(&data, mm_ops, ptep, level + 1, ghost_va_partial, true));
+#else
 	WARN_ON(__kvm_pgtable_walk(&data, mm_ops, pte_ops, ptep, level + 1));
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 
 	WARN_ON(mm_ops->page_count(pgtable) != 1);
 	mm_ops->put_page(pgtable);

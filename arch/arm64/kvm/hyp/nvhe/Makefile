@@ -24,6 +24,43 @@ hyp-obj-$(CONFIG_ARM_SMMU_V3_PKVM) += ../../../../../drivers/iommu/io-pgtable-ar
 endif
 
 
+ghosts += ghost/ghost_serial.o
+ghosts += ghost/ghost_printer.o
+ghosts += ghost/ghost_mapping_reqs.o
+ghosts += ghost/ghost_misc.o
+ghosts += ghost/ghost_asm.o
+ghosts += ghost/ghost_sort_hack.o
+ghosts += ghost/ghost_list_sort_hack.o
+ghosts += ghost/ghost_maplets.o
+ghosts += ghost/ghost_pgtable.o
+ghosts += ghost/ghost_control.o
+ghosts += ghost/ghost_pfn_set.o
+ghosts += ghost/ghost_context.o
+ghosts += ghost/ghost_status.o
+ghosts += ghost/ghost_recording.o
+ghosts += ghost/ghost_types_aux.o
+ghosts += ghost/ghost_spec.o
+ghosts += ghost/ghost_alloc.o
+ghosts += ghost/ghost_control.o
+
+hyp-obj-$(CONFIG_NVHE_GHOST_SPEC) += $(ghosts)
+hyp-obj-$(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) += ghost/ghost_sm_driver.o
+hyp-obj-$(CONFIG_NVHE_GHOST_DIFF) += ghost/ghost_abstraction_diff.o
+
+get-casemate:
+	git clone https://github.com/rems-project/casemate ghost/casemate
+.PHONY: get-casemate
+
+ifneq ($(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL),)
+  CASEMATELIB = ghost/casemate/src/lib
+  include $(obj)/ghost/casemate/src/lib/Makefile.linux
+endif
+
+ghost-lib-objs := strcmp.o strlen.o
+hyp-obj-$(CONFIG_NVHE_GHOST_SPEC) += $(addprefix ../../../lib/, $(ghost-lib-objs))
+ccflags-$(CONFIG_NVHE_GHOST_SPEC) += -O1
+
+
 hyp-obj-y += power/hvc.o
 
 $(obj)/hyp.lds: $(src)/hyp.lds.S FORCE

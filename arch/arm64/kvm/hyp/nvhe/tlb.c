@@ -9,6 +9,9 @@
 #include <asm/tlbflush.h>
 
 #include <nvhe/mem_protect.h>
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+#include <nvhe/ghost/ghost_simplified_model.h>
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 
 struct tlb_inv_context {
 	struct kvm_s2_mmu	*mmu;
@@ -28,6 +31,11 @@ static void enter_vmid_context(struct kvm_s2_mmu *mmu,
 	vcpu = host_ctxt->__hyp_running_vcpu;
 	cxt->mmu = NULL;
 
+#if defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) && defined(CONFIG_NVHE_GHOST_SPEC_INJECT_FIX_stage2_try_break_pte_MISSING_DSB)
+	//TODO(porting) for casemate add an INJECT_FAULT here to bring back the missing dsb from 6.4
+	// dsb(ish);
+	// casemate_model_step_dsb(DxB_ish);
+#endif
 	/*
 	 * We have two requirements:
 	 *
@@ -49,6 +57,12 @@ static void enter_vmid_context(struct kvm_s2_mmu *mmu,
 		dsb(nsh);
 	else
 		dsb(ish);
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	if (nsh)
+		casemate_model_step_dsb(DxB_nsh);
+	else
+		casemate_model_step_dsb(DxB_ish);
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 
 	/*
 	 * If we're already in the desired context, then there's nothing
@@ -159,7 +173,9 @@ void __kvm_tlb_flush_vmid_ipa(struct kvm_s2_mmu *mmu,
 	 */
 	ipa >>= 12;
 	__tlbi_level(ipas2e1is, ipa, level);
-
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	casemate_model_step_tlbi_ipa(TLBI_ipas2e1is, ipa, (u64)level);
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	/*
 	 * We have to ensure completion of the invalidation at Stage-2,
 	 * since a table walk on another CPU could refill a TLB with a
@@ -167,9 +183,23 @@ void __kvm_tlb_flush_vmid_ipa(struct kvm_s2_mmu *mmu,
 	 * the Stage-1 invalidation happened first.
 	 */
 	dsb(ish);
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	casemate_model_step_dsb(DxB_ish);
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	__tlbi(vmalle1is);
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+#ifndef CONFIG_NVHE_GHOST_SPEC_INJECT_ERROR___kvm_tlb_flush_vmid_ipa_MISSING_TLBI
+	casemate_model_step_tlbi(TLBI_vmalle1is);
+#endif /* CONFIG_NVHE_GHOST_SPEC_INJECT_ERROR___kvm_tlb_flush_vmid_ipa_MISSING_TLBI */
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	dsb(ish);
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	casemate_model_step_dsb(DxB_ish);
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	isb();
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	casemate_model_step_isb();
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 
 	/*
 	 * If the host is running at EL1 and we have a VPIPT I-cache,
@@ -286,8 +316,17 @@ void __kvm_tlb_flush_vmid(struct kvm_s2_mmu *mmu)
 	enter_vmid_context(mmu, &cxt, false);
 
 	__tlbi(vmalls12e1is);
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	casemate_model_step_tlbi(TLBI_vmalls12e1is);
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	dsb(ish);
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	casemate_model_step_dsb(DxB_ish);
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	isb();
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	casemate_model_step_isb();
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 
 	exit_vmid_context(&cxt);
 }
@@ -300,9 +339,21 @@ void __kvm_flush_cpu_context(struct kvm_s2_mmu *mmu)
 	enter_vmid_context(mmu, &cxt, false);
 
 	__tlbi(vmalle1);
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	casemate_model_step_tlbi(TLBI_vmalle1);
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	asm volatile("ic iallu");
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	// TODO: IC
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	dsb(nsh);
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	casemate_model_step_dsb(DxB_nsh);
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	isb();
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	casemate_model_step_isb();
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 
 	exit_vmid_context(&cxt);
 }
@@ -311,7 +362,13 @@ void __kvm_flush_vm_context(void)
 {
 	/* Same remark as in enter_vmid_context() */
 	dsb(ish);
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	casemate_model_step_dsb(DxB_ish);
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	__tlbi(alle1is);
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	casemate_model_step_tlbi(TLBI_alle1is);
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 
 	/*
 	 * VIPT and PIPT caches are not affected by VMID, so no maintenance
@@ -326,4 +383,8 @@ void __kvm_flush_vm_context(void)
 		asm volatile("ic ialluis");
 
 	dsb(ish);
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	// TODO: BS: no DSB in between tlbi and dsb ?
+	casemate_model_step_dsb(DxB_ish);
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 }

@@ -19,6 +19,10 @@
 #include <nvhe/modules.h>
 #include <nvhe/spinlock.h>
 
+#ifdef CONFIG_NVHE_GHOST_SPEC
+#include <nvhe/ghost/ghost_spec.h>
+#endif /* CONFIG_NVHE_GHOST_SPEC */
+
 struct kvm_pgtable pkvm_pgtable;
 hyp_spinlock_t pkvm_pgd_lock;
 
@@ -31,15 +35,34 @@ struct hyp_fixmap_slot {
 	u64 addr;
 	kvm_pte_t *ptep;
 };
+#ifdef CONFIG_NVHE_GHOST_SPEC
+/* static */ DEFINE_PER_CPU(struct hyp_fixmap_slot, fixmap_slots);
+#else /* CONFIG_NVHE_GHOST_SPEC */
 static DEFINE_PER_CPU(struct hyp_fixmap_slot, fixmap_slots);
-
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 static int __pkvm_create_mappings(unsigned long start, unsigned long size,
+#ifdef CONFIG_NVHE_GHOST_SPEC
+				  unsigned long phys, enum kvm_pgtable_prot prot, enum mapping_req_kind kind)
+#else /* CONFIG_NVHE_GHOST_SPEC */
 				  unsigned long phys, enum kvm_pgtable_prot prot)
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 {
 	int err;
 
 	hyp_spin_lock(&pkvm_pgd_lock);
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	casemate_model_step_lock(hyp_virt_to_phys(&pkvm_pgd_lock));
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	err = kvm_pgtable_hyp_map(&pkvm_pgtable, start, size, phys, prot);
+
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	if (!err)
+		ghost_record_mapping_req(start, size, phys, prot, kind);
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	casemate_model_step_unlock(hyp_virt_to_phys(&pkvm_pgd_lock));
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
+#endif /* CONFIG_NVHE_GHOST_SPEC */
+
 	hyp_spin_unlock(&pkvm_pgd_lock);
 
 	return err;
@@ -82,8 +105,14 @@ int pkvm_alloc_private_va_range(size_t size, unsigned long *haddr)
 	int ret;
 
 	hyp_spin_lock(&pkvm_pgd_lock);
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	casemate_model_step_lock(hyp_virt_to_phys(&pkvm_pgd_lock));
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	addr = __io_map_base;
 	ret = __pkvm_alloc_private_va_range(addr, size);
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	casemate_model_step_unlock(hyp_virt_to_phys(&pkvm_pgd_lock));
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	hyp_spin_unlock(&pkvm_pgd_lock);
 
 	*haddr = addr;
@@ -93,7 +122,12 @@ int pkvm_alloc_private_va_range(size_t size, unsigned long *haddr)
 
 int __pkvm_create_private_mapping(phys_addr_t phys, size_t size,
 				  enum kvm_pgtable_prot prot,
+#ifdef CONFIG_NVHE_GHOST_SPEC
+					unsigned long *haddr,
+					enum mapping_req_kind kind)
+#else /* CONFIG_NVHE_GHOST_SPEC */
 				  unsigned long *haddr)
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 {
 	unsigned long addr;
 	int err;
@@ -103,7 +137,11 @@ int __pkvm_create_private_mapping(phys_addr_t phys, size_t size,
 	if (err)
 		return err;
 
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	err = __pkvm_create_mappings(addr, size, phys, prot, kind);
+#else /* CONFIG_NVHE_GHOST_SPEC */
 	err = __pkvm_create_mappings(addr, size, phys, prot);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	if (err)
 		return err;
 
@@ -206,12 +244,27 @@ int pkvm_create_mappings_locked(void *from, void *to, enum kvm_pgtable_prot prot
 	return 0;
 }
 
+#ifdef CONFIG_NVHE_GHOST_SPEC
+int pkvm_create_mappings(void *from, void *to, enum kvm_pgtable_prot prot,
+			 enum mapping_req_kind kind, u64 cpu)
+#else /* CONFIG_NVHE_GHOST_SPEC */
 int pkvm_create_mappings(void *from, void *to, enum kvm_pgtable_prot prot)
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 {
 	int ret;
 
 	hyp_spin_lock(&pkvm_pgd_lock);
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	casemate_model_step_lock(hyp_virt_to_phys(&pkvm_pgd_lock));
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	ret = pkvm_create_mappings_locked(from, to, prot);
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	if (!ret)
+		ghost_record_mapping_req_virt(from, to, prot, kind, cpu);
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	casemate_model_step_unlock(hyp_virt_to_phys(&pkvm_pgd_lock));
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_spin_unlock(&pkvm_pgd_lock);
 
 	return ret;
@@ -247,11 +300,20 @@ int hyp_back_vmemmap(phys_addr_t back)
 			continue;
 
 		size = end - start;
+#ifdef CONFIG_NVHE_GHOST_SPEC
+		ret = __pkvm_create_mappings(start, size, back, PAGE_HYP, HYP_VMEMMAP);
+#else
 		ret = __pkvm_create_mappings(start, size, back, PAGE_HYP);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 		if (ret)
 			return ret;
 
 		memset(hyp_phys_to_virt(back), 0, size);
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+		for (u64 p = back; p < back+size; p += sizeof(u64)) {
+			casemate_model_step_write(WMO_plain, (phys_addr_t)p, 0);
+		}
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 		back += size;
 	}
 
@@ -299,8 +361,13 @@ int hyp_map_vectors(void)
 	}
 
 	phys = __hyp_pa(__bp_harden_hyp_vecs);
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	ret = __pkvm_create_private_mapping(phys, __BP_HARDEN_HYP_VECS_SZ,
+						PAGE_HYP_EXEC, &bp_base, HYP_BP_HARDEN_HYP_VECS);
+#else
 	ret = __pkvm_create_private_mapping(phys, __BP_HARDEN_HYP_VECS_SZ,
 					    PAGE_HYP_EXEC, &bp_base);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	if (ret)
 		return ret;
 
@@ -317,7 +384,13 @@ static void *fixmap_map_slot(struct hyp_fixmap_slot *slot, phys_addr_t phys)
 	pte &= ~kvm_phys_to_pte(KVM_PHYS_INVALID);
 	pte |= kvm_phys_to_pte(phys) | KVM_PTE_VALID;
 	WRITE_ONCE(*ptep, pte);
+#if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
+	casemate_model_step_write(WMO_plain, hyp_virt_to_phys(ptep), pte);
+#endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 	dsb(ishst);
+#if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
+	casemate_model_step_dsb(DxB_ishst);
+#endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 
 	return (void *)slot->addr + offset_in_page(phys);
 }
@@ -338,7 +411,13 @@ static void fixmap_clear_slot(struct hyp_fixmap_slot *slot)
 	else
 		level = KVM_PGTABLE_MAX_LEVELS - 2; /* create_fixblock() guarantees PMD level */
 
+#if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
+	u64 pte = *ptep & ~KVM_PTE_VALID;
+	WRITE_ONCE(*ptep, pte);
+	casemate_model_step_write(WMO_plain, hyp_virt_to_phys(ptep), pte);
+#else /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 	WRITE_ONCE(*ptep, *ptep & ~KVM_PTE_VALID);
+#endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 
 	/*
 	 * Irritatingly, the architecture requires that we use inner-shareable
@@ -350,9 +429,21 @@ static void fixmap_clear_slot(struct hyp_fixmap_slot *slot)
 	 * https://lore.kernel.org/kvm/20221017115209.2099-1-will@kernel.org/T/#mf10dfbaf1eaef9274c581b81c53758918c1d0f03
 	 */
 	dsb(ishst);
+#if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
+	casemate_model_step_dsb(DxB_ishst);
+#endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 	__tlbi_level(vale2is, __TLBI_VADDR(addr, 0), level);
+#if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
+	casemate_model_step_tlbi_va(TLBI_vale2is, addr >> 12, (u64)KVM_PGTABLE_MAX_LEVELS - 1, 0ULL);
+#endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 	dsb(ish);
+#if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
+	casemate_model_step_dsb(DxB_ish);
+#endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 	isb();
+#if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
+	casemate_model_step_isb();
+#endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 }
 
 void hyp_fixmap_unmap(void)
@@ -370,6 +461,9 @@ static int __create_fixmap_slot_cb(const struct kvm_pgtable_visit_ctx *ctx,
 
 	slot->addr = ctx->addr;
 	slot->ptep = ctx->ptep;
+#if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
+		casemate_model_step_hint(GHOST_HINT_SET_PTE_THREAD_OWNER, hyp_virt_to_phys(slot->ptep), (u64)ctx->arg);
+#endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 
 	/*
 	 * Clear the PTE, but keep the page-table page refcount elevated to
@@ -499,7 +593,11 @@ int hyp_create_idmap(u32 hyp_va_bits)
 	__io_map_base ^= BIT(hyp_va_bits - 2);
 	__hyp_vmemmap = __io_map_base | BIT(hyp_va_bits - 3);
 
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	return __pkvm_create_mappings(start, end - start, start, PAGE_HYP_EXEC, HYP_IDMAP);
+#else
 	return __pkvm_create_mappings(start, end - start, start, PAGE_HYP_EXEC);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 }
 
 int pkvm_create_stack(phys_addr_t phys, unsigned long *haddr)
@@ -563,6 +661,9 @@ void *admit_host_page(void *arg, unsigned long order)
 	if (__pkvm_host_donate_hyp(hyp_phys_to_pfn(p), 1 << order))
 		return NULL;
 
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	GHOST_RECORD_MEMCACHE_DONATION(hyp_phys_to_pfn(host_mc->head));
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	return pop_hyp_memcache(host_mc, hyp_phys_to_virt, &order);
 }
 
@@ -575,6 +676,11 @@ int refill_memcache(struct kvm_hyp_memcache *mc, unsigned long min_pages,
 
 	ret =  __topup_hyp_memcache(mc, min_pages, admit_host_page,
 				    hyp_virt_to_phys, &tmp, 0);
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	// TODO
+	// BS: there is a memcache per vcpu, and a vcpu can only be loaded on one cpu at
+	// a time so no locks needed but why update with tmp like this?
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	*host_mc = tmp;
 
 	return ret;

@@ -21,6 +21,10 @@
 #include <nvhe/rwlock.h>
 #include <nvhe/trap_handler.h>
 
+#ifdef CONFIG_NVHE_GHOST_SPEC
+#include <nvhe/ghost/ghost_recording.h>
+#endif /* CONFIG_NVHE_GHOST_SPEC */
+
 /* Used by icache_is_vpipt(). */
 unsigned long __icache_flags;
 
@@ -35,7 +39,12 @@ unsigned int kvm_host_sve_max_vl;
  * The currently loaded hyp vCPU for each physical CPU. Used only when
  * protected KVM is enabled, but for both protected and non-protected VMs.
  */
+#ifdef CONFIG_NVHE_GHOST_SPEC // BS: this is non-static to allow ghost code to read it
+/*static*/ DEFINE_PER_CPU(struct pkvm_hyp_vcpu *, loaded_hyp_vcpu);
+#else /* CONFIG_NVHE_GHOST_SPEC */
 static DEFINE_PER_CPU(struct pkvm_hyp_vcpu *, loaded_hyp_vcpu);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
+ 
 
 /*
  * Host fp state for all cpus. This could include the host simd state, as well
@@ -312,13 +321,41 @@ static pkvm_handle_t idx_to_vm_handle(unsigned int idx)
 }
 
 /* Rwlock for protecting state related to the VM table. */
+#ifdef CONFIG_NVHE_GHOST_SPEC
+/*static*/ DEFINE_HYP_RWLOCK(vm_table_lock); // BS: this is non-static so the ghost code can use it
+#else /* CONFIG_NVHE_GHOST_SPEC */
 static DEFINE_HYP_RWLOCK(vm_table_lock);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
+
+#ifdef CONFIG_NVHE_GHOST_SPEC
+static void vm_table_lock_component(void)
+{
+	hyp_spin_lock(&vm_table_lock);
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	casemate_model_step_lock(hyp_virt_to_phys(&vm_table_lock));
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
+	record_and_check_abstraction_vms_pre();
+}
+
+static void vm_table_unlock_component(void)
+{
+	record_and_copy_abstraction_vms_post();
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	casemate_model_step_unlock(hyp_virt_to_phys(&vm_table_lock));
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
+	hyp_spin_unlock(&vm_table_lock);
+}
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 
 /*
  * The table of VM entries for protected VMs in hyp.
  * Allocated at hyp initialization and setup.
  */
+#ifdef CONFIG_NVHE_GHOST_SPEC // BS: this is non-static so the ghost code can use it
+/*static*/ struct pkvm_hyp_vm **vm_table;
+#else /* CONFIG_NVHE_GHOST_SPEC */
 static struct pkvm_hyp_vm **vm_table;
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 
 void pkvm_hyp_vm_table_init(void *tbl)
 {
@@ -430,7 +467,11 @@ struct pkvm_hyp_vcpu *pkvm_load_hyp_vcpu(pkvm_handle_t handle,
 	if (__this_cpu_read(loaded_hyp_vcpu))
 		return NULL;
 
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	vm_table_lock_component();
+#else /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_read_lock(&vm_table_lock);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_vm = get_vm_by_handle(handle);
 	if (!hyp_vm || hyp_vm->is_dying)
 		goto unlock;
@@ -453,7 +494,11 @@ struct pkvm_hyp_vcpu *pkvm_load_hyp_vcpu(pkvm_handle_t handle,
 
 	hyp_refcount_inc(hyp_vm->refcount);
 unlock:
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	vm_table_unlock_component();
+#else /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_read_unlock(&vm_table_lock);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 
 	if (hyp_vcpu)
 		__this_cpu_write(loaded_hyp_vcpu, hyp_vcpu);
@@ -645,7 +690,11 @@ static void init_pkvm_hyp_vm(struct kvm *host_kvm, struct pkvm_hyp_vm *hyp_vm,
 	hyp_vm->host_kvm = host_kvm;
 	hyp_vm->kvm.created_vcpus = nr_vcpus;
 	hyp_vm->kvm.arch.vtcr = host_mmu.arch.vtcr;
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	hyp_vm->kvm.arch.pkvm.enabled = READ_ONCE_GHOST_RECORD(host_kvm->arch.pkvm.enabled);
+#else /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_vm->kvm.arch.pkvm.enabled = READ_ONCE(host_kvm->arch.pkvm.enabled);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 
 	if (hyp_vm->kvm.arch.pkvm.enabled)
 		pvmfw_load_addr = READ_ONCE(host_kvm->arch.pkvm.pvmfw_load_addr);
@@ -715,7 +764,11 @@ static int init_pkvm_hyp_vcpu(struct pkvm_hyp_vcpu *hyp_vcpu,
 		return -EBUSY;
 	}
 
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	if (READ_ONCE_GHOST_RECORD(host_vcpu->vcpu_idx) != vcpu_idx) {
+#else /* CONFIG_NVHE_GHOST_SPEC */
 	if (host_vcpu->vcpu_idx != vcpu_idx) {
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 		ret = -EINVAL;
 		goto done;
 	}
@@ -729,7 +782,11 @@ static int init_pkvm_hyp_vcpu(struct pkvm_hyp_vcpu *hyp_vcpu,
 	hyp_vcpu->host_vcpu = host_vcpu;
 
 	hyp_vcpu->vcpu.kvm = &hyp_vm->kvm;
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	hyp_vcpu->vcpu.vcpu_id = READ_ONCE_GHOST_RECORD(host_vcpu->vcpu_id);
+#else /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_vcpu->vcpu.vcpu_id = READ_ONCE(host_vcpu->vcpu_id);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_vcpu->vcpu.vcpu_idx = vcpu_idx;
 
 	hyp_vcpu->vcpu.arch.hw_mmu = &hyp_vm->kvm.arch.mmu;
@@ -853,7 +910,11 @@ int __pkvm_init_vm(struct kvm *host_kvm, unsigned long pgd_hva)
 	if (ret)
 		return ret;
 
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	nr_vcpus = READ_ONCE_GHOST_RECORD(host_kvm->created_vcpus);
+#else /* CONFIG_NVHE_GHOST_SPEC */
 	nr_vcpus = READ_ONCE(host_kvm->created_vcpus);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	if (nr_vcpus < 1) {
 		ret = -EINVAL;
 		goto err_unpin_kvm;
@@ -880,7 +941,11 @@ int __pkvm_init_vm(struct kvm *host_kvm, unsigned long pgd_hva)
 
 	init_pkvm_hyp_vm(host_kvm, hyp_vm, last_ran, nr_vcpus);
 
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	vm_table_lock_component();
+#else /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_write_lock(&vm_table_lock);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	ret = insert_vm_table_entry(host_kvm, hyp_vm);
 	if (ret < 0)
 		goto err_unlock;
@@ -888,7 +953,11 @@ int __pkvm_init_vm(struct kvm *host_kvm, unsigned long pgd_hva)
 	ret = kvm_guest_prepare_stage2(hyp_vm, pgd);
 	if (ret)
 		goto err_remove_vm_table_entry;
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	vm_table_unlock_component();
+#else /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_write_unlock(&vm_table_lock);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 
 	return hyp_vm->kvm.arch.pkvm.handle;
 
@@ -922,7 +991,11 @@ int __pkvm_init_vcpu(pkvm_handle_t handle, struct kvm_vcpu *host_vcpu)
 	unsigned int idx;
 	int ret;
 
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	vm_table_lock_component();
+#else /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_read_lock(&vm_table_lock);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 
 	hyp_vm = get_vm_by_handle(handle);
 	if (!hyp_vm) {
@@ -961,7 +1034,11 @@ unlock_vcpus:
 	if (ret)
 		hyp_free_account(hyp_vcpu, hyp_vm->host_kvm);
 unlock_vm:
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	vm_table_unlock_component();
+#else /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_read_unlock(&vm_table_lock);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 
 	return ret;
 }
@@ -1000,7 +1077,12 @@ int __pkvm_finalize_teardown_vm(pkvm_handle_t handle)
 	unsigned int idx;
 	int err;
 
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	vm_table_lock_component();
+#else /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_write_lock(&vm_table_lock);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
+
 	hyp_vm = get_vm_by_handle(handle);
 	if (!hyp_vm) {
 		err = -ENOENT;
@@ -1015,7 +1097,11 @@ int __pkvm_finalize_teardown_vm(pkvm_handle_t handle)
 	/* Ensure the VMID is clean before it can be reallocated */
 	__kvm_tlb_flush_vmid(&hyp_vm->kvm.arch.mmu);
 	remove_vm_table_entry(handle);
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	vm_table_unlock_component();
+#else /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_write_unlock(&vm_table_lock);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 
 	/*
 	 * At this point, the VM has been detached from the VM table and
@@ -1057,7 +1143,11 @@ int __pkvm_finalize_teardown_vm(pkvm_handle_t handle)
 	return 0;
 
 err_unlock:
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	vm_table_unlock_component();
+#else /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_write_unlock(&vm_table_lock);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	return err;
 }
 

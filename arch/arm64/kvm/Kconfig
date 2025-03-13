@@ -71,6 +71,8 @@ config PROTECTED_NVHE_STACKTRACE
 
 	  If unsure, or not using protected nVHE (pKVM), say N.
 
+source "arch/arm64/kvm/Kconfig-ghost"
+
 config PKVM_MODULE_PATH
 	string "Path to pKVM modules"
 	default ""
