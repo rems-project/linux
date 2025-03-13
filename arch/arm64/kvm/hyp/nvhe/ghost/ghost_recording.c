@@ -76,6 +76,8 @@ static mapping compute_abstraction_hyp_memory(void)
 // This is very slow, but only look at the concrete pKVM state.
 static void compute_reclaimable_and_need_poisoning_slow(struct ghost_host *dest)
 {
+// TODO(porting)
+#if 0
 	for (int i=0; i<hyp_memblock_nr; i++) {
 		struct memblock_region block = hyp_memory[i];
 		for (int j=0; j<block.size; j+=PAGE_SIZE) {
@@ -87,12 +89,15 @@ static void compute_reclaimable_and_need_poisoning_slow(struct ghost_host *dest)
 				ghost_pfn_set_insert(&dest->need_poisoning_pfn_set, hyp_phys_to_pfn(addr));
 		}
 	}
+#endif
 }
 
 // This version is much starter, but looks at the ghost host annot and shared mappings
 // instead of looking at the concrete pKVM state.
 static void compute_reclaimable_and_need_poisoning_faster(struct ghost_host *dest)
 {
+// TODO(porting)
+#if 0
 	struct glist_node *pos;
 	struct maplet *m;
 	// if (glist_empty(&dest->host_abstract_pgtable_annot))
@@ -132,6 +137,7 @@ static void compute_reclaimable_and_need_poisoning_faster(struct ghost_host *des
 		}
 	}
 
+#endif
 }
 
 
