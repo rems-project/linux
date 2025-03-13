@@ -777,12 +777,12 @@ static void record_abstraction_all(struct ghost_state *g, struct kvm_cpu_context
 void record_abstraction_common(void)
 {
 	GHOST_LOG_CONTEXT_ENTER();
-	ghost_lock_pkvm_vm_table();
+	ghost_read_lock_pkvm_vm_table();
 	ghost_lock_maplets();
 	ghost_lock_vms();
 	record_abstraction_all(&gs, NULL);
 	ghost_unlock_vms();
 	ghost_unlock_maplets();
-	ghost_unlock_pkvm_vm_table();
+	ghost_read_unlock_pkvm_vm_table();
 	GHOST_LOG_CONTEXT_EXIT();
 }

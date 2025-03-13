@@ -144,15 +144,15 @@ void ghost_unlock_vms(void)
 }
 
 // EXPORTED ghost_spec.h
-void ghost_lock_pkvm_vm_table(void)
+void ghost_read_lock_pkvm_vm_table(void)
 {
-	hyp_spin_lock(&vm_table_lock);
+	hyp_read_lock(&vm_table_lock);
 }
 
 // EXPORTED ghost_spec.h
-void ghost_unlock_pkvm_vm_table(void)
+void ghost_read_unlock_pkvm_vm_table(void)
 {
-	hyp_spin_unlock(&vm_table_lock);
+	hyp_read_unlock(&vm_table_lock);
 }
 
 

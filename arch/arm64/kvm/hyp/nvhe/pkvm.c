@@ -39,8 +39,9 @@ unsigned int kvm_host_sve_max_vl;
  * The currently loaded hyp vCPU for each physical CPU. Used only when
  * protected KVM is enabled, but for both protected and non-protected VMs.
  */
-#ifdef CONFIG_NVHE_GHOST_SPEC // BS: this is non-static to allow ghost code to read it
-/*static*/ DEFINE_PER_CPU(struct pkvm_hyp_vcpu *, loaded_hyp_vcpu);
+#ifdef CONFIG_NVHE_GHOST_SPEC
+// Ghost: removing the internal linkage to allow ghost to record this
+DEFINE_PER_CPU(struct pkvm_hyp_vcpu *, loaded_hyp_vcpu);
 #else /* CONFIG_NVHE_GHOST_SPEC */
 static DEFINE_PER_CPU(struct pkvm_hyp_vcpu *, loaded_hyp_vcpu);
 #endif /* CONFIG_NVHE_GHOST_SPEC */
@@ -322,28 +323,52 @@ static pkvm_handle_t idx_to_vm_handle(unsigned int idx)
 
 /* Rwlock for protecting state related to the VM table. */
 #ifdef CONFIG_NVHE_GHOST_SPEC
-/*static*/ DEFINE_HYP_RWLOCK(vm_table_lock); // BS: this is non-static so the ghost code can use it
+// Ghost: removing the internal linkage to allow ghost to access this
+DEFINE_HYP_RWLOCK(vm_table_lock);
 #else /* CONFIG_NVHE_GHOST_SPEC */
 static DEFINE_HYP_RWLOCK(vm_table_lock);
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 
 #ifdef CONFIG_NVHE_GHOST_SPEC
-static void vm_table_lock_component(void)
+enum ghost_vm_table_lock_kind {
+	GHOST_VM_TABLE_READ_LOCKING,
+	GHOST_VM_TABLE_WRITE_LOCKING
+};
+
+static void vm_table_lock_component(enum ghost_vm_table_lock_kind kind)
 {
-	hyp_spin_lock(&vm_table_lock);
+	switch (kind) {
+	case GHOST_VM_TABLE_READ_LOCKING:
+		hyp_read_lock(&vm_table_lock);
+		break;
+	case GHOST_VM_TABLE_WRITE_LOCKING:
+		hyp_write_lock(&vm_table_lock);
+		break;
+	default:
+		BUG();
+	}
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
 	casemate_model_step_lock(hyp_virt_to_phys(&vm_table_lock));
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	record_and_check_abstraction_vms_pre();
 }
 
-static void vm_table_unlock_component(void)
+static void vm_table_unlock_component(enum ghost_vm_table_lock_kind kind)
 {
 	record_and_copy_abstraction_vms_post();
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
 	casemate_model_step_unlock(hyp_virt_to_phys(&vm_table_lock));
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
-	hyp_spin_unlock(&vm_table_lock);
+	switch (kind) {
+	case GHOST_VM_TABLE_READ_LOCKING:
+		hyp_read_unlock(&vm_table_lock);
+		break;
+	case GHOST_VM_TABLE_WRITE_LOCKING:
+		hyp_write_unlock(&vm_table_lock);
+		break;
+	default:
+		BUG();
+	}
 }
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 
@@ -351,8 +376,9 @@ static void vm_table_unlock_component(void)
  * The table of VM entries for protected VMs in hyp.
  * Allocated at hyp initialization and setup.
  */
-#ifdef CONFIG_NVHE_GHOST_SPEC // BS: this is non-static so the ghost code can use it
-/*static*/ struct pkvm_hyp_vm **vm_table;
+#ifdef CONFIG_NVHE_GHOST_SPEC
+// Ghost: removing the internal linkage to allow ghost to record this
+struct pkvm_hyp_vm **vm_table;
 #else /* CONFIG_NVHE_GHOST_SPEC */
 static struct pkvm_hyp_vm **vm_table;
 #endif /* CONFIG_NVHE_GHOST_SPEC */
@@ -419,7 +445,11 @@ int __pkvm_reclaim_dying_guest_page(pkvm_handle_t handle, u64 pfn, u64 gfn, u8 o
 	struct pkvm_hyp_vm *hyp_vm;
 	int ret = -EINVAL;
 
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	vm_table_lock_component(GHOST_VM_TABLE_READ_LOCKING);
+#else /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_read_lock(&vm_table_lock);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_vm = get_vm_by_handle(handle);
 	if (!hyp_vm || !hyp_vm->is_dying)
 		goto unlock;
@@ -430,7 +460,11 @@ int __pkvm_reclaim_dying_guest_page(pkvm_handle_t handle, u64 pfn, u64 gfn, u8 o
 
 	drain_hyp_pool(hyp_vm, &hyp_vm->host_kvm->arch.pkvm.stage2_teardown_mc);
 unlock:
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	vm_table_unlock_component(GHOST_VM_TABLE_READ_LOCKING);
+#else /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_read_unlock(&vm_table_lock);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 
 	return ret;
 }
@@ -439,7 +473,11 @@ struct pkvm_hyp_vm *pkvm_get_hyp_vm(pkvm_handle_t handle)
 {
 	struct pkvm_hyp_vm *hyp_vm;
 
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	vm_table_lock_component(GHOST_VM_TABLE_READ_LOCKING);
+#else /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_read_lock(&vm_table_lock);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_vm = get_vm_by_handle(handle);
 	if (hyp_vm) {
 		if (WARN_ON(hyp_vm->is_dying))
@@ -447,7 +485,11 @@ struct pkvm_hyp_vm *pkvm_get_hyp_vm(pkvm_handle_t handle)
 		else
 			hyp_refcount_inc(hyp_vm->refcount);
 	}
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	vm_table_unlock_component(GHOST_VM_TABLE_READ_LOCKING);
+#else /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_read_unlock(&vm_table_lock);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 
 	return hyp_vm;
 }
@@ -468,7 +510,7 @@ struct pkvm_hyp_vcpu *pkvm_load_hyp_vcpu(pkvm_handle_t handle,
 		return NULL;
 
 #ifdef CONFIG_NVHE_GHOST_SPEC
-	vm_table_lock_component();
+	vm_table_lock_component(GHOST_VM_TABLE_READ_LOCKING);
 #else /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_read_lock(&vm_table_lock);
 #endif /* CONFIG_NVHE_GHOST_SPEC */
@@ -495,7 +537,7 @@ struct pkvm_hyp_vcpu *pkvm_load_hyp_vcpu(pkvm_handle_t handle,
 	hyp_refcount_inc(hyp_vm->refcount);
 unlock:
 #ifdef CONFIG_NVHE_GHOST_SPEC
-	vm_table_unlock_component();
+	vm_table_unlock_component(GHOST_VM_TABLE_READ_LOCKING);
 #else /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_read_unlock(&vm_table_lock);
 #endif /* CONFIG_NVHE_GHOST_SPEC */
@@ -942,7 +984,7 @@ int __pkvm_init_vm(struct kvm *host_kvm, unsigned long pgd_hva)
 	init_pkvm_hyp_vm(host_kvm, hyp_vm, last_ran, nr_vcpus);
 
 #ifdef CONFIG_NVHE_GHOST_SPEC
-	vm_table_lock_component();
+	vm_table_lock_component(GHOST_VM_TABLE_WRITE_LOCKING);
 #else /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_write_lock(&vm_table_lock);
 #endif /* CONFIG_NVHE_GHOST_SPEC */
@@ -954,7 +996,7 @@ int __pkvm_init_vm(struct kvm *host_kvm, unsigned long pgd_hva)
 	if (ret)
 		goto err_remove_vm_table_entry;
 #ifdef CONFIG_NVHE_GHOST_SPEC
-	vm_table_unlock_component();
+	vm_table_unlock_component(GHOST_VM_TABLE_WRITE_LOCKING);
 #else /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_write_unlock(&vm_table_lock);
 #endif /* CONFIG_NVHE_GHOST_SPEC */
@@ -964,7 +1006,11 @@ int __pkvm_init_vm(struct kvm *host_kvm, unsigned long pgd_hva)
 err_remove_vm_table_entry:
 	remove_vm_table_entry(hyp_vm->kvm.arch.pkvm.handle);
 err_unlock:
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	vm_table_unlock_component(GHOST_VM_TABLE_WRITE_LOCKING);
+#else /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_write_unlock(&vm_table_lock);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	unmap_donated_memory(pgd, pgd_size);
 err_free_last_ran:
 	hyp_free_account(last_ran, host_kvm);
@@ -992,7 +1038,7 @@ int __pkvm_init_vcpu(pkvm_handle_t handle, struct kvm_vcpu *host_vcpu)
 	int ret;
 
 #ifdef CONFIG_NVHE_GHOST_SPEC
-	vm_table_lock_component();
+	vm_table_lock_component(GHOST_VM_TABLE_READ_LOCKING);
 #else /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_read_lock(&vm_table_lock);
 #endif /* CONFIG_NVHE_GHOST_SPEC */
@@ -1035,7 +1081,7 @@ unlock_vcpus:
 		hyp_free_account(hyp_vcpu, hyp_vm->host_kvm);
 unlock_vm:
 #ifdef CONFIG_NVHE_GHOST_SPEC
-	vm_table_unlock_component();
+	vm_table_unlock_component(GHOST_VM_TABLE_READ_LOCKING);
 #else /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_read_unlock(&vm_table_lock);
 #endif /* CONFIG_NVHE_GHOST_SPEC */
@@ -1048,7 +1094,11 @@ int __pkvm_start_teardown_vm(pkvm_handle_t handle)
 	struct pkvm_hyp_vm *hyp_vm;
 	int ret = 0;
 
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	vm_table_lock_component(GHOST_VM_TABLE_WRITE_LOCKING);
+#else /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_write_lock(&vm_table_lock);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_vm = get_vm_by_handle(handle);
 	if (!hyp_vm) {
 		ret = -ENOENT;
@@ -1064,7 +1114,11 @@ int __pkvm_start_teardown_vm(pkvm_handle_t handle)
 	hyp_vm->is_dying = true;
 
 unlock:
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	vm_table_unlock_component(GHOST_VM_TABLE_WRITE_LOCKING);
+#else /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_write_unlock(&vm_table_lock);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 
 	return ret;
 }
@@ -1078,7 +1132,7 @@ int __pkvm_finalize_teardown_vm(pkvm_handle_t handle)
 	int err;
 
 #ifdef CONFIG_NVHE_GHOST_SPEC
-	vm_table_lock_component();
+	vm_table_lock_component(GHOST_VM_TABLE_WRITE_LOCKING);
 #else /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_write_lock(&vm_table_lock);
 #endif /* CONFIG_NVHE_GHOST_SPEC */
@@ -1098,7 +1152,7 @@ int __pkvm_finalize_teardown_vm(pkvm_handle_t handle)
 	__kvm_tlb_flush_vmid(&hyp_vm->kvm.arch.mmu);
 	remove_vm_table_entry(handle);
 #ifdef CONFIG_NVHE_GHOST_SPEC
-	vm_table_unlock_component();
+	vm_table_unlock_component(GHOST_VM_TABLE_WRITE_LOCKING);
 #else /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_write_unlock(&vm_table_lock);
 #endif /* CONFIG_NVHE_GHOST_SPEC */
@@ -1144,7 +1198,7 @@ int __pkvm_finalize_teardown_vm(pkvm_handle_t handle)
 
 err_unlock:
 #ifdef CONFIG_NVHE_GHOST_SPEC
-	vm_table_unlock_component();
+	vm_table_unlock_component(GHOST_VM_TABLE_WRITE_LOCKING);
 #else /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_write_unlock(&vm_table_lock);
 #endif /* CONFIG_NVHE_GHOST_SPEC */
@@ -1974,11 +2028,19 @@ int pkvm_stage2_snapshot_by_handle(struct kvm_pgtable_snapshot *snap_hva,
 	if (!handle)
 		ret = __pkvm_host_stage2_snapshot(snap);
 	else {
+#ifdef CONFIG_NVHE_GHOST_SPEC
+		vm_table_lock_component(GHOST_VM_TABLE_READ_LOCKING);
+#else /* CONFIG_NVHE_GHOST_SPEC */
 		hyp_read_lock(&vm_table_lock);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 		vm = get_vm_by_handle(handle);
 		if (vm)
 			ret = __pkvm_guest_stage2_snapshot(snap, vm);
+#ifdef CONFIG_NVHE_GHOST_SPEC
+		vm_table_unlock_component(GHOST_VM_TABLE_READ_LOCKING);
+#else /* CONFIG_NVHE_GHOST_SPEC */
 		hyp_read_unlock(&vm_table_lock);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	}
 
 	if (!ret) {

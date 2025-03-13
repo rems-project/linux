@@ -2,6 +2,7 @@
 #define _GHOST_SPEC_H
 
 #include <asm/kvm_asm.h> // for __KVM_HOST_SMCCC_FUNC___pkvm_host_share_hyp etc
+#include <nvhe/rwlock.h>
 
 #include <nvhe/ghost/ghost_state.h>
 
@@ -55,13 +56,13 @@ void ghost_enable_this_cpu(void);
  * the inner ghost machinery should never itself try take a pKVM lock.
  */
 extern hyp_spinlock_t ghost_vms_hyp_lock; /* defined in ghost_compute_abstraction.c */
-extern hyp_spinlock_t vm_table_lock; /* defined in nvhe/pkvm.c */
+extern hyp_rwlock_t vm_table_lock; /* defined in nvhe/pkvm.c */
 
 void ghost_lock_vms(void);
 void ghost_unlock_vms(void);
 
-void ghost_lock_pkvm_vm_table(void);
-void ghost_unlock_pkvm_vm_table(void);
+void ghost_read_lock_pkvm_vm_table(void);
+void ghost_read_unlock_pkvm_vm_table(void);
 
 static inline void ghost_assert_vm_locked(struct ghost_vm *vm)
 {
@@ -75,7 +76,7 @@ static inline void ghost_assert_vms_locked(void)
 
 static inline void ghost_assert_pkvm_vm_table_locked(void)
 {
-	hyp_assert_lock_held(&vm_table_lock);
+	//TODO(porting) hyp_assert_lock_held(&vm_table_lock);
 }
 
 
