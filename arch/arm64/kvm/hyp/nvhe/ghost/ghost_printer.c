@@ -50,7 +50,7 @@ int __putc(gp_stream_t *out, char c)
 {
 	switch (out->kind) {
 	case GP_STREAM_UART:
-		__hyp_putc(c);
+		hyp_putc(c);
 		/* UART can't fail */
 		return 0;
 	case GP_STREAM_BUF:
