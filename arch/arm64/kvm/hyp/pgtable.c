@@ -205,7 +205,9 @@ static bool kvm_pgtable_walk_continue(const struct kvm_pgtable_walker *walker,
 
 #if defined(CONFIG_NVHE_GHOST_SPEC) && defined(__KVM_NVHE_HYPERVISOR__)
 static int __kvm_pgtable_walk(struct kvm_pgtable_walk_data *data,
-			      struct kvm_pgtable_mm_ops *mm_ops, kvm_pteref_t pgtable, u32 level,
+			      struct kvm_pgtable_mm_ops *mm_ops,
+			      struct kvm_pgtable_pte_ops *pte_ops,
+			      kvm_pteref_t pgtable, u32 level,
 			      u64 ghost_va_partial, bool s2);
 #else
 static int __kvm_pgtable_walk(struct kvm_pgtable_walk_data *data,
@@ -217,6 +219,7 @@ static int __kvm_pgtable_walk(struct kvm_pgtable_walk_data *data,
 #if defined(CONFIG_NVHE_GHOST_SPEC) && defined(__KVM_NVHE_HYPERVISOR__)
 static inline int __kvm_pgtable_visit(struct kvm_pgtable_walk_data *data,
 				      struct kvm_pgtable_mm_ops *mm_ops,
+				      struct kvm_pgtable_pte_ops *pte_ops,
 				      kvm_pteref_t pteref, u32 level,
 				      u64 ghost_va_partial, bool s2)
 #else
@@ -283,7 +286,7 @@ static inline int __kvm_pgtable_visit(struct kvm_pgtable_walk_data *data,
 
 	childp = (kvm_pteref_t)kvm_pte_follow(ctx.old, mm_ops);
 #if defined(CONFIG_NVHE_GHOST_SPEC) && defined(__KVM_NVHE_HYPERVISOR__)
-	ret = __kvm_pgtable_walk(data, mm_ops, childp, level + 1, ghost_va_partial, s2);
+	ret = __kvm_pgtable_walk(data, mm_ops, pte_ops, childp, level + 1, ghost_va_partial, s2);
 #else
 	ret = __kvm_pgtable_walk(data, mm_ops, pte_ops, childp, level + 1);
 #endif /* CONFIG_NVHE_GHOST_SPEC */
@@ -302,7 +305,9 @@ out:
 
 #if defined(CONFIG_NVHE_GHOST_SPEC) && defined(__KVM_NVHE_HYPERVISOR__)
 static int __kvm_pgtable_walk(struct kvm_pgtable_walk_data *data,
-			      struct kvm_pgtable_mm_ops *mm_ops, kvm_pteref_t pgtable, u32 level,
+			      struct kvm_pgtable_mm_ops *mm_ops,
+			      struct kvm_pgtable_pte_ops *pte_ops,
+			      kvm_pteref_t pgtable, u32 level,
 			      u64 ghost_va_partial, bool s2)
 #else
 static int __kvm_pgtable_walk(struct kvm_pgtable_walk_data *data,
@@ -380,7 +385,8 @@ static int __kvm_pgtable_walk(struct kvm_pgtable_walk_data *data,
                 case 3: ghost_va_partial_new = ghost_va_partial | ((u64)idx << 12); break;
                 default: check_assert_fail("unhandled level"); // cases are exhaustive
                 }
-		ret = __kvm_pgtable_visit(data, mm_ops, pteref, level, ghost_va_partial_new, s2);
+		ret = __kvm_pgtable_visit(data, mm_ops, pte_ops, pteref, level,
+					  ghost_va_partial_new, s2);
 #else
 		ret = __kvm_pgtable_visit(data, mm_ops, pte_ops, pteref, level);
 #endif /* CONFIG_NVHE_GHOST_SPEC */
@@ -457,7 +463,9 @@ static int _kvm_pgtable_walk(struct kvm_pgtable *pgt, struct kvm_pgtable_walk_da
 #if defined(CONFIG_NVHE_GHOST_SPEC) && defined(__KVM_NVHE_HYPERVISOR__)
 		ghost_va_partial = 0;  // TODO?
 		bool is_s2 = pgt->mmu != NULL;
-		ret = __kvm_pgtable_walk(data, pgt->mm_ops, pteref, pgt->start_level, ghost_va_partial, is_s2);
+		ret = __kvm_pgtable_walk(data, pgt->mm_ops, pgt->pte_ops,
+					 pteref, pgt->start_level,
+					 ghost_va_partial, is_s2);
 #else
 		ret = __kvm_pgtable_walk(data, pgt->mm_ops, pgt->pte_ops,
 					 pteref, pgt->start_level);
@@ -2024,8 +2032,15 @@ kvm_pte_t *kvm_pgtable_stage2_create_unlinked(struct kvm_pgtable *pgt,
 	if (!pgtable)
 		return ERR_PTR(-ENOMEM);
 
+#if defined(CONFIG_NVHE_GHOST_SPEC) && defined(__KVM_NVHE_HYPERVISOR__)
+	u64 ghost_va_partial = 0;  // TODO?
+	ret = __kvm_pgtable_walk(&data, mm_ops, pgt->pte_ops,
+				 (kvm_pteref_t)pgtable, level + 1,
+				 ghost_va_partial, true);
+#else
 	ret = __kvm_pgtable_walk(&data, mm_ops, pgt->pte_ops,
 				 (kvm_pteref_t)pgtable, level + 1);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	if (ret) {
 		kvm_pgtable_stage2_free_unlinked(mm_ops, pgt->pte_ops,
 						 pgtable, level);
@@ -2239,7 +2254,8 @@ void kvm_pgtable_stage2_free_unlinked(struct kvm_pgtable_mm_ops *mm_ops,
 
 #if defined(CONFIG_NVHE_GHOST_SPEC) && defined(__KVM_NVHE_HYPERVISOR__)
 	u64 ghost_va_partial = 0;  // TODO?
-	WARN_ON(__kvm_pgtable_walk(&data, mm_ops, ptep, level + 1, ghost_va_partial, true));
+	WARN_ON(__kvm_pgtable_walk(&data, mm_ops, pte_ops, ptep, level + 1,
+				   ghost_va_partial, true));
 #else
 	WARN_ON(__kvm_pgtable_walk(&data, mm_ops, pte_ops, ptep, level + 1));
 #endif /* CONFIG_NVHE_GHOST_SPEC */
