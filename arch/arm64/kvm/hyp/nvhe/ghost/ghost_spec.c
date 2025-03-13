@@ -1310,7 +1310,7 @@ static bool compute_new_abstract_state_handle___pkvm_init_vm(struct ghost_state 
 		vm1->vm_table_locked.vcpu_refs[i].vcpu = NULL;
 	}
 
-	vm1->vm_teardown_data.host_mc = phys_of_hyp_va(g0, (hyp_va_t)&host_kvm->arch.pkvm.teardown_mc);
+	vm1->vm_teardown_data.host_mc = phys_of_hyp_va(g0, (hyp_va_t)&host_kvm->arch.pkvm.stage2_teardown_mc);
 	vm1->vm_teardown_data.hyp_vm_struct_addr = vm_phys;
 	vm1->vm_teardown_data.last_ran_addr = last_ran_phys;
 

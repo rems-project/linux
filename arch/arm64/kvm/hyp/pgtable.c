@@ -44,7 +44,7 @@ struct kvm_pgtable_walk_data {
 struct stage2_map_data {
 	const u64			phys;
 	kvm_pte_t			attr;
-	u8				owner_id;
+	u8				annotation;
 
 	kvm_pte_t			*anchor;
 	kvm_pte_t			*childp;

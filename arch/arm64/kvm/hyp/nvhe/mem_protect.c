@@ -74,7 +74,7 @@ static void guest_lock_component(struct pkvm_hyp_vm *vm)
 {
 	hyp_spin_lock(&vm->pgtable_lock);
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-	casemate_model_step_lock(hyp_virt_to_phys(&vm->lock));
+	casemate_model_step_lock(hyp_virt_to_phys(&vm->pgtable_lock));
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	current_vm = vm;
 #ifdef CONFIG_NVHE_GHOST_SPEC
@@ -89,7 +89,7 @@ static void guest_unlock_component(struct pkvm_hyp_vm *vm)
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 	current_vm = NULL;
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-	casemate_model_step_unlock(hyp_virt_to_phys(&vm->lock));
+	casemate_model_step_unlock(hyp_virt_to_phys(&vm->pgtable_lock));
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	hyp_spin_unlock(&vm->pgtable_lock);
 }
@@ -450,7 +450,7 @@ int kvm_guest_prepare_stage2(struct pkvm_hyp_vm *vm, void *pgd)
 					KVM_PGTABLE_S2_PREFAULT_BLOCK,
 					&guest_s2_pte_ops);
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-	casemate_model_step_hint(GHOST_HINT_SET_ROOT_LOCK, hyp_virt_to_phys(mmu->pgt->pgd), hyp_virt_to_phys(&vm->lock));
+	casemate_model_step_hint(GHOST_HINT_SET_ROOT_LOCK, hyp_virt_to_phys(mmu->pgt->pgd), hyp_virt_to_phys(&vm->pgtable_lock));
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	guest_unlock_component(vm);
 	if (ret)

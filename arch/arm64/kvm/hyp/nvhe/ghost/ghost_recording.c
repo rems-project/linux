@@ -299,8 +299,8 @@ static void compute_abstraction_vcpu(struct ghost_vcpu *dest, struct pkvm_hyp_vc
 		make_abstract_register(&dest->regs.el2_sysregs[GHOST_SYSREG(HCR_EL2)], vcpu->vcpu.arch.hcr_el2);
 		make_abstract_register(&dest->regs.el2_sysregs[GHOST_SYSREG(MDCR_EL2)], vcpu->vcpu.arch.mdcr_el2);
 		make_abstract_register(&dest->regs.el2_sysregs[GHOST_SYSREG(CPTR_EL2)], vcpu->vcpu.arch.cptr_el2);
-		phys_addr_t* p = hyp_phys_to_virt(vcpu->vcpu.arch.pkvm_memcache.head);
-		for (int i=0; i<vcpu->vcpu.arch.pkvm_memcache.nr_pages; i++) {
+		phys_addr_t* p = hyp_phys_to_virt(vcpu->vcpu.arch.stage2_mc.head);
+		for (int i=0; i<vcpu->vcpu.arch.stage2_mc.nr_pages; i++) {
 			ghost_pfn_set_insert(&dest->recorded_memcache_pfn_set, hyp_virt_to_pfn(p));
 			p = hyp_phys_to_virt(*p);
 		}
@@ -314,15 +314,15 @@ static void compute_abstraction_vm_partial(struct ghost_vm *dest, struct pkvm_hy
 	dest->protected = hyp_vm->kvm.arch.pkvm.enabled;
 	dest->pkvm_handle = hyp_vm->kvm.arch.pkvm.handle;
 
-	dest->vm_teardown_data.host_mc = hyp_virt_to_phys(&hyp_vm->host_kvm->arch.pkvm.teardown_mc);
+	dest->vm_teardown_data.host_mc = hyp_virt_to_phys(&hyp_vm->host_kvm->arch.pkvm.stage2_teardown_mc);
 	dest->vm_teardown_data.hyp_vm_struct_addr = hyp_virt_to_phys(hyp_vm);
 	dest->vm_teardown_data.last_ran_addr = hyp_virt_to_phys(hyp_vm->kvm.arch.mmu.last_vcpu_ran);
 
-	dest->lock = &hyp_vm->lock;
+	dest->lock = &hyp_vm->pgtable_lock;
 
 	if (owner & VMS_VM_OWNED) {
 		/* really do need to hold this lock */
-		hyp_assert_lock_held(&hyp_vm->lock);
+		hyp_assert_lock_held(&hyp_vm->pgtable_lock);
 		dest->vm_locked.present = true;
 		ghost_record_pgtable_ap(&dest->vm_locked.vm_abstract_pgtable, &hyp_vm->pgt, hyp_vm->pool.range_start, hyp_vm->pool.range_end, "guest_mmu.pgt", 0);
 	}

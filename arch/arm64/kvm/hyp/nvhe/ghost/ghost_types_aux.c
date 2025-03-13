@@ -21,7 +21,7 @@ extern struct pkvm_hyp_vm **vm_table;
 hyp_spinlock_t *ghost_pointer_to_vm_lock(pkvm_handle_t handle)
 {
 	// TODO: remove this unsafe operation.
-	return &vm_table[handle - /*HANDLE_OFFSET*/ 0x1000]->lock;
+	return &vm_table[handle - /*HANDLE_OFFSET*/ 0x1000]->pgtable_lock;
 }
 
 /*
