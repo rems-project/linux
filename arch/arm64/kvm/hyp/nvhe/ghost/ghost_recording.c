@@ -540,8 +540,8 @@ void record_and_check_abstraction_vm_pre(struct pkvm_hyp_vm *vm)
 			record_abstraction_vm_partial(g, vm, VMS_VM_OWNED);
 			enum vm_field_owner owner = VMS_VM_OWNED | VMS_VM_TABLE_OWNED;
 
-			if (THIS_HCALL_IS("__pkvm_teardown_vm")) {
-				// If this is __pkvm_teardown_vm, then
+			if (THIS_HCALL_IS("__pkvm_finalize_teardown_vm")) {
+				// If this is __pkvm_finalize_teardown_vm, then
 				// the VM has already been removed from the table
 				// so we only record the VM_OWNED part.
 				owner ^= VMS_VM_TABLE_OWNED;
