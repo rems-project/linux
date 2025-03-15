@@ -146,9 +146,11 @@ static void compute_abstraction_host(struct ghost_host *dest)
 	u64 i=0; /* base indent */ /* though we'll mostly want this to be quiet, later */
 	u64 pool_range_start = (u64)hyp_virt_to_phys(host_s2_pgt_base);
 	u64 pool_range_end = pool_range_start + ghost_host_s2_pgt_size * PAGE_SIZE;
-	ghost_record_pgtable_ap(&dest->host_concrete_pgtable, &host_mmu.pgt, pool_range_start, pool_range_end, "host_mmu.pgt", i);
+	mapping page_state_map = mapping_empty_();
+	ghost_record_pgtable_ap(&dest->host_concrete_pgtable, &page_state_map, &host_mmu.pgt, pool_range_start, pool_range_end, "host_mmu.pgt", i);
 	dest->host_abstract_pgtable_annot = mapping_annot(dest->host_concrete_pgtable.mapping);
-	dest->host_abstract_pgtable_shared = mapping_shared(dest->host_concrete_pgtable.mapping);
+	dest->host_abstract_pgtable_shared = mapping_shared(page_state_map);
+	free_mapping(page_state_map);
 	// TODO: maybe add a build config switch?
 	if (true)
 		compute_reclaimable_and_need_poisoning_faster(dest);
@@ -165,7 +167,7 @@ static void compute_abstraction_pkvm(struct ghost_pkvm *dest)
 	u64 i=0; /* base indent */ /* though we'll mostly want this to be quiet, later */
 	u64 pool_range_start = (u64)hyp_virt_to_phys(hyp_pgt_base);
 	u64 pool_range_end = pool_range_start + ghost_hyp_pgt_size * PAGE_SIZE;
-	ghost_record_pgtable_ap(&dest->pkvm_abstract_pgtable, &pkvm_pgtable, pool_range_start, pool_range_end, "pkvm_pgtable", i);
+	ghost_record_pgtable_ap(&dest->pkvm_abstract_pgtable, NULL, &pkvm_pgtable, pool_range_start, pool_range_end, "pkvm_pgtable", i);
 	dest->present = true;
 }
 
@@ -330,7 +332,7 @@ static void compute_abstraction_vm_partial(struct ghost_vm *dest, struct pkvm_hy
 		/* really do need to hold this lock */
 		hyp_assert_lock_held(&hyp_vm->pgtable_lock);
 		dest->vm_locked.present = true;
-		ghost_record_pgtable_ap(&dest->vm_locked.vm_abstract_pgtable, &hyp_vm->pgt, hyp_vm->pool.range_start, hyp_vm->pool.range_end, "guest_mmu.pgt", 0);
+		ghost_record_pgtable_ap(&dest->vm_locked.vm_abstract_pgtable, NULL, &hyp_vm->pgt, hyp_vm->pool.range_start, hyp_vm->pool.range_end, "guest_mmu.pgt", 0);
 	}
 
 

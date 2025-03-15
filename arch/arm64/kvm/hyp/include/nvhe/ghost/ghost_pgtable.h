@@ -235,14 +235,14 @@ void hyp_put_ek(enum entry_kind ek);
 void hyp_put_entry(kvm_pte_t pte, u8 level);
 void hyp_put_abstract_pgtable(abstract_pgtable *ap, u64 indent);
 
-mapping ghost_record_pgtable(struct kvm_pgtable *pgt, struct pfn_set *out_pfns, char *doc, u64 i);
+mapping ghost_record_pgtable(struct kvm_pgtable *pgt, struct pfn_set *out_pfns, mapping *out_page_state, char *doc, u64 i);
 mapping ghost_record_pgtable_and_check(mapping map_old, struct kvm_pgtable *pg, bool dump, char *doc, u64 i);
 
 // start from an arbitrary point down in the walk
 mapping ghost_record_pgtable_partial(kvm_pte_t *pgtable, ghost_stage_t stage, ghost_mair_t mair, u8 level, u64 va_partial, struct aal aal_partial, char *doc, u64 i);
 
 // the ap variants are similar to the above but also record the mapping root
-void ghost_record_pgtable_ap(abstract_pgtable *ap_out, struct kvm_pgtable *pg, u64 pool_range_start, u64 pool_range_end, char *doc, u64 i);
+void ghost_record_pgtable_ap(abstract_pgtable *ap_out, mapping *out_page_state, struct kvm_pgtable *pg, u64 pool_range_start, u64 pool_range_end, char *doc, u64 i);
 
 void abstract_pgtable_copy(abstract_pgtable *dst, abstract_pgtable *src);
 

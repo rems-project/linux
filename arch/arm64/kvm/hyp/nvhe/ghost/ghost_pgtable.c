@@ -231,7 +231,7 @@ struct maplet_attributes parse_attrs(ghost_stage_t stage, ghost_mair_t mair, u64
 	// now extract the page state
 	enum maplet_page_state page_state;
 	// grab the software-defined bits from the upper attributes
-	switch (desc & PTE_FIELD_UPPER_ATTRS_SW_MASK) {
+	switch (FIELD_GET(PTE_FIELD_UPPER_ATTRS_SW_MASK, desc)) {
 	/* these PKVM_PAGE_x are defined to be equal to the _architectural_ bits */
 	case PKVM_PAGE_OWNED:
 		page_state = MAPLET_PAGE_STATE_PRIVATE_OWNED;
@@ -294,10 +294,8 @@ struct maplet_attributes parse_attrs(ghost_stage_t stage, ghost_mair_t mair, u64
 	};
 }
 
-struct maplet_target_mapped parse_mapped(ghost_stage_t stage, ghost_mair_t mair, u8 level, u64 oa, u64 nr_pages, u64 desc, struct aal next_level_aal)
+static struct maplet_target_mapped make_mapped(u64 oa, u64 nr_pages, struct maplet_attributes attrs)
 {
-	struct maplet_attributes attrs = parse_attrs(stage, mair, desc, level, next_level_aal);
-
 	struct maplet_target_mapped m = {
 		.oa_range_start = oa,
 		.oa_range_nr_pages = nr_pages,
@@ -305,6 +303,60 @@ struct maplet_target_mapped parse_mapped(ghost_stage_t stage, ghost_mair_t mair,
 	};
 
 	return m;
+}
+
+struct maplet_target_mapped parse_mapped(ghost_stage_t stage, ghost_mair_t mair, u8 level, u64 oa, u64 nr_pages, u64 desc, struct aal next_level_aal)
+{
+	return make_mapped(oa, nr_pages, parse_attrs(stage, mair, desc, level, next_level_aal));
+}
+
+static inline enum maplet_page_state convert_page_state(enum pkvm_page_state page_state)
+{
+	switch (page_state) {
+	case PKVM_PAGE_OWNED:
+		return MAPLET_PAGE_STATE_PRIVATE_OWNED;
+	case PKVM_PAGE_SHARED_OWNED:
+		return MAPLET_PAGE_STATE_SHARED_OWNED;
+	case PKVM_PAGE_SHARED_BORROWED:
+		return MAPLET_PAGE_STATE_SHARED_BORROWED;
+	case PKVM_PAGE_MMIO_DMA:
+	case PKVM_MODULE_OWNED_PAGE:
+	case PKVM_NOPAGE:
+	case PKVM_PAGE_RESTRICTED_PROT:
+	case PKVM_MMIO:
+		return MAPLET_PAGE_STATE_UNKNOWN;
+	}
+}
+
+/*
+ * Since android15-6.6, the whole memory is mapped in the stage-2 page table of
+ * the host, but when looking for the pages state (shared component) during the
+ * interpretation of the page table, we need to filter out device memory.
+ */
+static inline bool is_in_hyp_memory(phys_addr_t addr)
+{
+	for (int i=0; i<hyp_memblock_nr; i++) {
+		struct memblock_region block = hyp_memory[i];
+		if (addr < block.base)
+			return false;
+		if (block.base <= addr && addr < block.base + block.size)
+			return true;
+	}
+	return false;
+}
+
+static struct maplet_target_mapped parse_page_state(u64 oa, u64 nr_pages)
+{
+	// Since android15-6.6, the page state is stored in the hyp_vmemmap
+	// rather than the stage-2 page table of the host.
+	enum pkvm_page_state page_state = hyp_phys_to_page(oa)->host_state;
+	struct maplet_attributes attrs = {
+		.prot = MAPLET_PERM_UNKNOWN,
+		.provenance = convert_page_state(page_state),
+		.memtype = MAPLET_MEMTYPE_UNKNOWN,
+		.raw_arch_attrs = page_state
+	};
+	return make_mapped(oa, nr_pages, attrs);
 }
 
 /**
@@ -317,7 +369,7 @@ static u64 MAP_BLOCK_NR_PAGES[4] = {
 	[3] = 0x0000001,
 };
 
-void _interpret_pgtable(mapping *mapp, kvm_pte_t *pgd, struct pfn_set *pfns, ghost_stage_t stage, ghost_mair_t mair, u8 level, u64 va_partial, struct aal aal, bool noisy)
+static void _interpret_pgtable(mapping *mapp, kvm_pte_t *pgd, struct pfn_set *pfns, mapping *out_page_state, ghost_stage_t stage, ghost_mair_t mair, u8 level, u64 va_partial, struct aal aal, bool noisy)
 {
 	if (noisy) { hyp_putsp("_interpret_pgtable "); hyp_putsxn("level", (u64)level, 8); hyp_putsxn("pgd", (u64)pgd, 64); }
 
@@ -342,6 +394,11 @@ void _interpret_pgtable(mapping *mapp, kvm_pte_t *pgd, struct pfn_set *pfns, gho
 			if (noisy) { hyp_putsp("_interpret_pgtable block"); hyp_putsxn("va", va_partial_new, 64); hyp_putsxn("oa", oa, 64); hyp_putsxn("nr_pages", nr_pages, 64); }
 			struct maplet_target_mapped t = parse_mapped(stage, mair, level, oa, nr_pages, attr, next_level_aal);
 			extend_mapping_coalesce(mapp, stage, va_partial_new, nr_pages, maplet_target_mapped(va_partial_new, nr_pages, t));
+			if (out_page_state && is_in_hyp_memory(oa)) {
+				extend_mapping_coalesce(out_page_state, stage, va_partial_new, nr_pages,
+					maplet_target_mapped(va_partial_new, nr_pages, parse_page_state(oa, nr_pages))
+				);
+			}
 			break;
 		}
 		case EK_TABLE: {
@@ -350,7 +407,7 @@ void _interpret_pgtable(mapping *mapp, kvm_pte_t *pgd, struct pfn_set *pfns, gho
 			next_level_aal.attr_at_level[level] = pte & (PTE_FIELD_UPPER_ATTRS_MASK | PTE_FIELD_TABLE_IGNORED_MASK);
 			if (pfns)
 				ghost_pfn_set_insert(pfns, hyp_virt_to_pfn(next_level_virt_address));
-			_interpret_pgtable(mapp, (kvm_pte_t *)next_level_virt_address, pfns, stage, mair, level+1, va_partial_new, next_level_aal, noisy);
+			_interpret_pgtable(mapp, (kvm_pte_t *)next_level_virt_address, pfns, out_page_state, stage, mair, level+1, va_partial_new, next_level_aal, noisy);
 			break;
 		}
 		case EK_PAGE_DESCRIPTOR: {
@@ -359,6 +416,11 @@ void _interpret_pgtable(mapping *mapp, kvm_pte_t *pgd, struct pfn_set *pfns, gho
 			if (noisy) { hyp_putsp("_interpret_pgtable desc "); hyp_putsxn("va", va_partial_new, 64); hyp_putsxn("oa", oa, 64); }
 			struct maplet_target_mapped t = parse_mapped(stage, mair, level, oa, nr_pages, attr, next_level_aal);
 			extend_mapping_coalesce(mapp, stage, va_partial_new, 1, maplet_target_mapped(va_partial_new, nr_pages, t));
+			if (out_page_state && is_in_hyp_memory(oa)) {
+				extend_mapping_coalesce(out_page_state, stage, va_partial_new, nr_pages,
+					maplet_target_mapped(va_partial_new, nr_pages, parse_page_state(oa, nr_pages))
+				);
+			}
 			break;
 		}
 		case EK_BLOCK_NOT_PERMITTED:
@@ -373,7 +435,7 @@ void _interpret_pgtable(mapping *mapp, kvm_pte_t *pgd, struct pfn_set *pfns, gho
 	}
 }
 
-void ghost_record_pgtable_into(mapping *out, struct kvm_pgtable *pg, struct pfn_set *out_pfns, ghost_stage_t stage, ghost_mair_t mair, u64 i)
+static void ghost_record_pgtable_into(mapping *out, struct kvm_pgtable *pg, struct pfn_set *out_pfns, mapping *out_page_state, ghost_stage_t stage, ghost_mair_t mair, u64 i)
 {
 	//hyp_puts("interpret_pgtable");
 	*out = mapping_empty_();
@@ -385,10 +447,10 @@ void ghost_record_pgtable_into(mapping *out, struct kvm_pgtable *pg, struct pfn_
 	}
 
 	if (pg)
-		_interpret_pgtable(out, pg->pgd, out_pfns, stage, mair, 0, 0, aal, false);
+		_interpret_pgtable(out, pg->pgd, out_pfns, out_page_state, stage, mair, 0, 0, aal, false);
 }
 
-mapping ghost_record_pgtable(struct kvm_pgtable *pgt, struct pfn_set *out_pfns, char *doc, u64 i)
+mapping ghost_record_pgtable(struct kvm_pgtable *pgt, struct pfn_set *out_pfns, mapping *out_page_state, char *doc, u64 i)
 {
 	mapping map;
 	bool is_s2 = pgt->mmu != NULL;
@@ -398,15 +460,15 @@ mapping ghost_record_pgtable(struct kvm_pgtable *pgt, struct pfn_set *out_pfns, 
 	if (pgt->pgd == 0)
 		map = mapping_empty_();
 	else
-		ghost_record_pgtable_into(&map, pgt, out_pfns, stage, mair, i);
+		ghost_record_pgtable_into(&map, pgt, out_pfns, out_page_state, stage, mair, i);
 
 	return map;
 }
 
-void ghost_record_pgtable_ap(abstract_pgtable *ap_out, struct kvm_pgtable *pgt, u64 pool_range_start, u64 pool_range_end, char *doc, u64 i)
+void ghost_record_pgtable_ap(abstract_pgtable *ap_out, mapping *out_page_state, struct kvm_pgtable *pgt, u64 pool_range_start, u64 pool_range_end, char *doc, u64 i)
 {
 	ghost_pfn_set_init(&ap_out->table_pfns, pool_range_start, pool_range_end);
-	ap_out->mapping = ghost_record_pgtable(pgt, &ap_out->table_pfns, doc, i);
+	ap_out->mapping = ghost_record_pgtable(pgt, &ap_out->table_pfns, out_page_state, doc, i);
 	ap_out->root = hyp_virt_to_phys(pgt->pgd);
 }
 
@@ -415,7 +477,7 @@ mapping ghost_record_pgtable_and_check(mapping map_old, struct kvm_pgtable *pgt,
 	//hyp_puts("pgtable diff ");
 	//hyp_puts(doc);
 	//hyp_putc('\n');
-	mapping map = ghost_record_pgtable(pgt, NULL, NULL, i);
+	mapping map = ghost_record_pgtable(pgt, NULL, NULL, NULL, i);
 	if (dump) {
 		hyp_putspi(doc,i+2);
 		hyp_put_mapping(map, i+4);
@@ -436,7 +498,7 @@ mapping ghost_record_pgtable_partial(kvm_pte_t *pgtable, ghost_stage_t stage, gh
 		hyp_putspi("pgtable==NULL\n", i);
 		goto out;
 	}
-	_interpret_pgtable(&map, pgtable, NULL, stage, mair, level, va_partial, aal_partial, false /*noisy*/);
+	_interpret_pgtable(&map, pgtable, NULL, NULL, stage, mair, level, va_partial, aal_partial, false /*noisy*/);
 	hyp_put_mapping(map, i+2);
 out:
 	return map;
@@ -460,7 +522,7 @@ void ghost_dump_pgtable_locked(struct kvm_pgtable *pg, char *doc, u64 i)
 		hyp_puts("empty");
 		return;
 	}
-	mapping map = ghost_record_pgtable(pg, NULL, NULL, 0);
+	mapping map = ghost_record_pgtable(pg, NULL, NULL, NULL, 0);
 	//hyp_puts("ghost_dump_pgtable post interpret_pgtable()\n");
 	hyp_put_mapping(map, i+2);
 	// dump_pgtable(*pg); // to look at the raw pgtable - verbosely!
