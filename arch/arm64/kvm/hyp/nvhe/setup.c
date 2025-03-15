@@ -617,8 +617,15 @@ int __pkvm_init(phys_addr_t phys, unsigned long size, unsigned long nr_cpus,
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 
 	ret = hyp_alloc_init(SZ_128M);
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	if (ret) {
+		GHOST_LOG_CONTEXT_EXIT();
+		return ret;
+	}
+#else /* CONFIG_NVHE_GHOST_SPEC */
 	if (ret)
 		return ret;
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 
 	update_nvhe_init_params();
 
