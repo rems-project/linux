@@ -811,33 +811,19 @@ out:
 }
 #endif
 
-/**
- * compute the new abstract ghost_state from a struct ghost_call_data *call = pkvm_host_map_guest(host_pfn, guest_gfn)
+/*
+ * NOTE: a call to this function should typically be followed with a check
+ * for non-deterministic ENOMEM return value by the calling hypercall.
  */
-static bool compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call) {
-	int ret;
-
-	u64 pfn = ghost_read_gpr(g0, 1);
-	u64 gfn = ghost_read_gpr(g0, 2);
-
-	phys_addr_t phys = hyp_pfn_to_phys(pfn);
-	host_ipa_t host_ipa = host_ipa_of_phys(phys);
-	guest_ipa_t guest_ipa = (gfn << PAGE_SHIFT);
-
-	struct ghost_loaded_vcpu_status *loaded_vcpu_status = this_cpu_ghost_loaded_vcpu_status(g0);
-
-	// previous vcpu_load must have been done
-	// `hyp_vcpu = pkvm_get_loaded_hyp_vcpu(); if (!hyp_vcpu) goto out;`
-	if (!loaded_vcpu_status->loaded) {
-		ret = -EINVAL;
-		goto out;
-	}
-
+static void memcache_donations(struct ghost_state *g1, struct ghost_state *g0,
+			       struct ghost_memcache_donations *mc_donations,
+			       u64 return_value)
+{
 	/*
 	 * Take a snapshot of the host/pkvm when we will need to update them.
 	 * If a donation happens, then we will update the host and pkvm states.
 	 */
-	if (call->memcache_donations.len > 0) {
+	 if (mc_donations->len > 0) {
 		copy_abstraction_pkvm(g1, g0);
 		copy_abstraction_host(g1, g0);
 	} else {
@@ -845,7 +831,7 @@ static bool compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost
 		g1->pkvm.present = false;
 
 		// If the hcall succeeds even without donations, the host state will be updated.
-		if (call->return_value != -ENOMEM) {
+		if (return_value != -ENOMEM) {
 			copy_abstraction_host(g1, g0);
 		} else {
 			ghost_assert(!g0->host.present);
@@ -853,8 +839,8 @@ static bool compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost
 		}
 	}
 
-	for (int d=0; d<call->memcache_donations.len; d++) {
-		u64 pfn = call->memcache_donations.pages[d];
+	for (int d=0; d<mc_donations->len; d++) {
+		u64 pfn = mc_donations->pages[d];
 		phys_addr_t donated_phys = hyp_pfn_to_phys(pfn);
 		host_ipa_t host_donated_page_ipa = host_ipa_of_phys(donated_phys);
 		hyp_va_t hyp_donated_page_addr = (u64)ghost__hyp_va(g0, donated_phys);
@@ -885,10 +871,38 @@ static bool compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost
 		);
 		// TODO: WRITE_ONCE()
 	}
+}
+
+
+/**
+ * compute the new abstract ghost_state from a struct ghost_call_data *call = pkvm_host_map_guest(host_pfn, guest_gfn)
+ */
+static bool compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call) {
+	int ret;
+
+	u64 pfn = ghost_read_gpr(g0, 1);
+	u64 gfn = ghost_read_gpr(g0, 2);
+
+	phys_addr_t phys = hyp_pfn_to_phys(pfn);
+	host_ipa_t host_ipa = host_ipa_of_phys(phys);
+	guest_ipa_t guest_ipa = (gfn << PAGE_SHIFT);
+
+	struct ghost_loaded_vcpu_status *loaded_vcpu_status = this_cpu_ghost_loaded_vcpu_status(g0);
+
+	// previous vcpu_load must have been done
+	// `hyp_vcpu = pkvm_get_loaded_hyp_vcpu(); if (!hyp_vcpu) goto out;`
+	if (!loaded_vcpu_status->loaded) {
+		ret = -EINVAL;
+		goto out;
+	}
+
+	memcache_donations(g1, g0, &call->memcache_donations, call->return_value);
 
 	// The call to pkvm_refill_memcache() may non-deterministically
-	// fail because we run out of memory. In this case the hypercall
-	// ends with that host mapping left unchanged.
+	// fail if the host constructed an ill-formed memcache, causing a page
+	// admission to fail (e.g. if a node points to memory no longer owned
+	// by the host). In this case the hypercall ends with that guest mapping
+	// left unchanged.
 	//
 	// The code of __pkvm_host_donate_guest() allows for a non-deterministic
 	// run out of memory when updating the guest page table.
