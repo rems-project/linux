@@ -1650,6 +1650,47 @@ out:
 }
 #endif
 
+static bool compute_new_abstract_state_handle___pkvm_hyp_alloc_mgt_refill(
+	struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call)
+{
+	int ret = 0;
+	unsigned long id = ghost_read_gpr(g0, 1);
+	// phys_addr_t phys = ghost_read_gpr(g0, 2);
+	unsigned long nr_pages = ghost_read_gpr(g0, 3);
+
+	if (id != HYP_ALLOC_MGT_HEAP_ID && id != HYP_ALLOC_MGT_IOMMU_ID) {
+		ret = -EINVAL;
+		goto out;
+	}
+
+	// TODO: we haven't spec-ed out the IOMMY refill
+	ghost_assert(id == HYP_ALLOC_MGT_HEAP_ID);
+
+	memcache_donations(g1, g0, &call->memcache_donations, call->return_value);
+
+	// The underlying call to mm.c::refill_memcache() may
+	// non-deterministically fail if the host constructed an ill-formed
+	// memcache, causing a page admission to fail (e.g. if a node points to
+	// memory no longer owned by the host).
+	if (call->return_value == -ENOMEM) {
+		ret = -ENOMEM;
+		goto out;
+	}
+
+	// If the hypercall succeeds, we it must have admitted the number of
+	// pages advertised by the host.
+	ghost_spec_assert(nr_pages == call->memcache_donations.len);
+
+out:
+	ghost_write_gpr(g1, 1, ret);
+
+	/* these registers now become the host's run context */
+	copy_registers_to_host(g1);
+
+	/* check this spec */
+	return true;
+}
+
 static bool compute_new_abstract_state_handle_host_hcall(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call)
 {
 	bool new_state_computed = false;
@@ -1693,6 +1734,9 @@ static bool compute_new_abstract_state_handle_host_hcall(struct ghost_state *g1,
 		break;
 	case __KVM_HOST_SMCCC_FUNC___pkvm_init_vcpu:
 		new_state_computed =  compute_new_abstract_state_handle___pkvm_init_vcpu(g1, g0, call);
+		break;
+	case __KVM_HOST_SMCCC_FUNC___pkvm_hyp_alloc_mgt_refill:
+		new_state_computed = compute_new_abstract_state_handle___pkvm_hyp_alloc_mgt_refill(g1, g0, call);
 		break;
 	// case __KVM_HOST_SMCCC_FUNC___pkvm_teardown_vm:
 	// 	new_state_computed =  compute_new_abstract_state_handle___pkvm_teardown_vm(g1, g0, call);
