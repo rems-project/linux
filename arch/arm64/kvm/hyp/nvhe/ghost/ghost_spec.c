@@ -521,6 +521,7 @@ static inline u64 calculate_reset_mpidr(int vcpu_id)
 // TODO: pointer authentication, SVE regs
 static void init_vcpu_sysregs(struct ghost_state *g, int vcpu_idx, struct ghost_registers *regs, bool is_protected)
 {
+	// TODO: SVE and SME config. see kvm_emulate.h::kvm_get_reset_cptr_el2()
 	ghost_write_el2_sysreg_explicit(regs, GHOST_SYSREG(CPTR_EL2), CPTR_NVHE_EL2_RES1);
 	ghost_write_el2_sysreg_explicit(regs, GHOST_SYSREG(MDCR_EL2), 0);
 
