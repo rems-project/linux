@@ -21,6 +21,7 @@
 
 #ifdef CONFIG_NVHE_GHOST_SPEC
 #include <nvhe/ghost/ghost_spec.h>
+#include <nvhe/ghost/ghost_recording.h>
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 
 struct kvm_pgtable pkvm_pgtable;
@@ -50,9 +51,12 @@ static int __pkvm_create_mappings(unsigned long start, unsigned long size,
 	int err;
 
 	hyp_spin_lock(&pkvm_pgd_lock);
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	record_and_check_abstraction_pkvm_pre();
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
 	casemate_model_step_lock(hyp_virt_to_phys(&pkvm_pgd_lock));
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	err = kvm_pgtable_hyp_map(&pkvm_pgtable, start, size, phys, prot);
 
 #ifdef CONFIG_NVHE_GHOST_SPEC
@@ -61,6 +65,7 @@ static int __pkvm_create_mappings(unsigned long start, unsigned long size,
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
 	casemate_model_step_unlock(hyp_virt_to_phys(&pkvm_pgd_lock));
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
+	record_and_copy_abstraction_pkvm_post();
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 
 	hyp_spin_unlock(&pkvm_pgd_lock);
@@ -105,14 +110,20 @@ int pkvm_alloc_private_va_range(size_t size, unsigned long *haddr)
 	int ret;
 
 	hyp_spin_lock(&pkvm_pgd_lock);
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	record_and_check_abstraction_pkvm_pre();
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
 	casemate_model_step_lock(hyp_virt_to_phys(&pkvm_pgd_lock));
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	addr = __io_map_base;
 	ret = __pkvm_alloc_private_va_range(addr, size);
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
 	casemate_model_step_unlock(hyp_virt_to_phys(&pkvm_pgd_lock));
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	record_and_copy_abstraction_pkvm_post();
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_spin_unlock(&pkvm_pgd_lock);
 
 	*haddr = addr;
@@ -262,9 +273,12 @@ int pkvm_create_mappings(void *from, void *to, enum kvm_pgtable_prot prot)
 	int ret;
 
 	hyp_spin_lock(&pkvm_pgd_lock);
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	record_and_check_abstraction_pkvm_pre();
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
 	casemate_model_step_lock(hyp_virt_to_phys(&pkvm_pgd_lock));
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	ret = pkvm_create_mappings_locked(from, to, prot);
 #ifdef CONFIG_NVHE_GHOST_SPEC
 	if (!ret)
@@ -272,6 +286,7 @@ int pkvm_create_mappings(void *from, void *to, enum kvm_pgtable_prot prot)
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
 	casemate_model_step_unlock(hyp_virt_to_phys(&pkvm_pgd_lock));
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
+	record_and_copy_abstraction_pkvm_post();
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_spin_unlock(&pkvm_pgd_lock);
 
@@ -283,7 +298,19 @@ void pkvm_remove_mappings(void *from, void *to)
 	unsigned long size = (unsigned long)to - (unsigned long)from;
 
 	hyp_spin_lock(&pkvm_pgd_lock);
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	record_and_check_abstraction_pkvm_pre();
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	casemate_model_step_lock(hyp_virt_to_phys(&pkvm_pgd_lock));
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	WARN_ON(kvm_pgtable_hyp_unmap(&pkvm_pgtable, (u64)from, size) != size);
+#ifdef CONFIG_NVHE_GHOST_SPEC
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	casemate_model_step_unlock(hyp_virt_to_phys(&pkvm_pgd_lock));
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
+	record_and_copy_abstraction_pkvm_post();
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_spin_unlock(&pkvm_pgd_lock);
 }
 
@@ -535,6 +562,12 @@ static int create_fixblock(void)
 		return -EINVAL;
 
 	hyp_spin_lock(&pkvm_pgd_lock);
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	record_and_check_abstraction_pkvm_pre();
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	casemate_model_step_lock(hyp_virt_to_phys(&pkvm_pgd_lock));
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	addr = ALIGN(__io_map_base, PMD_SIZE);
 	ret = __pkvm_alloc_private_va_range(addr, PMD_SIZE);
 	if (ret)
@@ -546,6 +579,12 @@ static int create_fixblock(void)
 
 	ret = kvm_pgtable_walk(&pkvm_pgtable, addr, PMD_SIZE, &walker);
 unlock:
+#ifdef CONFIG_NVHE_GHOST_SPEC
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	casemate_model_step_unlock(hyp_virt_to_phys(&pkvm_pgd_lock));
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
+	record_and_copy_abstraction_pkvm_post();
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_spin_unlock(&pkvm_pgd_lock);
 
 	return ret;
@@ -615,6 +654,12 @@ int pkvm_create_stack(phys_addr_t phys, unsigned long *haddr)
 	int ret;
 
 	hyp_spin_lock(&pkvm_pgd_lock);
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	record_and_check_abstraction_pkvm_pre();
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	casemate_model_step_lock(hyp_virt_to_phys(&pkvm_pgd_lock));
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 
 	prev_base = __io_map_base;
 	/*
@@ -640,6 +685,12 @@ int pkvm_create_stack(phys_addr_t phys, unsigned long *haddr)
 		if (ret)
 			__io_map_base = prev_base;
 	}
+#ifdef CONFIG_NVHE_GHOST_SPEC
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	casemate_model_step_unlock(hyp_virt_to_phys(&pkvm_pgd_lock));
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
+	record_and_copy_abstraction_pkvm_post();
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_spin_unlock(&pkvm_pgd_lock);
 
 	*haddr = addr + size;
@@ -700,7 +751,19 @@ phys_addr_t __pkvm_private_range_pa(void *va)
 	u32 level;
 
 	hyp_spin_lock(&pkvm_pgd_lock);
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	record_and_check_abstraction_pkvm_pre();
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	casemate_model_step_lock(hyp_virt_to_phys(&pkvm_pgd_lock));
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	WARN_ON(kvm_pgtable_get_leaf(&pkvm_pgtable, (u64)va, &pte, &level));
+#ifdef CONFIG_NVHE_GHOST_SPEC
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	casemate_model_step_unlock(hyp_virt_to_phys(&pkvm_pgd_lock));
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
+	record_and_copy_abstraction_pkvm_post();
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_spin_unlock(&pkvm_pgd_lock);
 
 	BUG_ON(!kvm_pte_valid(pte));
