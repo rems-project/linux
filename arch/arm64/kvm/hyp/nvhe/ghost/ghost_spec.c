@@ -988,9 +988,13 @@ static bool compute_new_abstract_state_handle___pkvm_vcpu_load(struct ghost_stat
 	if (vcpu_idx >= vm0->vm_table_locked.nr_vcpus)
 		goto out;
 
-	ghost_assert(vcpu_idx < KVM_MAX_VCPUS);	
+	ghost_assert(vcpu_idx < KVM_MAX_VCPUS);
+
+	struct ghost_vcpu_reference *vcpu_ref0 = &vm0->vcpu_refs[vcpu_idx];
+	ghost_spec_assert(vcpu_ref0->present && vcpu_ref0->initialised);
+
 	// if the vcpu is already loaded (potentially in another CPU), then do nothing
-	if (vm0->vm_table_locked.vcpu_refs[vcpu_idx].loaded_somewhere)
+	if (vcpu_ref0->loaded_somewhere)
 		goto out;
 
 	// record in the ghost state of the vcpu 'vcpu_idx' that is has been loaded
@@ -998,24 +1002,25 @@ static bool compute_new_abstract_state_handle___pkvm_vcpu_load(struct ghost_stat
 	// TODO: BS: this is wrong, we should only be copying the vCPU being loaded
 	// TODO: KM: I don't agree with the previous anymore
 	ghost_vm_clone_into_partial(vm1, vm0, VMS_VM_TABLE_OWNED);
-	struct ghost_vcpu_reference *vcpu_ref = &vm1->vm_table_locked.vcpu_refs[vcpu_idx];
+	struct ghost_vcpu_reference *vcpu_ref1 = &vm1->vcpu_refs[vcpu_idx];
 
 	if (vm1->protected) {
-		u64 vcpu_hcr_el2 = ghost_read_el2_sysreg_explicit(&vcpu_ref->vcpu->regs, GHOST_SYSREG(HCR_EL2));
+		u64 vcpu_hcr_el2 = ghost_read_el2_sysreg_explicit(&vcpu_ref1->vcpu->regs, GHOST_SYSREG(HCR_EL2));
 		vcpu_hcr_el2 &= ~(HCR_TWE | HCR_TWI | HCR_API | HCR_APK);
 		vcpu_hcr_el2 |= hcr_el2 & (HCR_TWE | HCR_TWI);
-		ghost_write_el2_sysreg_explicit(&vcpu_ref->vcpu->regs, GHOST_SYSREG(HCR_EL2), vcpu_hcr_el2);
+		ghost_write_el2_sysreg_explicit(&vcpu_ref1->vcpu->regs, GHOST_SYSREG(HCR_EL2), vcpu_hcr_el2);
 	}
 
 	// and mark the current physical CPU as having a loaded vCPU
 	this_cpu_ghost_loaded_vcpu_status(g1)->loaded = true;
 	this_cpu_ghost_loaded_vcpu_status(g1)->vm_handle = vm_handle;
-	ghost_vcpu_clone_into(this_cpu_ghost_loaded_vcpu_status(g1)->loaded_vcpu, vcpu_ref->vcpu);
+	ghost_vcpu_clone_into(this_cpu_ghost_loaded_vcpu_status(g1)->loaded_vcpu, vcpu_ref1->vcpu);
 
 	// this vm's vCPU is now marked as loaded and the table looses ownership over it
-	vcpu_ref->loaded_somewhere = true;
-	free(ALLOC_VCPU, vcpu_ref->vcpu);
-	vcpu_ref->vcpu = NULL;
+	vcpu_ref1->present = true;
+	vcpu_ref1->loaded_somewhere = true;
+	free(ALLOC_VCPU, vcpu_ref1->vcpu);
+	vcpu_ref1->vcpu = NULL;
 
 	// and the table has the same number of vms as before.
 	g1->vms.table_data.present = true;
@@ -1051,13 +1056,14 @@ static bool compute_new_abstract_state_handle___pkvm_vcpu_put(struct ghost_state
 	// TODO: KM: I don't agree anymore
 	ghost_vm_clone_into_partial(vm1, vm0, VMS_VM_TABLE_OWNED);
 
-	// the VM table should not have ownership over the vCPU since it was loaded
-	ghost_assert(!vm1->vm_table_locked.vcpu_refs[vcpu_index].vcpu);
+	// the reference to the vCPU should not be here, because it is inthe thread local state
+	ghost_assert(!vm1->vcpu_refs[vcpu_index].vcpu);
 
 	// the vm's vcpu is now marked as not loaded and it gets ownership back
-	vm1->vm_table_locked.vcpu_refs[vcpu_index].loaded_somewhere = false;
-	vm1->vm_table_locked.vcpu_refs[vcpu_index].vcpu = malloc_or_die(ALLOC_VCPU, sizeof(struct ghost_vcpu));
-	ghost_vcpu_clone_into(vm1->vm_table_locked.vcpu_refs[vcpu_index].vcpu, loaded_vcpu_status->loaded_vcpu);
+	vm1->vcpu_refs[vcpu_index].present = true;
+	vm1->vcpu_refs[vcpu_index].loaded_somewhere = false;
+	vm1->vcpu_refs[vcpu_index].vcpu = malloc_or_die(ALLOC_VCPU, sizeof(struct ghost_vcpu));
+	ghost_vcpu_clone_into(vm1->vcpu_refs[vcpu_index].vcpu, loaded_vcpu_status->loaded_vcpu);
 
 	// and the table has the same number of vms as before.
 	// NOTE:
@@ -1290,6 +1296,9 @@ static bool compute_new_abstract_state_handle___pkvm_init_vm(struct ghost_state 
 	ghost_map_donated_memory_nocheck(g1, last_ran_host_ipa, last_ran_size);
 	ghost_map_donated_memory_nocheck(g1, pgd_host_ipa, pgd_size);
 
+	vm1->protected = GHOST_READ_ONCE(call, host_kvm->arch.pkvm.enabled);
+	vm1->pkvm_handle = handle;
+
 	// Now set up the VM with the right initial state:
 	// an empty mapping with the right pool,
 	// and the first nr_vcpus un-initialised unloaded vcpus.
@@ -1301,16 +1310,21 @@ static bool compute_new_abstract_state_handle___pkvm_init_vm(struct ghost_state 
 	vm1->vm_locked.vm_abstract_pgtable.root = pgd_phys;
 
 	vm1->vm_table_locked.present = true;
+	vm1->vm_table_locked.nr_vcpus = false;
 	vm1->vm_table_locked.nr_vcpus = nr_vcpus;
-	vm1->vm_table_locked.nr_initialised_vcpus = 0;
-	vm1->pkvm_handle = handle;
-	vm1->protected = GHOST_READ_ONCE(call, host_kvm->arch.pkvm.enabled);
+
+	// vCPUs have yet to be  initialised
+	vm1->initialised_vcpus.present = true;
+	vm1->initialised_vcpus.count = 0;
+
 	for (int i = 0; i < nr_vcpus; i++) {
-		vm1->vm_table_locked.vcpu_refs[i].initialised = false;
-		// the following two inits are for sanity, these fields have no meaning
+		vm1->vcpu_refs[i].present = true;
+		vm1->vcpu_refs[i].initialised = false;
+		// the following inits are for sanity, these fields have no meaning
 		// because .initialised = false
-		vm1->vm_table_locked.vcpu_refs[i].loaded_somewhere = false;
-		vm1->vm_table_locked.vcpu_refs[i].vcpu = NULL;
+		vm1->vcpu_refs[i].loaded_somewhere = false;
+		vm1->vcpu_refs[i].vm_teardown_addr = 0;
+		vm1->vcpu_refs[i].vcpu = NULL;
 	}
 
 	vm1->vm_teardown_data.host_mc = phys_of_hyp_va(g0, (hyp_va_t)&host_kvm->arch.pkvm.stage2_teardown_mc);
@@ -1354,6 +1368,8 @@ static bool compute_new_abstract_state_handle___pkvm_init_vcpu(struct ghost_stat
 	host_va_t vcpu_hva = ghost_read_gpr(g0, 3);
 	struct kvm_vcpu *host_vcpu_hyp_va = (struct kvm_vcpu *)hyp_va_of_host_va(g0, host_vcpu_hva);
 
+	// TODO: this is not checking that the VM table lock was taken, so currently this spec allows
+	// implementations to return ENOENT if it does not take the vm_table lock
 	struct ghost_vm *vm0 = ghost_vms_get(&g0->vms, vm_handle);
 	if (!vm0) {
 		ret = -ENOENT;
@@ -1362,9 +1378,10 @@ static bool compute_new_abstract_state_handle___pkvm_init_vcpu(struct ghost_stat
 	struct ghost_vm *vm1 = ghost_vms_alloc(&g1->vms, vm_handle);
 	ghost_assert(vm1);
 	// TODO: BS: this is wrong we should have a function that only clone the VM metadata (not the vCPUs)
-	ghost_vm_clone_into_partial(vm1, vm0, VMS_VM_TABLE_OWNED);
+	ghost_vm_clone_into_partial(vm1, vm0, VMS_VM_TABLE_OWNED | VMS_INITIALISED_VCPUS);
 
-	vcpu_idx = vm1->vm_table_locked.nr_initialised_vcpus;
+	vcpu_idx = vm1->initialised_vcpus.count;
+	ghost_assert(!vm0->vcpu_refs[vcpu_idx].present);
 	if (vcpu_idx >= vm1->vm_table_locked.nr_vcpus) {
 		ret = -EINVAL;
 		goto out;
@@ -1392,7 +1409,8 @@ static bool compute_new_abstract_state_handle___pkvm_init_vcpu(struct ghost_stat
 	}
 
 	// TODO -> hyp_pin_shared_mem(host_vcpu, host_vcpu + 1)
-	vcpu_ref = &vm1->vm_table_locked.vcpu_refs[vcpu_idx];
+	vcpu_ref = &vm1->vcpu_refs[vcpu_idx];
+	vcpu_ref->present = true;
 	vcpu_ref->initialised = true;
 	vcpu_ref->loaded_somewhere = false;
 
@@ -1414,10 +1432,11 @@ static bool compute_new_abstract_state_handle___pkvm_init_vcpu(struct ghost_stat
 	u64 vcpu_id = GHOST_READ_ONCE(call, host_vcpu_hyp_va->vcpu_id);
 	init_vcpu_sysregs(g1, vcpu_id, &vcpu_ref->vcpu->regs, vm1->protected);
 
+	vcpu_ref->vm_teardown_addr = phys_of_host_ipa(vcpu_ipa);
+
 	g1->vms.table_data.present = true;
 	g1->vms.table_data.nr_vms = g0->vms.table_data.nr_vms;
-	vm1->vm_table_locked.vm_teardown_vcpu_addrs[vm1->vm_table_locked.nr_initialised_vcpus] = phys_of_host_ipa(vcpu_ipa);
-	vm1->vm_table_locked.nr_initialised_vcpus++;
+	vm1->initialised_vcpus.count++;
 out:
 	ghost_write_gpr(g1, 1, ret);
 

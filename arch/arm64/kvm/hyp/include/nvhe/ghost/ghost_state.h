@@ -77,19 +77,22 @@ struct ghost_vcpu {
 };
 
 /**
- * struct ghost_vcpu_reference - A reference to a single vCPU held by the vm_table locked part of a VM state
+ * struct ghost_vcpu_reference - A reference to a single initialised vCPU held by the vm_table locked part of a VM state
  *
- * @initialised: whether this vcpu has been initialised by __pkvm_init_vcpu.
- * @loaded_somewhere: if initialised, whether this vcpu is currently loaded on a physical CPU.
- * @vcpu: if initialised, a pointer to the actual state of the vCPU. This is NULL if the vCPU is not owned by the vm table (because it is loaded somewhere).
+ * @present: whether this vCPU is present in the ghost state.
+ * @loaded_somewhere: if present and initialised, whether this vcpu is currently loaded on a physical CPU.
+ * @vm_teardown_addr: if present and initialised, locations of the `pkvm_hyp_vcpu` structures, donated during __pkvm_init_vcpu calls.
+ * @vcpu: if present and initialised, a pointer to the actual state of the vCPU. This is NULL if the vCPU is not owned by the vm table (because it is loaded somewhere).
  *
  * Context: Protected by the vm_table lock, including the object pointed to by vcpu if not NULL.
  *
  * Invariant: loaded_somewhere == true <==> vcpu == NULL
  */
 struct ghost_vcpu_reference {
+	bool present;
 	bool initialised;
 	bool loaded_somewhere;
+	phys_addr_t vm_teardown_addr;
 	struct ghost_vcpu *vcpu;
 };
 
@@ -101,6 +104,7 @@ struct ghost_vcpu_reference {
 enum vm_field_owner {
 	VMS_VM_TABLE_OWNED = BIT(0),
 	VMS_VM_OWNED = BIT(1),
+	VMS_INITIALISED_VCPUS = BIT(2),
 };
 
 /**
@@ -120,24 +124,16 @@ struct ghost_vm_locked_by_vm_lock {
  * struct ghost_vm_locked_by_vm_table - A guest VM (part protected by the VM table lock)
  *
  * @present: whether this portion of the VM is present in the ghost state.
+ * @is_dying: if present, whether the VM is dying.
  * @nr_vcpus: if present, the number of vCPUs this VM was created with.
- * @nr_initialised_vcpus: if present, the number vCPUs that have been initialised so far by __pkvm_init_vcpu.
- * @vcpu_refs: if present, the actual table of ghost_vcpu_reference objects, valid up to nr_vcpus.
- * @vm_teardown_vcpu_addrs: if present, locations of the `pkvm_hyp_vcpu` structures, donated during __pkvm_init_vcpu calls.
-
  *
  * Context: Protected by the VM table lock,
  *          the `lock` field should not be used to take the lock, only to check it for sanity checking of the spec machinery
- *
- * NOTE: in `.vm_teardown_vcpu_addrs`, there are only `.nr_initialised_vcpus`
- * The remaining elements of the array should be zero.
  */
 struct ghost_vm_locked_by_vm_table {
 	bool present;
+	bool is_dying;
 	u64 nr_vcpus;
-	u64 nr_initialised_vcpus;
-	struct ghost_vcpu_reference vcpu_refs[KVM_MAX_VCPUS];
-	phys_addr_t vm_teardown_vcpu_addrs[KVM_MAX_VCPUS];
 };
 
 /**
@@ -161,6 +157,8 @@ struct ghost_vm_teardown_data {
  * @lock: (for ghost machinery checks) a reference to the underlying spinlock of the real hyp VM, for instrumentation purposes.
  * @vm_locked: fields owned by the internal VM lock
  * @vm_table_locked: fields protected by the pKVM vm_table lock
+ * @initialised_vcpus: the potentially absent count of initialised vCPUs so far by __pkvm_init_vcpu.
+ * @vcpu_refs: array of references to potentially absent vCPUs
  * @vm_teardown_data: pages donated to pKVM for holding VM metadata, to be given back on teardown.
  *
  * The VM is split into two parts: the pgtable (owned by the VM's own internal lock)
@@ -176,6 +174,11 @@ struct ghost_vm {
 	hyp_spinlock_t *lock;
 	struct ghost_vm_locked_by_vm_lock vm_locked;
 	struct ghost_vm_locked_by_vm_table vm_table_locked;
+	struct {
+		bool present;
+		u64 count;
+	} initialised_vcpus;
+	struct ghost_vcpu_reference vcpu_refs[KVM_MAX_VCPUS];
 	struct ghost_vm_teardown_data vm_teardown_data;
 };
 

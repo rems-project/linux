@@ -335,36 +335,51 @@ static void compute_abstraction_vm_partial(struct ghost_vm *dest, struct pkvm_hy
 		ghost_record_pgtable_ap(&dest->vm_locked.vm_abstract_pgtable, NULL, &hyp_vm->pgt, hyp_vm->pool.range_start, hyp_vm->pool.range_end, "guest_mmu.pgt", 0);
 	}
 
+	if (owner & VMS_INITIALISED_VCPUS) {
+		dest->initialised_vcpus.present = true;
+		dest->initialised_vcpus.count = hyp_vm->nr_vcpus;
+	}
 
 	if (owner & VMS_VM_TABLE_OWNED) {
 		/* can't assert the lock held, as it might be that we're in a loaded vcpu
 		 * so don't need the lock at all. */
 		dest->vm_table_locked.present = true;
+		dest->vm_table_locked.is_dying = hyp_vm->is_dying;
 		dest->vm_table_locked.nr_vcpus = hyp_vm->kvm.created_vcpus;
-		dest->vm_table_locked.nr_initialised_vcpus = hyp_vm->nr_vcpus;
+
+		// When we have the vm_table lock, we only know about the vCPUs
+		// if we own the `.vcpus_lock` or if the VM is dying
+		if (!hyp_vm->is_dying && !(owner & VMS_INITIALISED_VCPUS))
+			return;
+
+		// The VM is dying so what `.vcpus_lock` owned is now owned by
+		// the VM table
+		dest->initialised_vcpus.present = true;
+		dest->initialised_vcpus.count = hyp_vm->nr_vcpus;
 
 		/* the pKVM hyp_vm .vcpus field is only defined up to created_vcpus */
 		for (int vcpu_idx=0; vcpu_idx < KVM_MAX_PVMS; vcpu_idx++) {
-			struct ghost_vcpu_reference *vcpu_ref = &dest->vm_table_locked.vcpu_refs[vcpu_idx];
-			if (vcpu_idx < hyp_vm->kvm.created_vcpus) {
-				struct pkvm_hyp_vcpu *vcpu = hyp_vm->vcpus[vcpu_idx];
-				vcpu_ref->initialised = vcpu_idx < hyp_vm->nr_vcpus;
-				if (vcpu_ref->initialised) {
-					dest->vm_table_locked.vm_teardown_vcpu_addrs[vcpu_idx] =
-						vcpu_ref->initialised ? hyp_virt_to_phys(hyp_vm->vcpus[vcpu_idx]) : 0;
-					if (vcpu->loaded_hyp_vcpu) {
-						vcpu_ref->loaded_somewhere = true;
-						ghost_assert(vcpu_ref->vcpu == NULL);
-						vcpu_ref->vcpu = NULL;
-					} else {
-						vcpu_ref->loaded_somewhere = false;
-						struct ghost_vcpu *g_vcpu = malloc_or_die(ALLOC_VCPU, sizeof (struct ghost_vcpu));
-						compute_abstraction_vcpu(g_vcpu, vcpu, vcpu_idx);
-						ghost_assert(vcpu_ref->vcpu == NULL);
-						vcpu_ref->vcpu = g_vcpu;
+			struct ghost_vcpu_reference *vcpu_ref = &dest->vcpu_refs[vcpu_idx];
+			vcpu_ref->present = true;
+			vcpu_ref->vm_teardown_addr = hyp_virt_to_phys(hyp_vm->vcpus[vcpu_idx]);
 
-					}
+			if (vcpu_idx < hyp_vm->nr_vcpus) {
+				vcpu_ref->initialised = true;
+				struct pkvm_hyp_vcpu *vcpu = hyp_vm->vcpus[vcpu_idx];
+				if (vcpu->loaded_hyp_vcpu) {
+					vcpu_ref->loaded_somewhere = true;
+					ghost_assert(vcpu_ref->vcpu == NULL);
+					vcpu_ref->vcpu = NULL;
+				} else {
+					vcpu_ref->loaded_somewhere = false;
+					struct ghost_vcpu *g_vcpu = malloc_or_die(ALLOC_VCPU, sizeof (struct ghost_vcpu));
+					compute_abstraction_vcpu(g_vcpu, vcpu, vcpu_idx);
+					ghost_assert(vcpu_ref->vcpu == NULL);
+					vcpu_ref->vcpu = g_vcpu;
 				}
+			} else {
+				// For sanity zeroing the rest of the array
+				memset(vcpu_ref, 0, sizeof(struct ghost_vcpu_reference));
 			}
 		}
 	}

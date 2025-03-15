@@ -36,6 +36,13 @@
 	ghost_spec_assert((var1) == (var2)); \
 }
 
+#define GHOST_SPEC_ASSERT_VAR_EQ_INNER(name, var1, var2, ty) { \
+	GHOST_LOG_INNER(name, var1, ty); \
+	GHOST_LOG_INNER(name, var2, ty); \
+	if ((var1) != (var2)) \
+		GHOST_WARN(#var1 " did not match " #var2); \
+	ghost_spec_assert((var1) == (var2)); \
+}
 
 /*
  * some spec assertion helpers
