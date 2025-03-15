@@ -595,6 +595,15 @@ static void copy_registers_to_host(struct ghost_state *g)
 // 	copy_abstraction_regs(&vcpu->regs, &ghost_this_cpu_local_state(g)->regs);
 // }
 
+// Since android15-6.6, the shared mapping not longer corresponds to a subset
+// of a page table mapping, so there is no meaningful permission/memtype
+static inline struct maplet_target host_shared_maplet_target(u64 oa_start, u64 nr_pages)
+{
+	return maplet_target_mapped_attrs(oa_start, nr_pages,
+		ghost_memory_attributes(MAPLET_PAGE_STATE_SHARED_OWNED, MAPLET_PERM_UNKNOWN, MAPLET_MEMTYPE_UNKNOWN)
+	);
+}
+
 static bool compute_new_abstract_state_handle___pkvm_host_share_hyp(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call)
 {
 	u64 pfn = ghost_read_gpr(g0, 1);
@@ -648,7 +657,6 @@ static bool compute_new_abstract_state_handle___pkvm_host_share_hyp(struct ghost
 	}
 
 	bool is_memory = ghost_addr_is_allowed_memory(g0, phys);
-	struct maplet_attributes host_attrs = ghost_default_host_memory_attributes(is_memory, MAPLET_PAGE_STATE_SHARED_OWNED);
 	struct maplet_attributes hyp_attrs = ghost_default_hyp_memory_attributes(is_memory, MAPLET_PAGE_STATE_SHARED_BORROWED);
 
 	/* the host annot mapping is unchanged (we have established that host_addr is NOT already in there)
@@ -656,7 +664,7 @@ static bool compute_new_abstract_state_handle___pkvm_host_share_hyp(struct ghost
 	mapping_update(
 		&g1->host.host_abstract_pgtable_shared,
 		g0->host.host_abstract_pgtable_shared,
-		MAP_INSERT_PAGE, GHOST_STAGE2, host_addr, 1, maplet_target_mapped_attrs(phys, 1, host_attrs)
+		MAP_INSERT_PAGE, GHOST_STAGE2, host_addr, 1, host_shared_maplet_target(phys, 1)
 	);
 
 	/* add a new hyp mapping, PKVM_PAGE_SHARED_BORROWED */
