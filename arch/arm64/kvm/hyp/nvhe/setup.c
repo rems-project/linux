@@ -497,7 +497,10 @@ void __noreturn __pkvm_init_finalise(void)
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	init_abstraction_common();
 	init_abstraction_thread_local();
-	record_abstraction_common();
+	/* The call to record_abstraction_common() is delayed until the call to
+	 * __pkvm_prot_finalize() so that it occurs after the initialisation of
+	 * pKVM modules, as they affect the stage-1 mapping of pKVM.
+	 */
 	WRITE_ONCE(ghost_pkvm_init_finalized, true);
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 

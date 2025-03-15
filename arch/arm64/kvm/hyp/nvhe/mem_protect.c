@@ -590,6 +590,7 @@ int __pkvm_prot_finalize(void)
 	__pkvm_close_module_registration();
 
 #ifdef CONFIG_NVHE_GHOST_SPEC
+	record_abstraction_common();
 	init_abstraction_thread_local();
 	record_abstraction_loaded_vcpu_and_check_none();
 	this_cpu_ptr(&ghost_cpu_run_state)->guest_running = false;
