@@ -23,6 +23,12 @@
 
 #ifdef CONFIG_NVHE_GHOST_SPEC
 #include <nvhe/ghost/ghost_recording.h>
+/*
+ * Inlining the ghost recording of relaxed reads using the macro defined
+ * in ghost_call_data.h
+ */
+#undef READ_ONCE
+#define READ_ONCE READ_ONCE_GHOST_RECORD
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 
 /* Used by icache_is_vpipt(). */
@@ -732,11 +738,7 @@ static void init_pkvm_hyp_vm(struct kvm *host_kvm, struct pkvm_hyp_vm *hyp_vm,
 	hyp_vm->host_kvm = host_kvm;
 	hyp_vm->kvm.created_vcpus = nr_vcpus;
 	hyp_vm->kvm.arch.vtcr = host_mmu.arch.vtcr;
-#ifdef CONFIG_NVHE_GHOST_SPEC
-	hyp_vm->kvm.arch.pkvm.enabled = READ_ONCE_GHOST_RECORD(host_kvm->arch.pkvm.enabled);
-#else /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_vm->kvm.arch.pkvm.enabled = READ_ONCE(host_kvm->arch.pkvm.enabled);
-#endif /* CONFIG_NVHE_GHOST_SPEC */
 
 	if (hyp_vm->kvm.arch.pkvm.enabled)
 		pvmfw_load_addr = READ_ONCE(host_kvm->arch.pkvm.pvmfw_load_addr);
@@ -807,7 +809,7 @@ static int init_pkvm_hyp_vcpu(struct pkvm_hyp_vcpu *hyp_vcpu,
 	}
 
 #ifdef CONFIG_NVHE_GHOST_SPEC
-	if (READ_ONCE_GHOST_RECORD(host_vcpu->vcpu_idx) != vcpu_idx) {
+	if (READ_ONCE(host_vcpu->vcpu_idx) != vcpu_idx) {
 #else /* CONFIG_NVHE_GHOST_SPEC */
 	if (host_vcpu->vcpu_idx != vcpu_idx) {
 #endif /* CONFIG_NVHE_GHOST_SPEC */
@@ -824,11 +826,7 @@ static int init_pkvm_hyp_vcpu(struct pkvm_hyp_vcpu *hyp_vcpu,
 	hyp_vcpu->host_vcpu = host_vcpu;
 
 	hyp_vcpu->vcpu.kvm = &hyp_vm->kvm;
-#ifdef CONFIG_NVHE_GHOST_SPEC
-	hyp_vcpu->vcpu.vcpu_id = READ_ONCE_GHOST_RECORD(host_vcpu->vcpu_id);
-#else /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_vcpu->vcpu.vcpu_id = READ_ONCE(host_vcpu->vcpu_id);
-#endif /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_vcpu->vcpu.vcpu_idx = vcpu_idx;
 
 	hyp_vcpu->vcpu.arch.hw_mmu = &hyp_vm->kvm.arch.mmu;
@@ -952,11 +950,7 @@ int __pkvm_init_vm(struct kvm *host_kvm, unsigned long pgd_hva)
 	if (ret)
 		return ret;
 
-#ifdef CONFIG_NVHE_GHOST_SPEC
-	nr_vcpus = READ_ONCE_GHOST_RECORD(host_kvm->created_vcpus);
-#else /* CONFIG_NVHE_GHOST_SPEC */
 	nr_vcpus = READ_ONCE(host_kvm->created_vcpus);
-#endif /* CONFIG_NVHE_GHOST_SPEC */
 	if (nr_vcpus < 1) {
 		ret = -EINVAL;
 		goto err_unpin_kvm;

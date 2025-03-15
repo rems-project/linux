@@ -148,15 +148,18 @@ DECLARE_PER_CPU(struct ghost_call_data, gs_call_data);
 
 /**
  * READ_ONCE_GHOST_RECORD(ptr) - Perform a READ_ONCE(ptr) but remember the address and value in the ghost state.
+ *   The definition of READ_ONCE() from include/asm-generic/rwonce.h is inlined here to allow this macro be used
+ *   as its redefinition.
  */
 #define READ_ONCE_GHOST_RECORD(x) \
 	({ \
-		typeof(x) v = READ_ONCE(x); \
+		compiletime_assert_rwonce_type(x); \
+		typeof(x) v = __READ_ONCE(x); \
 		ghost_relaxed_reads_insert( \
 			&this_cpu_ptr(&gs_call_data)->relaxed_reads, \
 			(u64)&x, \
 			sizeof(typeof(x)), \
-			v \
+			(u64)v \
 		); \
 		v; \
 	})
