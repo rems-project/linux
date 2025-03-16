@@ -53,6 +53,7 @@ get-casemate:
 
 ifneq ($(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL),)
   CASEMATELIB = ghost/casemate/src/lib
+  GHOST_USES_SERIAL = 1
   include $(obj)/ghost/casemate/src/lib/Makefile.linux
 endif
 
