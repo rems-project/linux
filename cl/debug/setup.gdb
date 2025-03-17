@@ -95,6 +95,25 @@ document currentEL
   Usage: currentEL
 end
 
+define split_address
+    set $PAGE_SHIFT = 12
+    set $__addr = $arg0
+    set $mask = (1UL << ($PAGE_SHIFT - 3)) - 1
+    printf "Address: 0x%lX\n", $__addr
+
+    set $level = 0
+    while $level < 4
+        set $shift = ($PAGE_SHIFT - 3) * (4 - $level) + 3
+        set $index = ($__addr >> $shift) & $mask
+        printf "L%d index: 0x%03X\n", $level, $index
+        set $level = $level + 1
+    end
+end
+document split_address
+    Compute and display the page table indices for a given virtual address.
+    Usage: split_address <virtual_address>
+end
+
 
 file "kernel-pkvm.sym"
 
