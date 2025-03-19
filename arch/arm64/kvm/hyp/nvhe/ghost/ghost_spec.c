@@ -1254,31 +1254,6 @@ static bool compute_new_abstract_state_handle___pkvm_init_vm(struct ghost_state 
 	// so these ghost compute functions are only valid if properly initialised
 	ghost_assert(READ_ONCE(ghost_pkvm_init_finalized));
 
-	// the implementation must have taken the vm_table lock
-	ghost_spec_assert(g0->vms.present && g0->vms.table_data.present);
-
-	// pKVM should not allocate the same handle to a previously existent VM
-	ghost_spec_assert(ghost_vms_get(&g0->vms, handle) == NULL);
-
-	// if we've already allocated KVM_MAX_PVMS VMs, then fail with -ENOMEM
-	if (g0->vms.table_data.nr_vms == KVM_MAX_PVMS) {
-		ret = -ENOMEM;
-		goto out;
-	}
-
-	// otherwise, we have all the same vms as before, plus one more
-	copy_abstraction_vms_partial(g1, g0, VMS_VM_TABLE_OWNED);
-	struct ghost_vm *vm1 = ghost_vms_alloc(&g1->vms, handle);
-	g1->vms.table_data.present = true; // TODO: we probably want to change copy_abstraction_vms_partial() instead to set g1.vms.present to true (check with Ben)
-	g1->vms.table_data.nr_vms = g0->vms.table_data.nr_vms + 1;
-	ghost_assert(vm1);
-
-	// the calls to map_donated_memory() may run out of
-	// memory when updating the pKVM page table
-	// BS suspects there is an invariant preventing this from
-	// actually happening.
-	ghost_spec_assert(call->return_value != -ENOMEM);
-
 	u64 nr_vcpus = GHOST_READ_ONCE(call, host_kvm->created_vcpus);
 	if (nr_vcpus < 1) {
 		ret = -EINVAL;
@@ -1319,8 +1294,32 @@ static bool compute_new_abstract_state_handle___pkvm_init_vm(struct ghost_state 
 	ghost_map_donated_memory_nocheck(g1, last_ran_host_ipa, last_ran_size);
 	ghost_map_donated_memory_nocheck(g1, pgd_host_ipa, pgd_size);
 
+	// the implementation must have taken the vm_table lock
+	ghost_spec_assert(g0->vms.present && g0->vms.table_data.present);
+
+	// if we've already allocated KVM_MAX_PVMS VMs, then fail with -ENOMEM
+	if (g0->vms.table_data.nr_vms == KVM_MAX_PVMS) {
+		ret = -ENOMEM;
+		goto out;
+	}
+
+	// the calls to map_donated_memory() may run out of
+	// memory when updating the pKVM page table
+	// BS suspects there is an invariant preventing this from
+	// actually happening.
+	ghost_spec_assert(call->return_value != -ENOMEM);
+
+	// pKVM should not allocate the same handle to a previously existent VM
+	ghost_spec_assert(ghost_vms_get(&g0->vms, handle) == NULL);
+
+	// otherwise, we have all the same vms as before, plus one more
+	copy_abstraction_vms_partial(g1, g0, VMS_VM_TABLE_OWNED);
+	struct ghost_vm *vm1 = ghost_vms_alloc(&g1->vms, handle);
 	vm1->protected = GHOST_READ_ONCE(call, host_kvm->arch.pkvm.enabled);
 	vm1->pkvm_handle = handle;
+	g1->vms.table_data.present = true; // TODO: we probably want to change copy_abstraction_vms_partial() instead to set g1.vms.present to true (check with Ben)
+	g1->vms.table_data.nr_vms = g0->vms.table_data.nr_vms + 1;
+	ghost_assert(vm1);
 
 	// Now set up the VM with the right initial state:
 	// an empty mapping with the right pool,
