@@ -412,6 +412,7 @@ void ghost_vcpu_clone_into(struct ghost_vcpu *dest, struct ghost_vcpu *src)
 	ghost_assert(src);
 	ghost_assert(dest);
 	dest->vcpu_index = src->vcpu_index;
+        dest->host_vcpu_ptr = src->host_vcpu_ptr;
 	dest->regs = src->regs;
 	ghost_pfn_set_copy(&dest->recorded_memcache_pfn_set, &src->recorded_memcache_pfn_set);
 }
@@ -575,6 +576,7 @@ void check_abstraction_equals_vcpu(struct ghost_vcpu *vcpu1, struct ghost_vcpu *
 	ghost_assert(vcpu2);
 
 	GHOST_SPEC_ASSERT_VAR_EQ(vcpu1->vcpu_index, vcpu2->vcpu_index, u64);
+	GHOST_SPEC_ASSERT_VAR_EQ(vcpu1->host_vcpu_ptr, vcpu2->host_vcpu_ptr, u64); // XXX use proper pointer type
 	GHOST_LOG_CONTEXT_EXIT();
 }
 
