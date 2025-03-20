@@ -292,6 +292,7 @@ static void compute_abstraction_vcpu(struct ghost_vcpu *dest, struct pkvm_hyp_vc
 {
 	memset(dest, 0, sizeof(struct ghost_vcpu));
 	dest->vcpu_index = vcpu_index;
+        dest->host_vcpu_ptr = (hyp_va_t) vcpu->host_vcpu;
 	if (vcpu) {
 		dest->regs.present = true;
 		compute_abstract_registers(&dest->regs, &vcpu->vcpu.arch.ctxt, true/*we also copy EL2 sysregs*/);

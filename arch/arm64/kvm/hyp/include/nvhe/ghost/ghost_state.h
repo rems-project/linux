@@ -73,6 +73,7 @@ struct ghost_registers {
  * struct ghost_vcpu - A single vCPU within a VM
  *
  * @vcpu_index: the index of this vCPU in the VM.
+ * @host_vcpu_ptr: pointer the host copy of the vCPU in EL2 VA space (opaque).
  * @regs: the saved register state of this vCPU.
  * @recorded_memcache_pfn_set:
  *
@@ -81,6 +82,7 @@ struct ghost_registers {
  */
 struct ghost_vcpu {
 	u64 vcpu_index;
+        hyp_va_t host_vcpu_ptr;
 	struct ghost_registers regs;
 	struct pfn_set recorded_memcache_pfn_set;
 };

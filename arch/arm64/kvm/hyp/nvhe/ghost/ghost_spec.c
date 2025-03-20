@@ -1066,11 +1066,15 @@ out:
 
 static bool compute_new_abstract_state_handle___kvm_vcpu_run_begin(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call)
 {
+	int ret;
+
 	struct ghost_loaded_vcpu_status *loaded_vcpu_status = this_cpu_ghost_loaded_vcpu_status(g0);
+	host_va_t host_vcpu = ghost_read_gpr(g0, 1);
 
 	// have to have done a previous vcpu_load
 	if (!loaded_vcpu_status->loaded) {
-		goto out;
+		ret = -EINVAL;
+		goto out_err;
 	}
 	ghost_assert(loaded_vcpu_status->loaded_vcpu);
 
@@ -1078,6 +1082,11 @@ static bool compute_new_abstract_state_handle___kvm_vcpu_run_begin(struct ghost_
 
 	struct ghost_vcpu *vcpu0 = loaded_vcpu_status->loaded_vcpu;
 	ghost_assert(vcpu0);
+
+	if (vcpu0->host_vcpu_ptr != hyp_va_of_host_va(g0, host_vcpu)) {
+		ret = -EINVAL;
+		goto out_err;
+	}
 
 	/* save current register state into the host context */
 	copy_abstraction_regs(&ghost_this_cpu_local_state(g1)->host_regs.regs, &ghost_this_cpu_local_state(g0)->regs);
@@ -1092,7 +1101,14 @@ static bool compute_new_abstract_state_handle___kvm_vcpu_run_begin(struct ghost_
 		.vcpu_index = vcpu0->vcpu_index,
 	};
 
-out:
+	return true;
+
+out_err:
+	ghost_write_gpr(g1, 1, ret);
+
+	/* these registers now become the host's run context */
+	copy_registers_to_host(g1);
+
 	return true;
 }
 
@@ -1386,6 +1402,7 @@ static bool compute_new_abstract_state_handle___pkvm_init_vcpu(struct ghost_stat
 	ghost_assert(vcpu_ref->vcpu == NULL);
 	vcpu_ref->vcpu = malloc_or_die(ALLOC_VCPU, sizeof(struct ghost_vcpu));
 	vcpu_ref->vcpu->vcpu_index = vcpu_idx;
+	vcpu_ref->vcpu->host_vcpu_ptr = (hyp_va_t) host_vcpu_hyp_va;
 
 	vcpu_ref->vcpu->regs.present = true;
 	for (int i=0; i<31; i++) {
