@@ -332,16 +332,6 @@ DEFINE_PER_CPU(struct ghost_state, gs_computed_post);
 // adapted from memory.h to make it a pure function of the ghost state rather than depend on the impl global hyp_phys_virt_offset
 #define ghost__hyp_va(g,phys)	((void *)((phys_addr_t)(phys) - g->globals.hyp_physvirt_offset))
 
-// type of pKVM virtual addresses
-typedef u64 hyp_va_t;
-// Host kernel virtual address
-typedef u64 host_va_t;
-// Host intermediate physical address
-typedef u64 host_ipa_t;
-// guest intermediate physical address
-typedef u64 guest_ipa_t;
-
-
 // this function is only valid if @phys is within the address range to which
 // the hyp_va linear mapped range is mapped too.
 // THAT IS: memstart_addr <= phys && phys < memstart_addr + 2^tag_lsb

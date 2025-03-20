@@ -10,6 +10,15 @@
 #include <nvhe/ghost/ghost_call_data.h>
 
 
+// type of pKVM virtual addresses
+typedef u64 hyp_va_t;
+// Host kernel virtual address
+typedef u64 host_va_t;
+// Host intermediate physical address
+typedef u64 host_ipa_t;
+// guest intermediate physical address
+typedef u64 guest_ipa_t;
+
 /**
  * struct ghost_loaded_vcpu_status - Whether the current physical CPU has a loaded vCPU, and if there is one, a pointer to its state.
  *
