@@ -1001,6 +1001,10 @@ static bool compute_new_abstract_state_handle___pkvm_vcpu_load(struct ghost_stat
 	if (vcpu_idx >= vm0->vm_table_locked.nr_vcpus)
 		goto out;
 
+	// if the vcpu hasn't been initialised, do nothing.
+	if (!vm0->vcpu_refs[vcpu_idx].initialised)
+		goto out;
+
 	ghost_assert(vcpu_idx < KVM_MAX_VCPUS);
 
 	struct ghost_vcpu_reference *vcpu_ref0 = &vm0->vcpu_refs[vcpu_idx];
