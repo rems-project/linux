@@ -1460,7 +1460,7 @@ static bool compute_new_abstract_state_handle___pkvm_teardown_vm(struct ghost_st
 	// if any vCPU is currently loaded,
 	// can't tear down VM,
 	// so return -EBUSY
-	for (int i=0; i<vm->vm_table_locked.nr_vcpus; i++) {
+	for (int i=0; i<vm->vm_table_locked.nr_initialised_vcpus; i++) {
 		if (vm->vm_table_locked.vcpu_refs[i].loaded_somewhere) {
 			ret = -EBUSY;
 			goto out;
