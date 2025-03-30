@@ -291,13 +291,28 @@ static long pkvm_proxy_memcache_ioctl(struct file *filep, unsigned int cmd,
 	if (copy_from_user(&mc, user_mc, sizeof(struct kvm_hyp_memcache)))
 		return -EFAULT;
 
-	if (minpages)
-		topup_hyp_memcache(&mc, minpages);
-	else
-		free_hyp_memcache(&mc);
+	if (minpages == 0xff) {
+		int n = mc.nr_pages;
+		phys_addr_t *addrs = kvmalloc_array(n, sizeof(phys_addr_t), GFP_KERNEL_ACCOUNT);
+		phys_addr_t *p = addrs;
+		if (!addrs)
+			return -ENOMEM;
+		while(mc.nr_pages--) {
+			*(p++) = mc.head;
+			mc.head = *((phys_addr_t *) __va(mc.head));
+		}
+		if (copy_to_user((void *)(user_mc + 1), addrs, n * sizeof(phys_addr_t)))
+			return -EFAULT;
+		kvfree(addrs);
+	} else {
+		if (minpages)
+			topup_hyp_memcache(&mc, minpages);
+		else
+			free_hyp_memcache(&mc);
 
-	if (copy_to_user(user_mc, &mc, sizeof(struct kvm_hyp_memcache)))
-		return -EFAULT;
+		if (copy_to_user(user_mc, &mc, sizeof(struct kvm_hyp_memcache)))
+			return -EFAULT;
+	}
 
 	return 0;
 }
