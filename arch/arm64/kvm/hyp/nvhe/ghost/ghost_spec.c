@@ -1138,13 +1138,12 @@ static bool ghost_map_donated_memory_checkonly(struct ghost_state *g, host_ipa_t
 	u64 hyp_virt = (u64)ghost__hyp_va(g, phys_addr);
 	u64 nr_pages = PAGE_ALIGN((u64)size_in_bytes) >> PAGE_SHIFT;
 
-	for (u64 addr=phys_addr; addr < nr_pages * PAGE_SIZE; addr += PAGE_SIZE) {
+	for (u64 addr = phys_addr; addr < phys_addr + nr_pages * PAGE_SIZE; addr += PAGE_SIZE) {
 		if (!is_owned_exclusively_by(g, GHOST_HOST, addr))
 			return false;
-
 	}
-	for (u64 addr=hyp_virt; addr < nr_pages * PAGE_SIZE; addr += PAGE_SIZE) {
-		if (mapping_in_domain(hyp_virt, g->pkvm.pkvm_abstract_pgtable.mapping))
+	for (u64 addr = hyp_virt; addr < hyp_virt + nr_pages * PAGE_SIZE; addr += PAGE_SIZE) {
+		if (mapping_in_domain(addr, g->pkvm.pkvm_abstract_pgtable.mapping))
 			return false;
 	}
 	return true;
