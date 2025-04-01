@@ -14,7 +14,6 @@
  *
  * Supported format codes:
  *  %c = char
- *  %b = boolean
  *  %s = string
  *  %p = raw pointer (as 0x1122334455667788)
  *  %pK = kernel pointer (as 0x.......RAW...../0x......PHYS......)
@@ -52,6 +51,8 @@
  *  %% = literal %
  *  %$ = current shadow stack context
  */
+
+#define FORMAT_BOOL(X)		(X ? "true" : "false")
 
 enum gp_stream_kind {
 	GP_STREAM_UART,

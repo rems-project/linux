@@ -2283,7 +2283,7 @@ static void ghost_print_call_data(void)
 		ghost_printf("[at_translations]");
 		for (int i = 0; i < call->at_translations.len; i++) {
 			struct ghost_at_translation *t = &call->at_translations.translations[i];
-			ghost_printf(" <va:%p ipa:%p success:%b>", (void*)t->va, (void*)t->ipa, t->success);
+			ghost_printf(" <va:%p ipa:%p success:%s>", (void*)t->va, (void*)t->ipa, FORMAT_BOOL(t->success));
 			if (i < call->at_translations.len - 1)
 				ghost_printf(",");
 		}
@@ -2381,9 +2381,9 @@ static struct ghost_trap_data host_hcalls[] = {
 	HOST_HCALL(__pkvm_vcpu_sync_state, "", "", "", "", "", ""),
 	HOST_HCALL(__pkvm_load_tracing, "", "desc_hva: %lx", "desc_size: %lx", "", "", ""),
 	HOST_HCALL(__pkvm_teardown_tracing, "", "", "", "", "", ""),
-	HOST_HCALL(__pkvm_enable_tracing, "", "enable: %b", "", "", "", ""),
+	HOST_HCALL(__pkvm_enable_tracing, "", "enable: %u", "", "", "", ""),
 	HOST_HCALL(__pkvm_swap_reader_tracing, "", "cpu: %u", "", "", "", ""),
-	HOST_HCALL(__pkvm_enable_event, "", "id: %u", "enable: %b", "", "", ""),
+	HOST_HCALL(__pkvm_enable_event, "", "id: %u", "enable: %u", "", "", ""),
 	HOST_HCALL(__pkvm_hyp_alloc_mgt_refill, "", "id: %lu", "phys: %llx", "nr_pages: %lu", "", ""),
 	HOST_HCALL(__pkvm_hyp_alloc_mgt_reclaimable, "", "", "", "", "", ""),
 	HOST_HCALL(__pkvm_hyp_alloc_mgt_reclaim, "", "target: %d", "", "", "", ""),

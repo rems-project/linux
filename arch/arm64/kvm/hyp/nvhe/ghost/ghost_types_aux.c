@@ -1095,7 +1095,7 @@ void ghost_dump_vm(struct ghost_vm *vm, u64 i)
 
 	ghost_printf_ext("%Ivm %x:\n", i, vm->pkvm_handle);
 
-	ghost_printf_ext("%Iprotected: %b:\n", i+4, vm->protected);
+	ghost_printf_ext("%Iprotected: %s:\n", i+4, FORMAT_BOOL(vm->protected));
 
 	ghost_printf_ext("%Ivm_locked: ", i+4);
 	if (vm->vm_locked.present) {
