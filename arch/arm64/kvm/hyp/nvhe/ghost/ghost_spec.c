@@ -1427,6 +1427,16 @@ static bool compute_new_abstract_state_handle___pkvm_init_vcpu(struct ghost_stat
 
 	// TODO: this is not checking that the VM table lock was taken, so currently this spec allows
 	// implementations to return ENOENT if it does not take the vm_table lock
+
+	copy_abstraction_host(g1, g0);
+	copy_abstraction_pkvm(g1, g0);
+
+	host_ipa_t vcpu_ipa = host_ipa_of_phys(phys_of_hyp_va(g0, hyp_va_of_host_va(g0, vcpu_hva)));
+	if (!ghost_map_donated_memory_checkonly(g1, vcpu_ipa, sizeof(struct pkvm_hyp_vcpu))) {
+		ret = -ENOMEM;
+		goto out;
+	}
+
 	struct ghost_vm *vm0 = ghost_vms_get(&g0->vms, vm_handle);
 	if (!vm0) {
 		ret = -ENOENT;
@@ -1445,25 +1455,18 @@ static bool compute_new_abstract_state_handle___pkvm_init_vcpu(struct ghost_stat
 	}
 	ghost_spec_assert(vcpu_idx < KVM_MAX_VCPUS);
 
-	if (GHOST_READ_ONCE(call, host_vcpu_hyp_va->vcpu_idx) != vcpu_idx) {
-		ret = -EINVAL;
-		goto out;
-	}
-
-	copy_abstraction_host(g1, g0);
-	copy_abstraction_pkvm(g1, g0);
-
-	host_ipa_t vcpu_ipa = host_ipa_of_phys(phys_of_hyp_va(g0, hyp_va_of_host_va(g0, vcpu_hva)));
-	if (!ghost_map_donated_memory_checkonly(g1, vcpu_ipa, sizeof(struct pkvm_hyp_vcpu))) {
-		ret = -ENOMEM;
-		goto out;
-	}
-	ghost_map_donated_memory_nocheck(g1, vcpu_ipa, sizeof(struct pkvm_hyp_vcpu));
 
 	if (!ghost_hyp_check_host_shared_mem(g0, host_vcpu_hva, host_vcpu_hva + sizeof(struct kvm_vcpu))) {
 		ret = -EBUSY;
 		goto out;
 	}
+
+	if (GHOST_READ_ONCE(call, host_vcpu_hyp_va->vcpu_idx) != vcpu_idx) {
+		ret = -EINVAL;
+		goto out;
+	}
+
+	ghost_map_donated_memory_nocheck(g1, vcpu_ipa, sizeof(struct pkvm_hyp_vcpu));
 
 	// TODO -> hyp_pin_shared_mem(host_vcpu, host_vcpu + 1)
 	vcpu_ref = &vm1->vcpu_refs[vcpu_idx];
