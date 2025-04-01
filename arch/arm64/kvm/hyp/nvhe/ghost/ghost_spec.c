@@ -1186,6 +1186,22 @@ static size_t ghost_pkvm_get_last_ran_size_in_bytes(struct ghost_state *g)
 	return array_size(hyp_nr_cpus, sizeof(int));
 }
 
+struct region { u64 p; size_t size; };
+
+static bool ghost_pkvm_disjoint_pages_v(struct region* rs, size_t n)
+{
+	for (int i = 0; i < n - 1; ++i)
+		for (int j = i + 1; j < n; ++j) {
+			u64 p1 = rs[i].p,
+			    p2 = rs[j].p,
+			    q1 = rs[i].p + rs[i].size,
+			    q2 = rs[j].p + rs[j].size;
+			if(PAGE_ALIGN_DOWN(p1) < PAGE_ALIGN(q2) && PAGE_ALIGN_DOWN(p2) < PAGE_ALIGN(q1))
+				return false;
+		}
+	return true;
+}
+
 static bool compute_new_abstract_state_handle___pkvm_init_vm(struct ghost_state *g1, struct ghost_state *g0, struct ghost_call_data *call) {
 	int ret;
 	size_t vm_size, pgd_size, last_ran_size;
@@ -1204,12 +1220,12 @@ static bool compute_new_abstract_state_handle___pkvm_init_vm(struct ghost_state 
 	hyp_va_t pgd_hyp_va = hyp_va_of_host_va(g0, pgd_hva);
 	hyp_va_t last_ran_hyp_va = hyp_va_of_host_va(g0, last_ran_hva);
 
-	// phys_addr_t host_kvm_phys = phys_of_host_va(g0, host_kvm_hyp_va);
+	phys_addr_t host_kvm_phys = phys_of_host_va(g0, host_kvm_hyp_va);
 	phys_addr_t vm_phys = phys_of_host_va(g0, vm_hyp_va);
 	phys_addr_t pgd_phys = phys_of_host_va(g0, pgd_hyp_va);
 	phys_addr_t last_ran_phys = phys_of_host_va(g0, last_ran_hyp_va);
 
-	// host_ipa_t host_kvm_host_ipa = host_ipa_of_phys(host_kvm_phys);
+	host_ipa_t host_kvm_host_ipa = host_ipa_of_phys(host_kvm_phys);
 	host_ipa_t vm_host_ipa = host_ipa_of_phys(vm_phys);
 	host_ipa_t pgd_host_ipa = host_ipa_of_phys(pgd_phys);
 	host_ipa_t last_ran_host_ipa = host_ipa_of_phys(last_ran_phys);
@@ -1254,6 +1270,16 @@ static bool compute_new_abstract_state_handle___pkvm_init_vm(struct ghost_state 
 	// NOTE: to avoid having to do the equivalent of any unmap_donated_memory() in
 	// the spec, we group the checks and we then do the three mapping updates
 	// only if all of their checks succeeded.
+	struct region slices[] = {
+		{ .p = host_kvm_host_ipa, .size = sizeof(struct kvm) },
+		{ .p = vm_host_ipa, .size = vm_size },
+		{ .p = pgd_host_ipa, .size = pgd_size },
+		{ .p = last_ran_host_ipa, .size = last_ran_size },
+	};
+	if (!ghost_pkvm_disjoint_pages_v(slices, 4)) {
+		ret = -ENOMEM;
+		goto out;
+	}
 	if (!ghost_map_donated_memory_checkonly(g1, vm_host_ipa, vm_size)) {
 		ret = -ENOMEM;
 		goto out;
