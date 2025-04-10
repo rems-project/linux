@@ -2009,9 +2009,11 @@ static int do_share(struct pkvm_mem_transition *share,
 	};
 	int ret;
 
+#if !defined(CONFIG_NVHE_GHOST_SPEC_INJECT_ERROR_do_share_OMIT_CHECKS)
 	ret = check_share(&checked_tx);
 	if (ret)
 		return ret;
+#endif /* !defined(CONFIG_NVHE_GHOST_SPEC_INJECT_ERROR_do_share_OMIT_CHECKS) */
 
 	ret = __do_share(share, &checked_tx);
 	if (WARN_ON(ret))
