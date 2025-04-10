@@ -1451,9 +1451,11 @@ static int do_share(struct pkvm_mem_share *share)
 {
 	int ret;
 
+#if !defined(CONFIG_NVHE_GHOST_SPEC_INJECT_ERROR_do_share_OMIT_CHECKS)
 	ret = check_share(share);
 	if (ret)
 		return ret;
+#endif /* !defined(CONFIG_NVHE_GHOST_SPEC_INJECT_ERROR_do_share_OMIT_CHECKS) */
 
 	return WARN_ON(__do_share(share));
 }

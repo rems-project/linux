@@ -17,3 +17,7 @@ config NVHE_GHOST_SPEC_INJECT_ERROR_stage2_try_break_pte_MISSING_TLBI
 config NVHE_GHOST_SPEC_INJECT_ERROR_stage2_put_pte_MISSING_INVALIDATE
 	bool "Inject an error (missing invalidate) into stage2_put_pte"
 	depends on NVHE_GHOST_SIMPLIFIED_MODEL
+
+config NVHE_GHOST_SPEC_INJECT_ERROR_do_share_OMIT_CHECKS
+	bool "Inject an error (omit the checks) into do_share"
+	depends on NVHE_GHOST_SPEC
