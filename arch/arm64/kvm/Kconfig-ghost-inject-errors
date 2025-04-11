@@ -21,3 +21,7 @@ config NVHE_GHOST_SPEC_INJECT_ERROR_stage2_put_pte_MISSING_INVALIDATE
 config NVHE_GHOST_SPEC_INJECT_ERROR_do_share_OMIT_CHECKS
 	bool "Inject an error (omit the checks) into do_share"
 	depends on NVHE_GHOST_SPEC
+
+config NVHE_GHOST_SPEC_INJECT_ERROR_do_donate_OMIT_host_initiate_donation
+	bool "Inject an error (omit the host initiation part) into do_donate"
+	depends on NVHE_GHOST_SPEC

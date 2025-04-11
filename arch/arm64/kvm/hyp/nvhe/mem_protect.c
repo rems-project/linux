@@ -1004,7 +1004,11 @@ static int host_initiate_donation(u64 *completer_addr,
 	u64 size = tx->nr_pages * PAGE_SIZE;
 
 	*completer_addr = tx->initiator.host.completer_addr;
+#if defined(CONFIG_NVHE_GHOST_SPEC_INJECT_ERROR_do_donate_OMIT_host_initiate_donation)
+	return 0;
+#else
 	return host_stage2_set_owner_locked(tx->initiator.addr, size, owner_id);
+#endif /* defined(CONFIG_NVHE_GHOST_SPEC_INJECT_ERROR_do_donate_OMIT_host_initiate_donation) */
 }
 
 static bool __host_ack_skip_pgtable_check(const struct pkvm_mem_transition *tx)
