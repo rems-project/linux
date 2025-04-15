@@ -779,9 +779,11 @@ err_remove_vm_table_entry:
 err_unlock:
 	hyp_spin_unlock(&vm_table_lock);
 err_remove_mappings:
+#if !defined(CONFIG_NVHE_GHOST_SPEC_INJECT_ERROR_init_vm_NO_UNMAP_DONATED)
 	unmap_donated_memory(hyp_vm, vm_size);
 	unmap_donated_memory(last_ran, last_ran_size);
 	unmap_donated_memory(pgd, pgd_size);
+#endif /* !defined(NVHE_GHOST_SPEC_INJECT_ERROR_init_vm_NO_UNMAP_DONATED) */
 err_unpin_kvm:
 	hyp_unpin_shared_mem(host_kvm, host_kvm + 1);
 	return ret;

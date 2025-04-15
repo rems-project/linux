@@ -25,3 +25,7 @@ config NVHE_GHOST_SPEC_INJECT_ERROR_do_share_OMIT_CHECKS
 config NVHE_GHOST_SPEC_INJECT_ERROR_do_donate_OMIT_host_initiate_donation
 	bool "Inject an error (omit the host initiation part) into do_donate"
 	depends on NVHE_GHOST_SPEC
+
+config NVHE_GHOST_SPEC_INJECT_ERROR_init_vm_NO_UNMAP_DONATED
+	bool "Inject an error (do not unmap donated memory on error) into init_vm"
+	depends on NVHE_GHOST_SPEC
