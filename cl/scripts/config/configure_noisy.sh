@@ -11,7 +11,7 @@
 ./scripts/config $ENABLE CONFIG_NVHE_GHOST_SPEC_COLOURS
 
 # also for simplified model
-./scripts/config $ENABLE CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL_NOISY
+./scripts/config $ENABLE CONFIG_NVHE_GHOST_CASEMATE_LOG
 # ... but condensed (no prints for "clean" ptes)
 ./scripts/config $ENABLE CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL_NOISY_CONDENSED
 # ... and don't dump the whole simplified model state each transition

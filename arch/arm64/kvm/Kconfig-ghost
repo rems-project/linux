@@ -43,30 +43,33 @@ config NVHE_GHOST_MEM_DUMP_STATS
 	  with the allocator itself.
 
 menuconfig NVHE_GHOST_SIMPLIFIED_MODEL
-	bool "Runtime simplified model checking"
+	bool "Runtime checking with Casemate"
 	depends on NVHE_GHOST_SPEC
 	default n
 	select NVHE_EL2_DEBUG
 	select PROTECTED_NVHE_STACKTRACE
 	select KVM_ARM_HYP_DEBUG_UART
+	depends on NVHE_EL2_STACKSIZE>1
 
-config NVHE_GHOST_SIMPLIFIED_MODEL_LOG_ONLY
-	bool "Only log simplified model steps"
-	depends on NVHE_GHOST_SIMPLIFIED_MODEL
-	default n
-	help
-	  Do not compute the simplified model state but log the transitions for later analysis.
-
-menuconfig NVHE_GHOST_SIMPLIFIED_MODEL_NOISY
-	bool "Noisy ghost simplified model output"
+config NVHE_GHOST_CASEMATE_LOG
+	bool "Log Casemate traces"
 	depends on NVHE_GHOST_SIMPLIFIED_MODEL
 	default n
 	help
 	  Enable some noisy logs from the ghost simplified model.
 
+config NVHE_GHOST_CASEMATE_CHECK
+	bool "Enable runtime check of Casemate"
+	depends on NVHE_GHOST_SIMPLIFIED_MODEL
+	default n
+	help
+	  Do not compute the simplified model state but log the transitions for later analysis.
+
+menu "Casemate runtime state print/diff options"
+	depends on NVHE_GHOST_CASEMATE_CHECK
+
 config NVHE_GHOST_SIMPLIFIED_MODEL_DIFF_ON_TRANS
 	bool "Print a diff to the simplified model state on each transition"
-	depends on NVHE_GHOST_SIMPLIFIED_MODEL_NOISY
 	depends on NVHE_GHOST_DIFF
 	default n
 	help
@@ -74,17 +77,16 @@ config NVHE_GHOST_SIMPLIFIED_MODEL_DIFF_ON_TRANS
 
 config NVHE_GHOST_SIMPLIFIED_MODEL_DUMP_ON_TRANS
 	bool "Print the entire simplified model state on each transition"
-	depends on NVHE_GHOST_SIMPLIFIED_MODEL_NOISY
 	default n
 	help
 	  Dumps the entire simplified model state to the UART on each simplified model transition (very noisy).
 
 config NVHE_GHOST_SIMPLIFIED_MODEL_NOISY_CONDENSED
 	bool "Condense simplified model state dumps&diffs to only invalid uncleans"
-	depends on NVHE_GHOST_SIMPLIFIED_MODEL_NOISY
 	default n
 	help
 	  Don't show entire state or full diffs, only show those that affected a location that was or became invalid unclean.
+endmenu
 
 menuconfig NVHE_GHOST_SPEC_NOISY
 	bool "Noisy ghost spec checking machinery"
