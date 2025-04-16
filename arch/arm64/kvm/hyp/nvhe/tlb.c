@@ -80,6 +80,11 @@ static void enter_vmid_context(struct kvm_s2_mmu *mmu,
 		casemate_model_step_dsb(DxB_nsh);
 	else
 		casemate_model_step_dsb(DxB_ish);
+
+#ifdef CONFIG_NVHE_GHOST_SPEC_INJECT_ERROR_enter_vmid_context_NO_VMID_SWITCH
+	/* early-exit, emulating forgetting to do this */
+	return;
+#endif
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 
 	if (cpus_have_final_cap(ARM64_WORKAROUND_SPECULATIVE_AT)) {
@@ -174,7 +179,11 @@ void __kvm_tlb_flush_vmid_ipa(struct kvm_s2_mmu *mmu,
 	ipa >>= 12;
 	__tlbi_level(ipas2e1is, ipa, level);
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+#ifdef CONFIG_NVHE_GHOST_SPEC_INJECT_ERROR___kvm_tlb_flush_vmid_ipa_WRONG_PAGE
+	casemate_model_step_tlbi_ipa(TLBI_ipas2e1is, ipa-1, (u64)level);
+#else /* NVHE_GHOST_SPEC_INJECT_ERROR___kvm_tlb_flush_vmid_ipa_WRONG_PAGE */
 	casemate_model_step_tlbi_ipa(TLBI_ipas2e1is, ipa, (u64)level);
+#endif /* NVHE_GHOST_SPEC_INJECT_ERROR___kvm_tlb_flush_vmid_ipa_WRONG_PAGE */
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	/*
 	 * We have to ensure completion of the invalidation at Stage-2,
@@ -235,7 +244,11 @@ void __kvm_tlb_flush_vmid(struct kvm_s2_mmu *mmu)
 
 	__tlbi(vmalls12e1is);
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+#ifdef CONFIG_NVHE_GHOST_SPEC_INJECT_ERROR___kvm_tlb_flush_vmid_WRONG_TLBI
+	casemate_model_step_tlbi(TLBI_vmalle1is);
+#else
 	casemate_model_step_tlbi(TLBI_vmalls12e1is);
+#endif
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	dsb(ish);
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL

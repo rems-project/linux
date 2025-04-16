@@ -1048,7 +1048,11 @@ static void stage2_make_pte(const struct kvm_pgtable_visit_ctx *ctx, kvm_pte_t n
 
 	smp_store_release(ctx->ptep, new);
 #if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
+#ifdef CONFIG_NVHE_GHOST_SPEC_INJECT_ERROR_stage2_make_pte_PLAIN_STORE
+	casemate_model_step_write(WMO_plain, hyp_virt_to_phys(ctx->ptep), new);
+#else /* CONFIG_NVHE_GHOST_SPEC_INJECT_ERROR_stage2_make_pte_PLAIN_STORE */
 	casemate_model_step_write(WMO_release, hyp_virt_to_phys(ctx->ptep), new);
+#endif /* CONFIG_NVHE_GHOST_SPEC_INJECT_ERROR_stage2_make_pte_PLAIN_STORE */
 #endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 }
 

@@ -18,6 +18,23 @@ config NVHE_GHOST_SPEC_INJECT_ERROR_stage2_put_pte_MISSING_INVALIDATE
 	bool "Inject an error (missing invalidate) into stage2_put_pte"
 	depends on NVHE_GHOST_SIMPLIFIED_MODEL
 
+config NVHE_GHOST_SPEC_INJECT_ERROR___kvm_tlb_flush_vmid_WRONG_TLBI
+	bool "Inject an error (incorrect tlbi) into __kvm_tlb_flush_vmid"
+	depends on NVHE_GHOST_SIMPLIFIED_MODEL
+
+config NVHE_GHOST_SPEC_INJECT_ERROR_stage2_make_pte_PLAIN_STORE
+	bool "Inject an error (plain write) into stage2_make_pte"
+	depends on NVHE_GHOST_SIMPLIFIED_MODEL
+
+config NVHE_GHOST_SPEC_INJECT_ERROR___kvm_tlb_flush_vmid_ipa_WRONG_PAGE
+	bool "Inject an error (incorrect page) into __kvm_tlb_flush_vmid_ipa"
+	depends on NVHE_GHOST_SIMPLIFIED_MODEL
+
+config NVHE_GHOST_SPEC_INJECT_ERROR_enter_vmid_context_NO_VMID_SWITCH
+	bool "Inject an error (missing VMID switch) into enter_vmid_context"
+	depends on NVHE_GHOST_SIMPLIFIED_MODEL
+
+
 config NVHE_GHOST_SPEC_INJECT_ERROR_do_share_OMIT_CHECKS
 	bool "Inject an error (omit the checks) into do_share"
 	depends on NVHE_GHOST_SPEC
