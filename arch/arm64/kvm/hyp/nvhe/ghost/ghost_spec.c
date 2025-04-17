@@ -811,26 +811,21 @@ static bool compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost
 		goto out;
 	}
 
-	/*
-	 * Take a snapshot of the host/pkvm when we will need to update them.
-	 * If a donation happens, then we will update the host and pkvm states.
-	 */
-	if (call->memcache_donations.len > 0) {
-		copy_abstraction_pkvm(g1, g0);
-		copy_abstraction_host(g1, g0);
-	} else {
-		ghost_assert(!g0->pkvm.present);
-		g1->pkvm.present = false;
+	// Who is affected, by case:
+	//
+	//              | OK    | ENOMEM |
+	//              +-------+--------+
+	// donations    | H P G | H P    |
+	// no donations | H   G |        |
+	//
 
-		// If the hcall succeeds even without donations, the host state will be updated.
-		if (call->return_value != -ENOMEM) {
-			copy_abstraction_host(g1, g0);
-		} else {
-			ghost_assert(!g0->host.present);
-			g1->host.present = false;
-		}
-	}
+        if (call->memcache_donations.len > 0)
+          copy_abstraction_pkvm(g1, g0);
 
+        if (call->memcache_donations.len > 0 || call->return_value != -ENOMEM)
+          copy_abstraction_host(g1, g0);
+
+	// Do donations.
 	for (int d=0; d<call->memcache_donations.len; d++) {
 		u64 pfn = call->memcache_donations.pages[d];
 		phys_addr_t donated_phys = hyp_pfn_to_phys(pfn);
