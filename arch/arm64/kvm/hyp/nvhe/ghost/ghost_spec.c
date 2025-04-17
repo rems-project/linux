@@ -830,16 +830,16 @@ static bool compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost
 		u64 pfn = call->memcache_donations.pages[d];
 		phys_addr_t donated_phys = hyp_pfn_to_phys(pfn);
 		host_ipa_t host_donated_page_ipa = host_ipa_of_phys(donated_phys);
-		hyp_va_t hyp_donated_page_addr = (u64)ghost__hyp_va(g0, donated_phys);
+		hyp_va_t hyp_donated_page_addr = (u64)ghost__hyp_va(g1, donated_phys);
 
-		bool is_memory = ghost_addr_is_allowed_memory(g0, donated_phys);
+		bool is_memory = ghost_addr_is_allowed_memory(g1, donated_phys);
 		struct maplet_attributes hyp_attrs = ghost_default_hyp_memory_attributes(is_memory, MAPLET_PAGE_STATE_PRIVATE_OWNED);
 
 		/* The memcache HEAD pointer is in a page that is shared with pKVM,
 		 * but the pages of the linked list are actually owned exclusively by the host,
 		 * and they are stolen by pKVM as needed.
 		 */
-		if (! is_owned_exclusively_by(g0, GHOST_HOST, host_donated_page_ipa))
+		if (! is_owned_exclusively_by(g1, GHOST_HOST, host_donated_page_ipa))
 			ghost_spec_assert(false);
 
 		// Each memcache page that is donated must be put as owned in pKVM's tables,
@@ -888,7 +888,7 @@ static bool compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost
 	ghost_assert(g1_vm != NULL);
 	ghost_vm_clone_into_partial(g1_vm, g0_vm, VMS_VM_OWNED);
 
-	if (! g0_vm->protected) {
+	if (! g1_vm->protected) {
 		/* don't check this spec */
 		GHOST_WARN("__pkvm_host_map_guest with non-protected VM");
 		return false;
@@ -913,7 +913,7 @@ static bool compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost
 		goto out;
 	}
 	// if the addr is already mapped in the guest mapping, fail with -EPERM
-	if (mapping_in_domain(guest_ipa, g0_vm->vm_locked.vm_abstract_pgtable.mapping)) {
+	if (mapping_in_domain(guest_ipa, g1_vm->vm_locked.vm_abstract_pgtable.mapping)) {
 		ret = -EPERM;
 		goto out;
 	}
@@ -928,7 +928,7 @@ static bool compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost
 	);
 
 	// Finally, add the mapping to the VM's pagetable.
-	bool is_memory = ghost_addr_is_allowed_memory(g0, phys);
+	bool is_memory = ghost_addr_is_allowed_memory(g1, phys);
 	struct maplet_attributes vm_attrs = ghost_default_vm_memory_attributes(is_memory, MAPLET_PAGE_STATE_PRIVATE_OWNED);
 	mapping_update(
 		&g1_vm->vm_locked.vm_abstract_pgtable.mapping,
