@@ -812,11 +812,13 @@ int __pkvm_init_vcpu(pkvm_handle_t handle, struct kvm_vcpu *host_vcpu,
 	if (!hyp_vcpu)
 		return -ENOMEM;
 
+#if !defined(CONFIG_NVHE_GHOST_SPEC_INJECT_ERROR_init_vcpu_NO_LOCKING)
 #ifdef CONFIG_NVHE_GHOST_SPEC
 	vm_table_lock_component();
 #else /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_spin_lock(&vm_table_lock);
 #endif /* CONFIG_NVHE_GHOST_SPEC */
+#endif /* !defined(CONFIG_NVHE_GHOST_SPEC_INJECT_ERROR_init_vcpu_NO_LOCKING) */
 
 	hyp_vm = get_vm_by_handle(handle);
 	if (!hyp_vm) {
@@ -837,11 +839,13 @@ int __pkvm_init_vcpu(pkvm_handle_t handle, struct kvm_vcpu *host_vcpu,
 	hyp_vm->vcpus[idx] = hyp_vcpu;
 	hyp_vm->nr_vcpus++;
 unlock:
+#if !defined(CONFIG_NVHE_GHOST_SPEC_INJECT_ERROR_init_vcpu_NO_LOCKING)
 #ifdef CONFIG_NVHE_GHOST_SPEC
 	vm_table_unlock_component();
 #else /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_spin_unlock(&vm_table_lock);
 #endif /* CONFIG_NVHE_GHOST_SPEC */
+#endif /* !defined(CONFIG_NVHE_GHOST_SPEC_INJECT_ERROR_init_vcpu_NO_LOCKING) */
 
 	if (ret)
 		unmap_donated_memory(hyp_vcpu, sizeof(*hyp_vcpu));

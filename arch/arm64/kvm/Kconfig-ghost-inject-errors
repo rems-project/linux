@@ -59,3 +59,7 @@ config NVHE_GHOST_SPEC_INJECT_ERROR_host_share_hyp_NO_LOCKING
 config NVHE_GHOST_SPEC_INJECT_ERROR_host_share_hyp_WRONG_COMPLETER
 	bool "Inject an error (use guest completer id) into __pkvm_host_share_hyp"
 	depends on NVHE_GHOST_SPEC
+
+config NVHE_GHOST_SPEC_INJECT_ERROR_init_vcpu_NO_LOCKING
+	bool "Inject an error (do not lock/unlock the vm_table) into init_vcpu"
+	depends on NVHE_GHOST_SPEC
