@@ -1662,7 +1662,11 @@ int __pkvm_host_share_hyp(u64 pfn)
 				},
 			},
 			.completer	= {
+#if defined(CONFIG_NVHE_GHOST_SPEC_INJECT_ERROR_host_share_hyp_WRONG_COMPLETER)
+				.id	= PKVM_ID_GUEST,
+#else
 				.id	= PKVM_ID_HYP,
+#endif
 			},
 		},
 		.completer_prot	= PAGE_HYP,
