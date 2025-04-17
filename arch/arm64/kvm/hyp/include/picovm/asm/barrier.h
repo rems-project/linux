@@ -10,9 +10,15 @@
 
 #ifndef __ASSEMBLY__
 
+#ifdef CONFIG_PICOVM_CLIGHTPLUS
+#define isb()		isb()
+#define dmb(opt)	dmb(#opt)
+#define dsb(opt)	dsb(#opt)
+#else
 #define isb()		asm volatile("isb" : : : "memory")
 #define dmb(opt)	asm volatile("dmb " #opt : : : "memory")
 #define dsb(opt)	asm volatile("dsb " #opt : : : "memory")
+#endif
 
 
 #define __smp_mb()	dmb(ish)

@@ -30,8 +30,13 @@ struct hyp_fixmap_slot {
 
 static DEFINE_PER_CPU(struct hyp_fixmap_slot, fixmap_slots);
 
+#ifdef CONFIG_PICOVM_CLIGHTPLUS
 static int __picovm_create_mappings(unsigned long start, unsigned long size, 
-                                    unsigned long phys, enum picovm_pgtable_prot prot)
+	unsigned long phys, u64 prot)
+#else
+static int __picovm_create_mappings(unsigned long start, unsigned long size, 
+	unsigned long phys, enum picovm_pgtable_prot prot)
+#endif
 {
 	int err;
 
@@ -70,9 +75,15 @@ out:
 	return ret;
 }
 
+#ifdef CONFIG_PICOVM_CLIGHTPLUS
 int __picovm_create_private_mapping(phys_addr_t phys, size_t size,
-				  enum picovm_pgtable_prot prot,
-				  unsigned long *haddr)
+	u64 prot,
+	unsigned long *haddr)
+#else
+int __picovm_create_private_mapping(phys_addr_t phys, size_t size,
+	enum picovm_pgtable_prot prot,
+	unsigned long *haddr)
+#endif
 {
 	unsigned long addr;
 	int err;
@@ -90,8 +101,11 @@ int __picovm_create_private_mapping(phys_addr_t phys, size_t size,
 	return err;
 }
 
-
+#ifdef CONFIG_PICOVM_CLIGHTPLUS
+int picovm_create_mappings_locked(void *from, void *to, u64 prot)
+#else
 int picovm_create_mappings_locked(void *from, void *to, enum picovm_pgtable_prot prot)
+#endif
 {
 	unsigned long start = (unsigned long)from;
 	unsigned long end = (unsigned long)to;
@@ -118,7 +132,11 @@ int picovm_create_mappings_locked(void *from, void *to, enum picovm_pgtable_prot
 	return 0;
 }
 
+#ifdef CONFIG_PICOVM_CLIGHTPLUS
+int picovm_create_mappings(void *from, void *to, u64 prot)
+#else
 int picovm_create_mappings(void *from, void *to, enum picovm_pgtable_prot prot)
+#endif
 {
 	int ret;
 

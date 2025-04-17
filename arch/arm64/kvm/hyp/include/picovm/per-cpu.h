@@ -76,11 +76,15 @@ do {									\
 	(void)__vpp_verify;						\
 } while (0)
 
+#ifdef CONFIG_PICOVM_CLIGHTPLUS
+#define per_cpu_ptr(ptr, cpu) ptr
+#else
 #define per_cpu_ptr(ptr, cpu)						\
 ({									\
 	__verify_pcpu_ptr(ptr);						\
 	SHIFT_PERCPU_PTR((ptr), per_cpu_offset((cpu)));			\
 })
+#endif
 
 #if 0
 
@@ -210,6 +214,9 @@ DECLARE_PER_CPU_READ_MOSTLY(int, cpu_number);
 
 // #define	this_cpu_ptr		raw_cpu_ptr
 
+#ifdef CONFIG_PICOVM_CLIGHTPLUS
+#define this_cpu_ptr(X) X
+#else
 // #define this_cpu_ptr(X)	0 // TODO
 #define this_cpu_ptr(X)							\
 	({								\
@@ -228,5 +235,6 @@ DECLARE_PER_CPU_READ_MOSTLY(int, cpu_number);
 				((read_sysreg(tpidr_el2))));		\
 	});								\
 	})
+#endif
 
 #endif /* __PICOVM_PER_CPU_H */

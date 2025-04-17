@@ -24,8 +24,11 @@
 
 #define __TLBI_N(op, arg, n, ...) __TLBI_##n(op, arg)
 
+#ifdef CONFIG_PICOVM_CLIGHTPLUS
+#define __tlbi(op, ...)		tlbi(#op, #__VA_ARGS__, 1, 0)
+#else
 #define __tlbi(op, ...)		__TLBI_N(op, ##__VA_ARGS__, 1, 0)
-
+#endif
 
 /* This macro creates a properly formatted VA operand for the TLBI */
 #define __TLBI_VADDR(addr, asid)				\

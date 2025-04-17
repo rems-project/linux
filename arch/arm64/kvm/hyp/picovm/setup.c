@@ -71,6 +71,9 @@ struct alt_instr {
 void kvm_update_va_mask(struct alt_instr *alt,
 			u32 *origptr, u32 *updptr, int nr_inst);
 
+#ifdef CONFIG_PICOVM_CLIGHTPLUS
+extern __always_inline unsigned long __kern_hyp_va(unsigned long v);
+#else
 static __always_inline unsigned long __kern_hyp_va(unsigned long v)
 {
 #ifndef __KVM_VHE_HYPERVISOR__
@@ -85,7 +88,13 @@ static __always_inline unsigned long __kern_hyp_va(unsigned long v)
 #endif
 	return v;
 }
+#endif
+
+#ifdef CONFIG_PICOVM_CLIGHTPLUS
+#define kern_hyp_va(v) 	(u64)(__kern_hyp_va((unsigned long)(v)))
+#else
 #define kern_hyp_va(v) 	((typeof(v))(__kern_hyp_va((unsigned long)(v))))
+#endif
 // END ************************************************************************
 
 
@@ -160,7 +169,13 @@ static int recreate_hyp_mappings(phys_addr_t phys, unsigned long size,
 	if (ret)
 		return ret;
 
+	#ifdef CONFIG_PICOVM_CLIGHTPLUS
+	u64 start_u64 = (u64)virt;
+	u64 end_u64 = start_u64 + size;
+	ret = picovm_create_mappings((void *)start_u64, (void *)end_u64, PAGE_HYP);
+	#else
 	ret = picovm_create_mappings(virt, virt + size, PAGE_HYP);
+	#endif
 	if (ret)
 		return ret;
 
@@ -168,9 +183,15 @@ static int recreate_hyp_mappings(phys_addr_t phys, unsigned long size,
 		struct kvm_nvhe_init_params *params = per_cpu_ptr(&kvm_init_params, i);
 		unsigned long hyp_addr;
 
+		#ifdef CONFIG_PICOVM_CLIGHTPLUS
+		u64 start_u64 = kern_hyp_va(per_cpu_base[i]);
+		u64 end_u64 = start_u64 + PAGE_ALIGN(hyp_percpu_size);
+		ret = picovm_create_mappings((void *)start_u64, (void *)end_u64, PAGE_HYP);
+		#else
 		start = (void *)kern_hyp_va(per_cpu_base[i]);
 		end = start + PAGE_ALIGN(hyp_percpu_size);
 		ret = picovm_create_mappings(start, end, PAGE_HYP);
+		#endif
 		if (ret)
 			return ret;
 
@@ -223,8 +244,13 @@ static void update_nvhe_init_params(void)
 
 static int fix_host_ownership_walker(const struct picovm_pgtable_visit_ctx *ctx)
 {
+	#ifdef CONFIG_PICOVM_CLIGHTPLUS
+	u64 prot;
+	u64 state;
+	#else
 	enum picovm_pgtable_prot prot;
 	enum picovm_page_state state;
+	#endif
 	phys_addr_t phys;
 
 	if (!picovm_pte_valid(ctx->old))
@@ -333,7 +359,11 @@ int __pkvm_init(phys_addr_t phys, unsigned long size, unsigned long nr_cpus,
 
 	/* Jump in the idmap page to switch to the new page-tables */
 	params = this_cpu_ptr(&kvm_init_params);
+	#ifdef CONFIG_PICOVM_CLIGHTPLUS
+	fn = (void (*)(phys_addr_t params_pa, void *finalize_fn_va))__hyp_pa(__pkvm_init_switch_pgd);
+	#else
 	fn = (typeof(fn))__hyp_pa(__pkvm_init_switch_pgd);
+	#endif
 	fn(__hyp_pa(params), __picovm_init_finalise);
 
 	__builtin_unreachable();

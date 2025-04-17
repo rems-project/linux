@@ -72,7 +72,18 @@ static inline picovm_pte_t picovm_phys_to_pte(u64 pa)
 	return pte;
 }
 
+#ifdef CONFIG_PICOVM_CLIGHTPLUS
+#define PICOVM_PGTABLE_PROT_X	BIT(0)
+#define PICOVM_PGTABLE_PROT_W	BIT(1)
+#define PICOVM_PGTABLE_PROT_R	BIT(2)
 
+#define PICOVM_PGTABLE_PROT_DEVICE	BIT(3)
+
+#define PICOVM_PGTABLE_PROT_SW0	BIT(55)
+#define PICOVM_PGTABLE_PROT_SW1	BIT(56)
+#define PICOVM_PGTABLE_PROT_SW2	BIT(57)
+#define PICOVM_PGTABLE_PROT_SW3	BIT(58)
+#else
 enum picovm_pgtable_prot {
 	PICOVM_PGTABLE_PROT_X = BIT(0),
 	PICOVM_PGTABLE_PROT_W = BIT(1),
@@ -85,6 +96,7 @@ enum picovm_pgtable_prot {
 	PICOVM_PGTABLE_PROT_SW2 = BIT(57),
 	PICOVM_PGTABLE_PROT_SW3 = BIT(58),
 };
+#endif
 
 #define PICOVM_PGTABLE_PROT_RW (PICOVM_PGTABLE_PROT_R | PICOVM_PGTABLE_PROT_W)
 #define PICOVM_PGTABLE_PROT_RWX (PICOVM_PGTABLE_PROT_RW | PICOVM_PGTABLE_PROT_X)
@@ -166,18 +178,31 @@ int picovm_pgtable_walk(struct picovm_pgtable *pgt, u64 addr, u64 size,
 			struct picovm_pgtable_walker *walker);
 
 int picovm_pgtable_get_leaf(struct picovm_pgtable *pgt, u64 addr, picovm_pte_t *ptep);
-
+#ifdef CONFIG_PICOVM_CLIGHTPLUS
 int picovm_pgtable_stage2_map(struct picovm_pgtable *pgt, u64 addr, u64 size,
-			      u64 phys, enum picovm_pgtable_prot prot);
+	u64 phys, u64 prot);
 int picovm_pgtable_stage2_set_owner(struct picovm_pgtable *pgt, u64 addr, u64 size,
-				    u8 owner_id);
+	  u8 owner_id);
 int picovm_pgtable_hyp_map(struct picovm_pgtable *pgt, u64 addr, u64 size,
-			   u64 phys, enum picovm_pgtable_prot prot);
+ u64 phys, u64 prot);
+#else
+int picovm_pgtable_stage2_map(struct picovm_pgtable *pgt, u64 addr, u64 size,
+	u64 phys, enum picovm_pgtable_prot prot);
+int picovm_pgtable_stage2_set_owner(struct picovm_pgtable *pgt, u64 addr, u64 size,
+	  u8 owner_id);
+int picovm_pgtable_hyp_map(struct picovm_pgtable *pgt, u64 addr, u64 size,
+ u64 phys, enum picovm_pgtable_prot prot);
+#endif
 
 int picovm_pgtable_hyp_unmap(struct picovm_pgtable *pgt, u64 addr, u64 size);
 
+#ifdef CONFIG_PICOVM_CLIGHTPLUS
+u64 picovm_pgtable_hyp_pte_prot(picovm_pte_t pte);
+u64 picovm_pgtable_stage2_pte_prot(picovm_pte_t pte);
+#else
 enum picovm_pgtable_prot picovm_pgtable_hyp_pte_prot(picovm_pte_t pte);
 enum picovm_pgtable_prot picovm_pgtable_stage2_pte_prot(picovm_pte_t pte);
+#endif
 
 u64 picovm_get_vtcr(u64 mmfr0, u64 mmfr1, u32 phys_shift);
 

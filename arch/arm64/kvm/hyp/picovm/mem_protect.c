@@ -249,8 +249,13 @@ static int host_stage2_adjust_range(u64 addr, struct picovm_mem_range *range)
 	return 0;
 }
 
+#ifdef CONFIG_PICOVM_CLIGHTPLUS
+int host_stage2_idmap_locked(phys_addr_t addr, u64 size,
+	u64 prot)
+#else
 int host_stage2_idmap_locked(phys_addr_t addr, u64 size,
 			     enum picovm_pgtable_prot prot)
+#endif
 {
 	// TODO(doc) we don't do the host_stage2_try from actual pKVM
 	return picovm_pgtable_stage2_map(&host_mmu.pgt, addr, size, addr,
@@ -267,7 +272,11 @@ static int host_stage2_idmap(u64 addr)
 	struct picovm_mem_range range;
 
 	bool is_memory = !!find_mem_range(addr, &range);
+	#ifdef CONFIG_PICOVM_CLIGHTPLUS
+	u64 prot;
+	#else
 	enum picovm_pgtable_prot prot;
+	#endif
 	int ret;
 
 	prot = is_memory ? PICOVM_HOST_MEM_PROT : PICOVM_HOST_MMIO_PROT;
@@ -332,7 +341,17 @@ static void host_inject_abort(struct kvm_cpu_context *host_ctxt)
 }
 
 
+#ifdef CONFIG_PICOVM_CLIGHTPLUS
+u64 read_sysreg_par() {
+	u64 par;
+	asm("dmb sy");
+	par = read_sysreg(par_el1);
+	asm("dmb sy");
+	return par;	
+}
 
+#define read_sysreg_par() read_sysreg_par()
+#else
 // this always include the fix for ARM64_WORKAROUND_1508412
 #define read_sysreg_par() ({						\
 	u64 par;							\
@@ -341,6 +360,7 @@ static void host_inject_abort(struct kvm_cpu_context *host_ctxt)
 	asm("dmb sy");							\
 	par;								\
 })
+#endif
 
 // Copied from arch/arm64/include/asm/kvm_arm.h
 /* Hyp Prefetch Fault Address Register (HPFAR/HDFAR) */
@@ -365,7 +385,9 @@ static void host_inject_abort(struct kvm_cpu_context *host_ctxt)
 	"	.long		(" #from " - .), (" #to " - .)\n"	\
 	"	.popsection\n"
 
-
+#ifdef CONFIG_PICOVM_CLIGHTPLUS
+#define __kvm_at(at_op, addr)	__kvm_at(at_op, addr)
+#else
 #define __kvm_at(at_op, addr)						\
 ( { 									\
 	int __kvm_at_err = 0;						\
@@ -385,6 +407,7 @@ static void host_inject_abort(struct kvm_cpu_context *host_ctxt)
 	: "r" (addr), "i" (-EFAULT));					\
 	__kvm_at_err;							\
 } )
+#endif
 
 # define unlikely(x)	__builtin_expect(!!(x), 0)
 
@@ -469,11 +492,17 @@ void handle_host_mem_abort(struct kvm_cpu_context *host_ctxt)
 }
 
 
-
+#ifdef CONFIG_PICOVM_CLIGHTPLUS
+struct check_walk_data {
+	u64	desired;
+	u64	(*get_page_state)(picovm_pte_t pte, u64 addr);
+};
+#else
 struct check_walk_data {
 	enum picovm_page_state	desired;
 	enum picovm_page_state	(*get_page_state)(picovm_pte_t pte, u64 addr);
 };
+#endif
 
 static int __check_page_state_visitor(const struct picovm_pgtable_visit_ctx *ctx)
 {
@@ -493,7 +522,11 @@ static int check_page_state_range(struct picovm_pgtable *pgt, u64 addr, u64 size
 	return picovm_pgtable_walk(pgt, addr, size, &walker);
 }
 
+#ifdef CONFIG_PICOVM_CLIGHTPLUS
+u64 host_get_page_state(picovm_pte_t pte, u64 addr)
+#else
 static enum picovm_page_state host_get_page_state(picovm_pte_t pte, u64 addr)
+#endif
 {
 	// if (!addr_is_allowed_memory(addr))
 	// 	return PICOVM_NOPAGE;
@@ -504,9 +537,13 @@ static enum picovm_page_state host_get_page_state(picovm_pte_t pte, u64 addr)
 	return picovm_getstate(picovm_pgtable_stage2_pte_prot(pte));
 }
 
-
+#ifdef CONFIG_PICOVM_CLIGHTPLUS
 static int __host_check_page_state_range(u64 addr, u64 size,
-					 enum picovm_page_state state)
+	u64 state)
+#else
+static int __host_check_page_state_range(u64 addr, u64 size,
+	enum picovm_page_state state)
+#endif
 {
 	struct check_walk_data d = {
 		.desired = state,
@@ -517,15 +554,28 @@ static int __host_check_page_state_range(u64 addr, u64 size,
 	return check_page_state_range(&host_mmu.pgt, addr, size, &d);
 }
 
+#ifdef CONFIG_PICOVM_CLIGHTPLUS
 static int __host_set_page_state_range(u64 addr, u64 size,
-				       enum picovm_page_state state)
+	u64 state)
+#else
+static int __host_set_page_state_range(u64 addr, u64 size,
+	enum picovm_page_state state)
+#endif
 {
+	#ifdef CONFIG_PICOVM_CLIGHTPLUS
+	u64 prot = picovm_mkstate(PICOVM_HOST_MEM_PROT, state);
+	#else
 	enum picovm_pgtable_prot prot = picovm_mkstate(PICOVM_HOST_MEM_PROT, state);
+	#endif
 
 	return host_stage2_idmap_locked(addr, size, prot);
 }
 
+#ifdef CONFIG_PICOVM_CLIGHTPLUS
+static u64 hyp_get_page_state(picovm_pte_t pte, u64 addr)
+#else
 static enum picovm_page_state hyp_get_page_state(picovm_pte_t pte, u64 addr)
+#endif
 {
 	if (!picovm_pte_valid(pte))
 		return PICOVM_NOPAGE;
@@ -533,8 +583,13 @@ static enum picovm_page_state hyp_get_page_state(picovm_pte_t pte, u64 addr)
 	return picovm_getstate(picovm_pgtable_hyp_pte_prot(pte));
 }
 
+#ifdef CONFIG_PICOVM_CLIGHTPLUS
 static int __hyp_check_page_state_range(u64 addr, u64 size,
-					enum picovm_page_state state)
+	u64 state)
+#else
+static int __hyp_check_page_state_range(u64 addr, u64 size,
+	enum picovm_page_state state)
+#endif
 {
 	struct check_walk_data d = {
 		.desired	= state,
@@ -573,9 +628,18 @@ int __pkvm_host_share_hyp(u64 pfn)
 		goto unlock;
 
 	{
+		#ifdef CONFIG_PICOVM_CLIGHTPLUS
+		void *start = hyp_addr;
+		void *end = hyp_addr + PAGE_SIZE;
+		#else
 		void *start = (void *)hyp_addr;
 		void *end = start + PAGE_SIZE;
+		#endif
+		#ifdef CONFIG_PICOVM_CLIGHTPLUS
+		u64 prot;
+		#else
 		enum picovm_pgtable_prot prot;
+		#endif
 
 		prot = (PAGE_HYP & ~PICOVM_PAGE_STATE_PROT_MASK) | PICOVM_PAGE_SHARED_BORROWED;
 		ret = picovm_create_mappings_locked(start, end, prot);

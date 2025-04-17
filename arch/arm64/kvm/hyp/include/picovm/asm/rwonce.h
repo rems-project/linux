@@ -20,23 +20,30 @@
 #define __READ_ONCE(x)	(*(const volatile __unqual_scalar_typeof(x) *)&(x))
 #endif
 
+#ifdef CONFIG_PICOVM_CLIGHTPLUS
+#define READ_ONCE(x) read_once(&x)
+#else
 #define READ_ONCE(x)							\
 ({									\
 	compiletime_assert_rwonce_type(x);				\
 	__READ_ONCE(x);							\
 })
+#endif
 
 #define __WRITE_ONCE(x, val)						\
 do {									\
 	*(volatile typeof(x) *)&(x) = (val);				\
 } while (0)
 
+#ifdef CONFIG_PICOVM_CLIGHTPLUS
+#define WRITE_ONCE(x, val) write_once(&x, val)
+#else
 #define WRITE_ONCE(x, val)						\
 do {									\
 	compiletime_assert_rwonce_type(x);				\
 	__WRITE_ONCE(x, val);						\
 } while (0)
-
+#endif
 
 #endif /* __ASSEMBLY__ */
 #endif	/* __PICOVM_ASM_RWONCE_H */

@@ -123,7 +123,9 @@ void *__pi_memcpy(void *dst, const void *src, size_t size)
 // provided arch/arm64/kvm/hyp/picovm/mem_protect.c
 // int __pkvm_prot_finalize(void)
 
-
+#ifdef CONFIG_PICOVM_CLIGHTPLUS
+extern void __psci_invoke(u32 func_, u64 arg1, u64 arg2, u64 arg3);
+#else
 void __psci_invoke(u32 func_, u64 arg1, u64 arg2, u64 arg3)
 {
 	register u32 func asm("w0") = func_;
@@ -134,6 +136,7 @@ void __psci_invoke(u32 func_, u64 arg1, u64 arg2, u64 arg3)
 	asm volatile("smc #0" : "+r"(func) : "r"((void*)x1), "r"((void*)x2), "r"((void*)x3));
 	/* could return something, but ignoring it */
 }
+#endif
 #define PSCI_SYSTEM_OFF		0x84000008U
 
 void __noreturn psci_system_off(void)

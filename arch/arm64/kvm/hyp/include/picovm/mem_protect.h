@@ -20,6 +20,15 @@
  *   10: The page is shared with, but not owned by the page-table owner.
  *   11: Reserved for future use (lending).
  */
+#ifdef CONFIG_PICOVM_CLIGHTPLUS
+#define PICOVM_PAGE_OWNED				0ULL
+#define PICOVM_PAGE_SHARED_OWNED		PICOVM_PGTABLE_PROT_SW0
+#define PICOVM_PAGE_SHARED_BORROWED		PICOVM_PGTABLE_PROT_SW1
+#define __PICOVM_PAGE_RESERVED			(PICOVM_PGTABLE_PROT_SW0 | PICOVM_PGTABLE_PROT_SW1)
+
+/* Meta-states which aren't encoded directly in the PTE's SW bits */
+#define PICOVM_NOPAGE	108086391056891905
+#else
 enum picovm_page_state {
 	PICOVM_PAGE_OWNED		= 0ULL,
 	PICOVM_PAGE_SHARED_OWNED	= PICOVM_PGTABLE_PROT_SW0,
@@ -30,16 +39,24 @@ enum picovm_page_state {
 	/* Meta-states which aren't encoded directly in the PTE's SW bits */
 	PICOVM_NOPAGE,
 };
+#endif
 
 #define PICOVM_PAGE_STATE_PROT_MASK	(PICOVM_PGTABLE_PROT_SW0 | PICOVM_PGTABLE_PROT_SW1)
 
+#ifdef CONFIG_PICOVM_CLIGHTPLUS
+static inline u64 picovm_mkstate(u64 prot, u64 state)
+#else
 static inline enum picovm_pgtable_prot picovm_mkstate(enum picovm_pgtable_prot prot,
-						      enum picovm_page_state state)
+	enum picovm_page_state state)
+#endif
 {
 	return (prot & ~PICOVM_PAGE_STATE_PROT_MASK) | state;
 }
-
+#ifdef CONFIG_PICOVM_CLIGHTPLUS
+static inline u64 picovm_getstate(u64 prot)
+#else
 static inline enum picovm_page_state picovm_getstate(enum picovm_pgtable_prot prot)
+#endif
 {
 	return prot & PICOVM_PAGE_STATE_PROT_MASK;
 }
@@ -57,7 +74,11 @@ extern unsigned long hyp_nr_cpus;
 
 bool addr_is_memory(phys_addr_t phys);
 int picovm_host_prepare_stage2(void *pgt_pool_base);
+#ifdef CONFIG_PICOVM_CLIGHTPLUS
+int host_stage2_idmap_locked(phys_addr_t addr, u64 size, u64 prot);
+#else
 int host_stage2_idmap_locked(phys_addr_t addr, u64 size, enum picovm_pgtable_prot prot);
+#endif
 int host_stage2_set_owner_locked(phys_addr_t addr, u64 size, u8 owner_id);
 
 int __pkvm_prot_finalize(void);

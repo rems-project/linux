@@ -33,6 +33,9 @@ do {									\
 	*(l) = __HYP_SPIN_LOCK_UNLOCKED;				\
 } while (0)
 
+#ifdef CONFIG_PICOVM_CLIGHTPLUS
+extern inline void hyp_spin_lock(hyp_spinlock_t *lock);
+#else
 static inline void hyp_spin_lock(hyp_spinlock_t *lock)
 {
 #ifdef CONFIG_NVHE_GHOST_SPEC
@@ -67,7 +70,11 @@ static inline void hyp_spin_lock(hyp_spinlock_t *lock)
 	: "Q" (lock->owner)
 	: "memory");
 }
+#endif
 
+#ifdef CONFIG_PICOVM_CLIGHTPLUS
+extern inline void hyp_spin_unlock(hyp_spinlock_t *lock);
+#else
 static inline void hyp_spin_unlock(hyp_spinlock_t *lock)
 {
 	u64 tmp;
@@ -80,5 +87,6 @@ static inline void hyp_spin_unlock(hyp_spinlock_t *lock)
 	:
 	: "memory");
 }
+#endif
 
 #endif /* __PICOVM_SPINLOCK_H */

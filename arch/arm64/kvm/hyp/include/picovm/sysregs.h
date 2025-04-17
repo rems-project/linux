@@ -19,10 +19,15 @@
 // Saved Program Status Register (SPSR_ELn)
 // M[3:0], bits [3:0]
 #define SPSR_ELn_M_SHIFT	(0)
+#ifdef CONFIG_PICOVM_CLIGHTPLUS
+#define SPSR_ELn_M_MASK		(UL(0xF) << SPSR_ELn_M_SHIFT)
+#define SPSR_ELn_M_EL0t		(UL(0x0))
+#define SPSR_ELn_M_EL1h		(UL(0x5))
+#else
 #define SPSR_ELn_M_MASK		(UL(0b1111) << SPSR_ELn_M_SHIFT)
-
 #define SPSR_ELn_M_EL0t		(UL(0b0000))
 #define SPSR_ELn_M_EL1h		(UL(0b0101))
+#endif
 
 
 // Physical Address Register (PAR_EL1)
@@ -64,10 +69,18 @@
 
 // Virtualization Translation Control Register (VTCR_EL2)
 #define VTCR_EL2_SL0_SHIFT	(6)
+#ifdef CONFIG_PICOVM_CLIGHTPLUS
+#define VTCR_EL2_SL0_MASK	(UL(0x3) << VTCR_EL2_SL0_SHIFT)
+#else
 #define VTCR_EL2_SL0_MASK	(UL(0b11) << VTCR_EL2_SL0_SHIFT)
+#endif
 
 #define VTCR_EL2_TG0_SHIFT	(14)
+#ifdef CONFIG_PICOVM_CLIGHTPLUS
+#define VTCR_EL2_TG0_MASK	(UL(0x3) << VTCR_EL2_TG0_SHIFT)
+#else
 #define VTCR_EL2_TG0_MASK	(UL(0b11) << VTCR_EL2_TG0_SHIFT)
+#endif
 
 #define VTCR_EL2_PS_SHIFT	(16)
 
@@ -116,14 +129,20 @@
 // AArch64 Memory Model Feature Register 0 (ID_AA64MMFR0_EL1)
 // PARange, bits[3:0]
 #define ID_AA64MMFR0_EL1_PARANGE_SHIFT	0
+#ifdef CONFIG_PICOVM_CLIGHTPLUS
+#define ID_AA64MMFR0_EL1_PARANGE_48	UL(0x5)
+#else
 #define ID_AA64MMFR0_EL1_PARANGE_48	UL(0b0101)
-
+#endif
 
 
 
 #define ID_AA64MMFR1_EL1_VMIDBits_SHIFT                 4
+#ifdef CONFIG_PICOVM_CLIGHTPLUS
+#define ID_AA64MMFR1_EL1_VMIDBits_16                    UL(0x2)
+#else
 #define ID_AA64MMFR1_EL1_VMIDBits_16                    UL(0b0010)
-
+#endif
 
 #ifdef CONFIG_ARM64_PA_BITS_52
 #error "picovm does not support 52-bit physical addresses"
@@ -152,10 +171,15 @@ static inline u64 read_esr_el2(void)
 		     : : "rZ" (__val));		\
 } while (0)
 
+#ifdef CONFIG_PICOVM_CLIGHTPLUS
+#define read_sysreg(r) read_sysreg(#r)
+#else
 #define read_sysreg(r) ({				\
 	u64 __val;					\
 	asm volatile("mrs %0, " #r : "=r" (__val));	\
 	__val;						\
 })
+#endif
+
 #endif
 #endif /* __PICOVM_SYSREGS_H */

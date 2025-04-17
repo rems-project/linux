@@ -58,18 +58,33 @@
 #define PICOVM_MAX_OWNER_ID		FIELD_MAX(PICOVM_INVALID_PTE_OWNER_MASK)
 
 // NOTE: based on linux/arch/arm64/kvm/hyp/pgtable.c::struct kvm_stage2_map_data
+#ifdef CONFIG_PICOVM_CLIGHTPLUS
+struct picovm_stage2_map_data {
+	const u64 phys;
+	u64 prot;
+	u8 owner_id;
+};
+#else
 struct picovm_stage2_map_data {
 	const u64 phys;
 	enum picovm_pgtable_prot prot;
 	u8 owner_id;
 };
+#endif
 
 
 // NOTE: based on linux/arch/arm64/kvm/hyp/pgtable.c::struct kvm_hyp_map_data
+#ifdef CONFIG_PICOVM_CLIGHTPLUS
+struct picovm_hyp_map_data {
+	const u64 phys;
+	u64 prot;
+};
+#else
 struct picovm_hyp_map_data {
 	const u64 phys;
 	enum picovm_pgtable_prot prot;
 };
+#endif
 
 // NOTE: based on linux/arch/arm64/kvm/hyp/pgtable.c::struct kvm_pgtable_walk_data
 struct picovm_pgtable_walk_data {
@@ -96,9 +111,17 @@ static bool inline picovm_is_pte_invalid_or_block(picovm_pte_t pte)
 }
 
 // NOTE: based on linux/arch/arm64/kvm/hyp/pgtable.c::static kvm_pgtable_stage2_pte_rpot(kvm_pte_t pte)
+#ifdef CONFIG_PICOVM_CLIGHTPLUS
+u64 picovm_pgtable_stage2_pte_prot(picovm_pte_t pte)
+#else
 enum picovm_pgtable_prot picovm_pgtable_stage2_pte_prot(picovm_pte_t pte)
+#endif
 {
+	#ifdef CONFIG_PICOVM_CLIGHTPLUS
+	u64 prot = pte & PICOVM_PTE_LEAF_ATTR_HI_SW;
+	#else
 	enum picovm_pgtable_prot prot = pte & PICOVM_PTE_LEAF_ATTR_HI_SW;
+	#endif
 
 	if (!picovm_pte_valid(pte))
 		return prot;
@@ -113,9 +136,17 @@ enum picovm_pgtable_prot picovm_pgtable_stage2_pte_prot(picovm_pte_t pte)
 	return prot;
 }
 
+#ifdef CONFIG_PICOVM_CLIGHTPLUS
+u64 picovm_pgtable_hyp_pte_prot(picovm_pte_t pte)
+#else
 enum picovm_pgtable_prot picovm_pgtable_hyp_pte_prot(picovm_pte_t pte)
+#endif
 {
+	#ifdef CONFIG_PICOVM_CLIGHTPLUS
+	u64 prot = pte & PICOVM_PTE_LEAF_ATTR_HI_SW;
+	#else
 	enum picovm_pgtable_prot prot = pte & PICOVM_PTE_LEAF_ATTR_HI_SW;
+	#endif
 	u32 ap;
 
 	if (!picovm_pte_valid(pte))
@@ -173,7 +204,11 @@ static bool picovm_pte_table(picovm_pte_t pte, u32 level)
 	return FIELD_GET(PICOVM_PTE_TYPE, pte) == PICOVM_PTE_TYPE_TABLE;
 }
 
+#ifdef CONFIG_PICOVM_CLIGHTPLUS
+static u64 picovm_make_hyp_attr(u64 prot)
+#else
 static u64 picovm_make_hyp_attr(enum picovm_pgtable_prot prot)
+#endif
 {
 	bool device = prot & PICOVM_PGTABLE_PROT_DEVICE;
 	u32 mtype = device ? MT_DEVICE_nGnRE : MT_NORMAL;
@@ -199,7 +234,11 @@ static u64 picovm_make_hyp_attr(enum picovm_pgtable_prot prot)
 	return attr;
 }
 
+#ifdef CONFIG_PICOVM_CLIGHTPLUS
+static u64 picovm_make_stage2_attr(u64 prot)
+#else
 static u64 picovm_make_stage2_attr(enum picovm_pgtable_prot prot)
+#endif
 {
 	bool device = prot & PICOVM_PGTABLE_PROT_DEVICE;
 	u32 mtype = device ? MT_DEVICE_nGnRE : MT_NORMAL;
@@ -225,7 +264,11 @@ static u64 picovm_make_stage2_attr(enum picovm_pgtable_prot prot)
 	return attr;
 }
 
+#ifdef CONFIG_PICOVM_CLIGHTPLUS
+static u64 picovm_make_page_pte(bool is_hyp, u64 phys, u64 prot)
+#else
 static u64 picovm_make_page_pte(bool is_hyp, u64 phys, enum picovm_pgtable_prot prot)
+#endif
 {
 	u64 pte = 0;
 
@@ -539,8 +582,13 @@ int picovm_pgtable_stage2_init(struct picovm_pgtable *pgt, struct picovm_s2_mmu 
 	return ret;
 }
 
+#ifdef CONFIG_PICOVM_CLIGHTPLUS
 int picovm_pgtable_stage2_map(struct picovm_pgtable *pgt, u64 addr, u64 size,
-			      u64 phys, enum picovm_pgtable_prot prot)
+	u64 phys, u64 prot)
+#else
+int picovm_pgtable_stage2_map(struct picovm_pgtable *pgt, u64 addr, u64 size,
+	u64 phys, enum picovm_pgtable_prot prot)
+#endif
 {
 	int ret;
 	struct picovm_stage2_map_data map_data = {
@@ -578,8 +626,13 @@ int picovm_pgtable_stage2_set_owner(struct picovm_pgtable *pgt, u64 addr, u64 si
 	return ret;
 }
 
+#ifdef CONFIG_PICOVM_CLIGHTPLUS
 int picovm_pgtable_hyp_map(struct picovm_pgtable *pgt, u64 addr, u64 size, u64 phys,
-			enum picovm_pgtable_prot prot)
+	u64 prot)
+#else
+int picovm_pgtable_hyp_map(struct picovm_pgtable *pgt, u64 addr, u64 size, u64 phys,
+	enum picovm_pgtable_prot prot)
+#endif
 {
 	int ret;
 	struct picovm_hyp_map_data map_data = {
