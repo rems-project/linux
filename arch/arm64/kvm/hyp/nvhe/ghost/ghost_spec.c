@@ -906,8 +906,9 @@ static bool compute_new_abstract_state_handle___pkvm_host_map_guest(struct ghost
 
 	// TODO: non-protected VM/VCPUs?
 
-	// if this page is not accessible by the host, fail with -EPERM
-	if (!is_owned_exclusively_by(g0, GHOST_HOST, phys)) {
+	// If this page is not accessible by the host (incl. for donations),
+	// fail with -EPERM
+	if (!is_owned_exclusively_by(g1, GHOST_HOST, phys)) {
 		ret = -EPERM;
 		goto out;
 	}
