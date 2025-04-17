@@ -181,7 +181,9 @@ void __kvm_tlb_flush_vmid_ipa(struct kvm_s2_mmu *mmu,
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
 #ifdef CONFIG_NVHE_GHOST_SPEC_INJECT_ERROR___kvm_tlb_flush_vmid_ipa_WRONG_PAGE
 	casemate_model_step_tlbi_ipa(TLBI_ipas2e1is, ipa-1, (u64)level);
-#else /* NVHE_GHOST_SPEC_INJECT_ERROR___kvm_tlb_flush_vmid_ipa_WRONG_PAGE */
+#elif defined(CONFIG_NVHE_GHOST_SPEC_INJECT_ERROR___kvm_tlb_flush_vmid_ipa_WRONG_TLBI)
+	casemate_model_step_tlbi_ipa(TLBI_vae2is, ipa, (u64)level);
+#else
 	casemate_model_step_tlbi_ipa(TLBI_ipas2e1is, ipa, (u64)level);
 #endif /* NVHE_GHOST_SPEC_INJECT_ERROR___kvm_tlb_flush_vmid_ipa_WRONG_PAGE */
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
