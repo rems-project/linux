@@ -1668,13 +1668,17 @@ int __pkvm_host_share_hyp(u64 pfn)
 		.completer_prot	= PAGE_HYP,
 	};
 
+#if !defined(CONFIG_NVHE_GHOST_SPEC_INJECT_ERROR_host_share_hyp_NO_LOCKING)
 	host_lock_component();
 	hyp_lock_component();
+#endif /* !defined(CONFIG_NVHE_GHOST_SPEC_INJECT_ERROR_host_share_hyp_NO_LOCKING) */
 
 	ret = do_share(&share);
 
+#if !defined(CONFIG_NVHE_GHOST_SPEC_INJECT_ERROR_host_share_hyp_NO_LOCKING)
 	hyp_unlock_component();
 	host_unlock_component();
+#endif /* !defined(CONFIG_NVHE_GHOST_SPEC_INJECT_ERROR_host_share_hyp_NO_LOCKING) */
 
 	return ret;
 }

@@ -51,3 +51,7 @@ config NVHE_GHOST_SPEC_INJECT_ERROR_do_donate_OMIT_host_initiate_donation
 config NVHE_GHOST_SPEC_INJECT_ERROR_init_vm_NO_UNMAP_DONATED
 	bool "Inject an error (do not unmap donated memory on error) into init_vm"
 	depends on NVHE_GHOST_SPEC
+
+config NVHE_GHOST_SPEC_INJECT_ERROR_host_share_hyp_NO_LOCKING
+	bool "Inject an error (do not lock/unlock the hyp and host) into __pkvm_host_share_hyp"
+	depends on NVHE_GHOST_SPEC
