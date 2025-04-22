@@ -49,7 +49,7 @@ static inline u64 picovm_pte_to_phys(picovm_pte_t pte)
 	u64 pa = pte & PICOVM_PTE_ADDR_MASK;
 
 #if PAGE_SHIFT != 12
-#error "picovm requiest 4K pages"
+#error "picovm requires 4K pages"
 #endif
 	// if (PAGE_SHIFT == 16)
 	// 	pa |= FIELD_GET(KVM_PTE_ADDR_51_48, pte) << 48;
@@ -62,7 +62,7 @@ static inline picovm_pte_t picovm_phys_to_pte(u64 pa)
 	picovm_pte_t pte = pa & PICOVM_PTE_ADDR_MASK;
 
 #if PAGE_SHIFT != 12
-#error "picovm requiest 4K pages"
+#error "picovm requires 4K pages"
 #endif
 	// if (PAGE_SHIFT == 16) {
 	// 	pa &= GENMASK(51, 48);
