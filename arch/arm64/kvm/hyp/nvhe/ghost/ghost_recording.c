@@ -149,8 +149,7 @@ static void compute_abstraction_host(struct ghost_host *dest)
 	mapping page_state_map = mapping_empty_();
 	ghost_record_pgtable_ap(&dest->host_concrete_pgtable, &page_state_map, &host_mmu.pgt, pool_range_start, pool_range_end, "host_mmu.pgt", i);
 	dest->host_abstract_pgtable_annot = mapping_annot(dest->host_concrete_pgtable.mapping);
-	dest->host_abstract_pgtable_shared = mapping_shared(page_state_map);
-	free_mapping(page_state_map);
+	dest->host_abstract_pgtable_shared = page_state_map;
 	// TODO: maybe add a build config switch?
 	if (true)
 		compute_reclaimable_and_need_poisoning_faster(dest);

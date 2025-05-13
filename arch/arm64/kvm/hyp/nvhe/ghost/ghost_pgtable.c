@@ -396,9 +396,17 @@ static void _interpret_pgtable(mapping *mapp, kvm_pte_t *pgd, struct pfn_set *pf
 			extend_mapping_coalesce(mapp, stage, va_partial_new, nr_pages, maplet_target_mapped(va_partial_new, nr_pages, t));
 			if (out_page_state && is_in_hyp_memory(oa)) {
 				for (u64 addr = oa, ia = va_partial_new; addr < oa + (nr_pages << PAGE_SHIFT); addr += PAGE_SIZE, ia += PAGE_SIZE ) {
-					extend_mapping_coalesce(out_page_state, stage, ia, 1,
-						maplet_target_mapped(ia, 1, parse_page_state(addr, 1))
-					);
+					struct maplet_target target = maplet_target_mapped(ia, 1, parse_page_state(addr, 1));
+					switch (target.map.attrs.provenance) {
+					case MAPLET_PAGE_STATE_PRIVATE_OWNED:
+						break;
+					case MAPLET_PAGE_STATE_SHARED_OWNED:
+					case MAPLET_PAGE_STATE_SHARED_BORROWED:
+						extend_mapping_coalesce(out_page_state, stage, ia, 1, target);
+						break;
+					case MAPLET_PAGE_STATE_UNKNOWN:
+						break;
+					}
 				}
 			}
 			break;
@@ -419,9 +427,17 @@ static void _interpret_pgtable(mapping *mapp, kvm_pte_t *pgd, struct pfn_set *pf
 			struct maplet_target_mapped t = parse_mapped(stage, mair, level, oa, nr_pages, attr, next_level_aal);
 			extend_mapping_coalesce(mapp, stage, va_partial_new, 1, maplet_target_mapped(va_partial_new, nr_pages, t));
 			if (out_page_state && is_in_hyp_memory(oa)) {
-				extend_mapping_coalesce(out_page_state, stage, va_partial_new, nr_pages,
-					maplet_target_mapped(va_partial_new, nr_pages, parse_page_state(oa, nr_pages))
-				);
+				struct maplet_target target = maplet_target_mapped(va_partial_new, nr_pages, parse_page_state(oa, nr_pages));
+				switch (target.map.attrs.provenance) {
+				case MAPLET_PAGE_STATE_PRIVATE_OWNED:
+					break;
+				case MAPLET_PAGE_STATE_SHARED_OWNED:
+				case MAPLET_PAGE_STATE_SHARED_BORROWED:
+					extend_mapping_coalesce(out_page_state, stage, va_partial_new, nr_pages, target);
+					break;
+				case MAPLET_PAGE_STATE_UNKNOWN:
+					break;
+				}
 			}
 			break;
 		}
