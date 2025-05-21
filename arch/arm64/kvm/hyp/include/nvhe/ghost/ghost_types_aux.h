@@ -127,4 +127,12 @@ void ghost_dump_running_state(struct ghost_running_state *run, u64 i);
 void ghost_dump_globals(struct ghost_constant_globals *globals);
 void ghost_dump_regs(struct ghost_registers *regs, u64 i);
 
+#if defined(CONFIG_NVHE_GHOST_DIFF_post_host_pgtable)
+void ghost_post_dump_recorded_concrete_host_pgtable_diff(struct ghost_state *gr_post, struct ghost_state *gr_pre);
+#endif /* defined(NVHE_GHOST_DIFF_post_host_pgtable) */
+
+#if defined(CONFIG_NVHE_GHOST_DIFF_pre_post_recorded)
+void ghost_post_dump_recorded_ghost_diff(struct ghost_state *gr_post, struct ghost_state *gr_pre);
+#endif /* defined(CONFIG_NVHE_GHOST_DIFF_pre_post_recorded) */
+
 #endif // _GHOST_TYPES_H

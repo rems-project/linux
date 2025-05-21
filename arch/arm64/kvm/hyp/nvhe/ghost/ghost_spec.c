@@ -2698,6 +2698,14 @@ void ghost_post(struct kvm_cpu_context *ctxt)
 	record_and_copy_abstraction_local_state_post(ctxt);
 	call->return_value = cpu_reg(ctxt, 1);
 
+	#if defined(CONFIG_NVHE_GHOST_DIFF_post_host_pgtable)
+	ghost_post_dump_recorded_concrete_host_pgtable_diff(gr_post, gr_pre);
+	#endif /* defined(NVHE_GHOST_DIFF_post_host_pgtable) */
+
+	#if defined(CONFIG_NVHE_GHOST_DIFF_pre_post_recorded)
+	ghost_post_dump_recorded_ghost_diff(gr_post, gr_pre);
+	#endif /* defined(CONFIG_NVHE_GHOST_DIFF_pre_post_recorded) */
+
 	if (ghost_exec_enabled()) {
 		// actually compute the new state
 		new_state_computed = compute_new_abstract_state_for_exception(gc_post, gr_pre, call);
