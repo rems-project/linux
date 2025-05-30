@@ -25,6 +25,10 @@ hyp-obj-$(CONFIG_ARM_SMMU_V3_PKVM) += ../../../../../drivers/iommu/arm/arm-smmu-
 hyp-obj-$(CONFIG_ARM_SMMU_V3_PKVM) += ../../../../../drivers/iommu/io-pgtable-arm-common.o
 endif
 
+cn += cn/cn_alloc.o
+
+hyp-obj-$(CONFIG_NVHE_CN_FULMINATE) += $(cn)
+
 $(obj)/hyp.lds: $(src)/hyp.lds.S FORCE
 	$(call if_changed_dep,cpp_lds_S)
 
