@@ -1,40 +1,8 @@
-/* SPDX-License-Identifier: GPL-2.0-only */
-/*
- * Linker script variables to be set after section resolution, as
- * ld.lld does not like variables assigned before SECTIONS is processed.
- */
-#ifndef __ARM64_KERNEL_IMAGE_VARS_H
-#define __ARM64_KERNEL_IMAGE_VARS_H
-
-#ifndef LINKER_SCRIPT
-#error This file should only be included in vmlinux.lds.S
-#endif
-
-PROVIDE(__efistub_primary_entry		= primary_entry);
-
-/*
- * The EFI stub has its own symbol namespace prefixed by __efistub_, to
- * isolate it from the kernel proper. The following symbols are legally
- * accessed by the stub, so provide some aliases to make them accessible.
- * Only include data symbols here, or text symbols of functions that are
- * guaranteed to be safe when executed at another offset than they were
- * linked at. The routines below are all implemented in assembler in a
- * position independent manner
- */
-PROVIDE(__efistub_caches_clean_inval_pou = __pi_caches_clean_inval_pou);
-
-PROVIDE(__efistub__text			= _text);
-PROVIDE(__efistub__end			= _end);
-PROVIDE(__efistub___inittext_end       	= __inittext_end);
-PROVIDE(__efistub__edata		= _edata);
-PROVIDE(__efistub_screen_info		= screen_info);
-PROVIDE(__efistub__ctype		= _ctype);
-
-PROVIDE(__pi___memcpy			= __pi_memcpy);
-PROVIDE(__pi___memmove			= __pi_memmove);
-PROVIDE(__pi___memset			= __pi_memset);
-
-#ifdef CONFIG_KVM
+// Dummy definitions to produce a fully linked EL2 binary for analysis.
+#define KVM_NVHE_ALIAS(sym)	unsigned long sym
+#define KVM_NVHE_ALIAS_HYP(x,y)	unsigned long __kvm_nvhe_##y
+// XXX: Following imported directly from image-vars.h
+///////////////////////////////////////////////////////
 
 /*
  * KVM nVHE code has its own symbol namespace prefixed with __kvm_nvhe_, to
@@ -117,10 +85,3 @@ KVM_NVHE_ALIAS(kvm_protected_mode_initialized);
 KVM_NVHE_ALIAS(system_cpucaps);
 #endif /* CONFIG_NVHE_EL2_O0 */
 
-#endif /* CONFIG_KVM */
-
-#ifdef CONFIG_EFI_ZBOOT
-_kernel_codesize = ABSOLUTE(__inittext_end - _text);
-#endif
-
-#endif /* __ARM64_KERNEL_IMAGE_VARS_H */

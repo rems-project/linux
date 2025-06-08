@@ -92,4 +92,14 @@ config PTDUMP_STAGE2_DEBUGFS
 
          If in doubt, say N.
 
+config NVHE_EL2_O0
+	bool "Build non-VHE EL2 object with -O0"
+	depends on KVM
+	help
+	  Say Y to build the non-VHE KVM EL2 object with -O0. This is meant for
+	  analysis of the object file (e.g. with read-dwarf) and likely does not
+	  produce a working executable.
+
+	  If unsure, say N.
+
 endif # VIRTUALIZATION

@@ -716,7 +716,7 @@ struct kvm_vcpu_arch {
 
 #define __build_check_flag(v, flagset, f, m)			\
 	do {							\
-		typeof(v->arch.flagset) *_fset;			\
+		typeof(v->arch.flagset) *__maybe_unused _fset;	\
 								\
 		/* Check that the flags fit in the mask */	\
 		BUILD_BUG_ON(HWEIGHT(m) != HWEIGHT((f) | (m)));	\
