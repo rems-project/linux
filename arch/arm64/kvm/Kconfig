@@ -92,6 +92,8 @@ config PROTECTED_NVHE_TESTING
 
 	  If unsure, say N.
 
+source "arch/arm64/kvm/Kconfig-cn"
+
 config PKVM_MODULE_PATH
 	string "Path to pKVM modules"
 	default ""

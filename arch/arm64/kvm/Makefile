@@ -46,3 +46,5 @@ $(obj)/hyp_constants.h: $(obj)/hyp-constants.s FORCE
 
 obj-kvm := $(addprefix $(obj)/, $(kvm-y))
 $(obj-kvm): $(obj)/hyp_constants.h
+
+obj-$(CONFIG_PKVM_FIDDLER) += pkvm_fiddler.o

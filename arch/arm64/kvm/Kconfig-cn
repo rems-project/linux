@@ -1,0 +1,7 @@
+config PKVM_FIDDLER
+	tristate "Fiddle with pKVM"
+	depends on KVM
+	help
+	  Fiddle.
+
+# vim:set ft=kconfig:
