@@ -26,6 +26,7 @@ hyp-obj-$(CONFIG_ARM_SMMU_V3_PKVM) += ../../../../../drivers/iommu/io-pgtable-ar
 endif
 
 cn += cn/cn_alloc.o
+cn += cn/rmap.o cn/bump_alloc.o cn/fulminate_alloc.o cn/hash_table.o cn/utils.o
 
 hyp-obj-$(CONFIG_NVHE_CN_FULMINATE) += $(cn)
 
