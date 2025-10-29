@@ -24,11 +24,7 @@ SOFTWARE.
 
 */
 
-#include <assert.h>
-#include <stdint.h>
-#include <string.h>
-
-#include <cn-executable/hash_table.h>
+#include <nvhe/cn/hash_table.h>
 
 #define INITIAL_CAPACITY 16  // must not be zero
 

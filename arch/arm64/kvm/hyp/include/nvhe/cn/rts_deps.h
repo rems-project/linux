@@ -28,10 +28,21 @@
   #define alignof   _Alignof
 
 #else
-  #include <stdalign.h>
-  #include <stdbool.h>
-  #include <stddef.h>
-  #include <stdint.h>
+  #include <linux/limits.h>
+  #include <linux/string.h>
+  #include <asm/kvm_pkvm.h>
+
+  #include <nvhe/cn/cn_alloc.h>
+
+  #define alignof(t) __alignof__(t)
+  #define max_align_t __uint128_t
+  #define FILE void
+
+  #define assert(x) BUG_ON(!(x))
+  #define exit(x) BUG()
+  #define fprintf(a, fmt, ...) {}
+  #define printf(fmt, ...) {}
+
 #endif
 
 #endif

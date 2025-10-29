@@ -2,15 +2,8 @@
 // Bump Allocator //
 ////////////////////
 
-#include <assert.h>
-#include <inttypes.h>
-#include <stdalign.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-
-#include <cn-executable/bump_alloc.h>
-#include <cn-executable/utils.h>
+#include <nvhe/cn/bump_alloc.h>
+#include <nvhe/cn/utils.h>
 
 static size_t bump_block_size = (1024 * 1024 * 8);  // 8MB default
 static size_t max_bump_blocks = 256;                // Default maximum blocks

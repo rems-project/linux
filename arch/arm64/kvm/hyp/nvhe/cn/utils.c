@@ -1,13 +1,5 @@
-#include <assert.h>
-#include <inttypes.h>
-#include <limits.h>
-#include <signal.h>  // for SIGABRT
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-
-#include <cn-executable/rmap.h>
-#include <cn-executable/utils.h>
+#include <nvhe/cn/rmap.h>
+#include <nvhe/cn/utils.h>
 
 typedef rmap ownership_ghost_state;
 

@@ -1,10 +1,11 @@
-#include <assert.h>
-#include <string.h>
+#include <nvhe/cn/rmap.h>
+#include <linux/bug.h>
+
+#define assert(x) BUG_ON(!(x))
+
 #ifdef _RMAP_DEBUG
   #include <stdio.h>
 #endif /* _RMAP_DEBUG */
-
-#include <cn-executable/rmap.h>
 
 /* The entire rmap structure is parameterised by the type of range-query
  * results, defined below. Changing these definitions changes what

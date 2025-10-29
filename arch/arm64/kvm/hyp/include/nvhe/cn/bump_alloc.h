@@ -7,7 +7,7 @@
 
 #include "rts_deps.h"
 
-#include <cn-executable/fulminate_alloc.h>
+#include <nvhe/cn/fulminate_alloc.h>
 
 #ifdef __cplusplus
 extern "C" {
