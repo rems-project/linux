@@ -1,6 +1,6 @@
 #define __CN_INSTRUMENT
-#include <cn-executable/utils.h>
-#include <cn-executable/cerb_types.h>
+#include <nvhe/cn/utils.h>
+#include <nvhe/cn/cerb_types.h>
 typedef __cerbty_intptr_t intptr_t;
 typedef __cerbty_uintptr_t uintptr_t;
 typedef __cerbty_intmax_t intmax_t;
@@ -2744,7 +2744,8 @@ static inline
 	do { /*							          * __noreturn is needed to give the compiler enough	          * information to avoid certain possibly-uninitialized	          * warnings (regardless of the build failing).		          */
 		extern void __compiletime_assert_1(void);
 		if (!(CN_LOAD(cap) < 102)) {
-			__compiletime_assert_1();
+			(void *) 0;
+			// __compiletime_assert_1();
 		}
 	} while (0);
 	switch (CN_LOAD(cap)) {
@@ -118878,7 +118879,8 @@ static inline void push_hyp_memcache(struct kvm_hyp_memcache *mc,
 								      CN_LOAD((
 									      order))) :
 							    0))) {
-							__compiletime_assert_600();
+							(void *) 0;
+							// __compiletime_assert_600();
 						}
 					} while (0);
 					do { /*									 * __noreturn is needed to give the compiler enough			 * information to avoid certain possibly-uninitialized			 * warnings (regardless of the build failing).				 */
@@ -128619,9 +128621,9 @@ function (u64) MIN_ALLOC () {
         8u64
 }
 @*/
-static /* nothing */ typeof(int) hyp_allocator_errno;
-static /* nothing */ typeof(struct kvm_hyp_memcache) hyp_allocator_mc;
-static /* nothing */ typeof(u8) hyp_allocator_missing_donations;
+static /* nothing */ __attribute__((section(".data..percpu"))) typeof(int) hyp_allocator_errno;
+static /* nothing */ __attribute__((section(".data..percpu"))) typeof(struct kvm_hyp_memcache) hyp_allocator_mc;
+static /* nothing */ __attribute__((section(".data..percpu"))) typeof(u8) hyp_allocator_missing_donations;
 static struct hyp_allocator hyp_allocator;
 /* HK: Why "explicit padding"?
 
@@ -138179,7 +138181,7 @@ int hyp_alloc_init(size_t size)
 	 INIT_LIST_HEAD(&CN_LOAD(allocator)->chunks));
 	do {
 		CN_STORE(*(&CN_LOAD(allocator)->lock),
-			 CN_LOAD(((hyp_spinlock_t){ .__val = 0 })));
+			 ((hyp_spinlock_t){ .__val = 0 }));
 	} while (0);
 	{
 		__cn_ret = 0;
@@ -142059,28 +142061,29 @@ static void Cn_char_array(cn_pointer *p, cn_bits_u64 *size,
 {
 	update_cn_error_message_info(
 		"//-{\n             ^alloc.pp.carved.fmt.c:127442:14:");
-	cn_map *U = map_create();
-	{
-		cn_bits_u64 *i = cast_cn_bits_u64_to_cn_bits_u64(
-			convert_to_cn_bits_u64(0ULL));
-		while (convert_from_cn_bool(cn_bool_and(
-			cn_bits_u64_le(cast_cn_bits_u64_to_cn_bits_u64(
-					       convert_to_cn_bits_u64(0ULL)),
-				       i),
-			cn_bits_u64_lt(i, size)))) {
-			if (convert_from_cn_bool(cn_bits_u64_lt(i, size))) {
-				cn_pointer *a_21474 = cn_array_shift(
-					p, sizeof(unsigned char), i);
-				cn_map_set(U, cast_cn_bits_u64_to_cn_integer(i),
-					   owned_unsigned_char(a_21474,
-							       spec_mode,
-							       loop_ownership));
-			} else {
-				;
-			}
-			cn_bits_u64_increment(i);
-		}
-	}
+	cn_get_or_put_ownership(spec_mode, p->ptr, size->val, loop_ownership);
+	// cn_map *U = map_create();
+	// {
+	// 	cn_bits_u64 *i = cast_cn_bits_u64_to_cn_bits_u64(
+	// 		convert_to_cn_bits_u64(0ULL));
+	// 	while (convert_from_cn_bool(cn_bool_and(
+	// 		cn_bits_u64_le(cast_cn_bits_u64_to_cn_bits_u64(
+	// 				       convert_to_cn_bits_u64(0ULL)),
+	// 			       i),
+	// 		cn_bits_u64_lt(i, size)))) {
+	// 		if (convert_from_cn_bool(cn_bits_u64_lt(i, size))) {
+	// 			cn_pointer *a_21474 = cn_array_shift(
+	// 				p, sizeof(unsigned char), i);
+	// 			cn_map_set(U, cast_cn_bits_u64_to_cn_integer(i),
+	// 				   owned_unsigned_char(a_21474,
+	// 						       spec_mode,
+	// 						       loop_ownership));
+	// 		} else {
+	// 			;
+	// 		}
+	// 		cn_bits_u64_increment(i);
+	// 	}
+	// }
 	cn_pop_msg_info();
 	update_cn_error_message_info(
 		"other_location(File 'lib/compile.ml', line 1124, characters 31-38)");
@@ -142175,3 +142178,5 @@ static void ListSeg(cn_pointer *allocator, cn_pointer *result)
 	}
 	cn_bump_free_after(__cn_bump_count_a_22788);
 }
+
+#include "inits.c"
