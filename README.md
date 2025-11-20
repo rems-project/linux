@@ -1,3 +1,16 @@
+# This is where we run CN in the live pKVM
+
+- CN-specified files, files generated from these, and misc support files are in
+  [`arch/arm64/kvm/hyp/nvhe/fulminated`](arch/arm64/kvm/hyp/nvhe/fulminated).
+- Fulminate runtime is in
+  + [`arch/arm64/kvm/hyp/include/nvhe/cn`](arch/arm64/kvm/hyp/include/nvhe/cn)
+  + [`arch/arm64/kvm/hyp/nvhe/cn`](arch/arm64/kvm/hyp/nvhe/cn)
+
+The build system integration is WiP. In the present state, building everything
+from the source spec requires manual steps.
+
+**TODO** document the steps.
+
 # How do I submit patches to Android Common Kernels
 
 1. BEST: Make all of your changes to upstream Linux. If appropriate, backport to the stable releases.
