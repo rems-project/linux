@@ -21,6 +21,10 @@
 #include <nvhe/serial.h>
 #include <nvhe/trap_handler.h>
 
+#include <nvhe/cn/utils.h>
+extern void fulminate_spec_own_globals(void);
+extern void fulminate_spec_own_allocator_va(void);
+
 unsigned long hyp_nr_cpus;
 
 phys_addr_t pvmfw_base;
@@ -422,9 +426,18 @@ int __pkvm_init(phys_addr_t phys, unsigned long size, unsigned long nr_cpus,
 	if (ret)
 		return ret;
 
+	/* Init fulminate runtime. */
+	fulminate_init();
+
+	/* Own spec-related globals. */
+	fulminate_spec_own_globals();
+
 	ret = hyp_alloc_init(SZ_128M);
 	if (ret)
 		return ret;
+
+	/* Own allocator VA space, now the allocator is initialised. */
+	fulminate_spec_own_allocator_va();
 
 	update_nvhe_init_params();
 

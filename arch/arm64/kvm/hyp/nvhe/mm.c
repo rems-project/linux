@@ -19,6 +19,8 @@
 #include <nvhe/modules.h>
 #include <nvhe/spinlock.h>
 
+extern void fulminate_assume_ownership(void* p, unsigned long size, const char* fun, _Bool wildcard);
+
 struct kvm_pgtable pkvm_pgtable;
 hyp_spinlock_t pkvm_pgd_lock;
 
@@ -178,6 +180,12 @@ void __pkvm_unmap_module_page(u64 pfn, void *va)
 
 int __hyp_allocator_map(unsigned long va, phys_addr_t phys)
 {
+	/* If the spec is partial, we need to own the page. */
+	// int res = __pkvm_create_mappings(va, PAGE_SIZE, phys, PAGE_HYP);
+	// if (!res)
+	// 	fulminate_assume_ownership((void *) va, PAGE_SIZE, __FUNCTION__, true);
+	// return res;
+
 	return __pkvm_create_mappings(va, PAGE_SIZE, phys, PAGE_HYP);
 }
 
@@ -491,7 +499,12 @@ static void *admit_host_page(void *arg, unsigned long order)
 	if (__pkvm_host_donate_hyp(hyp_phys_to_pfn(p), 1 << order))
 		return NULL;
 
-	return pop_hyp_memcache(host_mc, hyp_phys_to_virt, &order);
+	/* Own the newly admitted page. */
+	void *__res = pop_hyp_memcache(host_mc, hyp_phys_to_virt, &order);
+	fulminate_assume_ownership(__res, PAGE_SIZE, __FUNCTION__, true);
+	return __res;
+
+// 	return pop_hyp_memcache(host_mc, hyp_phys_to_virt, &order);
 }
 
 /* Refill our local memcache by popping pages from the one provided by the host. */

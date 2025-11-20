@@ -16,12 +16,17 @@ static struct hyp_mgt_allocator_ops *registered_allocators[] = {
 
 #define MAX_ALLOC_ID		(ARRAY_SIZE(registered_allocators))
 
+extern void fulminate_assume_ownership(void* p, unsigned long size, const char* fun, _Bool wildcard);
+
 int hyp_alloc_mgt_refill(unsigned long id, struct kvm_hyp_memcache *host_mc)
 {
 	struct hyp_mgt_allocator_ops *ops;
 
 	if (id > MAX_ALLOC_ID)
 		return -EINVAL;
+
+	/* Own the mc record. */
+	fulminate_assume_ownership(host_mc, sizeof(struct kvm_hyp_memcache), __FUNCTION__, false);
 
 	id = array_index_nospec(id, MAX_ALLOC_ID);
 
