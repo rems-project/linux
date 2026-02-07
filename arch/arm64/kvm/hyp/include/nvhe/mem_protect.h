@@ -16,11 +16,19 @@
 #include <nvhe/pkvm.h>
 #include <nvhe/spinlock.h>
 
+#if defined(CONFIG_NVHE_GHOST_SPEC)
+/*
+ * @ghost_mapping: Ghost state recording the interpretation of the mapping
+ */
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 struct host_mmu {
 	struct kvm_arch arch;
 	struct kvm_pgtable pgt;
 	struct kvm_pgtable_mm_ops mm_ops;
 	hyp_spinlock_t lock;
+#if defined(CONFIG_NVHE_GHOST_SPEC)
+	mapping ghost_mapping;
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 };
 extern struct host_mmu host_mmu;
 

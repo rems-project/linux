@@ -34,6 +34,15 @@
 
 #include "../../sys_regs.h"
 
+#ifdef CONFIG_NVHE_GHOST_SPEC
+#include <nvhe/ghost/ghost_control.h>
+#include <nvhe/ghost/ghost_misc.h>
+#include <nvhe/ghost/ghost_serial.h>
+#include <nvhe/ghost/ghost_spec.h>
+#include <nvhe/ghost/ghost_tracing.h>
+#pragma GCC diagnostic ignored "-Wdeclaration-after-statement"
+#endif /* CONFIG_NVHE_GHOST_SPEC */
+
 DEFINE_PER_CPU(struct kvm_nvhe_init_params, kvm_init_params);
 
 /*
@@ -1448,7 +1457,11 @@ static void handle___pkvm_create_private_mapping(struct kvm_cpu_context *host_ct
 	 * ERR_PTR() on failure).
 	 */
 	unsigned long haddr;
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	int err = __pkvm_create_private_mapping(phys, size, prot, &haddr, HYP_HCALL);
+#else /* CONFIG_NVHE_GHOST_SPEC */
 	int err = __pkvm_create_private_mapping(phys, size, prot, &haddr);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 
 	if (err)
 		haddr = (unsigned long)ERR_PTR(err);
@@ -1458,7 +1471,15 @@ static void handle___pkvm_create_private_mapping(struct kvm_cpu_context *host_ct
 
 static void handle___pkvm_prot_finalize(struct kvm_cpu_context *host_ctxt)
 {
+#ifdef CONFIG_NVHE_GHOST_SPEC_NOISY
+	hyp_puts("\n__pkvm_prot_finalize:\n");
+	hyp_putsxnl("    CPU", hyp_smp_processor_id(), 32);
+#endif /* CONFIG_NVHE_GHOST_SPEC_NOISY */
 	cpu_reg(host_ctxt, 1) = __pkvm_prot_finalize();
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	if (cpu_reg(host_ctxt, 1) == 0)
+		ghost_enable_this_cpu();
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 }
 
 static void handle___pkvm_reserve_vm(struct kvm_cpu_context *host_ctxt)
@@ -2061,11 +2082,44 @@ static void handle_host_hcall(struct kvm_cpu_context *host_ctxt)
 	id &= ~ARM_SMCCC_CALL_HINTS;
 	id -= KVM_HOST_SMCCC_ID(0);
 
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	GHOST_LOG_CONTEXT_ENTER();
+	GHOST_LOG(id, u64);
+	if (id < 0 || id >= ARRAY_SIZE(ghost_host_hcall_names))
+		GHOST_LOG("UNKNOWN HCALL", str);
+	else
+		GHOST_LOG(ghost_host_hcall_names[id], str);
+
+	_Bool ghost_dump_verbose = ghost_control_print_enabled("handle_host_hcall_verbose");
+	u64 i=0; /* base indent */
+	if (ghost_dump_verbose) {
+		hyp_puts("Common hcall information:\n");
+		ghost_dump_sysregs();
+		ghost_dump_setup();
+		//	if (static_branch_unlikely(&kvm_protected_mode_initialized)) {
+		ghost_hyp_put_mapping_reqs();
+		ghost_dump_pgtable(&pkvm_pgtable,"pkvm_pgtable", i);
+		ghost_check_hyp_mapping_reqs(&pkvm_pgtable,false /*noisy*/);
+		//dump_pgtable(pkvm_pgtable);  // around 140k lines
+		//	}
+		ghost_dump_pgtable(&host_mmu.pgt,"host_kvm.pgt", i);
+		ghost_dump_hyp_memory(0);
+		ghost_dump_shadow_table();
+	}
+	bool is_valid = false;
+#endif /* CONFIG_NVHE_GHOST_SPEC */
+
 	if (handle_host_dynamic_hcall(&host_ctxt->regs, id) == HCALL_HANDLED)
 		goto end;
 
 	if (unlikely(id < hcall_min || id >= ARRAY_SIZE(host_hcall)))
 		goto inval;
+
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	enum ghost_trace_event tr_event = ghost_hcall_event(id, &is_valid);
+	if (is_valid && ghost_trace_event_is_enabled(tr_event))
+		trace_ghost_enter(tr_event);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 
 	hfn = host_hcall[id];
 	if (unlikely(!hfn))
@@ -2076,10 +2130,27 @@ static void handle_host_hcall(struct kvm_cpu_context *host_ctxt)
 end:
 	trace_host_hcall(id, 0);
 
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	if (is_valid && ghost_trace_event_is_enabled(tr_event))
+		trace_ghost_exit(tr_event);
+	if (ghost_dump_verbose) {
+		hyp_puts("\nafter host hcall body");
+		ghost_dump_pgtable(&pkvm_pgtable,"pkvm_pgtable", i);
+		ghost_dump_pgtable(&host_mmu.pgt,"host_kvm.pgt", i);
+		//ghost_dump_hyp_memory();
+	}
+	GHOST_LOG_CONTEXT_EXIT();
+#endif /* CONFIG_NVHE_GHOST_SPEC */
+
 	return;
 inval:
 	trace_host_hcall(id, 1);
 	cpu_reg(host_ctxt, 0) = SMCCC_RET_NOT_SUPPORTED;
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	if (is_valid && ghost_trace_event_is_enabled(tr_event))
+		trace_ghost_exit(tr_event);
+	GHOST_LOG_CONTEXT_EXIT();
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 }
 
 static void handle_host_smc(struct kvm_cpu_context *host_ctxt)
@@ -2106,8 +2177,25 @@ static void handle_host_smc(struct kvm_cpu_context *host_ctxt)
 	kvm_skip_host_instr();
 }
 
+#ifdef CONFIG_NVHE_GHOST_SPEC
+/*
+ * keep track, per-cpu of what pKVM thinks is running on this cpu.
+ * NOTE: this is part of the recording machinery, not the spec computing machinery.
+ */
+DEFINE_PER_CPU(struct ghost_running_state, ghost_cpu_run_state);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
+
 void handle_trap(struct kvm_cpu_context *host_ctxt)
 {
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	// ghost_dump_sysregs();
+	u64 cpu = hyp_smp_processor_id();
+	GHOST_LOG_CONTEXT_ENTER();
+	GHOST_LOG(cpu, u64);
+
+	ghost_record_pre(host_ctxt, 0);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
+
 	u64 esr = read_sysreg_el2(SYS_ESR);
 
 	__hyp_enter();
@@ -2128,11 +2216,21 @@ void handle_trap(struct kvm_cpu_context *host_ctxt)
                 break;
 	case ESR_ELx_EC_IABT_LOW:
 	case ESR_ELx_EC_DABT_LOW:
+#ifdef CONFIG_NVHE_GHOST_SPEC
+		trace_ghost_enter(GHOST_TRACE_host_mem_abort);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 		handle_host_mem_abort(host_ctxt);
+#ifdef CONFIG_NVHE_GHOST_SPEC
+		trace_ghost_exit(GHOST_TRACE_host_mem_abort);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 		break;
 	default:
 		BUG_ON(!READ_ONCE(default_trap_handler) || !default_trap_handler(&host_ctxt->regs));
 	}
 
 	__hyp_exit();
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	ghost_post(host_ctxt);
+	GHOST_LOG_CONTEXT_EXIT();
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 }

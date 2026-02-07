@@ -23,6 +23,17 @@
 #include <nvhe/trace.h>
 #include <nvhe/trap_handler.h>
 
+#ifdef CONFIG_NVHE_GHOST_SPEC
+#include <nvhe/ghost/ghost_serial.h>
+#include <nvhe/ghost/ghost_control.h>
+#include <nvhe/ghost/ghost_misc.h>
+#include <nvhe/ghost/ghost_recording.h>
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+#include <nvhe/ghost/ghost_simplified_model.h>
+#include <nvhe/ghost/ghost_sm_driver.h>
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
+#endif /* CONFIG_NVHE_GHOST_SPEC */
+
 unsigned long hyp_nr_cpus;
 
 phys_addr_t pvmfw_base;
@@ -39,15 +50,41 @@ size_t hyp_kvm_iommu_pages;
 
 u64 hyp_lm_size_mb;
 
+#ifdef CONFIG_NVHE_GHOST_SPEC
+// Ghost: removed static (perhaps better to add explicit ghost copies?)
+/*static*/ void *vmemmap_base;
+/*static*/ void *vm_table_base;
+/*static*/ void *hyp_pgt_base;
+/*static*/ void *host_s2_pgt_base;
+static void *selftest_base;
+/*static*/ void *ffa_proxy_pages;
+#else
 static void *vmemmap_base;
 static void *vm_table_base;
 static void *hyp_pgt_base;
 static void *host_s2_pgt_base;
 static void *selftest_base;
 static void *ffa_proxy_pages;
+#endif /* CONFIG_NVHE_GHOST_SPEC */
+
 static struct kvm_pgtable_mm_ops pkvm_pgtable_mm_ops;
+#ifdef CONFIG_NVHE_GHOST_SPEC
+/*static*/ struct hyp_pool hpool;
+#else /* CONFIG_NVHE_GHOST_SPEC */
 static struct hyp_pool hpool;
+#endif
 static void *iommu_base;
+
+#ifdef CONFIG_NVHE_GHOST_SPEC
+u64 ghost_vmemmap_size;
+u64 ghost_vm_table_size;
+u64 ghost_hyp_pgt_size;
+u64 ghost_host_s2_pgt_size;
+
+u64 ghost__pkvm_init_phys;
+u64 ghost__pkvm_init_size;
+u64 ghost__pkvm_init_virt;
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 
 static int divide_memory_pool(void *virt, unsigned long size)
 {
@@ -61,24 +98,52 @@ static int divide_memory_pool(void *virt, unsigned long size)
 		return -ENOMEM;
 
 	nr_pages = hyp_vmemmap_pages(sizeof(struct hyp_page));
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	ghost_vmemmap_size = nr_pages;
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	vmemmap_base = hyp_early_alloc_contig(nr_pages);
 	if (!vmemmap_base)
 		return -ENOMEM;
 
+#if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
+	casemate_model_step_init(hyp_virt_to_phys(vmemmap_base), nr_pages);
+#endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
+
 	nr_pages = hyp_vm_table_pages();
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	ghost_vm_table_size = nr_pages;
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	vm_table_base = hyp_early_alloc_contig(nr_pages);
 	if (!vm_table_base)
 		return -ENOMEM;
 
+#if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
+	casemate_model_step_init(hyp_virt_to_phys(vm_table_base), nr_pages);
+#endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
+
 	nr_pages = hyp_s1_pgtable_pages();
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	ghost_hyp_pgt_size = nr_pages;
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_pgt_base = hyp_early_alloc_contig(nr_pages);
 	if (!hyp_pgt_base)
 		return -ENOMEM;
 
+#if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
+	casemate_model_step_init(hyp_virt_to_phys(hyp_pgt_base), nr_pages);
+#endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
+
 	nr_pages = host_s2_pgtable_pages();
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	ghost_host_s2_pgt_size = nr_pages;
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	host_s2_pgt_base = hyp_early_alloc_contig(nr_pages);
 	if (!host_s2_pgt_base)
 		return -ENOMEM;
+
+#if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
+	casemate_model_step_init(hyp_virt_to_phys(host_s2_pgt_base), nr_pages);
+#endif /* defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) */
 
 	nr_pages = hyp_ffa_proxy_pages();
 	ffa_proxy_pages = hyp_early_alloc_contig(nr_pages);
@@ -112,7 +177,11 @@ static int pkvm_create_host_sve_mappings(void)
 
 		start = kern_hyp_va(sve_state);
 		end = start + PAGE_ALIGN(pkvm_host_sve_state_size());
+#ifdef CONFIG_NVHE_GHOST_SPEC
+		ret = pkvm_create_mappings(start, end, PAGE_HYP, HYP_HOST_FP_STATE, DUMMY_CPU);
+#else
 		ret = pkvm_create_mappings(start, end, PAGE_HYP);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 		if (ret)
 			return ret;
 	}
@@ -148,23 +217,43 @@ static int recreate_hyp_mappings(phys_addr_t phys, unsigned long size,
 	if (ret)
 		return ret;
 
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	ret = pkvm_create_mappings(__hyp_text_start, __hyp_text_end, PAGE_HYP_EXEC, HYP_TEXT, DUMMY_CPU);
+#else
 	ret = pkvm_create_mappings(__hyp_text_start, __hyp_text_end, PAGE_HYP_EXEC);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	if (ret)
 		return ret;
 
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	ret = pkvm_create_mappings(__hyp_data_start, __hyp_data_end, PAGE_HYP, HYP_DATA, DUMMY_CPU);
+#else
 	ret = pkvm_create_mappings(__hyp_data_start, __hyp_data_end, PAGE_HYP);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	if (ret)
 		return ret;
 
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	ret = pkvm_create_mappings(__hyp_rodata_start, __hyp_rodata_end, PAGE_HYP_RO, HYP_RODATA, DUMMY_CPU);
+#else
 	ret = pkvm_create_mappings(__hyp_rodata_start, __hyp_rodata_end, PAGE_HYP_RO);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	if (ret)
 		return ret;
 
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	ret = pkvm_create_mappings(__hyp_bss_start, __hyp_bss_end, PAGE_HYP, HYP_BSS, DUMMY_CPU);
+#else
 	ret = pkvm_create_mappings(__hyp_bss_start, __hyp_bss_end, PAGE_HYP);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	if (ret)
 		return ret;
 
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	ret = pkvm_create_mappings(virt, virt + size, PAGE_HYP, HYP_WORKSPACE, DUMMY_CPU);
+#else
 	ret = pkvm_create_mappings(virt, virt + size, PAGE_HYP);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	if (ret)
 		return ret;
 
@@ -173,7 +262,11 @@ static int recreate_hyp_mappings(phys_addr_t phys, unsigned long size,
 
 		start = (void *)kern_hyp_va(per_cpu_base[i]);
 		end = start + PAGE_ALIGN(hyp_percpu_size);
+#ifdef CONFIG_NVHE_GHOST_SPEC
+		ret = pkvm_create_mappings(start, end, PAGE_HYP, HYP_PERCPU, i);
+#else
 		ret = pkvm_create_mappings(start, end, PAGE_HYP);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 		if (ret)
 			return ret;
 
@@ -198,7 +291,11 @@ static int recreate_hyp_mappings(phys_addr_t phys, unsigned long size,
 	start = hyp_phys_to_virt(pvmfw_base);
 	end = start + pvmfw_size;
 	prot = pkvm_mkstate(PAGE_HYP_RO, PKVM_PAGE_OWNED);
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	ret = pkvm_create_mappings(start, end, prot, HYP_PVMFW, DUMMY_CPU);
+#else
 	ret = pkvm_create_mappings(start, end, prot);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	if (ret)
 		return ret;
 
@@ -379,6 +476,19 @@ void __noreturn __pkvm_init_finalise(void)
 	unsigned long nr_pages, reserved_pages, pfn;
 	int ret;
 
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	GHOST_LOG_CONTEXT_ENTER();
+
+	if (ghost_print_on("setup")) {
+		// dump some mappings
+		ghost_dump_setup();
+		//	if (static_branch_unlikely(&kvm_protected_mode_initialized)) {
+		ghost_hyp_put_mapping_reqs();
+		ghost_dump_pgtable(&pkvm_pgtable,"pkvm_pgtable", 0);
+		ghost_check_hyp_mapping_reqs(&pkvm_pgtable,false /*noisy*/);
+	}
+#endif /* CONFIG_NVHE_GHOST_SPEC */
+
 	/* Now that the vmemmap is backed, install the full-fledged allocator */
 	pfn = hyp_virt_to_pfn(hyp_pgt_base);
 	nr_pages = hyp_s1_pgtable_pages();
@@ -438,7 +548,25 @@ void __noreturn __pkvm_init_finalise(void)
 	pkvm_hyp_vm_table_init(vm_table_base);
 
 	pkvm_ownership_selftest(selftest_base);
+#ifdef CONFIG_NVHE_GHOST_SPEC
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	ghost_initialise_sm(ghost__pkvm_init_phys, ghost__pkvm_init_size);
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
+	init_abstraction_common();
+	init_abstraction_thread_local();
+	/* The call to record_abstraction_common() is delayed until the call to
+	 * __pkvm_prot_finalize() so that it occurs after the initialisation of
+	 * pKVM modules, as they affect the stage-1 mapping of pKVM.
+	 */
+	WRITE_ONCE(ghost_pkvm_init_finalized, true);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
+
 out:
+
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	GHOST_LOG_CONTEXT_EXIT(); // __pkvm_init_finalise
+#endif /* CONFIG_NVHE_GHOST_SPEC */
+
 	/*
 	 * We tail-called to here from handle___pkvm_init() and will not return,
 	 * so make sure to propagate the return value to the host.
@@ -456,27 +584,117 @@ int __pkvm_init(phys_addr_t phys, unsigned long size, unsigned long nr_cpus,
 	typeof(__pkvm_init_switch_pgd) *fn;
 	int ret;
 
+#ifdef CONFIG_NVHE_GHOST_SPEC
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	u64 sm_size = PAGE_ALIGN(2 * sizeof(struct casemate_model_state));
+#endif
+
+	GHOST_LOG_CONTEXT_ENTER();
+
+	if (ghost_print_on("setup")) {
+		ghost_printf(
+			"\n"
+			"__pkvm_init:\n"
+			"    CPU:..................%d\n"
+			"\n"
+			"  arguments:\n"
+			"    phys:.................%p\n"
+			"    size:.................%lx\n"
+			"    nr_cpus:..............%lu\n"
+			"    per_cpu_base:.........%p\n"
+			"    hyp_va_bits:..........%x\n"
+			"\n"
+			"  interesting globals:\n"
+			"    hyp_physvirt_offset:..%llx\n"
+			"\n"
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+			"  simplified model:\n"
+			"    phys:.................%p\n"
+			"    virt:.................%p\n"
+			"    size:.................%llx\n"
+			"\n"
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
+			,
+			hyp_smp_processor_id(), (void*)phys, size, nr_cpus,
+			per_cpu_base, hyp_va_bits, hyp_physvirt_offset
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+			,
+			(void*)(phys+size-sm_size),
+			(void*)(virt+size-sm_size),
+			sm_size
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
+		);
+	}
+#endif /* CONFIG_NVHE_GHOST_SPEC */
+
 	BUG_ON(kvm_check_pvm_sysreg_table());
 
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	if (!PAGE_ALIGNED(phys) || !PAGE_ALIGNED(size)) {
+		GHOST_LOG_CONTEXT_EXIT();
+		return -EINVAL;
+	}
+#else /* CONFIG_NVHE_GHOST_SPEC */
 	if (!PAGE_ALIGNED(phys) || !PAGE_ALIGNED(size))
 		return -EINVAL;
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 
 	hyp_spin_lock_init(&pkvm_pgd_lock);
 	hyp_nr_cpus = nr_cpus;
 
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	ret = divide_memory_pool(virt, size - sm_size);
+#else /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	ret = divide_memory_pool(virt, size);
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	if (ret) {
+		GHOST_LOG_CONTEXT_EXIT();
+		return ret;
+	}
+#else /* CONFIG_NVHE_GHOST_SPEC */
 	if (ret)
 		return ret;
+#endif /* CONFIG_NVHE_GHOST_SPEC */
+
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	ghost__pkvm_init_phys = phys;
+	ghost__pkvm_init_size = size;
+	ghost__pkvm_init_virt = (u64)virt;
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 
 	ret = recreate_hyp_mappings(phys, size, per_cpu_base, hyp_va_bits);
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	if (ret) {
+		GHOST_LOG_CONTEXT_EXIT();
+		return ret;
+	}
+#else /* CONFIG_NVHE_GHOST_SPEC */
 	if (ret)
 		return ret;
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 
 	ret = hyp_alloc_init(SZ_128M);
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	if (ret) {
+		GHOST_LOG_CONTEXT_EXIT();
+		return ret;
+	}
+#else /* CONFIG_NVHE_GHOST_SPEC */
 	if (ret)
 		return ret;
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 
 	update_nvhe_init_params();
+
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	//	hyp_putc('P');hyp_putc('S');hyp_putc('H');hyp_putc('A');hyp_putc('C');hyp_putc('k');hyp_putc('\n');
+	GHOST_LOG_CONTEXT_EXIT();
+	// because we will tail call here with no intention of returning,
+	// pop the parents off as well.
+	GHOST_LOG_CONTEXT_EXIT_FORCE("handle_host_hcall");
+	GHOST_LOG_CONTEXT_EXIT_FORCE("handle_trap");
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 
 	/* Jump in the idmap page to switch to the new page-tables */
 	params = this_cpu_ptr(&kvm_init_params);

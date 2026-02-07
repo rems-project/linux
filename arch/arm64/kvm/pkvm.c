@@ -243,6 +243,10 @@ void __init kvm_hyp_reserve(void)
 	hyp_mem_pages += hyp_vmemmap_pages(STRUCT_HYP_PAGE_SIZE);
 	hyp_mem_pages += pkvm_selftest_pages();
 	hyp_mem_pages += hyp_ffa_proxy_pages();
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	/* simplified model memory is ~600MiB, and we need space for 2 of them. */
+	hyp_mem_pages += 0x50000;
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	if (static_branch_unlikely(&kvm_ffa_unmap_on_lend))
 		hyp_mem_pages += KVM_FFA_SPM_HANDLE_NR_PAGES;
 

@@ -11,6 +11,11 @@
 #include <asm/memory.h>
 #include <asm/mmu.h>
 #include <asm/cpufeature.h>
+#if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
+#ifndef __ASSEMBLY__
+#include <nvhe/ghost/ghost_simplified_model.h>
+#endif /* __ASSEMBLY__ */
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 
 /*
  * As ARMv8.0 only has the TTBR0_EL2 register, we cannot express
@@ -392,6 +397,9 @@ static __always_inline void __load_stage2(struct kvm_s2_mmu *mmu,
 {
 	write_sysreg(mmu->vtcr, vtcr_el2);
 	write_sysreg(kvm_get_vttbr(mmu), vttbr_el2);
+#if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
+	casemate_model_step_msr(SYSREG_VTTBR, kvm_get_vttbr(mmu));
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 
 	/*
 	 * ARM errata 1165522 and 1530923 require the actual execution of the

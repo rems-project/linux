@@ -14,6 +14,9 @@
 #include <nvhe/gfp.h>
 #include <nvhe/rwlock.h>
 
+#if defined(CONFIG_NVHE_GHOST_SPEC)
+#include <nvhe/ghost/ghost_maplets.h>
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 /*
  * Holds the relevant data for maintaining the vcpu state completely at hyp.
  */
@@ -76,6 +79,11 @@ struct pkvm_hyp_vm {
 	struct pkvm_hyp_vcpu *pvmfw_entry_vcpu;
 
 	unsigned short refcount;
+
+#if defined(CONFIG_NVHE_GHOST_SPEC)
+	/* Ghost state recording the interpretation of the stage-2 mapping */
+	mapping ghost_mapping;
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 
 	hyp_spinlock_t vcpus_lock;
 

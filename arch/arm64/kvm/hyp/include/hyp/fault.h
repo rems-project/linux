@@ -12,6 +12,10 @@
 #include <asm/kvm_hyp.h>
 #include <asm/kvm_mmu.h>
 
+#if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SPEC)
+#include <nvhe/ghost/ghost_call_data.h>
+#endif /* CONFIG_NVHE_GHOST_SPEC */
+
 static inline bool __fault_safe_to_translate(u64 esr)
 {
 	u64 fsc = esr & ESR_ELx_FSC;
@@ -44,6 +48,12 @@ static inline bool __translate_far_to_hpfar(u64 far, u64 *hpfar)
 		tmp = read_sysreg_par();
 	else
 		tmp = SYS_PAR_EL1_F; /* back to the guest */
+#if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SPEC)
+	if (!ret)
+		GHOST_RECORD_AT_SUCCESS(far, tmp);
+	else
+		GHOST_RECORD_AT_FAIL(far);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	write_sysreg(par, par_el1);
 
 	if (unlikely(tmp & SYS_PAR_EL1_F))

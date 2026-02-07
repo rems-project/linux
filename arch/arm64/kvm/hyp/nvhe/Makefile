@@ -41,6 +41,48 @@ hyp-obj-$(CONFIG_ARM_SMMU_V3_PKVM_PV) += $(HYP_SMMU_V3_DRV_PATH)/pkvm/pv/arm-smm
 	$(HYP_SMMU_V3_DRV_PATH)/pkvm/arm-smmu-v3-lib-hyp.o
 endif
 
+ghosts-y += ghost/ghost_serial.o
+ghosts-y += ghost/ghost_printer.o
+ghosts-y += ghost/ghost_mapping_reqs.o
+ghosts-y += ghost/ghost_misc.o
+ghosts-y += ghost/ghost_asm.o
+ghosts-y += ghost/ghost_sort_hack.o
+ghosts-y += ghost/ghost_list_sort_hack.o
+ghosts-y += ghost/ghost_maplets.o
+ghosts-y += ghost/ghost_pgtable.o
+ghosts-y += ghost/ghost_control.o
+ghosts-y += ghost/ghost_pfn_set.o
+ghosts-y += ghost/ghost_context.o
+ghosts-y += ghost/ghost_status.o
+ghosts-y += ghost/ghost_recording.o
+ghosts-y += ghost/ghost_types_aux.o
+ghosts-y += ghost/ghost_spec.o
+ghosts-y += ghost/ghost_alloc.o
+ghosts-y += ghost/ghost_control.o
+
+ghosts-$(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) += ghost/ghost_sm_driver.o
+ghosts-$(CONFIG_NVHE_GHOST_DIFF) += ghost/ghost_abstraction_diff.o
+
+# We define a macro for ghost translation units, so that headers can tell when
+# they are included by ghost code.
+$(foreach ghost,$(ghosts-y),$(eval CFLAGS_$(patsubst %.o,%.nvhe.o,$(ghost)) += -D__GHOST__))
+
+hyp-obj-$(CONFIG_NVHE_GHOST_SPEC) += $(ghosts-y)
+
+get-casemate:
+       git clone https://github.com/rems-project/casemate ghost/casemate
+.PHONY: get-casemate
+
+ifneq ($(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL),)
+  CASEMATELIB = ghost/casemate/src/lib
+  GHOST_USES_SERIAL = 1
+  include $(obj)/ghost/casemate/src/lib/Makefile.linux
+endif
+
+ghost-lib-objs := strcmp.o strlen.o
+hyp-obj-$(CONFIG_NVHE_GHOST_SPEC) += $(addprefix ../../../lib/, $(ghost-lib-objs))
+ccflags-$(CONFIG_NVHE_GHOST_SPEC) += -O1
+
 $(obj)/hyp.lds: $(src)/hyp.lds.S FORCE
 	$(call if_changed_dep,cpp_lds_S)
 

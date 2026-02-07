@@ -1,0 +1,52 @@
+config NVHE_GHOST_SPEC_INJECT_ERROR___kvm_tlb_flush_vmid_ipa_MISSING_TLBI
+	bool "Inject an error (missing TLBI) into __kvm_tlb_flush_vmid_ipa"
+	depends on NVHE_GHOST_SIMPLIFIED_MODEL
+
+config NVHE_GHOST_SPEC_INJECT_ERROR_kvm_clear_pte_MISSING_WRITE
+	bool "Inject an error (missing write of 0) into kvm_clear_pte"
+	depends on NVHE_GHOST_SIMPLIFIED_MODEL
+
+config NVHE_GHOST_SPEC_INJECT_ERROR_stage2_map_walker_try_leaf_MISSING_BREAK
+	bool "Inject an error (missing break) into stage2_map_walker_try_leaf"
+	depends on NVHE_GHOST_SIMPLIFIED_MODEL
+
+config NVHE_GHOST_SPEC_INJECT_ERROR_stage2_try_break_pte_MISSING_TLBI
+	bool "Inject an error (missing TLBI) into stage2_try_break_pte"
+	depends on NVHE_GHOST_SIMPLIFIED_MODEL
+
+config NVHE_GHOST_SPEC_INJECT_ERROR_stage2_put_pte_MISSING_INVALIDATE
+	bool "Inject an error (missing invalidate) into stage2_put_pte"
+	depends on NVHE_GHOST_SIMPLIFIED_MODEL
+
+config NVHE_GHOST_SPEC_INJECT_ERROR___kvm_tlb_flush_vmid_WRONG_TLBI
+	bool "Inject an error (incorrect tlbi) into __kvm_tlb_flush_vmid"
+	depends on NVHE_GHOST_SIMPLIFIED_MODEL
+
+config NVHE_GHOST_SPEC_INJECT_ERROR_stage2_make_pte_PLAIN_STORE
+	bool "Inject an error (plain write) into stage2_make_pte"
+	depends on NVHE_GHOST_SIMPLIFIED_MODEL
+
+config NVHE_GHOST_SPEC_INJECT_ERROR___kvm_tlb_flush_vmid_ipa_WRONG_PAGE
+	bool "Inject an error (incorrect page) into __kvm_tlb_flush_vmid_ipa"
+	depends on NVHE_GHOST_SIMPLIFIED_MODEL
+
+config NVHE_GHOST_SPEC_INJECT_ERROR_enter_vmid_context_NO_VMID_SWITCH
+	bool "Inject an error (missing VMID switch) into enter_vmid_context"
+	depends on NVHE_GHOST_SIMPLIFIED_MODEL
+
+
+config NVHE_GHOST_SPEC_INJECT_ERROR_do_share_OMIT_CHECKS
+	bool "Inject an error (omit the checks) into do_share"
+	depends on NVHE_GHOST_SPEC
+
+config NVHE_GHOST_SPEC_INJECT_ERROR_do_donate_OMIT_host_initiate_donation
+	bool "Inject an error (omit the host initiation part) into do_donate"
+	depends on NVHE_GHOST_SPEC
+
+config NVHE_GHOST_SPEC_INJECT_ERROR_host_share_hyp_NO_LOCKING
+	bool "Inject an error (do not lock/unlock the hyp and host) into __pkvm_host_share_hyp"
+	depends on NVHE_GHOST_SPEC
+
+config NVHE_GHOST_SPEC_INJECT_ERROR_host_share_hyp_WRONG_COMPLETER
+	bool "Inject an error (use guest completer id) into __pkvm_host_share_hyp"
+	depends on NVHE_GHOST_SPEC

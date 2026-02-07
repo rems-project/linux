@@ -22,6 +22,22 @@
 #include <nvhe/mm.h>
 #include <nvhe/modules.h>
 
+#ifdef CONFIG_NVHE_GHOST_SPEC
+#include <nvhe/ghost/ghost_serial.h>
+#include <nvhe/ghost/ghost_control.h>
+#include <nvhe/ghost/ghost_misc.h>
+#include <nvhe/ghost/ghost_recording.h>
+#include <nvhe/ghost/ghost_call_data.h>
+#ifdef CONFIG_NVHE_GHOST_SPEC_DUMP_STATE_RAW_HOST
+#include <nvhe/ghost/ghost_spec.h> // for ghost_print_this_hypercall
+#endif
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+#include <nvhe/ghost/ghost_simplified_model.h>
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
+#pragma GCC diagnostic ignored "-Wdeclaration-after-statement"
+#pragma GCC diagnostic ignored "-Wunused-variable"
+#endif /* CONFIG_NVHE_GHOST_SPEC */
+
 #define KVM_HOST_S2_FLAGS (KVM_PGTABLE_S2_NOFWB | KVM_PGTABLE_S2_IDMAP)
 
 struct host_mmu host_mmu;
@@ -29,7 +45,11 @@ struct host_mmu host_mmu;
 struct pkvm_moveable_reg pkvm_moveable_regs[PKVM_NR_MOVEABLE_REGS];
 unsigned int pkvm_moveable_regs_nr;
 
+#ifdef CONFIG_NVHE_GHOST_SPEC
+/*static*/ struct hyp_pool host_s2_pool;
+#else /* CONFIG_NVHE_GHOST_SPEC */
 static struct hyp_pool host_s2_pool;
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 
 static DEFINE_PER_CPU(struct pkvm_hyp_vm *, __current_vm);
 #define current_vm (*this_cpu_ptr(&__current_vm))
@@ -46,32 +66,88 @@ static struct kvm_pgtable_pte_ops guest_s2_pte_ops = {
 static void guest_lock_component(struct pkvm_hyp_vm *vm)
 {
 	hyp_spin_lock(&vm->pgtable_lock);
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	casemate_model_step_lock(hyp_virt_to_phys(&vm->pgtable_lock));
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	current_vm = vm;
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	record_and_check_abstraction_vm_pre(vm);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 }
 
 static void guest_unlock_component(struct pkvm_hyp_vm *vm)
 {
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	record_and_copy_abstraction_vm_post(vm);
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	current_vm = NULL;
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	casemate_model_step_unlock(hyp_virt_to_phys(&vm->pgtable_lock));
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	hyp_spin_unlock(&vm->pgtable_lock);
 }
 
 static void host_lock_component(void)
 {
 	hyp_spin_lock(&host_mmu.lock);
+#ifdef CONFIG_NVHE_GHOST_SPEC
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	casemate_model_step_lock(hyp_virt_to_phys(&host_mmu.lock));
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
+#ifdef CONFIG_NVHE_GHOST_SPEC_DUMP_STATE_RAW_HOST
+	if (__this_cpu_read(ghost_print_this_hypercall)) {
+		ghost_printf("host pgtable pre (mapping):\n");
+		ghost_dump_pgtable(&host_mmu.pgt, "host_kvm.pgt", 2);
+		ghost_printf("\n");
+		ghost_printf("host pgtable pre (raw):\n");
+		dump_pgtable(host_mmu.pgt);
+		ghost_printf("\n");
+	}
+#endif /* CONFIG_NVHE_GHOST_SPEC_DUMP_STATE_RAW_HOST */
+	record_and_check_abstraction_host_pre();
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 }
 
 static void host_unlock_component(void)
 {
+#ifdef CONFIG_NVHE_GHOST_SPEC
+#ifdef CONFIG_NVHE_GHOST_SPEC_DUMP_STATE_RAW_HOST
+	if (__this_cpu_read(ghost_print_this_hypercall)) {
+		ghost_printf("host pgtable post (mapping):\n");
+		ghost_dump_pgtable(&host_mmu.pgt, "host_kvm.pgt", 2);
+		ghost_printf("\n");
+		ghost_printf("host pgtable post (raw):\n");
+		dump_pgtable(host_mmu.pgt);
+		ghost_printf("\n");
+	}
+#endif /* CONFIG_NVHE_GHOST_SPEC_DUMP_STATE_RAW_HOST */
+	record_and_copy_abstraction_host_post();
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	casemate_model_step_unlock(hyp_virt_to_phys(&host_mmu.lock));
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_spin_unlock(&host_mmu.lock);
 }
 
 static void hyp_lock_component(void)
 {
 	hyp_spin_lock(&pkvm_pgd_lock);
+#ifdef CONFIG_NVHE_GHOST_SPEC
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	casemate_model_step_lock(hyp_virt_to_phys(&pkvm_pgd_lock));
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
+	record_and_check_abstraction_pkvm_pre();
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 }
 
 static void hyp_unlock_component(void)
 {
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	record_and_copy_abstraction_pkvm_post();
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	casemate_model_step_unlock(hyp_virt_to_phys(&pkvm_pgd_lock));
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	hyp_spin_unlock(&pkvm_pgd_lock);
 }
 
@@ -191,6 +267,12 @@ int kvm_host_prepare_stage2(void *pgt_pool_base)
 	if (ret)
 		return ret;
 
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	ghost_lock_maplets();
+	host_mmu.ghost_mapping = mapping_empty_();
+	ghost_unlock_maplets();
+#endif /* CONFIG_NVHE_GHOST_SPEC */
+
 	mmu->pgd_phys = __hyp_pa(host_mmu.pgt.pgd);
 	mmu->pgt = &host_mmu.pgt;
 	atomic64_set(&mmu->vmid.id, 0);
@@ -243,6 +325,9 @@ static void *guest_s2_zalloc_page(void *mc)
 
 	WARN_ON(order);
 	memset(addr, 0, PAGE_SIZE);
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	casemate_model_step_init(hyp_virt_to_phys(addr), PAGE_SIZE);
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	p = hyp_virt_to_page(addr);
 	hyp_set_page_refcounted(p);
 	p->order = 0;
@@ -350,9 +435,18 @@ int kvm_guest_prepare_stage2(struct pkvm_hyp_vm *vm, void *pgd)
 	guest_lock_component(vm);
 	ret = __kvm_pgtable_stage2_init(mmu->pgt, mmu, &vm->mm_ops, 0,
 					&guest_s2_pte_ops);
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	casemate_model_step_hint(GHOST_HINT_SET_ROOT_LOCK, hyp_virt_to_phys(mmu->pgt->pgd), hyp_virt_to_phys(&vm->pgtable_lock));
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	guest_unlock_component(vm);
 	if (ret)
 		return ret;
+
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	ghost_lock_maplets();
+	vm->ghost_mapping = mapping_empty_();
+	ghost_unlock_maplets();
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 
 	vm->kvm.arch.mmu.pgd_phys = __hyp_pa(vm->pgt.pgd);
 
@@ -362,6 +456,10 @@ int kvm_guest_prepare_stage2(struct pkvm_hyp_vm *vm, void *pgd)
 void destroy_hyp_vm_pgt(struct pkvm_hyp_vm *vm)
 {
 	guest_lock_component(vm);
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	// TODO: BS: fold this into the stage2 table free?
+	casemate_model_step_hint(GHOST_HINT_RELEASE_TABLE, vm->kvm.arch.mmu.pgd_phys, 0);
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	kvm_pgtable_stage2_destroy(&vm->pgt);
 	vm->kvm.arch.mmu.pgd_phys = 0ULL;
 	guest_unlock_component(vm);
@@ -495,11 +593,31 @@ int __pkvm_prot_finalize(void)
 
 	/* Invalidate stale HCR bits that may be cached in TLBs */
 	__tlbi(vmalls12e1);
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	casemate_model_step_tlbi(TLBI_vmalls12e1);
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	dsb(nsh);
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	casemate_model_step_dsb(DxB_nsh);
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	isb();
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	casemate_model_step_isb();
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 
 	__pkvm_close_module_registration();
 
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	record_abstraction_common();
+	init_abstraction_thread_local();
+	record_abstraction_loaded_vcpu_and_check_none();
+	this_cpu_ptr(&ghost_cpu_run_state)->guest_running = false;
+
+	if (ghost_print_on("setup")) {
+		ghost_dump_sysregs();
+	}
+
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	return 0;
 }
 
@@ -803,16 +921,116 @@ static bool host_stage2_pte_is_counted(kvm_pte_t pte, u32 level)
 static int host_stage2_idmap(u64 addr)
 {
 	struct kvm_mem_range range;
+
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	// PS: t012345he mm.c struct memblock_region hyp_memory[] is initialised by pkvm.c register_memblock_regions to a sorted copy of the regions available to linux, using the include/linux/memblock.h for_each_mem_region (struct memblock_region is also defined there).  I guess hyp_memory[] is constant after initialisation?   The find_mem_range above finds the enclosing region for addr if there is one, writing into range.  The memblock_region's have flags (HOTPLUG/MIRROR/NOMAP), but find_mem_range ignores them, so I think we can abstract hyp_memory[] to just a set of physical addresses (closed under the same-4K-page relation) (or, equivalently, a set of page addresses or page frame numbers) (or reuse our mapping and maplet code).
+	// In the QEMU boot these are:
+	//  base:0x........40000000 base':0x.......1385b0000 size:0x........f85b0000 flags:
+	// -base:0x.......1385b0000 base':0x.......138750000 size:0x..........1a0000 flags:
+	// -base:0x.......138750000 base':0x.......13bc20000 size:0x.........34d0000 flags:
+	// -base:0x.......13bc20000 base':0x.......13c000000 size:0x..........3e0000 flags:
+	// -base:0x.......13c000000 base':0x.......140000000 size:0x.........4000000 flags:
+	// Why five contiguous regions?   Different permissions.
+        // I'll only pay attention to the memory case for now, not the device case
+#endif /* CONFIG_NVHE_GHOST_SPEC */
+
 	bool is_memory = !!find_mem_range(addr, &range);
 	enum kvm_pgtable_prot prot = default_host_prot(is_memory);
 	int ret;
 
 	host_lock_component();
+
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	bool ghost_check = ghost_control_check_enabled(__func__);
+	u64 i=0; /* base indent */
+	int cur;
+	mapping mapping_pre, mapping_post; // interpretation of pgt on entry and exit
+	mapping mapping_pre_annot, mapping_post_annot; // interpretation of pgtable on entry and exit, cut down to annot parts
+	//mapping mapping_requested;
+	mapping mapping_hyp_memory;
+	mapping mapping_post_nonannot;
+	if (ghost_check) {
+		hyp_putsxn("\nhost_stage2_idmap addr",addr,64); hyp_putc('\n');
+		//hyp_putsxn("kvm_iommu_ops.host_stage2_adjust_mmio_range",(u64)kvm_iommu_ops.host_stage2_adjust_mmio_range,64);
+		//hyp_putsp("\n");
+		ghost_dump_hyp_memory(i+2);
+		//	ghost_dump_s2mpus(i+2);
+		// (we can't meaningfully record the on-entry host pagetable abstraction until we've taken the lock - and in any case, instead of recomputing the abstraction, we should be able to pull it from the lock invariant)
+	}
+
+	if (ghost_check) {
+		ghost_lock_maplets();
+		mapping_pre = ghost_record_pgtable_and_check(host_mmu.ghost_mapping, &host_mmu.pgt, true/*dump*/, "host_mmu.pgt", i+2);
+		ghost_dump_pgtable_locked(&host_mmu.pgt,"before: host_mmu.pgt", i);
+		ghost_unlock_maplets();
+	}
+	// PS: the host_stage2_adjust_range uses kvm_pgtable_get_leaf (which does a kvm_pgtable_walk) to find the current pte and level for addr. If there's a valid entry, it returns -EAGAIN (presumably another thread has mapped it since the fault); if there's a nonzero invalid entry, it returns -EPERM (indicating that there's another owner and we shouldn't map it); otherwise it iterates from this level downwards looking for a level at which the level supports a block mapping for a block included in the range.  (Though in the pKVM boot it doesn't seem to ever make block mappings for actual memory??)  The tree geometry means that there won't be any annotated ptes if we find a proper block mapping.
+#endif /* CONFIG_NVHE_GHOST_SPEC */
+
 	ret = host_stage2_adjust_range(addr, &range);
 	if (ret)
 		goto unlock;
 
 	ret = host_stage2_idmap_locked(range.start, range.end - range.start, prot);
+
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	if (ghost_check) {
+		// sketch of the postcondition - punting on sundry cases
+		// some of this is common with pgtable.c stage2 postconditions and should be abstracted out when we know better what they all are
+		ghost_lock_maplets();
+		mapping_post = ghost_record_pgtable(&host_mmu.pgt, NULL, NULL, "host_stage2_idmap post", i+2);
+		ghost_dump_pgtable_locked(&host_mmu.pgt,"after: host_mmu.pgt", i);
+		// the atomicity is interesting here: after the host_unlock_component(), what remains guaranteed?
+
+		// the naive postcondition would check mapping_post included in mapping_pre + mapping_requested, but that would be wrong, as the code might map more than the requested address - any block contained in a memblock_region.  Ignoring device memory, the upper bound is really the hyp_memory[] minus the annotation parts of the on-entry mapping.  So we first compute the interpretation of those two.   For device memory, it looks as if currently (with s2mpu.c not turned on) we should allow _any_ non-hyp_memory mapping, but at PKVM_HOST_MMIO_PROT.  So how is that supposed to protect devices from guests?  IIRC Will said the s2mpu.c is turned on in later versions.
+
+
+		// we think the hyp_memory is constant, while the annotations will change; they should be ghost state for the spec, but here we'll compute them from the host tables on entry
+		mapping_hyp_memory = mapping_empty_();
+		for (cur=0; cur<hyp_memblock_nr; cur++) {
+			u64 phys = hyp_memory[cur].base;
+			u64 nr_pages = hyp_memory[cur].size / PAGE_SIZE;
+			extend_mapping_coalesce(&mapping_hyp_memory, GHOST_STAGE2, phys, nr_pages, maplet_target_mapped_ext(phys, nr_pages, DUMMY_ATTR, DUMMY_ATTR, DUMMY_ATTR));
+		}
+		mapping_pre_annot = mapping_annot(mapping_pre);
+
+		// NB this addr might have been "guessed" - so the following is (at least) awkward to talk about in the top-level spec - it's not necessarily the fault address.  We tend to think a pure safety spec is what we should go for, without any progress result, and so we should omit this here.  The underlying `pgtable.c:kvm_pgtable_stage2_map` will have a stronger spec that we'll weaken for its usag
+		// postcondition: if addr is in memory and is not annotated in the stage 2 map, it's in mapping_post
+		//if (mapping_in_domain(addr, mapping_hyp_memory) && !mapping_in_domain(addr, mapping_pre_annot)) {
+		//	mapping_requested = mapping_singleton(ALIGN_DOWN(addr,PAGE_SIZE), ALIGN_DOWN(addr,PAGE_SIZE), 1, DUMMY_ATTR);
+		//	mapping_submapping(mapping_requested, mapping_post, "host_stage2_idmap post", "mapping_requested", "mapping_post", i+2);
+		//} else {
+		//	mapping_requested = mapping_empty_();
+		//	hyp_putspi("addr not in memory or annotated in stage 2, so nothing to check\n", i+2);
+		//}
+
+		// postcondition: mapping_post minus annotations included in hyp_memory minus annotations
+		mapping_post_nonannot = mapping_nonannot(mapping_post);
+		mapping_submapping(mapping_post_nonannot, mapping_hyp_memory, "host_stage2_idmap post", "mapping_post_nonannot", "mapping_hyp_memory", i+2);
+		mapping_disjoint(mapping_post_nonannot, mapping_pre_annot, "host_stage2_idmap post", "mapping_post_nonannot", "mapping_pre_annot", i+2);
+
+		// postcondition: mapping_post and mapping_pre have the same annotation part
+		mapping_post_annot = mapping_annot(mapping_post);
+		mapping_equal(mapping_pre_annot, mapping_post_annot, "host_stage2_idmap post annot equal", "mapping_pre_annot", "mapping_post_annot", i+2);
+
+		// record updated interpretation
+                free_mapping(host_mmu.ghost_mapping);
+		host_mmu.ghost_mapping = mapping_post;
+
+		free_mapping(mapping_pre);
+		/* NOT:	free_mapping(mapping_post);*/
+		free_mapping(mapping_pre_annot);
+		free_mapping(mapping_post_annot);
+		free_mapping(mapping_post_nonannot);
+		//free_mapping(mapping_requested);
+		free_mapping(mapping_hyp_memory);
+		ghost_unlock_maplets();
+		//ghost_dump_pgtable(host_mmu.pgt,"after: host_mmu.pgt", i);
+		//ghost_dump_pgtable_diff(mapping_pre, host_mmu.pgt,"host_mmu.pgt", i);
+		// and we need to wrap this local postcondition back up into the host lock invariant when we unlock it below
+	}
+#endif /* CONFIG_NVHE_GHOST_SPEC */
+
 unlock:
 	host_unlock_component();
 
@@ -885,6 +1103,10 @@ void handle_host_mem_abort(struct kvm_cpu_context *host_ctxt)
 	u64 esr, addr;
 	int ret = 0;
 
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	GHOST_LOG_CONTEXT_ENTER();
+#endif /* CONFIG_NVHE_GHOST_SPEC */
+
 	esr = read_sysreg_el2(SYS_ESR);
 	if (!__get_fault_info(esr, &fault)) {
 		/* Setting the address to an invalid value for use in tracing. */
@@ -893,6 +1115,9 @@ void handle_host_mem_abort(struct kvm_cpu_context *host_ctxt)
 		 * We've presumably raced with a page-table change which caused
 		 * AT to fail, try again.
 		 */
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	GHOST_LOG_CONTEXT_EXIT();
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 		return;
 	}
 
@@ -907,7 +1132,14 @@ void handle_host_mem_abort(struct kvm_cpu_context *host_ctxt)
 
 	if (is_dabt(esr) && !addr_is_memory(addr) &&
 	    kvm_iommu_host_dabt_handler(&host_ctxt->regs, esr, addr))
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	{
+		GHOST_LOG_CONTEXT_EXIT();
 		return;
+	}
+#else
+		return;
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 
 
 	switch (esr & ESR_ELx_FSC_TYPE) {
@@ -929,6 +1161,9 @@ void handle_host_mem_abort(struct kvm_cpu_context *host_ctxt)
 		BUG_ON(ret && ret != -EAGAIN);
 
 	trace_host_mem_abort(esr, addr);
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	GHOST_LOG_CONTEXT_EXIT();
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 }
 
 struct check_walk_data {
@@ -1279,8 +1514,10 @@ int __pkvm_host_share_hyp(u64 pfn)
 	u64 size = PAGE_SIZE;
 	int ret;
 
+#if !defined(CONFIG_NVHE_GHOST_SPEC_INJECT_ERROR_host_share_hyp_NO_LOCKING)
 	host_lock_component();
 	hyp_lock_component();
+#endif /* !defined(CONFIG_NVHE_GHOST_SPEC_INJECT_ERROR_host_share_hyp_NO_LOCKING) */
 
 	ret = __host_check_page_state_range(phys, size, PKVM_PAGE_OWNED);
 	if (ret)
@@ -1293,8 +1530,10 @@ int __pkvm_host_share_hyp(u64 pfn)
 	WARN_ON(__host_set_page_state_range(phys, size, PKVM_PAGE_SHARED_OWNED));
 
 unlock:
+#if !defined(CONFIG_NVHE_GHOST_SPEC_INJECT_ERROR_host_share_hyp_NO_LOCKING)
 	hyp_unlock_component();
 	host_unlock_component();
+#endif /* !defined(CONFIG_NVHE_GHOST_SPEC_INJECT_ERROR_host_share_hyp_NO_LOCKING) */
 
 	return ret;
 }
@@ -1953,6 +2192,9 @@ static int __guest_check_transition_size(u64 phys, u64 ipa, u64 nr_pages, u64 *s
 static void __hyp_poison_page(void *addr, size_t size)
 {
 	memset(addr, 0, size);
+#ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
+	casemate_model_step_init(hyp_virt_to_phys(addr), size);
+#endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 	__hyp_flush_page(addr, size);
 }
 
@@ -2241,6 +2483,30 @@ int __pkvm_host_donate_guest(u64 pfn, u64 gfn, u64 nr_pages, struct pkvm_hyp_vcp
 	host_lock_component();
 	guest_lock_component(vm);
 
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	// here (inside the locks) we could snapshot the abstraction of the host and guest pagetables, or (if we maintain them) use prevoiusly recorded ghost state for them in the postcondition
+	// do_donate uses check_donation which uses host_request_owned_transition and (if the donation works) calls guest_ack_donation. The former uses kvm_pgtable_walk for __check_page_stage_visitor to check that all this address range is PKVM_PAGE_OWNED (and that any valid ptes satisfy addr_is_allowed_memory() )
+	// Then host_initiate_donation uses host_stage2_set_owner_locked
+	// and guest_complete_donation uses kvm_pgtable_stage2_map (plus magic for pvmfw)
+
+	// Do we anywhere tell the guest we've done this?  Not as far as I can see
+	bool ghost_check = ghost_control_check_enabled(__func__);
+	u64 i=0; /* base indent */
+	mapping mapping_host_pre, mapping_host_post; // interpretation of pgt on entry and exit
+	mapping mapping_guest_pre, mapping_guest_post; // interpretation of pgt on entry and exit
+	if (ghost_check) {
+		hyp_putsxn("\n__pkvm_host_donate_guest host_addr",phys,64); hyp_putc('\n');
+		hyp_putsxn("__pkvm_host_donate_guest guest_addr",ipa,64); hyp_putc('\n');
+		// record host pgtable
+		mapping_host_pre = ghost_record_pgtable_and_check(host_mmu.ghost_mapping, &host_mmu.pgt,/*dump*/true, "host_mmu.pgt", i);
+
+
+		// record guest pgtable
+		mapping_guest_pre = ghost_record_pgtable_and_check(vm->ghost_mapping, &vm->pgt,/*dump*/true, "vm->pgt", i);
+
+	}
+#endif /* CONFIG_NVHE_GHOST_SPEC */
+
 	ret = ___host_check_page_state_range(phys, size, PKVM_PAGE_OWNED,
 					     HOST_CHECK_NULL_REFCNT |
 					     HOST_CHECK_IS_MEMORY);
@@ -2259,6 +2525,12 @@ int __pkvm_host_donate_guest(u64 pfn, u64 gfn, u64 nr_pages, struct pkvm_hyp_vcp
 	WARN_ON(kvm_pgtable_stage2_map(&vm->pgt, ipa, size, phys, prot,
 		&vcpu->vcpu.arch.stage2_mc, 0));
 unlock:
+#ifdef CONFIG_NVHE_GHOST_SPEC
+	// postcondition: if that PKVM_PAGE_OWNED check then the host ownership (and any mapping) has been removed, and the guest mapping has been added.  Plus magic for pvmfw
+
+	// TODO
+	// now we need a more slick way of computing the different parts of the host pgt, for different predicates on the annotations
+#endif /* CONFIG_NVHE_GHOST_SPEC */
 	guest_unlock_component(vm);
 	host_unlock_component();
 
