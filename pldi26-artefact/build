@@ -1,0 +1,17 @@
+#!/bin/bash
+set -e
+
+WORK=$(dirname $0)
+TREE=$(dirname $WORK)
+
+cp ${WORK}/config ${TREE}/.config
+
+cd $TREE
+
+MAKE="make LLVM=1 ARCH=arm64 -j32"
+$MAKE oldconfig
+$MAKE arch/arm64/kvm/hyp/nvhe/kvm_nvhe.o
+clang $(< $WORK/alloc.c.flags) arch/arm64/kvm/hyp/nvhe/fulminated/alloc.exec.c
+$MAKE
+
+
