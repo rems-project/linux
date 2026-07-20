@@ -11,9 +11,9 @@
 #include <asm/memory.h>
 #include <asm/mmu.h>
 #include <asm/cpufeature.h>
-#if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
+#if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) && !defined(NO_GHOST)
 #ifndef __ASSEMBLY__
-#include <nvhe/ghost/ghost_simplified_model.h>
+#include <casemate.h>
 #endif /* __ASSEMBLY__ */
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 
@@ -316,7 +316,7 @@ static __always_inline void __load_stage2(struct kvm_s2_mmu *mmu,
 {
 	write_sysreg(arch->vtcr, vtcr_el2);
 	write_sysreg(kvm_get_vttbr(mmu), vttbr_el2);
-#if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
+#if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL) && !defined(NO_GHOST)
 	casemate_model_step_msr(SYSREG_VTTBR, kvm_get_vttbr(mmu));
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 

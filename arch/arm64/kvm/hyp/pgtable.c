@@ -19,7 +19,7 @@
 #include <nvhe/ghost/ghost_asserts.h>
 // #pragma GCC diagnostic ignored "-Wdeclaration-after-statement"
 #if defined(CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL)
-#include <nvhe/ghost/ghost_simplified_model.h>
+#include <casemate.h>
 #endif
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 
@@ -1067,8 +1067,8 @@ static bool stage2_try_break_pte(const struct kvm_pgtable_visit_ctx *ctx,
 		} else if (kvm_pte_valid(ctx->old)) {
 			kvm_call_hyp(__kvm_tlb_flush_vmid_ipa, mmu,
 				     ctx->addr, ctx->level);
-		#endif /* CONFIG_NVHE_GHOST_SPEC_INJECT_ERROR_stage2_try_break_pte_MISSING_TLBI */
 		}
+		#endif /* CONFIG_NVHE_GHOST_SPEC_INJECT_ERROR_stage2_try_break_pte_MISSING_TLBI */
 	}
 
 	if (pte_ops->pte_is_counted_cb(ctx->old, ctx->level))
@@ -1127,8 +1127,8 @@ static void stage2_unmap_clear_pte(const struct kvm_pgtable_visit_ctx *ctx,
 			kvm_call_hyp(__kvm_tlb_flush_vmid_ipa, mmu, ctx->addr,
 				     ctx->level);
 		}
-	#endif /* CONFIG_NVHE_GHOST_SPEC_INJECT_ERROR_stage2_put_pte_MISSING_INVALIDATE */
 	}
+	#endif /* CONFIG_NVHE_GHOST_SPEC_INJECT_ERROR_stage2_put_pte_MISSING_INVALIDATE */
 }
 
 static void stage2_unmap_put_pte(const struct kvm_pgtable_visit_ctx *ctx,

@@ -27,7 +27,7 @@
 #include <nvhe/ghost/ghost_misc.h>
 #include <nvhe/ghost/ghost_recording.h>
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-#include <nvhe/ghost/ghost_simplified_model.h>
+#include <casemate.h>
 #include <nvhe/ghost/ghost_sm_driver.h>
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 #endif /* CONFIG_NVHE_GHOST_SPEC */

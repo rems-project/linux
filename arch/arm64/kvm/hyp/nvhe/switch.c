@@ -32,7 +32,7 @@
 #ifdef CONFIG_NVHE_GHOST_SPEC
 #include <nvhe/ghost/ghost_spec.h>
 #ifdef CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL
-#include <nvhe/ghost/ghost_simplified_model.h>
+#include <casemate.h>
 #endif /* CONFIG_NVHE_GHOST_SIMPLIFIED_MODEL */
 #endif /* CONFIG_NVHE_GHOST_SPEC */
 

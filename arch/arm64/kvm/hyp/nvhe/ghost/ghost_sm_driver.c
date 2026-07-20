@@ -7,7 +7,7 @@
 #include <nvhe/ghost/ghost_context.h>
 #include <nvhe/ghost/ghost_control.h>
 #include <nvhe/ghost/ghost_printer.h>
-#include <nvhe/ghost/ghost_simplified_model.h>
+#include <casemate.h>
 
 /*
  * Driver functions for the simplified model
