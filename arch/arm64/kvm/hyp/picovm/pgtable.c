@@ -352,6 +352,9 @@ static int stage2_map_walker(const struct picovm_pgtable_visit_ctx *ctx)
 
 	if (picovm_pte_valid(ctx->old)) {
 		phys_addr_t ipa = ctx->addr;
+
+		/* Break the existing mapping before invalidating its TLB entry. */
+		WRITE_ONCE(*ptep, 0);
 		dsb(ishst);
 		ipa >>= 12;
 		__tlbi_level(ipas2e1is, ipa, PICOVM_PGTABLE_MAX_LEVELS-1);
@@ -651,4 +654,3 @@ u64 picovm_get_vtcr(u64 mmfr0, u64 mmfr1, u32 phys_shift)
 
 	return vtcr;
 }
-
